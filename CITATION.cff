@@ -1,0 +1,22 @@
+cff-version: 1.2.0
+message: "Si utiliza o modifica este software, cite Archive Workbench y a sus autores mediante estos metadatos."
+title: "Archive Workbench"
+type: software
+version: "0.33.1"
+date-released: "2026-07-28"
+authors:
+  - family-names: "Colman"
+    given-names: "Alex"
+  - name: "Grupo de Investigación en Archivos de la Represión (GIAR)"
+abstract: "Aplicación local para registrar, describir, procesar, revisar, anotar, buscar, exportar e intercambiar cambios sobre documentación archivística digitalizada."
+repository-code: "https://github.com/alexdcolman/archive-workbench"
+url: "https://github.com/alexdcolman/archive-workbench"
+license: "AGPL-3.0-or-later"
+keywords:
+  - archivos
+  - archivos de la represión
+  - investigación
+  - OCR
+  - revisión documental
+  - humanidades digitales
+  - software de investigación

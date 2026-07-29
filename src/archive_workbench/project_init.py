@@ -1,0 +1,48 @@
+from __future__ import annotations
+
+import shutil
+from pathlib import Path
+
+
+PROJECT_DIRS = (
+    "data/pdfs",
+    "data/tiff",
+    "data/other",
+    "extraction",
+    "derivatives",
+    "ocr_benchmarks",
+    "region_previews",
+    "indexes",
+    "exchange/incoming",
+    "exchange/outgoing",
+    "backups",
+    "logs",
+    "config",
+    "corpus",
+)
+
+
+def initialize_project(destination: str | Path, template_root: str | Path | None = None) -> Path:
+    root = Path(destination)
+    root.mkdir(parents=True, exist_ok=True)
+    for relative in PROJECT_DIRS:
+        (root / relative).mkdir(parents=True, exist_ok=True)
+
+    if template_root is not None:
+        templates = Path(template_root)
+        for target_name in (
+            "decisions.yaml",
+            "test_corpus.yaml",
+            "extraction.yaml",
+            "extraction_tesseract.yaml",
+            "extraction_press_columns.yaml",
+            "ocr_benchmark.yaml",
+            "regions_leg_17_leg_15_a_c_6.yaml",
+        ):
+            completed = templates / target_name
+            generic = templates / target_name.replace(".yaml", ".template.yaml")
+            source = completed if completed.exists() else generic
+            target = root / "config" / target_name
+            if source.exists() and not target.exists():
+                shutil.copy2(source, target)
+    return root

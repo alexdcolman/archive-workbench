@@ -1,0 +1,57 @@
+# Una entrada por PDF, TIFF o imagen seleccionada para el corpus de prueba.
+# No hace falta completar todo al principio: los campos "unknown" pueden quedar en true.
+corpus_name: "Corpus de prueba inicial"
+created_by: "COMPLETAR"
+created_at: "COMPLETAR"
+
+documents:
+  - test_id: "doc_001"
+    local_path: "COMPLETAR"
+    short_description: "Ejemplo: legajo mecanografiado con sellos y anotaciones"
+    archival_location:
+      fondo: "DIPPBA"
+      seccion: "COMPLETAR"
+      subseccion: null
+      serie: "COMPLETAR"
+      caja: null
+      legajo: "COMPLETAR"
+      tomo: null
+      documento: null
+
+    input_characteristics:
+      format: "pdf"               # pdf | tiff | image
+      scanned: true
+      digital_text_layer: false
+      multipage_tiff: false
+      poor_contrast: false
+      skewed_pages: false
+      landscape_pages: false
+      mixed_orientations: false
+      text_orientation: unknown  # upright | rotated | mixed | unknown
+      typewritten: true
+      handwritten_notes: true
+      stamps: true
+      tables_or_forms: true
+      multiple_internal_documents: true
+      unknown: false
+
+    expected_extraction:
+      minimum_page_coverage_percent: 95
+      reading_order_should_be_correct: true
+      preserve_stamps_as_regions: true
+      preserve_handwriting_as_regions: true
+      transcribe_handwriting_automatically: false
+      expected_object_types: [paragraph, title, stamp, handwritten_region, form_field]
+      objects_that_may_be_hidden_by_default: [page_header, page_footer]
+      critical_text_examples:
+        - "COMPLETAR con una frase que no puede perderse"
+      known_difficulties:
+        - "COMPLETAR"
+
+    manual_ground_truth:
+      pages_reviewed: []
+      expected_internal_parts: []
+      expected_tables: []
+      expected_notes: []
+
+    acceptance_notes: "COMPLETAR"

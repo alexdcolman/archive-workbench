@@ -1,0 +1,430 @@
+from __future__ import annotations
+
+from pathlib import Path
+
+from archive_workbench.authorities import create_authority
+from archive_workbench.catalog import ensure_project
+from archive_workbench.catalog_management import create_archival_unit
+from archive_workbench.db import create_sqlite_engine, database_path, session_scope, upgrade_database
+from archive_workbench.decisions import load_decisions
+from archive_workbench.relations import (
+    create_entity_relation,
+    entity_relation_revision_rows,
+    entity_relation_rows,
+    relation_target_choices,
+    update_entity_relation,
+)
+
+
+def _setup(tmp_path: Path):
+    root = tmp_path / "project"
+    upgrade_database(root)
+    decisions = load_decisions(Path(__file__).parents[1] / "config/decisions.yaml")
+    engine = create_sqlite_engine(database_path(root))
+    with session_scope(engine) as session:
+        ensure_project(session, decisions)
+    return root, decisions, engine
+
+
+def test_entity_relation_is_versioned_and_can_be_deactivated(tmp_path: Path) -> None:
+    _root, decisions, engine = _setup(tmp_path)
+    try:
+        with session_scope(engine) as session:
+            source = create_authority(
+                session,
+                project_id=decisions.project_id,
+                entity_type="person",
+                preferred_name="Persona A",
+                created_by="tests",
+            )
+            target = create_authority(
+                session,
+                project_id=decisions.project_id,
+                entity_type="organization",
+                preferred_name="Organización B",
+                created_by="tests",
+            )
+            relation = create_entity_relation(
+                session,
+                project_id=decisions.project_id,
+                source_authority_id=source.id,
+                relation_label="integró",
+                target_kind="entity",
+                target_id=target.id,
+                created_by="tests",
+            )
+            update_entity_relation(
+                session,
+                relation_id=relation.id,
+                expected_revision=1,
+                evidence_note="Informe, página 3",
+                review_status="approved",
+                lifecycle_status="inactive",
+                changed_by="tests",
+            )
+            rows = entity_relation_rows(
+                session,
+                project_id=decisions.project_id,
+                authority_id=source.id,
+                include_inactive=True,
+            )
+            revisions = entity_relation_revision_rows(session, relation.id)
+        assert rows[0].evidence_note == "Informe, página 3"
+        assert rows[0].review_status == "approved"
+        assert rows[0].lifecycle_status == "inactive"
+        assert [row.operation for row in revisions] == ["update", "create"]
+    finally:
+        engine.dispose()
+
+
+def test_relation_target_can_be_changed_and_is_versioned(tmp_path: Path) -> None:
+    _root, decisions, engine = _setup(tmp_path)
+    try:
+        with session_scope(engine) as session:
+            source = create_authority(
+                session,
+                project_id=decisions.project_id,
+                entity_type="organization",
+                preferred_name="Organismo de origen",
+                created_by="tests",
+            )
+            original_target = create_authority(
+                session,
+                project_id=decisions.project_id,
+                entity_type="organization",
+                preferred_name="Destino inicial",
+                created_by="tests",
+            )
+            replacement = create_archival_unit(
+                session,
+                decisions=decisions,
+                project_id=decisions.project_id,
+                parent_id=None,
+                level_key="archivo",
+                title="Destino corregido",
+                created_by="tests",
+            )
+            relation = create_entity_relation(
+                session,
+                project_id=decisions.project_id,
+                source_authority_id=source.id,
+                relation_label="aparece en",
+                target_kind="entity",
+                target_id=original_target.id,
+                created_by="tests",
+            )
+            update_entity_relation(
+                session,
+                relation_id=relation.id,
+                expected_revision=1,
+                target_kind="archival_unit",
+                target_id=replacement.id,
+                changed_by="tests",
+                note="Corrección del destino",
+            )
+            rows = entity_relation_rows(
+                session,
+                project_id=decisions.project_id,
+                authority_id=source.id,
+                include_inactive=True,
+            )
+            revisions = entity_relation_revision_rows(session, relation.id)
+
+        assert rows[0].target_kind == "archival_unit"
+        assert rows[0].target_id == replacement.id
+        assert rows[0].target_label == "Destino corregido"
+        assert rows[0].revision == 2
+        assert revisions[0].snapshot["target_archival_unit_id"] == replacement.id
+        assert revisions[0].snapshot["target_authority_id"] is None
+        assert revisions[0].note == "Corrección del destino"
+        assert revisions[1].snapshot["target_authority_id"] == original_target.id
+    finally:
+        engine.dispose()
+
+
+def test_relation_can_target_catalog_unit(tmp_path: Path) -> None:
+    _root, decisions, engine = _setup(tmp_path)
+    try:
+        with session_scope(engine) as session:
+            entity = create_authority(
+                session,
+                project_id=decisions.project_id,
+                entity_type="organization",
+                preferred_name="Organismo",
+                created_by="tests",
+            )
+            unit = create_archival_unit(
+                session,
+                decisions=decisions,
+                project_id=decisions.project_id,
+                parent_id=None,
+                level_key="archivo",
+                title="Archivo documental",
+                created_by="tests",
+            )
+            choices = relation_target_choices(
+                session,
+                project_id=decisions.project_id,
+                target_kind="archival_unit",
+            )
+            relation = create_entity_relation(
+                session,
+                project_id=decisions.project_id,
+                source_authority_id=entity.id,
+                relation_label="aparece en",
+                target_kind="archival_unit",
+                target_id=unit.id,
+                created_by="tests",
+            )
+            rows = entity_relation_rows(
+                session,
+                project_id=decisions.project_id,
+                authority_id=entity.id,
+            )
+        assert any(choice.target_id == unit.id for choice in choices)
+        assert relation.target_archival_unit_id == unit.id
+        assert rows[0].target_label == "Archivo documental"
+    finally:
+        engine.dispose()
+
+
+def test_transversal_entity_candidates_show_alias_and_can_be_included(tmp_path: Path) -> None:
+    from archive_workbench.authorities import (
+        add_authority_alias,
+        authority_mention_candidates,
+        include_authority_mention_candidates,
+        mention_rows,
+    )
+    from tests.test_search import _seed_search_project
+    from archive_workbench.db.models import EditableObject
+
+    root = tmp_path / "candidate_project"
+    object_id, _page_id = _seed_search_project(root)
+    engine = create_sqlite_engine(database_path(root))
+    try:
+        with session_scope(engine) as session:
+            obj = session.get(EditableObject, object_id)
+            obj.current_text = "La DIPBA investigó a militantes. La Dirección de Inteligencia archivó el informe."
+            entity = create_authority(
+                session,
+                project_id="search_project",
+                entity_type="organization",
+                preferred_name="Dirección de Inteligencia",
+                created_by="tests",
+            )
+            add_authority_alias(
+                session,
+                authority_id=entity.id,
+                alias="DIPBA",
+                alias_type="acronym",
+                created_by="tests",
+            )
+            candidates = authority_mention_candidates(
+                session, authority_id=entity.id, include_existing=True
+            )
+            assert {row.match_kind for row in candidates} == {"preferred", "alias"}
+            alias_candidate = next(row for row in candidates if row.match_kind == "alias")
+            assert alias_candidate.matched_surface == "DIPBA"
+            summary = include_authority_mention_candidates(
+                session,
+                authority_id=entity.id,
+                candidate_keys=[row.candidate_key for row in candidates],
+                created_by="tests",
+            )
+            mentions = mention_rows(session, authority_id=entity.id)
+        assert summary.created == 2
+        assert len(mentions) == 2
+        assert {row.mention_text for row in mentions} == {"DIPBA", "Dirección de Inteligencia"}
+    finally:
+        engine.dispose()
+
+
+def test_temporal_ranges_are_normalized_and_filter_entities_and_relations(tmp_path: Path) -> None:
+    from datetime import date
+    from archive_workbench.authorities import authority_rows
+
+    _root, decisions, engine = _setup(tmp_path)
+    try:
+        with session_scope(engine) as session:
+            source = create_authority(
+                session,
+                project_id=decisions.project_id,
+                entity_type="organization",
+                preferred_name="Dirección A",
+                temporal_expression="años setenta",
+                temporal_note="Fecha aproximada",
+                created_by="tests",
+            )
+            target = create_authority(
+                session,
+                project_id=decisions.project_id,
+                entity_type="organization",
+                preferred_name="Ministerio B",
+                temporal_expression="desde 1980",
+                created_by="tests",
+            )
+            relation = create_entity_relation(
+                session,
+                project_id=decisions.project_id,
+                source_authority_id=source.id,
+                relation_label="dependió de",
+                target_kind="entity",
+                target_id=target.id,
+                temporal_expression="03/1974 - 03/1976",
+                created_by="tests",
+            )
+            entity_1975 = authority_rows(
+                session,
+                project_id=decisions.project_id,
+                temporal_start=date(1975, 1, 1),
+                temporal_end=date(1975, 12, 31),
+            )
+            relation_1975 = entity_relation_rows(
+                session,
+                project_id=decisions.project_id,
+                temporal_start=date(1975, 1, 1),
+                temporal_end=date(1975, 12, 31),
+            )
+            relation_1985 = entity_relation_rows(
+                session,
+                project_id=decisions.project_id,
+                temporal_start=date(1985, 1, 1),
+                temporal_end=date(1985, 12, 31),
+            )
+        assert [row.authority_id for row in entity_1975] == [source.id]
+        assert relation_1975[0].relation_id == relation.id
+        assert relation_1975[0].temporal_start == date(1974, 3, 1)
+        assert relation_1975[0].temporal_end == date(1976, 3, 31)
+        assert relation_1985 == []
+    finally:
+        engine.dispose()
+
+
+def test_transversal_candidates_link_existing_unlinked_mention_without_duplication(
+    tmp_path: Path,
+) -> None:
+    from archive_workbench.authorities import (
+        authority_mention_candidates,
+        create_mention,
+        include_authority_mention_candidates,
+        mention_rows,
+    )
+    from archive_workbench.db.models import EditableObject
+    from tests.test_search import _seed_search_project
+
+    root = tmp_path / "candidate_link_project"
+    object_id, _page_id = _seed_search_project(root)
+    engine = create_sqlite_engine(database_path(root))
+    try:
+        with session_scope(engine) as session:
+            obj = session.get(EditableObject, object_id)
+            assert obj is not None
+            obj.current_text = "La SIDE remitió el parte."
+            authority = create_authority(
+                session,
+                project_id="search_project",
+                entity_type="organization",
+                preferred_name="SIDE",
+                created_by="tests",
+            )
+            orphan = create_mention(
+                session,
+                object_id=object_id,
+                mention_text="SIDE",
+                status="pending",
+                created_by="tests",
+            )
+
+            candidates = authority_mention_candidates(
+                session, authority_id=authority.id, include_existing=True
+            )
+            assert len(candidates) == 1
+            assert candidates[0].can_link_existing
+            assert not candidates[0].already_included
+
+            summary = include_authority_mention_candidates(
+                session,
+                authority_id=authority.id,
+                candidate_keys=[candidates[0].candidate_key],
+                status="accepted",
+                created_by="tests",
+            )
+            mentions = mention_rows(session, object_id=object_id)
+
+        assert summary.created == 0
+        assert summary.linked_existing == 1
+        assert summary.already_present == 0
+        assert len(mentions) == 1
+        assert mentions[0].mention_id == orphan.id
+        assert mentions[0].authority_id == authority.id
+        assert mentions[0].status == "accepted"
+        assert mentions[0].revision == 2
+    finally:
+        engine.dispose()
+
+
+def test_transversal_candidates_report_conflict_with_another_authority(
+    tmp_path: Path,
+) -> None:
+    import pytest
+
+    from archive_workbench.authorities import (
+        authority_mention_candidates,
+        create_mention,
+        include_authority_mention_candidates,
+        mention_rows,
+    )
+    from archive_workbench.db.models import EditableObject
+    from tests.test_search import _seed_search_project
+
+    root = tmp_path / "candidate_conflict_project"
+    object_id, _page_id = _seed_search_project(root)
+    engine = create_sqlite_engine(database_path(root))
+    try:
+        with session_scope(engine) as session:
+            obj = session.get(EditableObject, object_id)
+            assert obj is not None
+            obj.current_text = "La SIDE remitió el parte."
+            target = create_authority(
+                session,
+                project_id="search_project",
+                entity_type="organization",
+                preferred_name="SIDE",
+                created_by="tests",
+            )
+            other = create_authority(
+                session,
+                project_id="search_project",
+                entity_type="organization",
+                preferred_name="Otra institución",
+                created_by="tests",
+            )
+            create_mention(
+                session,
+                object_id=object_id,
+                mention_text="SIDE",
+                authority_id=other.id,
+                status="pending",
+                created_by="tests",
+            )
+
+            candidates = authority_mention_candidates(
+                session, authority_id=target.id, include_existing=True
+            )
+            assert len(candidates) == 1
+            assert candidates[0].has_authority_conflict
+            assert candidates[0].existing_authority_name == "Otra institución"
+
+            with pytest.raises(ValueError, match="ya está vinculada"):
+                include_authority_mention_candidates(
+                    session,
+                    authority_id=target.id,
+                    candidate_keys=[candidates[0].candidate_key],
+                    created_by="tests",
+                )
+            mentions = mention_rows(session, object_id=object_id)
+
+        assert len(mentions) == 1
+        assert mentions[0].authority_id == other.id
+    finally:
+        engine.dispose()

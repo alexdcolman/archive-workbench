@@ -1,0 +1,235 @@
+project_name: "Archivo Provincial de la Memoria de Chubut"
+project_id: "apm_chubut"
+
+catalog:
+  structure_profiles_by_fund: true
+  allow_skipped_levels: true
+  provisional_registration_allowed: true
+  required_root_levels: [archivo, fondo]
+  completion_any_of_levels:
+    - [caja, legajo]
+  field_value_states: [provided, no_information, not_applicable, pending]
+  manual_completion_confirmation: true
+  separate_incomplete_inventory: true
+
+archival_levels:
+  - key: archivo
+    label: Archivo
+    plural_label: Archivos
+    display_order: 0
+    parent_keys: []
+    required_fields: [title]
+    optional: false
+
+  - key: fondo
+    label: Fondo
+    plural_label: Fondos
+    display_order: 1
+    parent_keys: [archivo]
+    required_fields: [title]
+    optional: false
+
+  - key: seccion
+    label: Sección
+    plural_label: Secciones
+    display_order: 2
+    parent_keys: [fondo]
+    required_fields: [title]
+    optional: true
+
+  - key: subseccion
+    label: Subsección
+    plural_label: Subsecciones
+    display_order: 3
+    parent_keys: [fondo, seccion]
+    required_fields: [title]
+    optional: true
+
+  - key: serie
+    label: Serie
+    plural_label: Series
+    display_order: 4
+    parent_keys: [fondo, seccion, subseccion]
+    required_fields: [title]
+    optional: true
+
+  - key: subserie
+    label: Subserie
+    plural_label: Subseries
+    display_order: 5
+    parent_keys: [serie]
+    required_fields: [title]
+    optional: true
+
+  - key: caja
+    label: Caja
+    plural_label: Cajas
+    display_order: 6
+    parent_keys: [fondo, seccion, subseccion, serie, subserie]
+    required_fields: [title]
+    optional: true
+
+  - key: legajo
+    label: Legajo
+    plural_label: Legajos
+    display_order: 7
+    parent_keys: [fondo, seccion, subseccion, serie, subserie, caja]
+    required_fields: [title]
+    optional: true
+
+  - key: tomo
+    label: Tomo
+    plural_label: Tomos
+    display_order: 8
+    parent_keys: [legajo]
+    required_fields: [title]
+    optional: true
+
+  - key: documento
+    label: Documento
+    plural_label: Documentos
+    display_order: 9
+    parent_keys: [fondo, seccion, subseccion, serie, subserie, caja, legajo, tomo]
+    required_fields: [title]
+    optional: true
+
+descriptive_fields:
+  - key: reference_code
+    label: Código de referencia
+    applies_to_levels: [seccion, subseccion, serie, subserie, caja, legajo]
+    required: false
+    repeatable: false
+    data_type: text
+    examples: ["AR.BACPM.DIPPBA.DCDRA.A.fp.ra"]
+
+  - key: attributed_title
+    label: Título atribuido
+    applies_to_levels: [seccion, subseccion, serie, subserie, caja, legajo, documento]
+    required: false
+    repeatable: true
+    data_type: text
+    examples: ["Registro de Autoridades Comunales"]
+
+  - key: extreme_dates
+    label: Fechas extremas
+    applies_to_levels: [seccion, subseccion, serie, subserie, caja, legajo]
+    required: false
+    repeatable: true
+    data_type: date_range
+    examples: ["1958-1996"]
+
+  - key: document_date
+    label: Fecha del documento
+    applies_to_levels: [documento]
+    required: false
+    repeatable: true
+    data_type: date
+    examples: ["1977-08-02"]
+
+  - key: medium
+    label: Soporte
+    applies_to_levels: [all]
+    required: false
+    repeatable: true
+    data_type: text
+    examples: ["papel", "digital"]
+
+  - key: extent
+    label: Cantidad o extensión
+    applies_to_levels: [seccion, subseccion, serie, subserie, caja, legajo, tomo, documento]
+    required: false
+    repeatable: true
+    data_type: text
+    examples: ["6 cajas", "59 páginas"]
+
+  - key: scope_content
+    label: Alcance y contenido
+    applies_to_levels: [seccion, subseccion, serie, subserie, caja, legajo]
+    required: false
+    repeatable: true
+    data_type: text
+    supports_list: true
+
+  - key: archivist_note
+    label: Nota del archivero
+    applies_to_levels: [seccion, subseccion, serie, subserie, caja, legajo]
+    required: false
+    repeatable: true
+    data_type: text
+
+  - key: description_date
+    label: Fecha de descripción
+    applies_to_levels: [seccion, subseccion, serie, subserie, caja, legajo]
+    required: false
+    repeatable: true
+    data_type: date
+
+  - key: folio_number
+    label: Número de foja
+    applies_to_levels: [documento]
+    required: false
+    repeatable: true
+    data_type: text
+
+object_types:
+  - {key: title, label: Título, category: structure, visible_by_default: true, editable: true, searchable: true, export_by_default: true, text_exportable: true, asset_exportable: false, supports_manual_transcription: true, can_have_children: true}
+  - {key: section_heading, label: Encabezado interno, category: structure, visible_by_default: true, editable: true, searchable: true, export_by_default: true, text_exportable: true, asset_exportable: false, supports_manual_transcription: true, can_have_children: true}
+  - {key: paragraph, label: Párrafo, category: text, visible_by_default: true, editable: true, searchable: true, export_by_default: true, text_exportable: true, asset_exportable: false, supports_manual_transcription: true, can_have_children: false}
+  - {key: list_item, label: Ítem de lista, category: text, visible_by_default: true, editable: true, searchable: true, export_by_default: true, text_exportable: true, asset_exportable: false, supports_manual_transcription: true, can_have_children: false}
+  - {key: table, label: Tabla, category: visual, visible_by_default: false, editable: true, searchable: true, export_by_default: true, text_exportable: true, asset_exportable: true, supports_manual_transcription: true, can_have_children: false}
+  - {key: figure, label: Imagen, category: visual, visible_by_default: false, editable: true, searchable: true, export_by_default: false, text_exportable: false, asset_exportable: true, supports_manual_transcription: true, can_have_children: false}
+  - {key: chart, label: Gráfico, category: visual, visible_by_default: false, editable: true, searchable: true, export_by_default: false, text_exportable: false, asset_exportable: true, supports_manual_transcription: true, can_have_children: false}
+  - {key: caption, label: Epígrafe, category: paratext, visible_by_default: false, editable: true, searchable: true, export_by_default: true, text_exportable: true, asset_exportable: false, supports_manual_transcription: true, can_have_children: false}
+  - {key: footnote, label: Nota al pie, category: paratext, visible_by_default: true, editable: true, searchable: true, export_by_default: true, text_exportable: true, asset_exportable: false, supports_manual_transcription: true, can_have_children: false}
+  - {key: table_of_contents, label: Índice, category: structure, visible_by_default: false, editable: true, searchable: true, export_by_default: true, text_exportable: true, asset_exportable: false, supports_manual_transcription: true, can_have_children: true}
+  - {key: page_header, label: Encabezado de página, category: paratext, visible_by_default: false, editable: true, searchable: true, export_by_default: false, text_exportable: true, asset_exportable: false, supports_manual_transcription: true, can_have_children: false}
+  - {key: page_footer, label: Pie o número de página, category: paratext, visible_by_default: false, editable: true, searchable: true, export_by_default: false, text_exportable: true, asset_exportable: false, supports_manual_transcription: true, can_have_children: false}
+  - {key: stamp, label: Sello, category: visual, visible_by_default: false, editable: true, searchable: true, export_by_default: false, text_exportable: true, asset_exportable: true, supports_manual_transcription: true, can_have_children: false}
+  - {key: handwritten_region, label: Manuscrito, category: visual, visible_by_default: false, editable: true, searchable: true, export_by_default: true, text_exportable: true, asset_exportable: true, supports_manual_transcription: true, can_have_children: false}
+  - {key: marginalia, label: Nota marginal, category: paratext, visible_by_default: false, editable: true, searchable: true, export_by_default: true, text_exportable: true, asset_exportable: true, supports_manual_transcription: true, can_have_children: false}
+  - {key: form_field, label: Campo de ficha o formulario, category: text, visible_by_default: false, editable: true, searchable: true, export_by_default: true, text_exportable: true, asset_exportable: true, supports_manual_transcription: true, can_have_children: false}
+  - {key: unknown, label: Objeto sin clasificar, category: other, visible_by_default: true, editable: true, searchable: true, export_by_default: true, text_exportable: true, asset_exportable: true, supports_manual_transcription: true, can_have_children: false}
+
+jsonl:
+  schema_version: "1.0"
+  objects_filename: objects.jsonl
+  paragraphs_filename: paragraphs.jsonl
+  images_filename: images.jsonl
+  manifest_filename: manifest.json
+  image_storage: referenced
+  base64_export_available: false
+  coordinate_space: normalized
+
+identity:
+  entity_ids: uuid4
+  digital_object_identity: sha256
+  same_sha256_policy: same_digital_object
+  preserve_original_filename: true
+  paths_are_identity: false
+  extraction_identity_fields: [digital_object_id, source_sha256, engine, options_hash]
+  reextraction_policy: preserve_versions_mark_current
+  better_scan_policy: new_linked_representation
+  text_object_ids_survive_reordering: true
+  split_merge_use_lineage: true
+
+merge:
+  additive_entity_types: [annotation, tag_assignment, entity_mention, relation]
+  exclusive_fields:
+    archival_unit: [parent_id, level_key, reference_code, title]
+    text_object: [edited_text, object_type, part_id, superseded_by]
+    extraction_run: [is_current]
+  allow_disjoint_field_merge: true
+  conflict_requires_admin_confirmation: true
+  delete_vs_update_is_conflict: true
+
+tiff:
+  preserve_original: true
+  accept_single_page: true
+  accept_multipage: true
+  split_multipage_for_processing: true
+  ocr_derivative_format: png
+  preview_format: webp
+  target_ocr_dpi: 300
+  preview_dpi: 150
+  use_pyvips_when_available: true
+  never_overwrite_source: true

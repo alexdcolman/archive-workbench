@@ -1,0 +1,93 @@
+schema_version: '1.1'
+plan_key: leg_17_caso_bolson_plan_v2
+source_key: leg_17_caso_bolson
+expected_page_count: 9
+status: ready
+benchmark_pages: [1, 5, 9]
+parts:
+  - part_key: informe_secuestro_material
+    title: Informe sobre secuestro de material y averiguaciones en El Maitén
+    part_type: report
+    page_start: 1
+    page_end: 2
+    page_sequence: [2, 1]
+    status: confirmed
+    notes: La página física 2 inicia el informe y termina con marca de continuación; la página física 1 contiene la continuación y la firma.
+  - part_key: informe_jardin_principito
+    title: Investigación sobre el Jardín de Infantes Principito de El Maitén
+    part_type: report
+    page_start: 3
+    page_end: 3
+    page_sequence: [3]
+    status: confirmed
+    notes: Informe que remite fotocopias del libro Un corderito con cuernos.
+  - part_key: adjunto_un_corderito_con_cuernos
+    title: Fotocopias adjuntas del libro Un corderito con cuernos
+    part_type: attachment
+    page_start: 4
+    page_end: 6
+    page_sequence: [6, 4, 5]
+    status: confirmed
+    notes: Orden lógico reconstruido como portada, primera página y página editorial/contratapa; se conserva también el orden físico del PDF.
+  - part_key: ficha_jardin_principito
+    title: Ficha sobre el Jardín de Infantes Principito
+    part_type: intelligence_note
+    page_start: 7
+    page_end: 7
+    page_sequence: [7]
+    status: confirmed
+  - part_key: nota_municipalidad_el_maiten
+    title: Nota de la Municipalidad de El Maitén
+    part_type: correspondence
+    page_start: 8
+    page_end: 8
+    page_sequence: [8]
+    status: confirmed
+  - part_key: portada_subversion_ambito_educativo
+    title: Portada del folleto Subversión en el ámbito educativo
+    part_type: attachment_fragment
+    page_start: 9
+    page_end: 9
+    page_sequence: [9]
+    status: confirmed
+    notes: Se registra como fragmento adjunto porque el PDF conserva solamente la portada.
+assignments:
+  - assignment_key: ocr_informe_secuestro
+    pages: [1, 2]
+    mode: ocr
+    profile: config/extraction_official_degraded.yaml
+    part_key: informe_secuestro_material
+    notes: OCR provisional; la página 1 presenta mecanografía muy degradada y requerirá revisión intensiva.
+  - assignment_key: ocr_informe_jardin
+    pages: [3]
+    mode: ocr
+    profile: config/extraction_official_degraded.yaml
+    part_key: informe_jardin_principito
+  - assignment_key: ocr_paginas_libro
+    pages: [4, 5]
+    mode: ocr
+    profile: config/extraction_book_text.yaml
+    part_key: adjunto_un_corderito_con_cuernos
+    notes: La imagen de la página 4 se conserva como derivado; el OCR se limita al texto visible.
+  - assignment_key: ocr_portada_libro
+    pages: [6]
+    mode: ocr
+    profile: config/extraction_sparse_page.yaml
+    part_key: adjunto_un_corderito_con_cuernos
+  - assignment_key: ocr_ficha_jardin
+    pages: [7]
+    mode: ocr
+    profile: config/extraction_sparse_page.yaml
+    part_key: ficha_jardin_principito
+  - assignment_key: ocr_nota_municipal
+    pages: [8]
+    mode: ocr
+    profile: config/extraction_official_degraded.yaml
+    part_key: nota_municipalidad_el_maiten
+  - assignment_key: ocr_portada_subversion
+    pages: [9]
+    mode: ocr
+    profile: config/extraction_sparse_page.yaml
+    part_key: portada_subversion_ambito_educativo
+created_by: alex
+notes: Plan construido a partir de la hoja de contacto y del benchmark de las páginas 1, 5 y 9. Todas las extracciones quedan sujetas a revisión humana posterior.

@@ -1,0 +1,16 @@
+schema_version: "1.0"
+profile_key: "tesseract_sparse_page_es_v1"
+backend: "tesseract_tsv"
+tesseract_command: "tesseract"
+ocr_languages: ["spa"]
+force_ocr: true
+extract_tables: false
+psm: 6
+device: "cpu"
+num_threads: 4
+document_timeout_seconds: 900
+use_ocr_derivatives: true
+minimum_characters_per_page_warning: 20
+image_variant: "otsu"
+object_granularity: "paragraph"
+layout_hint: "sparse"

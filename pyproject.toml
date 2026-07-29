@@ -1,0 +1,59 @@
+[build-system]
+requires = ["setuptools>=68", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "archive-workbench"
+version = "0.33.1"
+description = "Aplicación local para registro, extracción, edición y anotación de archivos desclasificados."
+readme = "README.md"
+requires-python = ">=3.11"
+license = "AGPL-3.0-or-later"
+authors = [
+  {name = "Alex Colman"},
+  {name = "Grupo de Investigación en Archivos de la Represión (GIAR)"},
+]
+dependencies = [
+  "pydantic>=2.10,<3",
+  "PyYAML>=6,<7",
+  "typer>=0.15,<1",
+  "Pillow>=11,<13",
+  "PyMuPDF>=1.25,<2",
+  "SQLAlchemy>=2.0,<3",
+  "alembic>=1.14,<2",
+]
+
+[project.optional-dependencies]
+semantic = [
+  "sentence-transformers>=5.2,<6",
+]
+streamlit = [
+  "streamlit>=1.51,<2",
+]
+extraction = [
+  "docling>=2.100,<3",
+]
+tiff = [
+  "pyvips[binary]>=3,<4",
+]
+dev = [
+  "pytest>=8,<10",
+  "ruff>=0.9,<1",
+]
+
+[project.scripts]
+archive-workbench = "archive_workbench.cli:app"
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+addopts = "-q"
+
+[tool.ruff]
+line-length = 100
+target-version = "py311"
+
+[tool.setuptools.package-data]
+archive_workbench = ["migrations/*", "migrations/versions/*.py"]

@@ -1,0 +1,257 @@
+# Una entrada por PDF, TIFF o imagen seleccionada para el corpus de prueba.
+# No hace falta completar todo al principio: los campos "unknown" pueden quedar en true.
+corpus_name: "Corpus de prueba inicial"
+created_by: "Alex Colman"
+created_at: "2026-07-23T00:00:00-03:00"
+
+documents:
+  - test_id: "caja_administracion_publica_adm_pub_asp_contr"
+    local_path: "corpus/caja_administracion_publica/adm_pub_asp_contr.pdf"
+    short_description: "Legajo con síntesis de conferencias"
+    archival_location:
+      fondo: "SiCH"
+      seccion: null
+      subseccion: null
+      serie: null
+      caja: "Administración pública: aspectos fundamentales sobre contrainteligencia"
+      legajo: null
+      tomo: null
+      documento: "Ejemplar 0619. Síntesis de conferencias"
+
+    input_characteristics:
+      format: "pdf"               # pdf | tiff | image
+      scanned: true
+      digital_text_layer: false
+      multipage_tiff: false
+      poor_contrast: false
+      skewed_pages: true
+      landscape_pages: true
+      mixed_orientations: false
+      text_orientation: upright
+      typewritten: false
+      handwritten_notes: false
+      stamps: false
+      tables_or_forms: false
+      multiple_internal_documents: false
+      unknown: false
+
+    expected_extraction:
+      minimum_page_coverage_percent: 95
+      reading_order_should_be_correct: true
+      preserve_stamps_as_regions: true
+      preserve_handwriting_as_regions: true
+      transcribe_handwriting_automatically: false
+      expected_object_types: [paragraph, title, stamp, handwritten_region, form_field]
+      objects_that_may_be_hidden_by_default: [page_header, page_footer]
+      critical_text_examples:
+        - "La CONTRAINTELIGENCIA, es indispensable en todos los niveles de los organismos hasta considerar al hombre individualmente."
+      known_difficulties:
+        - "Ninguna"
+
+    manual_ground_truth:
+      pages_reviewed: []
+      expected_internal_parts: []
+      expected_tables: []
+      expected_notes: []
+
+    acceptance_notes: "Por ahora es una prueba"
+  - test_id: "caja_administracion_publica_carp_reg"
+    local_path: "corpus/caja_administracion_publica/carp_reg.pdf"
+    short_description: "Carpeta con reglamentos"
+    archival_location:
+      fondo: "SiCH"
+      seccion: null
+      subseccion: null
+      serie: null
+      caja: "Administración pública: aspectos fundamentales sobre contrainteligencia"
+      legajo: null
+      tomo: null
+      documento: "Carpeta con reglamentos"
+
+    input_characteristics:
+      format: "pdf"               # pdf | tiff | image
+      scanned: true
+      digital_text_layer: false
+      multipage_tiff: false
+      poor_contrast: true
+      skewed_pages: true
+      landscape_pages: true
+      mixed_orientations: true
+      text_orientation: upright
+      typewritten: true
+      handwritten_notes: true
+      stamps: true
+      tables_or_forms: true
+      multiple_internal_documents: true
+      unknown: false
+
+    expected_extraction:
+      minimum_page_coverage_percent: 95
+      reading_order_should_be_correct: true
+      preserve_stamps_as_regions: true
+      preserve_handwriting_as_regions: true
+      transcribe_handwriting_automatically: false
+      expected_object_types: [paragraph, title, stamp, handwritten_region, form_field]
+      objects_that_may_be_hidden_by_default: [page_header, page_footer]
+      critical_text_examples:
+        - "BASES PARA LA COORDINACION INFORMATIVA CON LOS GOBIERNOS DE PROVINCIAS"
+      known_difficulties:
+        - "Tiene todas las características que hacen a un documento de difícil extracción"
+
+    manual_ground_truth:
+      pages_reviewed: []
+      expected_internal_parts: []
+      expected_tables: []
+      expected_notes: []
+
+    acceptance_notes: "Por ahora es una prueba"
+  - test_id: "leg_17_caso_bolson"
+    local_path: "corpus/leg_17/caso_bolson.pdf"
+    short_description: "Caso Bolsón: cuento infantil. Incluye imágenes"
+    archival_location:
+      fondo: "SiCH"
+      seccion: null
+      subseccion: null
+      serie: null
+      caja: null
+      legajo: 17
+      tomo: null
+      documento: "Caso Bolsón: cuento infantil"
+
+    input_characteristics:
+      format: "pdf"               # pdf | tiff | image
+      scanned: true
+      digital_text_layer: false
+      multipage_tiff: false
+      poor_contrast: true
+      skewed_pages: true
+      landscape_pages: false
+      mixed_orientations: false
+      text_orientation: upright
+      typewritten: true
+      handwritten_notes: true
+      stamps: true
+      tables_or_forms: false
+      multiple_internal_documents: true
+      unknown: false
+
+    expected_extraction:
+      minimum_page_coverage_percent: 95
+      reading_order_should_be_correct: true
+      preserve_stamps_as_regions: true
+      preserve_handwriting_as_regions: true
+      transcribe_handwriting_automatically: false
+      expected_object_types: [paragraph, title, stamp, handwritten_region, form_field]
+      objects_that_may_be_hidden_by_default: [page_header, page_footer, image]
+      critical_text_examples:
+        - "(CONOZCAMOS A NUESTRO ENEMIGO)"
+      known_difficulties:
+        - "Además de las características que hacen a un documento de difícil extracción, incluye imágenes"
+
+    manual_ground_truth:
+      pages_reviewed: []
+      expected_internal_parts: []
+      expected_tables: []
+      expected_notes: []
+
+    acceptance_notes: "Por ahora es una prueba"
+  - test_id: "leg_17_leg_15_a_c_2"
+    local_path: "corpus/leg_17/leg_15_a_c_2.tiff"
+    short_description: "Recorte periodístico 1"
+    archival_location:
+      fondo: "SiCH"
+      seccion: null
+      subseccion: null
+      serie: null
+      caja: null
+      legajo: 17
+      tomo: null
+      documento: "Diario Jornada, 10 de Agosto de 1973, 'LA PALANGANA DE PONCIO PREPARA UN ESPECTACULO'"
+
+    input_characteristics:
+      format: "tiff"               # pdf | tiff | image
+      scanned: true
+      digital_text_layer: false
+      multipage_tiff: false
+      poor_contrast: true
+      skewed_pages: true
+      landscape_pages: false
+      mixed_orientations: false
+      text_orientation: upright
+      typewritten: true
+      handwritten_notes: false
+      stamps: false
+      tables_or_forms: false
+      multiple_internal_documents: false
+      unknown: false
+
+    expected_extraction:
+      minimum_page_coverage_percent: 95
+      reading_order_should_be_correct: true
+      preserve_stamps_as_regions: true
+      preserve_handwriting_as_regions: true
+      transcribe_handwriting_automatically: false
+      expected_object_types: [paragraph, title]
+      objects_that_may_be_hidden_by_default: []
+      critical_text_examples:
+        - "LA PALANGANA DE PONCIO"
+      known_difficulties:
+        - "Multicolumna"
+
+    manual_ground_truth:
+      pages_reviewed: []
+      expected_internal_parts: []
+      expected_tables: []
+      expected_notes: []
+
+    acceptance_notes: "Por ahora es una prueba"
+  - test_id: "leg_17_leg_15_a_c_6"
+    local_path: "corpus/leg_17/leg_15_a_c_6.tiff"
+    short_description: "Ficha 1"
+    archival_location:
+      fondo: "SiCH"
+      seccion: null
+      subseccion: null
+      serie: null
+      caja: null
+      legajo: 17
+      tomo: null
+      documento: "Parte Side n° 01531/183.-"
+
+    input_characteristics:
+      format: "tiff"               # pdf | tiff | image
+      scanned: true
+      digital_text_layer: false
+      multipage_tiff: false
+      poor_contrast: true
+      skewed_pages: true
+      landscape_pages: false
+      mixed_orientations: false
+      text_orientation: upright
+      typewritten: true
+      handwritten_notes: true
+      stamps: true
+      tables_or_forms: true
+      multiple_internal_documents: false
+      unknown: false
+
+    expected_extraction:
+      minimum_page_coverage_percent: 95
+      reading_order_should_be_correct: true
+      preserve_stamps_as_regions: true
+      preserve_handwriting_as_regions: true
+      transcribe_handwriting_automatically: false
+      expected_object_types: [paragraph, title]
+      objects_that_may_be_hidden_by_default: []
+      critical_text_examples:
+        - "Se solicita al señor Delegado quiera tener a bien, informar permanentemente, mencionando este parte y O.R. 183"
+      known_difficulties:
+        - "Es una ficha, tiene muchos elementos de formato extraños"
+
+    manual_ground_truth:
+      pages_reviewed: []
+      expected_internal_parts: []
+      expected_tables: []
+      expected_notes: []
+
+    acceptance_notes: "Por ahora es una prueba"

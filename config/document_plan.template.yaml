@@ -1,0 +1,44 @@
+schema_version: '1.1'
+plan_key: documento_ejemplo_plan_v1
+source_key: documento_ejemplo
+expected_page_count: 9
+status: draft
+benchmark_pages: [1, 3, 5, 7, 9]
+parts:
+  - part_key: documento_1
+    title: Primer documento interno
+    part_type: document
+    page_start: 1
+    page_end: 4
+    page_sequence: [1, 2, 3, 4]
+    status: provisional
+  - part_key: documento_2
+    title: Segundo documento interno
+    part_type: document
+    page_start: 5
+    page_end: 9
+    page_sequence: [5, 6, 7, 8, 9]
+    status: provisional
+assignments:
+  - assignment_key: paginas_mecanografiadas
+    pages: [1, 2, 3, 4, 5, 6]
+    mode: ocr
+    profile: config/extraction_tesseract.yaml
+    part_key: documento_1
+  - assignment_key: formulario_regional
+    pages: [7]
+    mode: regions
+    region_template: config/regiones_pagina_7.yaml
+    part_key: documento_2
+  - assignment_key: manuscritos
+    pages: [8]
+    mode: manual
+    part_key: documento_2
+    notes: Transcripción humana pendiente.
+  - assignment_key: reverso_en_blanco
+    pages: [9]
+    mode: skip
+    part_key: documento_2
+    notes: Página confirmada como reverso sin contenido.
+created_by: local_user
+notes: Cambiar status a ready solo cuando todas las páginas estén cubiertas y no queden asignaciones pending.

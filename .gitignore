@@ -1,0 +1,71 @@
+# Entornos y secretos
+.venv/
+venv/
+env/
+.env
+.env.*
+!.env.example
+.streamlit/secrets.toml
+
+# Datos locales de Archive Workbench
+/project_data/
+/project_data_*/
+/project_data_receiver*/
+/project_data_receiver_old_*/
+
+# Bases de datos locales
+*.db
+*.db-shm
+*.db-wal
+*.sqlite
+*.sqlite3
+*.sqlite-shm
+*.sqlite-wal
+
+# Artefactos de procesamiento, modelos y cachés
+/models/
+/hf_cache/
+/.cache/
+/logs/
+/tmp/
+*.log
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+*.egg-info/
+.eggs/
+build/
+dist/
+pip-wheel-metadata/
+
+# Tests, cobertura y análisis estático
+.pytest_cache/
+.ruff_cache/
+.mypy_cache/
+.pyright/
+.coverage
+.coverage.*
+coverage.xml
+htmlcov/
+.tox/
+.nox/
+
+# Versiones anteriores y parches
+.dev/
+
+# Documentación generada
+site/
+docs/_build/
+
+# IDE y sistema operativo
+.vscode/
+.idea/
+*.code-workspace
+.DS_Store
+Thumbs.db
+*.swp
+*.swo
+*~

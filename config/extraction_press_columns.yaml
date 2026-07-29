@@ -1,0 +1,16 @@
+schema_version: "1.0"
+profile_key: "tesseract_press_columns_es_v1"
+backend: "tesseract_tsv"
+tesseract_command: "tesseract"
+ocr_languages: ["spa"]
+force_ocr: true
+extract_tables: false
+psm: 3
+device: "cpu"
+num_threads: 4
+document_timeout_seconds: 900
+use_ocr_derivatives: true
+minimum_characters_per_page_warning: 100
+image_variant: "grayscale_autocontrast"
+object_granularity: "paragraph"
+layout_hint: "newspaper_columns"
