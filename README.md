@@ -1,118 +1,199 @@
-# Archive Workbench 0.33.1
+# Archive Workbench
 
-Aplicación local para registrar, describir, procesar, revisar, coordinar, anotar, buscar, exportar e intercambiar cambios de documentación archivística digitalizada.
+**Archive Workbench** es una aplicación local para organizar, procesar, revisar, anotar, buscar y exportar documentación archivística digitalizada.
 
-## Novedades 0.33.1
+Está pensada especialmente para equipos de archivos, bibliotecas, ciencias sociales, historia, antropología, análisis del discurso y humanidades digitales que trabajan con PDF, TIFF e imágenes escaneadas.
 
-Versión de estabilización posterior a la prueba piloto funcional de 0.33.0.
+Los documentos y la base de datos permanecen en la computadora del equipo: la aplicación no necesita subir el corpus a un servicio externo.
 
-- Corrige la migración `0027_temporal_authorities_relations` para conservar menciones y relaciones vinculadas a autoridades preexistentes.
-- Impide aceptar o modificar menciones sin autoridad canónica y evita duplicados activos sobre el mismo fragmento textual.
-- La búsqueda transversal reutiliza y vincula menciones huérfanas existentes en vez de crear una segunda mención sobre los mismos offsets.
-- Hace explícita la creación y edición de relaciones: `Enter` no guarda, el destino puede cambiarse y la baja lógica conserva historial.
-- Ordena los backups por la fecha real del manifiesto, evitando avisos falsos de recuperación pendiente.
-- Reconoce la ascendencia de bundles ya aplicados aunque la copia receptora haya conservado resoluciones locales diferentes.
-- Normaliza cadenas internas de eventos, fechas equivalentes y actualizaciones vacías durante el `dry-run`.
-- Rechaza la exportación de bundles estructuralmente incompletos que incluyan objetos OCR inicializados después del checkpoint sin una base común con sus páginas y selecciones.
-- `exchange-fork-copy` recrea los directorios operativos requeridos.
-- El índice semántico se invalida solo cuando cambia el corpus textual comprendido por su perfil; cambios exclusivos de entidades o alias ya no fuerzan una reconstrucción.
-- No agrega una migración nueva: la revisión vigente continúa siendo `0028_operational_readiness`.
-- 171 tests automatizados.
+**Versión actual:** 0.33.1 — primera versión pública funcional.
 
-## Actualización
+## Qué permite hacer
+
+Archive Workbench reúne en una misma interfaz:
+
+- catálogo y descripción archivística jerárquica;
+- registro de archivos originales sin modificarlos;
+- preparación de derivados para procesamiento;
+- extracción de texto y OCR versionados;
+- selección humana de la mejor extracción por página;
+- revisión del texto junto con la imagen y sus regiones;
+- edición, anotaciones e historial;
+- búsqueda literal y búsqueda semántica opcional;
+- entidades, alias, menciones y relaciones;
+- grafo documental;
+- exportaciones reproducibles en CSV y JSONL;
+- asignación de tareas entre integrantes del equipo;
+- intercambio offline de cambios entre distintas copias;
+- backups y pruebas de recuperación.
+
+La extracción automática siempre produce candidatos revisables. La aplicación no reemplaza la lectura ni las decisiones del equipo de investigación.
+
+## Estado del proyecto
+
+Esta es la primera versión pública y funcional. El circuito completo fue probado con un corpus piloto, pero el proyecto todavía se encuentra en etapa de estabilización.
+
+La instalación actual requiere ejecutar algunos comandos en una terminal. Está prevista una **imagen Docker** para una próxima versión, con el objetivo de simplificar la instalación en equipos sin experiencia técnica.
+
+La calidad del OCR depende mucho del estado y la disposición gráfica de cada documento. La búsqueda semántica es experimental y sus resultados deben evaluarse críticamente.
+
+## Requisitos actuales
+
+Las instrucciones siguientes están pensadas para **Ubuntu o una distribución Linux reciente**.
+
+Se necesita:
+
+- Python 3.11 o posterior;
+- conexión a internet durante la instalación;
+- Tesseract OCR y el idioma español;
+- espacio suficiente para los documentos, derivados y modelos opcionales.
+
+Una placa gráfica no es obligatoria. Puede acelerar algunas funciones, pero Archive Workbench también funciona con CPU.
+
+Instalá los requisitos del sistema:
 
 ```bash
-pip install -e ".[dev,extraction,streamlit]"
-pytest
-archive-workbench db-upgrade project_data
-archive-workbench db-upgrade project_data_receiver
+sudo apt update
+sudo apt install -y \
+  git \
+  python3 \
+  python3-venv \
+  python3-pip \
+  tesseract-ocr \
+  tesseract-ocr-spa
 ```
 
-Para usar embeddings:
+## Descargar Archive Workbench
+
+### Opción sencilla: descargar el ZIP
+
+En esta página de GitHub:
+
+1. Pulsá el botón verde **Code**.
+2. Elegí **Download ZIP**.
+3. Descomprimí el archivo.
+4. Abrí una terminal dentro de la carpeta descomprimida.
+
+En Ubuntu suele poder hacerse con clic derecho sobre la carpeta y **Abrir en una terminal**.
+
+### Opción con Git
+
+```bash
+git clone https://github.com/alexdcolman/archive-workbench.git
+cd archive-workbench
+```
+
+## Instalación
+
+Dentro de la carpeta de Archive Workbench, ejecutá:
+
+```bash
+python3 -m venv .venv
+source .venv/bin/activate
+
+python -m pip install --upgrade pip
+pip install -e ".[extraction,streamlit,tiff]"
+```
+
+La búsqueda semántica es opcional. Para agregarla:
 
 ```bash
 pip install -e ".[semantic]"
 ```
 
-También puede instalarse todo en una sola operación:
+La primera instalación puede demorar varios minutos. Algunas funciones pueden descargar modelos la primera vez que se utilizan.
+
+## Crear el primer proyecto
+
+Cada corpus se guarda en una carpeta de proyecto separada. En este ejemplo se llama `mi_proyecto`:
 
 ```bash
-pip install -e ".[dev,extraction,streamlit,semantic]"
+archive-workbench init-project mi_proyecto
+
+cp config/decisions.template.yaml \
+  mi_proyecto/config/decisions.yaml
+
+cp config/extraction.template.yaml \
+  mi_proyecto/config/extraction.yaml
 ```
 
-## Interfaz
-
-```bash
-archive-workbench review-app project_data
-```
-
-La barra lateral ofrece:
-
-- **Inicio**: estado operativo, recorrido guiado, alertas y accesos directos.
-- **Catálogo**: jerarquía archivística, descripción, unidades hijas, objetos digitales, archivos e historial.
-- **Procesamiento**: inventario, preparación, extracción por lote, reintentos, selección canónica e inicialización editable.
-- **Trabajo**: asignaciones, carga por responsable, vencimientos y revisión cruzada.
-- **Revisión**: imagen, cajas OCR, texto editable, anotaciones y menciones.
-- **Búsqueda literal**: consulta transversal FTS5 por palabras, frases y fragmentos.
-- **Búsqueda semántica**: recuperación por afinidad de sentido mediante un índice local opcional.
-- **Entidades**: fichas canónicas, alias, búsqueda transversal de menciones, relaciones e historial.
-- **Grafo**: exploración derivada de relaciones, menciones y entidades compartidas.
-- **Exportar**: perfiles, vista previa y salidas CSV/JSONL reproducibles.
-- **Intercambio**: bundles, dry-run, conflictos y aplicación con backup.
-- **Administración**: validaciones globales, backups, pruebas de recuperación y restauración controlada.
-
-## Flujo de incorporación
+Antes de comenzar, abrí este archivo con un editor de texto:
 
 ```text
-Catálogo
-→ Procesamiento: preparar
-→ Procesamiento: extraer
-→ Procesamiento: seleccionar páginas canónicas
-→ Procesamiento: inicializar capa editable
-→ Trabajo: asignar revisión primaria
-→ Revisión
-→ Trabajo: enviar y asignar revisión cruzada
+mi_proyecto/config/decisions.yaml
 ```
 
-La extracción produce candidatos versionados. La selección de páginas es siempre humana. Si una página ya fue inicializada y luego cambia su selección OCR, la capa editable existente se marca como desactualizada y no se sobrescribe.
+Al principio del archivo, reemplazá `project_name` y `project_id` por el nombre y un identificador breve de tu proyecto. No hace falta modificar toda la configuración para realizar una primera exploración.
 
-## Primer índice semántico
+Prepará la base local:
 
 ```bash
-archive-workbench semantic-profile-default project_data --changed-by alex
-archive-workbench semantic-profile-list project_data
-archive-workbench semantic-index-build \
-  project_data \
-  "Multilingüe E5 — objetos" \
-  --device auto \
-  --created-by alex
-archive-workbench semantic-search \
-  project_data \
-  "Multilingüe E5 — objetos" \
-  "vigilancia de organizaciones políticas y culturales"
+archive-workbench db-upgrade mi_proyecto
 ```
 
-La primera construcción puede descargar el modelo. Los índices se guardan bajo `project_data/semantic/indexes/` y no forman parte de la fuente canónica ni de los bundles offline. Su calidad analítica todavía debe evaluarse con un corpus más amplio y consultas de control definidas por el equipo.
+## Abrir la aplicación
+
+Cada vez que vuelvas a trabajar, entrá en la carpeta del programa, activá el entorno y abrí la interfaz:
+
+```bash
+source .venv/bin/activate
+archive-workbench review-app mi_proyecto
+```
+
+La aplicación abrirá una página en el navegador. Si no se abre automáticamente, visitá:
+
+```text
+http://127.0.0.1:8501
+```
+
+Para detenerla, volvé a la terminal y presioná `Ctrl+C`.
+
+## Primer recorrido recomendado
+
+Dentro de la interfaz:
+
+1. **Catálogo:** definí la estructura archivística y registrá los archivos.
+2. **Procesamiento:** prepará derivados, ejecutá extracciones y seleccioná candidatos.
+3. **Revisión:** contrastá imagen y texto, corregí objetos y aprobá páginas.
+4. **Búsqueda y Entidades:** explorá el corpus revisado y vinculá menciones.
+5. **Exportar:** generá corpus reproducibles en CSV o JSONL.
+6. **Administración:** revisá el estado operativo y creá backups.
+
+Los originales se conservan sin modificaciones. Las extracciones, correcciones y decisiones quedan separadas y versionadas.
+
+## Documentación
+
+La carpeta [`docs/`](docs/) contiene:
+
+- [Diseño y plan de implementación](docs/DISEÑO_Y_PLAN_DE_IMPLEMENTACION.md)
+- [Guía de la prueba piloto](docs/GUIA_PRUEBA_PILOTO_ARCHIVE_WORKBENCH.md)
+- [Cierre funcional de la versión 0.33.1](docs/PRUEBA_PILOTO_Y_CIERRE_0.33.1.md)
+- [Pendientes y mejoras](docs/PENDIENTES_Y_MEJORAS_ARCHIVE_WORKBENCH_PILOTO_FINAL_20260727_203735.md)
+- [Registro completo de la prueba piloto](docs/REGISTRO_PRUEBA_PILOTO_ARCHIVE_WORKBENCH_CIERRE_FINAL_20260727_203735.md)
+
+Los cambios entre versiones se registran en [`CHANGELOG.md`](CHANGELOG.md).
+
+## Desarrollo y pruebas
+
+Para instalar también las herramientas de desarrollo:
+
+```bash
+pip install -e ".[dev,extraction,streamlit,semantic,tiff]"
+pytest
+```
+
+La versión 0.33.1 cuenta con 171 pruebas automatizadas.
 
 ## Licencia y cita
 
-Archive Workbench es software libre distribuido bajo la **GNU Affero General
-Public License v3.0 o posterior (`AGPL-3.0-or-later`)**. Puede utilizarse,
-estudiarse, modificarse y redistribuirse conforme a los términos de esa
-licencia. Las versiones modificadas que se distribuyan o se ofrezcan como
-servicio a través de una red deben mantener la misma licencia, publicar su
-código fuente correspondiente y conservar los avisos de autoría y licencia.
+Archive Workbench es software libre distribuido bajo la **GNU Affero General Public License v3.0 o posterior (`AGPL-3.0-or-later`)**. Puede utilizarse, estudiarse, modificarse y redistribuirse conforme a los términos de esa licencia.
 
-El desarrollo fue realizado por **Alex Colman** en el marco del
-**Grupo de Investigación en Archivos de la Represión (GIAR)**.
+Las versiones modificadas que se distribuyan o se ofrezcan como servicio a través de una red deben mantener la misma licencia, publicar su código fuente correspondiente y conservar los avisos de autoría y licencia.
 
-Cuando Archive Workbench sea utilizado en una investigación, publicación,
-informe, actividad docente o desarrollo derivado, solicitamos citar:
+El desarrollo fue realizado por **Alex Colman** en el marco del **Grupo de Investigación en Archivos de la Represión (GIAR)**.
 
-> Colman, Alex, y Grupo de Investigación en Archivos de la Represión
-> (GIAR). 2026. *Archive Workbench* (versión 0.33.1) [software].
-> https://github.com/alexdcolman/archive-workbench
+Cuando Archive Workbench sea utilizado en una investigación, publicación, informe, actividad docente o desarrollo derivado, solicitamos citar:
 
-El archivo [`CITATION.cff`](CITATION.cff) contiene los metadatos de cita
-legibles por GitHub, gestores bibliográficos y servicios de archivado
-científico.
+> Colman, Alex, y Grupo de Investigación en Archivos de la Represión (GIAR). 2026. *Archive Workbench* (versión 0.33.1) [software]. https://github.com/alexdcolman/archive-workbench
+
+El archivo [`CITATION.cff`](CITATION.cff) contiene los metadatos de cita reconocidos por GitHub y por distintos gestores bibliográficos.
