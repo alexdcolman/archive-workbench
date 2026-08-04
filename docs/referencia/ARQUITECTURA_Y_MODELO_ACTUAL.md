@@ -51,7 +51,7 @@ Los perfiles seleccionan contenido, agrupación, filtros y formato. Cada materia
 
 ### Descubrimiento abierto
 
-Los perfiles autorizados producen corridas inmutables y candidatos con texto exacto, offsets, revisión textual, familia semántica, método y procedencia. Las decisiones humanas se registran por separado y son append-only. Los grupos reúnen candidatos repetidos sin fusionar sus filas: cada pertenencia conserva corrida, documento, offsets y estado. Las acciones de grupo registran creación, incorporación, restauración y separación. Cuando una edición vuelve obsoleto un candidato, la continuidad crea un candidato nuevo sobre la revisión vigente y mantiene visible el snapshot histórico.
+Los perfiles autorizados producen corridas inmutables y candidatos con texto exacto, offsets, revisión textual, familia semántica, método y procedencia. Las decisiones humanas se registran por separado y son append-only. Los grupos reúnen candidatos repetidos sin fusionar sus filas: cada pertenencia conserva corrida, documento, offsets y estado. Las acciones de grupo registran creación, incorporación, restauración y separación. Cuando una edición vuelve obsoleto un candidato, la continuidad crea un candidato nuevo sobre la revisión vigente y mantiene visible el snapshot histórico. La evaluación usa corpus JSONL con verdad terreno, métricas por familia e informes con huellas reproducibles. Los proveedores opcionales comparten el mismo contrato y fijan versión, método y modelo sin declararse superiores por defecto.
 
 ### Intercambio offline
 
@@ -84,6 +84,7 @@ Los backups incluyen manifiesto, base y configuración. La restauración crea pr
 - Decisión y registro propio de descubrimiento: juicio humano append-only y datos específicos por familia.
 - Grupo, pertenencia y acción de descubrimiento: deduplicación explícita sin fusionar procedencias.
 - Continuidad de candidato: vínculo entre un snapshot obsoleto y uno nuevo sobre la revisión vigente.
+- Corpus e informe de evaluación de descubrimiento: verdad terreno y comparación reproducible por proveedor, versión y parámetros.
 
 ## Reglas de seguridad
 

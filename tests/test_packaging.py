@@ -165,8 +165,8 @@ def test_version_docs_and_discovery_plan_are_packaged() -> None:
         / "0040_discovery_grouping_continuity.py"
     )
 
-    assert data["project"]["version"] == "0.71.2"
-    assert '__version__ = "0.71.2"' in version_source
+    assert data["project"]["version"] == "0.73.0"
+    assert '__version__ = "0.73.0"' in version_source
     assert migration.is_file()
     assert 'down_revision = "0039_discovery_decisions"' in migration.read_text(
         encoding="utf-8"
@@ -178,6 +178,12 @@ def test_version_docs_and_discovery_plan_are_packaged() -> None:
     assert (root / "src" / "archive_workbench" / "discovery_app.py").is_file()
     assert (root / "src" / "archive_workbench" / "discovery_review.py").is_file()
     assert (root / "src" / "archive_workbench" / "discovery_grouping.py").is_file()
+    assert (root / "src" / "archive_workbench" / "discovery_providers.py").is_file()
+    assert (root / "src" / "archive_workbench" / "discovery_evaluation.py").is_file()
+    assert (root / "config" / "discovery_evaluation_corpus.jsonl").is_file()
+    assert data["project"]["optional-dependencies"]["discovery"] == [
+        "spacy>=3.8,<4"
+    ]
     assert (root / "scripts" / "create_open_discovery_validation_project.py").is_file()
     assert (root / "scripts" / "prepare_open_discovery_review_validation.py").is_file()
     assert (root / "scripts" / "prepare_open_discovery_grouping_validation.py").is_file()
@@ -200,9 +206,12 @@ def test_version_docs_and_discovery_plan_are_packaged() -> None:
     assert (root / "docs" / "operativos" / "PENDIENTES_ACTIVOS.md").is_file()
     assert (root / "docs" / "operativos" / "ESTRATEGIA_DE_PRUEBAS.md").is_file()
     assert (root / "docs" / "operativos" / "ACTUALIZACION_ACTUAL.md").is_file()
-    assert (root / ".assistant" / "00_LEER_PRIMERO.md").is_file()
-    assert (root / ".assistant" / "05_CRITERIOS_INTERFAZ.md").is_file()
-    assert (root / ".assistant" / "06_RELEVO_NUEVA_CONVERSACION.md").is_file()
+    assert ".assistant/" in (root / ".gitignore").read_text(encoding="utf-8")
+    assistant_root = root / ".assistant"
+    if assistant_root.is_dir():
+        assert (assistant_root / "00_LEER_PRIMERO.md").is_file()
+        assert (assistant_root / "05_CRITERIOS_INTERFAZ.md").is_file()
+        assert (assistant_root / "06_RELEVO_NUEVA_CONVERSACION.md").is_file()
     assert (
         root / "docs" / "referencia" / "RECUPERACION_LINAJE_EX_01.md"
     ).is_file()

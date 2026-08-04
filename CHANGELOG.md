@@ -1,3 +1,17 @@
+## 0.73.0 — 2026-08-03
+
+- Cierra `DISC-01D` y el bloque `DISC-01` con un corpus JSONL que conserva texto exacto, offsets, familia, subtipo y procedencia.
+- Agrega métricas micro, macro y por familia, registro de errores, huellas SHA-256 y comparación reproducible de informes.
+- Incorpora `spacy_ner` como adaptador opcional con `modelo@versión` y el mismo contrato auditable del proveedor local.
+- Registra la validación manual de `UX-03`. No agrega migraciones; la revisión continúa en `0040_discovery_grouping_continuity`.
+
+## 0.72.0 — 2026-08-03
+
+- Cierra `DISC-01C` con el validador final sobre cuatro grupos, nueve pertenencias, catorce acciones append-only y una continuidad desde un snapshot equivalente.
+- Resuelve `UX-03`: separa revisar entidades, crear una entidad y Descubrimiento abierto; dentro de descubrimiento separa revisión, nueva corrida y agrupamiento o continuidad.
+- Ordena `docs/HISTORIAL_DE_CAMBIOS.md` y `docs/operativos/IMPLEMENTACIONES_REALIZADAS.md`.
+- No agrega migraciones; continúa `0040_discovery_grouping_continuity`.
+
 ## 0.71.2 — 2026-08-03
 
 - Corrige el validador de `DISC-01C` para aceptar como origen de continuidad cualquiera de los dos snapshots controlados equivalentes de `Cuaderno del Delta`.

@@ -35,6 +35,12 @@ from archive_workbench.db.models import (
     SourceRegistration,
     utc_now,
 )
+from archive_workbench.discovery_providers import (
+    LOCAL_PROVIDER_KEY,
+    LOCAL_PROVIDER_VERSION,
+    detect_with_provider,
+    provider_contract,
+)
 from archive_workbench.exchange import current_editable_state_sha256
 from archive_workbench.identity import new_id
 
@@ -47,9 +53,8 @@ DISCOVERY_FAMILIES = (
     "work",
     "other",
 )
-DISCOVERY_PROVIDER_KEY = "local_deterministic"
-DISCOVERY_PROVIDER_VERSION = "local_rules_v1"
-DISCOVERY_METHOD = "conservative_regex_rules"
+DISCOVERY_PROVIDER_KEY = LOCAL_PROVIDER_KEY
+DISCOVERY_PROVIDER_VERSION = LOCAL_PROVIDER_VERSION
 OBJECT_REVIEW_STATUSES = ("unreviewed", "needs_review", "reviewed", "approved")
 
 _FAMILY_LABELS = {
@@ -339,10 +344,13 @@ def _validate_profile(
     confidence = float(values.minimum_confidence)
     if not 0.0 <= confidence <= 1.0:
         raise ValueError("La confianza mínima debe estar entre 0 y 1")
-    if values.provider_key != DISCOVERY_PROVIDER_KEY:
-        raise ValueError("La primera fase solo admite el proveedor local determinista")
-    if values.provider_version != DISCOVERY_PROVIDER_VERSION:
-        raise ValueError("Versión del proveedor local no admitida")
+    contract = provider_contract(values.provider_key, values.provider_version)
+    unsupported = set(families) - set(contract.supported_families)
+    if unsupported:
+        raise ValueError(
+            f"{contract.key}@{contract.version} no admite las familias: "
+            + ", ".join(sorted(unsupported))
+        )
     return DiscoveryProfileValues(
         name=_clean_text(values.name, field="El nombre del perfil", maximum=200),
         description=(
@@ -391,7 +399,11 @@ def discovery_profile_authorization_parameters(
         "include_page_review_statuses",
     ):
         payload[key] = list(payload[key])
-    payload["method"] = DISCOVERY_METHOD
+    contract = provider_contract(profile.provider_key, profile.provider_version)
+    payload["method"] = contract.method
+    if contract.model_name is not None:
+        payload["model_name"] = contract.model_name
+        payload["model_version"] = contract.model_version
     payload["analysis_quality"] = quality_scope_snapshot(
         analysis_kind="open_discovery",
         page_review_statuses=profile.include_page_review_statuses_json or (),
@@ -752,6 +764,11 @@ def run_open_discovery(
             separators=(",", ":"),
         ).encode("utf-8")
     ).hexdigest()
+    provider = provider_contract(
+        profile.provider_key,
+        profile.provider_version,
+        require_available=profile.provider_key != DISCOVERY_PROVIDER_KEY,
+    )
     started = utc_now()
     run = DiscoveryRun(
         id=new_id(),
@@ -762,7 +779,7 @@ def run_open_discovery(
         profile_snapshot_json=profile_snapshot(profile),
         provider_key=profile.provider_key,
         provider_version=profile.provider_version,
-        method=DISCOVERY_METHOD,
+        method=provider.method,
         parameters_sha256=parameters_sha256,
         corpus_state_sha256=current_editable_state_sha256(session, project_id),
         page_review_statuses_json=list(profile.include_page_review_statuses_json or ()),
@@ -789,10 +806,19 @@ def run_open_discovery(
             text = editable.current_text or ""
             if not text.strip():
                 continue
-            for detection in detect_local_candidates(
-                text, families=profile.families_json or ()
-            ):
-                if detection.confidence < float(profile.minimum_confidence):
+            runtime_provider, detections = detect_with_provider(
+                text,
+                families=profile.families_json or (),
+                provider_key=profile.provider_key,
+                provider_version=profile.provider_version,
+            )
+            if runtime_provider != provider:
+                raise RuntimeError("El proveedor cambió durante la corrida")
+            for detection in detections:
+                if (
+                    detection.confidence is not None
+                    and detection.confidence < float(profile.minimum_confidence)
+                ):
                     continue
                 if detection.family in {"actor", "space", "event", "work"}:
                     normalized = _normalize_surface(detection.exact_text)
@@ -825,11 +851,11 @@ def run_open_discovery(
                     semantic_family=detection.family,
                     suggested_subtype=detection.subtype,
                     confidence=detection.confidence,
-                    method=DISCOVERY_METHOD,
+                    method=provider.method,
                     provider_key=profile.provider_key,
                     provider_version=profile.provider_version,
-                    model_name=None,
-                    model_version=None,
+                    model_name=provider.model_name,
+                    model_version=provider.model_version,
                     explanation=detection.explanation,
                     parameters_sha256=parameters_sha256,
                     status="pending",

@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "archive-workbench"
-version = "0.71.2"
+version = "0.73.0"
 description = "Aplicación local para registro, extracción, edición y anotación de archivos desclasificados."
 readme = "README.md"
 requires-python = ">=3.11"
@@ -35,6 +35,9 @@ extraction = [
 ]
 surya = [
   "surya-ocr==0.22.1",
+]
+discovery = [
+  "spacy>=3.8,<4",
 ]
 tiff = [
   "pyvips[binary]>=3,<4",

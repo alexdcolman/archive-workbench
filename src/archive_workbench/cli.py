@@ -169,6 +169,8 @@ from archive_workbench.search import (
 )
 from archive_workbench.open_discovery import (
     DISCOVERY_FAMILIES,
+    DISCOVERY_PROVIDER_KEY,
+    DISCOVERY_PROVIDER_VERSION,
     DiscoveryProfileValues,
     discovery_audit_payload,
     discovery_candidate_rows,
@@ -178,6 +180,12 @@ from archive_workbench.open_discovery import (
     run_open_discovery,
     save_discovery_profile,
 )
+from archive_workbench.discovery_evaluation import (
+    compare_evaluation_reports,
+    evaluate_discovery_provider,
+    write_evaluation_report,
+)
+from archive_workbench.discovery_providers import provider_catalog
 from archive_workbench.discovery_review import (
     DISCOVERY_ACCEPTANCE_MODES,
     DISCOVERY_DECISION_TYPES,
@@ -3608,6 +3616,76 @@ def semantic_profile_list_command(
 
 
 
+@app.command("discovery-providers")
+def discovery_providers_command() -> None:
+    """Lista adaptadores de descubrimiento y su disponibilidad local."""
+    for row in provider_catalog():
+        state = "disponible" if row.available else "no disponible"
+        typer.echo(
+            f"{row.key} | {row.version} | {row.method} | {state} | "
+            f"familias={','.join(row.supported_families)}"
+        )
+        typer.echo(f"    {row.availability_reason}")
+    typer.echo(
+        "Ningún proveedor se considera superior o predeterminado por evidencia empírica."
+    )
+
+
+@app.command("discovery-evaluate")
+def discovery_evaluate_command(
+    corpus: Path = typer.Argument(..., help="Corpus JSONL con texto, offsets y procedencia"),
+    output: Path = typer.Option(..., "--output", help="Informe JSON reproducible"),
+    provider: str = typer.Option(DISCOVERY_PROVIDER_KEY, "--provider"),
+    provider_version: str = typer.Option(
+        DISCOVERY_PROVIDER_VERSION, "--provider-version"
+    ),
+    family: list[str] | None = typer.Option(None, "--family"),
+    minimum_confidence: float = typer.Option(
+        0.0, "--minimum-confidence", min=0.0, max=1.0
+    ),
+) -> None:
+    """Evalúa un proveedor por familia sin escribir en una base de proyecto."""
+    try:
+        result = evaluate_discovery_provider(
+            corpus,
+            provider_key=provider,
+            provider_version=provider_version,
+            families=tuple(family or DISCOVERY_FAMILIES),
+            minimum_confidence=minimum_confidence,
+        )
+        written = write_evaluation_report(result, output)
+    except (ValueError, RuntimeError, OSError) as exc:
+        raise typer.BadParameter(str(exc)) from exc
+    metrics = result.payload["metrics"]["micro"]
+    typer.echo(
+        f"OK: {written} | precisión={metrics['precision']:.6f} | "
+        f"recuperación={metrics['recall']:.6f} | F1={metrics['f1']:.6f}"
+    )
+    typer.echo(f"SHA-256 informe: {result.report_sha256}")
+    typer.echo(
+        f"SHA-256 parámetros: {result.payload['parameters']['sha256']}"
+    )
+
+
+@app.command("discovery-evaluation-compare")
+def discovery_evaluation_compare_command(
+    reports: list[Path] = typer.Argument(..., help="Dos o más informes JSON"),
+    output: Path | None = typer.Option(None, "--output"),
+) -> None:
+    """Compara informes del mismo corpus por proveedor, versión y parámetros."""
+    try:
+        payload = compare_evaluation_reports(reports)
+    except (ValueError, OSError) as exc:
+        raise typer.BadParameter(str(exc)) from exc
+    rendered = json.dumps(payload, ensure_ascii=False, indent=2, sort_keys=True)
+    if output is not None:
+        output.parent.mkdir(parents=True, exist_ok=True)
+        output.write_text(rendered + "\n", encoding="utf-8")
+        typer.echo(f"OK: comparación escrita en {output.resolve()}")
+    else:
+        typer.echo(rendered)
+
+
 @app.command("discovery-profile-save")
 def discovery_profile_save_command(
     project_root: Path = typer.Argument(..., help="Raíz del proyecto operativo"),
@@ -3619,6 +3697,16 @@ def discovery_profile_save_command(
     object_status: list[str] | None = typer.Option(None, "--object-status"),
     page_status: list[str] | None = typer.Option(None, "--page-status"),
     minimum_confidence: float = typer.Option(0.75, "--minimum-confidence", min=0.0, max=1.0),
+    provider: str = typer.Option(
+        DISCOVERY_PROVIDER_KEY,
+        "--provider",
+        help="Proveedor auditable: local_deterministic o spacy_ner",
+    ),
+    provider_version: str = typer.Option(
+        DISCOVERY_PROVIDER_VERSION,
+        "--provider-version",
+        help="Versión exacta; para spaCy usar modelo@versión",
+    ),
     confirm_broader_quality_scope: bool = typer.Option(
         False, "--confirm-broader-quality-scope"
     ),
@@ -3664,6 +3752,8 @@ def discovery_profile_save_command(
                     include_object_review_statuses=tuple(object_status or ()),
                     include_page_review_statuses=selected_pages,
                     minimum_confidence=minimum_confidence,
+                    provider_key=provider,
+                    provider_version=provider_version,
                 ),
                 changed_by=changed_by,
                 broader_quality_scope_confirmed=confirm_broader_quality_scope,
@@ -3713,7 +3803,7 @@ def discovery_run_command(
     profile_ref: str = typer.Argument(..., help="ID o nombre del perfil"),
     created_by: str = typer.Option("local_user", "--created-by"),
 ) -> None:
-    """Ejecuta el proveedor local y persiste candidatos auditables."""
+    """Ejecuta el proveedor configurado y persiste candidatos auditables."""
     _require_current_database(project_root)
     engine = create_sqlite_engine(database_path(project_root))
     try:

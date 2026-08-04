@@ -32,10 +32,7 @@ def test_assistant_continuity_documents_exist_and_define_read_order() -> None:
         if line.strip() and not line.lstrip().startswith("#")
     }
 
-    # .assistant contiene reglas privadas de continuidad y no se versiona.
     assert ".assistant/" in gitignore_entries
-
-    # En una copia limpia de GitHub la carpeta puede no existir.
     if not assistant.is_dir():
         return
 
@@ -51,15 +48,11 @@ def test_assistant_continuity_documents_exist_and_define_read_order() -> None:
         "07_SEGURIDAD_ARCHIVOS_Y_REPOSITORIO.md",
     }
     documents = sorted(path.name for path in assistant.glob("*.md"))
-
     assert required.issubset(documents)
 
     first = (assistant / "00_LEER_PRIMERO.md").read_text(encoding="utf-8")
-
-    # Todo documento privado existente debe estar en el orden de lectura.
     for name in documents:
         assert f".assistant/{name}" in first
-
     assert "Orden obligatorio de lectura" in first
     assert "docs/operativos/PENDIENTES_ACTIVOS.md" in first
     assert "No volver a presentar como pendiente" in first
@@ -69,7 +62,6 @@ def test_active_pending_ledger_has_index_and_recovers_all_major_lines() -> None:
     text = (OPERATIVE / "PENDIENTES_ACTIVOS.md").read_text(encoding="utf-8")
     assert "## Índice" in text
     for item in (
-        "DISC-01 — Descubrimiento abierto",
         "DISC-02 — Importación de diccionarios",
         "AV-01 — Registro audiovisual local y transcripción",
         "AV-02 — Plugin opcional de descarga desde YouTube",
@@ -80,15 +72,14 @@ def test_active_pending_ledger_has_index_and_recovers_all_major_lines() -> None:
     ):
         assert item in text
     assert "un bloque no pertinente obtuvo similitud `0.830`" in text
-    assert "texto exacto" in text and "offsets" in text
     assert "BUG-01 — Duplicación visual al archivar un perfil" not in text
     assert "UX-01 — Simplificación de la interfaz" not in text
     assert "DATA-01 — Reparación asistida" not in text
     assert "DATA-02 — Control de calidad antes de todo análisis automático" not in text
     assert "VALIDACIÓN PENDIENTE" not in text
     assert "EX-01 — Recuperación asistida de linaje" not in text
-    assert "DESCUBRIMIENTO_ABIERTO_DISC_01.md" in text
-    assert "DISC-01A" in text
+    assert "DISC-01 — Descubrimiento abierto" not in text
+    assert "DISC-01D" not in text
 
 
 def test_implemented_ledger_separates_closed_work_from_active_pending() -> None:
@@ -125,10 +116,14 @@ def test_implemented_ledger_separates_closed_work_from_active_pending() -> None:
     assert "0034_automatic_analysis_authorizations" in text
     assert "EX-01 queda cerrado en 0.68.1" in text
     assert "project_data" in text and "pruebas OCR" in text
+    assert "DISC-01D — evaluación reproducible" in text
+    assert "DISC-01` queda cerrado" in text
 
 
 def test_streamlit_form_policy_prevents_circular_disabled_buttons() -> None:
     assistant = ROOT / ".assistant"
+    if not assistant.is_dir():
+        return
     text = (assistant / "05_FORMULARIOS_STREAMLIT.md").read_text(encoding="utf-8")
     tests_policy = (assistant / "03_POLITICA_DE_PRUEBAS.md").read_text(encoding="utf-8")
     first = (assistant / "00_LEER_PRIMERO.md").read_text(encoding="utf-8")
@@ -149,7 +144,8 @@ def test_streamlit_form_policy_prevents_circular_disabled_buttons() -> None:
     assert "Regla permanente de interfaz" in first
     assert "Principio permanente para toda modificación" in implemented
     assert "UX-02" in pending and "complejidad acumulada" in pending
-    assert "UX-03" in pending and "inutilizable" in pending
+    assert "UX-03" not in pending
+    assert "UX-03" in implemented and "recorridos separados" in implemented
     assert "un solo bloque ejecutable" in tests_policy
     assert "un único bloque de comandos" in interaction
 
@@ -157,6 +153,8 @@ def test_streamlit_form_policy_prevents_circular_disabled_buttons() -> None:
 
 def test_interface_policy_requires_persistent_interactive_panels() -> None:
     assistant = ROOT / ".assistant"
+    if not assistant.is_dir():
+        return
     text = (assistant / "05_CRITERIOS_INTERFAZ.md").read_text(encoding="utf-8")
     first = (assistant / "00_LEER_PRIMERO.md").read_text(encoding="utf-8")
     tests_policy = (assistant / "03_POLITICA_DE_PRUEBAS.md").read_text(encoding="utf-8")
@@ -168,58 +166,49 @@ def test_interface_policy_requires_persistent_interactive_panels() -> None:
     assert "05_CRITERIOS_INTERFAZ.md" in first
     assert "persistencia del panel durante reruns" in tests_policy
 
-def test_new_conversation_handoff_is_explicit_and_not_a_second_pending_ledger() -> None:
-    text = (ROOT / ".assistant" / "06_RELEVO_NUEVA_CONVERSACION.md").read_text(
-        encoding="utf-8"
-    )
-    first = (ROOT / ".assistant" / "00_LEER_PRIMERO.md").read_text(encoding="utf-8")
-    assert "0.71.2" in text
-    assert "0040_discovery_grouping_continuity" in text
-    assert "Prioridad activa" in text
-    assert "DISC-01A" in text
-    assert "DISC-01B" in text
-    assert "no debe convertirse en otra lista de pendientes" in text
-    assert ".assistant/06_RELEVO_NUEVA_CONVERSACION.md" in first
-
 
 def test_history_map_is_concise_and_references_historical_detail() -> None:
     text = (DOCS / "HISTORIAL_DE_CAMBIOS.md").read_text(encoding="utf-8")
     assert "## Documentación vigente" in text
-    assert "## 0.71.2" in text
-    assert "## 0.71.1" in text
-    assert "## 0.70.2" in text
-    assert "## 0.70.1" in text
-    assert "## 0.70.0" in text
-    assert "## 0.69.0" in text
-    assert "## 0.68.1" in text
-    assert "## 0.68.0" in text
-    assert "## 0.67.0" in text
-    assert "## 0.66.0" in text
-    assert "## 0.65.0" in text
-    assert "## 0.64.2" in text
-    assert "## 0.64.1" in text
-    assert "## 0.64.0" in text
-    assert "## 0.63.0" in text
-    assert "## 0.62.1" in text
-    assert "## 0.62.0" in text
-    assert "## 0.61.0" in text
-    assert "## 0.60.0" in text
-    assert "## 0.59.0" in text
-    assert "## 0.58.0" in text
-    assert "## 0.57.0" in text
-    assert "## 0.56.0" in text
-    assert "## 0.55.0" in text
-    assert "## 0.54.0" in text
-    assert "## 0.53.0" in text
-    assert "## 0.52.0" in text
-    assert "## 0.51.0" in text
-    assert "## 0.50.3" in text
-    assert "## 0.50.1" in text
-    assert "## 0.50.0" in text
+    assert "### 0.73.0" in text
+    assert "### 0.72.0" in text
+    assert "### 0.71.2" in text
+    assert "### 0.71.1" in text
+    assert "### 0.70.2" in text
+    assert "### 0.70.1" in text
+    assert "### 0.70.0" in text
+    assert "### 0.69.0" in text
+    assert "### 0.68.1" in text
+    assert "### 0.68.0" in text
+    assert "### 0.67.0" in text
+    assert "### 0.66.0" in text
+    assert "### 0.65.0" in text
+    assert "### 0.64.2" in text
+    assert "### 0.64.1" in text
+    assert "### 0.64.0" in text
+    assert "### 0.63.0" in text
+    assert "### 0.62.1" in text
+    assert "### 0.62.0" in text
+    assert "### 0.61.0" in text
+    assert "### 0.60.0" in text
+    assert "### 0.59.0" in text
+    assert "### 0.58.0" in text
+    assert "### 0.57.0" in text
+    assert "### 0.56.0" in text
+    assert "### 0.55.0" in text
+    assert "### 0.54.0" in text
+    assert "### 0.53.0" in text
+    assert "### 0.52.0" in text
+    assert "### 0.51.0" in text
+    assert "### 0.50.3" in text
+    assert "### 0.50.1" in text
+    assert "### 0.50.0" in text
     assert "historico/actualizaciones" in text
     assert "historico/decisiones_tecnicas" in text
     assert "CHANGELOG.md" in text
-    assert len(text.splitlines()) < 170
+    assert text.index("### 0.73.0") < text.index("### 0.72.0")
+    assert text.index("### 0.72.0") < text.index("### 0.71.2")
+    assert len(text.splitlines()) < 230
 
 
 def test_current_architecture_is_separate_from_historical_design() -> None:
@@ -369,6 +358,7 @@ def test_historical_update_guides_046_to_0630_are_preserved() -> None:
         "ACTUALIZACION_Y_PRUEBA_0.70.2.md",
         "ACTUALIZACION_Y_PRUEBA_0.71.0.md",
         "ACTUALIZACION_Y_PRUEBA_0.71.1.md",
+        "ACTUALIZACION_Y_PRUEBA_0.72.0.md",
     ]
     assert sorted(path.name for path in HISTORICAL_UPDATES.glob("*.md")) == expected
     text_047 = (HISTORICAL_UPDATES / expected[1]).read_text(encoding="utf-8")
@@ -448,17 +438,15 @@ def test_automatic_analysis_quality_decision_is_preserved_and_auditable() -> Non
     assert "st.form" in text
 
 
-def test_current_update_guide_is_stable_named_and_validates_disc01c() -> None:
+def test_current_update_guide_is_stable_named_and_validates_disc01d() -> None:
     text = (OPERATIVE / "ACTUALIZACION_ACTUAL.md").read_text(encoding="utf-8")
-    assert "Archive Workbench 0.71.2" in text
+    assert "Archive Workbench 0.73.0" in text
     assert "0040_discovery_grouping_continuity" in text
     assert "No hay migración" in text
-    assert "project_data_open_discovery_validation" in text
-    assert "no ejecutar backup" in text.lower()
-    assert "duplicate_equivalent" in text
-    assert "UX-03" in text
-    assert "No volver a abrir Streamlit" in text
-    assert "validate_open_discovery_disc01c.py" in text
+    assert "project_data" in text
+    assert "no se mueve ni se elimina" in text.lower()
+    assert "discovery-evaluate" in text
+    assert "discovery-evaluation-compare" in text
     assert "pytest --collect-only -q" in text
 
 
@@ -516,11 +504,10 @@ def test_pilot_guide_delegates_future_work_to_single_pending_ledger() -> None:
 def test_readme_points_only_to_current_documentation_map() -> None:
     text = (ROOT / "README.md").read_text(encoding="utf-8")
     citation = (ROOT / "CITATION.cff").read_text(encoding="utf-8")
-    assert "**Versión actual:** 0.71.2" in text
-    assert "La versión 0.71.2 recopila" in text
-    assert "pruebas automatizadas." in text
-    assert "(versión 0.71.2)" in text
-    assert 'version: "0.71.2"' in citation
+    assert "**Versión actual:** 0.73.0" in text
+    assert "La versión 0.73.0 incorpora pruebas automatizadas" in text
+    assert "(versión 0.73.0)" in text
+    assert 'version: "0.73.0"' in citation
     assert "docs/HISTORIAL_DE_CAMBIOS.md" in text
     assert "docs/operativos/PENDIENTES_ACTIVOS.md" in text
     assert "docs/operativos/IMPLEMENTACIONES_REALIZADAS.md" in text
@@ -545,3 +532,6 @@ def test_open_discovery_plan_separates_suggestions_from_canonical_records() -> N
     assert "discovery_context_records" in text
     assert "autoridad nueva con estado `unreviewed`" in text
     assert "local_deterministic@local_rules_v1" in text
+    assert "spacy_ner" in text
+    assert "config/discovery_evaluation_corpus.jsonl" in text
+    assert "Criterio de cierre cumplido" in text

@@ -1,25 +1,19 @@
-# Actualización y prueba — Archive Workbench 0.71.2
+# Actualización y prueba — Archive Workbench 0.73.0
 
-Esta versión corrige únicamente el validador final de `DISC-01C`. La continuidad ya creada es válida: se originó en el candidato duplicado controlado de `Cuaderno del Delta`, que representa el mismo texto, objeto y revisión que el candidato original y pertenece al mismo grupo. El validador anterior exigía de manera innecesaria un identificador específico.
+Esta versión cierra `DISC-01D` y el bloque `DISC-01`: agrega evaluación reproducible por familia, comparación de informes y un adaptador opcional para spaCy. No cambia el esquema de la base ni agrega controles a la pantalla principal.
 
-También registra `UX-03` como pendiente crítico: la interfaz de **Entidades y menciones** y **Descubrimiento abierto** debe reformularse completamente, conservando todas las funciones y contratos de datos. No se iniciará `DISC-01D` antes de resolver esa reformulación.
-
-No hay migración ni acciones manuales que repetir.
-
-## 1. Actualizar
+## 1. Actualizar sin mover ni eliminar archivos locales
 
 ```bash
 cd ~/projects/archive_app
 source .venv/bin/activate
 
-rm -rf /tmp/archive_workbench_v0.71.2
-mkdir -p /tmp/archive_workbench_v0.71.2
-
+TMP_DIR="$(mktemp -d)"
 unzip -q \
-  ~/Downloads/archive_workbench_v0.71.2.zip \
-  -d /tmp/archive_workbench_v0.71.2
+  ~/Downloads/archive_workbench_v0.73.0.zip \
+  -d "$TMP_DIR"
 
-cp -a /tmp/archive_workbench_v0.71.2/. .
+cp -a "$TMP_DIR"/. .
 
 python -m pip install \
   --no-build-isolation \
@@ -29,45 +23,63 @@ python -m pip install \
 python -c "import archive_workbench; print(archive_workbench.__version__)"
 ```
 
-Debe devolver `0.71.2`.
+Debe devolver `0.73.0`. La copia no se mueve ni se elimina: `project_data`, `.dev`, `.assistant` y los demás archivos locales existentes permanecen en su lugar.
 
 ## 2. Base de datos
 
-No ejecutar backup, `db-upgrade`, preparación, agrupamiento, separación ni continuidad. La revisión continúa en `0040_discovery_grouping_continuity` y el estado que ya existe es el que debe validarse.
+**No hay migración.** La revisión requerida continúa en `0040_discovery_grouping_continuity`. No ejecutar `db-upgrade` para esta actualización.
 
-## 3. Todas las pruebas relevantes y `collect-only`
+## 3. Pruebas relevantes y colección completa
 
 ```bash
 pytest -q \
-  tests/test_discovery_grouping.py \
+  tests/test_discovery_evaluation.py \
+  tests/test_open_discovery.py \
+  tests/test_ui_navigation.py \
   tests/test_documentation.py \
   tests/test_packaging.py && \
 pytest --collect-only -q
 ```
 
-Esperado: `50 passed` y `413 tests collected`.
+No hace falta repetir `DISC-01A`, `DISC-01B`, `DISC-01C` ni la validación manual de `UX-03`.
 
-## 4. Repetir solamente el validador final
+## 4. Validación breve de DISC-01D
+
+Esta prueba no abre ni modifica ninguna base. Usa el corpus sintético incluido y escribe tres informes en `~/Downloads`.
 
 ```bash
-python scripts/validate_open_discovery_disc01c.py \
-  project_data_open_discovery_validation
+cd ~/projects/archive_app
+source .venv/bin/activate
+
+archive-workbench discovery-providers
+
+archive-workbench discovery-evaluate \
+  config/discovery_evaluation_corpus.jsonl \
+  --provider local_deterministic \
+  --provider-version local_rules_v1 \
+  --minimum-confidence 0.0 \
+  --output ~/Downloads/aw_disc01d_local_000.json
+
+archive-workbench discovery-evaluate \
+  config/discovery_evaluation_corpus.jsonl \
+  --provider local_deterministic \
+  --provider-version local_rules_v1 \
+  --minimum-confidence 0.95 \
+  --output ~/Downloads/aw_disc01d_local_095.json
+
+archive-workbench discovery-evaluation-compare \
+  ~/Downloads/aw_disc01d_local_000.json \
+  ~/Downloads/aw_disc01d_local_095.json \
+  --output ~/Downloads/aw_disc01d_comparacion.json
 ```
 
-Debe aceptar como origen controlado de la continuidad `duplicate_equivalent` y mostrar, como mínimo:
+Resultado esperado:
 
-```text
-grupos automáticos: 3
-grupos manuales: 1
-familia del grupo manual: actor
-continuidades: 1
-origen controlado de continuidad: duplicate_equivalent
-candidatos totales: 17
-corridas totales: 3
-conteos canónicos: {'authority_records': 7, 'entity_mentions': 12, 'entity_relations': 3, 'discovery_decisions': 9, 'discovery_context_records': 4}
-revisión: 0040_discovery_grouping_continuity
-integridad: ok
-claves foráneas: []
-```
+- `local_deterministic` aparece disponible;
+- `spacy_ner` aparece disponible o no disponible según el entorno, sin impedir la prueba;
+- con umbral `0.0`: precisión `1.000000`, recuperación `0.857143` y F1 `0.923077`;
+- con umbral `0.95`: precisión `1.000000`, recuperación `0.142857` y F1 `0.250000`;
+- la comparación se crea porque ambos informes conservan la misma huella del corpus;
+- el informe por familia deja visible que las reglas locales no cubren `other`.
 
-El número de grupos automáticos puede ser mayor que tres. En tu copia, `familia del grupo manual: actor` se conserva como evidencia de la confusión de interfaz registrada en `UX-03`; no modifica autoridades, menciones, relaciones, decisiones ni registros propios. No volver a abrir Streamlit ni repetir ninguna acción de `DISC-01C`. Con esta salida se cierra la fase y el próximo bloque es `UX-03`, no `DISC-01D`.
+El corpus incluido es un control de contrato y offsets, no un benchmark representativo. Ningún proveedor queda declarado como empíricamente superior o recomendado por defecto.

@@ -28,6 +28,8 @@ from archive_workbench.discovery_review import (
 )
 from archive_workbench.open_discovery import (
     DISCOVERY_FAMILIES,
+    DISCOVERY_PROVIDER_KEY,
+    DISCOVERY_PROVIDER_VERSION,
     DiscoveryProfileValues,
     discovery_candidate_rows,
     discovery_profile_rows,
@@ -36,7 +38,7 @@ from archive_workbench.open_discovery import (
     run_open_discovery,
     save_discovery_profile,
 )
-from archive_workbench.ui_navigation import rerun_view
+from archive_workbench.ui_navigation import request_tab, rerun_view, tracked_tabs
 
 _PAGE_STATUS_LABELS = {
     "unreviewed": "Sin revisar",
@@ -231,6 +233,16 @@ def _render_profile_configuration(
                             include_object_review_statuses=tuple(profile_object_statuses),
                             include_page_review_statuses=tuple(profile_page_statuses),
                             minimum_confidence=float(profile_minimum_confidence),
+                            provider_key=(
+                                selected_profile.provider_key
+                                if selected_profile
+                                else DISCOVERY_PROVIDER_KEY
+                            ),
+                            provider_version=(
+                                selected_profile.provider_version
+                                if selected_profile
+                                else DISCOVERY_PROVIDER_VERSION
+                            ),
                         ),
                         changed_by=actor or "local_user",
                         broader_quality_scope_confirmed=quality_confirmed,
@@ -447,306 +459,281 @@ def _render_grouping_and_continuity(
     project_id: str,
     actor: str,
 ) -> None:
-    panel_open = st.toggle(
-        "Agrupar candidatos y mantener continuidad",
-        value=False,
-        key="open_discovery_grouping_continuity_panel",
-        help=(
-            "Agrupa candidatos repetidos sin fusionar sus procedencias y permite "
-            "crear un nuevo anclaje cuando una revisión textual volvió obsoleto al anterior."
-        ),
+    st.caption(
+        "Estas operaciones no borran candidatos, decisiones ni procedencias. "
+        "Los grupos y vínculos de continuidad conservan un historial auditable."
     )
-    if not panel_open:
-        return
+    groups_tab, continuity_tab = tracked_tabs(
+        st,
+        ["Revisar grupos", "Continuidad textual"],
+        key="open_discovery_grouping_tasks",
+        default="Revisar grupos",
+    )
 
-    with st.container(border=True):
-        st.caption(
-            "Estas operaciones no borran candidatos, decisiones ni procedencias. "
-            "Los grupos y vínculos de continuidad conservan un historial auditable."
-        )
-        grouping_open = st.toggle(
-            "Agrupamiento y duplicados",
+    with groups_tab:
+        if st.button(
+            "Actualizar grupos propuestos",
+            key="open_discovery_grouping_rebuild",
+        ):
+            summary = _run_action(
+                st,
+                db_path=db_path,
+                callback=lambda session: rebuild_discovery_groups(
+                    session,
+                    project_id=project_id,
+                    created_by=actor or "local_user",
+                    source="ui",
+                ),
+            )
+            if summary is not None:
+                st.session_state["open_discovery_grouping_success"] = (
+                    f"Agrupamiento actualizado: {summary.groups_created} grupos nuevos y "
+                    f"{summary.memberships_created} pertenencias nuevas."
+                )
+                rerun_view(st)
+
+        success = st.session_state.pop("open_discovery_grouping_success", None)
+        if success:
+            st.success(success)
+
+        engine = create_sqlite_engine(db_path)
+        try:
+            with session_scope(engine) as session:
+                groups = discovery_group_rows(
+                    session, project_id=project_id, include_removed=True
+                )
+                all_candidates = discovery_candidate_rows(
+                    session, project_id=project_id, limit=10_000
+                )
+        finally:
+            engine.dispose()
+
+        if groups:
+            group_map = {row.group_id: row for row in groups}
+            pending_group_id = st.session_state.pop(
+                "open_discovery_group_pending_selection", None
+            )
+            if pending_group_id in group_map:
+                st.session_state["open_discovery_group_selected"] = pending_group_id
+            elif st.session_state.get("open_discovery_group_selected") not in group_map:
+                st.session_state["open_discovery_group_selected"] = next(iter(group_map))
+            selected_group_id = st.selectbox(
+                "Grupo",
+                options=list(group_map),
+                format_func=lambda value: (
+                    f"{group_map[value].preferred_label} · "
+                    f"{family_label(group_map[value].semantic_family)} · "
+                    f"{group_map[value].active_member_count} miembros"
+                ),
+                key="open_discovery_group_selected",
+            )
+            selected_group = group_map[selected_group_id]
+            st.caption(
+                f"Método: {selected_group.grouping_method} · "
+                f"corridas: {selected_group.run_count} · "
+                f"miembros obsoletos: {selected_group.stale_member_count}"
+            )
+            for member in selected_group.members:
+                status = "separado" if member.membership_status != "active" else "activo"
+                stale = " · obsoleto" if member.is_stale else ""
+                st.write(
+                    f"- **{member.effective_text}** · {status}{stale} · "
+                    f"{member.original_filename}, p. {member.page_number} · "
+                    f"corrida `{member.run_id}` · candidato `{member.candidate_id}`"
+                )
+
+            active_members = [
+                row for row in selected_group.members if row.membership_status == "active"
+            ]
+            if len(active_members) > 1:
+                remove_map = {row.candidate_id: row for row in active_members}
+                remove_candidate_id = st.selectbox(
+                    "Candidato que debe separarse del grupo",
+                    options=list(remove_map),
+                    format_func=lambda value: (
+                        f"{remove_map[value].effective_text} · "
+                        f"{remove_map[value].original_filename}, p. {remove_map[value].page_number}"
+                    ),
+                    key=f"open_discovery_group_remove_candidate_{selected_group_id}",
+                )
+                remove_reason = st.text_area(
+                    "Fundamento de la separación",
+                    value="",
+                    height=70,
+                    key=f"open_discovery_group_remove_reason_{selected_group_id}",
+                )
+                if st.button(
+                    "Separar candidato",
+                    key=f"open_discovery_group_remove_submit_{selected_group_id}",
+                ):
+                    result = _run_action(
+                        st,
+                        db_path=db_path,
+                        callback=lambda session: remove_candidate_from_group(
+                            session,
+                            project_id=project_id,
+                            group_id=selected_group_id,
+                            candidate_id=remove_candidate_id,
+                            changed_by=actor or "local_user",
+                            reason=remove_reason,
+                            source="ui",
+                        ),
+                    )
+                    if result is not None:
+                        st.session_state["open_discovery_grouping_success"] = (
+                            "Candidato separado; el grupo y la procedencia histórica se conservaron."
+                        )
+                        rerun_view(st)
+        else:
+            st.caption("Todavía no hay grupos. Actualizá las propuestas o creá uno manual.")
+
+        manual_open = st.toggle(
+            "Crear grupo manual",
             value=False,
-            key="open_discovery_grouping_panel",
+            key="open_discovery_manual_group_panel",
         )
-        if grouping_open:
+        if manual_open:
+            candidate_map = {row.candidate_id: row for row in all_candidates}
+            manual_ids = st.multiselect(
+                "Candidatos del grupo",
+                options=list(candidate_map),
+                format_func=lambda value: (
+                    f"{candidate_map[value].effective_text} · "
+                    f"{candidate_map[value].original_filename}, p. {candidate_map[value].page_number} · "
+                    f"candidato {value[:8]} · corrida {candidate_map[value].run_id[:8]}"
+                ),
+                key="open_discovery_manual_group_candidates",
+            )
+            manual_label = st.text_input(
+                "Etiqueta del grupo",
+                key="open_discovery_manual_group_label",
+            )
+            manual_family = st.selectbox(
+                "Familia del grupo",
+                options=list(DISCOVERY_FAMILIES),
+                format_func=family_label,
+                key="open_discovery_manual_group_family",
+            )
+            manual_reason = st.text_area(
+                "Fundamento del agrupamiento manual",
+                height=70,
+                key="open_discovery_manual_group_reason",
+            )
             if st.button(
-                "Actualizar grupos propuestos",
-                key="open_discovery_grouping_rebuild",
+                "Crear grupo manual",
+                key="open_discovery_manual_group_submit",
+            ):
+                group = _run_action(
+                    st,
+                    db_path=db_path,
+                    callback=lambda session: create_manual_group(
+                        session,
+                        project_id=project_id,
+                        candidate_ids=manual_ids,
+                        preferred_label=manual_label,
+                        semantic_family=manual_family,
+                        created_by=actor or "local_user",
+                        reason=manual_reason,
+                        source="ui",
+                    ),
+                )
+                if group is not None:
+                    st.session_state[
+                        "open_discovery_group_pending_selection"
+                    ] = group.id
+                    st.session_state["open_discovery_grouping_success"] = (
+                        "Grupo manual creado sin fusionar candidatos ni procedencias."
+                    )
+                    rerun_view(st)
+
+    with continuity_tab:
+        engine = create_sqlite_engine(db_path)
+        try:
+            with session_scope(engine) as session:
+                all_candidates = discovery_candidate_rows(
+                    session, project_id=project_id, limit=10_000
+                )
+        finally:
+            engine.dispose()
+        stale = [row for row in all_candidates if row.is_stale]
+        if not stale:
+            st.caption("No hay candidatos obsoletos que requieran continuidad.")
+        else:
+            stale_map = {row.candidate_id: row for row in stale}
+            source_candidate_id = st.selectbox(
+                "Candidato obsoleto",
+                options=list(stale_map),
+                format_func=lambda value: (
+                    f"{stale_map[value].effective_text} · "
+                    f"{stale_map[value].original_filename}, p. {stale_map[value].page_number} · "
+                    f"rev. {stale_map[value].object_revision_number} · "
+                    f"candidato {value[:8]} · corrida {stale_map[value].run_id[:8]}"
+                ),
+                key="open_discovery_continuity_candidate",
+            )
+            method = st.radio(
+                "Método",
+                options=list(CONTINUITY_METHODS),
+                format_func=lambda value: (
+                    "Proyección exacta única"
+                    if value == "exact_projection"
+                    else "Nueva detección local"
+                ),
+                key="open_discovery_continuity_method",
+            )
+            st.caption(
+                "La operación crea un candidato nuevo para la revisión vigente y mantiene "
+                "visible el candidato obsoleto como procedencia histórica."
+            )
+            if st.button(
+                "Crear continuidad",
+                key="open_discovery_continuity_submit",
             ):
                 summary = _run_action(
                     st,
                     db_path=db_path,
-                    callback=lambda session: rebuild_discovery_groups(
+                    callback=lambda session: project_discovery_candidate(
                         session,
                         project_id=project_id,
+                        candidate_id=source_candidate_id,
+                        method=method,
                         created_by=actor or "local_user",
-                        source="ui",
                     ),
                 )
                 if summary is not None:
-                    st.session_state["open_discovery_grouping_success"] = (
-                        f"Agrupamiento actualizado: {summary.groups_created} grupos nuevos y "
-                        f"{summary.memberships_created} pertenencias nuevas."
+                    st.session_state["open_discovery_continuity_success"] = (
+                        f"Continuidad creada: revisión {summary.target_revision}, "
+                        f"offsets {summary.target_start_offset}:{summary.target_end_offset}."
                     )
                     rerun_view(st)
-
-            success = st.session_state.pop("open_discovery_grouping_success", None)
-            if success:
-                st.success(success)
-
-            engine = create_sqlite_engine(db_path)
-            try:
-                with session_scope(engine) as session:
-                    groups = discovery_group_rows(
-                        session, project_id=project_id, include_removed=True
-                    )
-                    all_candidates = discovery_candidate_rows(
-                        session, project_id=project_id, limit=10_000
-                    )
-            finally:
-                engine.dispose()
-
-            if groups:
-                group_map = {row.group_id: row for row in groups}
-                pending_group_id = st.session_state.pop(
-                    "open_discovery_group_pending_selection", None
-                )
-                if pending_group_id in group_map:
-                    st.session_state["open_discovery_group_selected"] = pending_group_id
-                elif st.session_state.get("open_discovery_group_selected") not in group_map:
-                    st.session_state["open_discovery_group_selected"] = next(iter(group_map))
-                selected_group_id = st.selectbox(
-                    "Grupo",
-                    options=list(group_map),
-                    format_func=lambda value: (
-                        f"{group_map[value].preferred_label} · "
-                        f"{family_label(group_map[value].semantic_family)} · "
-                        f"{group_map[value].active_member_count} miembros"
-                    ),
-                    key="open_discovery_group_selected",
-                )
-                selected_group = group_map[selected_group_id]
-                st.caption(
-                    f"Método: {selected_group.grouping_method} · "
-                    f"corridas: {selected_group.run_count} · "
-                    f"miembros obsoletos: {selected_group.stale_member_count}"
-                )
-                for member in selected_group.members:
-                    status = "separado" if member.membership_status != "active" else "activo"
-                    stale = " · obsoleto" if member.is_stale else ""
-                    st.write(
-                        f"- **{member.effective_text}** · {status}{stale} · "
-                        f"{member.original_filename}, p. {member.page_number} · "
-                        f"corrida `{member.run_id}` · candidato `{member.candidate_id}`"
-                    )
-
-                active_members = [
-                    row for row in selected_group.members if row.membership_status == "active"
-                ]
-                if len(active_members) > 1:
-                    remove_map = {row.candidate_id: row for row in active_members}
-                    remove_candidate_id = st.selectbox(
-                        "Candidato que debe separarse del grupo",
-                        options=list(remove_map),
-                        format_func=lambda value: (
-                            f"{remove_map[value].effective_text} · "
-                            f"{remove_map[value].original_filename}, p. {remove_map[value].page_number}"
-                        ),
-                        key=f"open_discovery_group_remove_candidate_{selected_group_id}",
-                    )
-                    remove_reason = st.text_area(
-                        "Fundamento de la separación",
-                        value="",
-                        height=70,
-                        key=f"open_discovery_group_remove_reason_{selected_group_id}",
-                    )
-                    if st.button(
-                        "Separar candidato",
-                        key=f"open_discovery_group_remove_submit_{selected_group_id}",
-                    ):
-                        result = _run_action(
-                            st,
-                            db_path=db_path,
-                            callback=lambda session: remove_candidate_from_group(
-                                session,
-                                project_id=project_id,
-                                group_id=selected_group_id,
-                                candidate_id=remove_candidate_id,
-                                changed_by=actor or "local_user",
-                                reason=remove_reason,
-                                source="ui",
-                            ),
-                        )
-                        if result is not None:
-                            st.session_state["open_discovery_grouping_success"] = (
-                                "Candidato separado; el grupo y la procedencia histórica se conservaron."
-                            )
-                            rerun_view(st)
-            else:
-                st.caption("Todavía no hay grupos. Actualizá las propuestas o creá uno manual.")
-
-            manual_open = st.toggle(
-                "Crear grupo manual",
-                value=False,
-                key="open_discovery_manual_group_panel",
-            )
-            if manual_open:
-                candidate_map = {row.candidate_id: row for row in all_candidates}
-                manual_ids = st.multiselect(
-                    "Candidatos del grupo",
-                    options=list(candidate_map),
-                    format_func=lambda value: (
-                        f"{candidate_map[value].effective_text} · "
-                        f"{candidate_map[value].original_filename}, p. {candidate_map[value].page_number} · "
-                        f"candidato {value[:8]} · corrida {candidate_map[value].run_id[:8]}"
-                    ),
-                    key="open_discovery_manual_group_candidates",
-                )
-                manual_label = st.text_input(
-                    "Etiqueta del grupo",
-                    key="open_discovery_manual_group_label",
-                )
-                manual_family = st.selectbox(
-                    "Familia del grupo",
-                    options=list(DISCOVERY_FAMILIES),
-                    format_func=family_label,
-                    key="open_discovery_manual_group_family",
-                )
-                manual_reason = st.text_area(
-                    "Fundamento del agrupamiento manual",
-                    height=70,
-                    key="open_discovery_manual_group_reason",
-                )
-                if st.button(
-                    "Crear grupo manual",
-                    key="open_discovery_manual_group_submit",
-                ):
-                    group = _run_action(
-                        st,
-                        db_path=db_path,
-                        callback=lambda session: create_manual_group(
-                            session,
-                            project_id=project_id,
-                            candidate_ids=manual_ids,
-                            preferred_label=manual_label,
-                            semantic_family=manual_family,
-                            created_by=actor or "local_user",
-                            reason=manual_reason,
-                            source="ui",
-                        ),
-                    )
-                    if group is not None:
-                        st.session_state[
-                            "open_discovery_group_pending_selection"
-                        ] = group.id
-                        st.session_state["open_discovery_grouping_success"] = (
-                            "Grupo manual creado sin fusionar candidatos ni procedencias."
-                        )
-                        rerun_view(st)
-
-        continuity_open = st.toggle(
-            "Continuidad después de editar texto",
-            value=False,
-            key="open_discovery_continuity_panel",
+        continuity_success = st.session_state.pop(
+            "open_discovery_continuity_success", None
         )
-        if continuity_open:
-            engine = create_sqlite_engine(db_path)
-            try:
-                with session_scope(engine) as session:
-                    all_candidates = discovery_candidate_rows(
-                        session, project_id=project_id, limit=10_000
-                    )
-            finally:
-                engine.dispose()
-            stale = [row for row in all_candidates if row.is_stale]
-            if not stale:
-                st.caption("No hay candidatos obsoletos que requieran continuidad.")
-            else:
-                stale_map = {row.candidate_id: row for row in stale}
-                source_candidate_id = st.selectbox(
-                    "Candidato obsoleto",
-                    options=list(stale_map),
-                    format_func=lambda value: (
-                        f"{stale_map[value].effective_text} · "
-                        f"{stale_map[value].original_filename}, p. {stale_map[value].page_number} · "
-                        f"rev. {stale_map[value].object_revision_number} · "
-                        f"candidato {value[:8]} · corrida {stale_map[value].run_id[:8]}"
-                    ),
-                    key="open_discovery_continuity_candidate",
-                )
-                method = st.radio(
-                    "Método",
-                    options=list(CONTINUITY_METHODS),
-                    format_func=lambda value: (
-                        "Proyección exacta única"
-                        if value == "exact_projection"
-                        else "Nueva detección local"
-                    ),
-                    key="open_discovery_continuity_method",
-                )
-                st.caption(
-                    "La operación crea un candidato nuevo para la revisión vigente y mantiene "
-                    "visible el candidato obsoleto como procedencia histórica."
-                )
-                if st.button(
-                    "Crear continuidad",
-                    key="open_discovery_continuity_submit",
-                ):
-                    summary = _run_action(
-                        st,
-                        db_path=db_path,
-                        callback=lambda session: project_discovery_candidate(
-                            session,
-                            project_id=project_id,
-                            candidate_id=source_candidate_id,
-                            method=method,
-                            created_by=actor or "local_user",
-                        ),
-                    )
-                    if summary is not None:
-                        st.session_state["open_discovery_continuity_success"] = (
-                            f"Continuidad creada: revisión {summary.target_revision}, "
-                            f"offsets {summary.target_start_offset}:{summary.target_end_offset}."
-                        )
-                        rerun_view(st)
-            continuity_success = st.session_state.pop(
-                "open_discovery_continuity_success", None
-            )
-            if continuity_success:
-                st.success(continuity_success)
+        if continuity_success:
+            st.success(continuity_success)
 
-def render_open_discovery_section(
+def _render_discovery_run_setup(
     st,
     *,
     db_path: Path,
     project_id: str,
     actor: str,
 ) -> None:
+    st.subheader("Preparar una corrida")
     st.caption(
-        "Propone actores, espacios, tiempos, acontecimientos, acciones, procesos y obras "
-        "a partir del texto. Las corridas crean candidatos; las decisiones humanas quedan "
-        "registradas por separado y nunca crean relaciones automáticamente."
+        "Elegí o configurá un perfil y ejecutá el descubrimiento. "
+        "La corrida solo crea candidatos revisables."
     )
 
     engine = create_sqlite_engine(db_path)
     try:
         with session_scope(engine) as session:
             profiles = discovery_profile_rows(session, project_id=project_id)
-            runs = discovery_run_rows(session, project_id=project_id, limit=25)
             object_types = session.scalars(
                 select(EditableObject.current_object_type)
                 .where(EditableObject.lifecycle_status == "active")
                 .distinct()
                 .order_by(EditableObject.current_object_type)
-            ).all()
-            authorities = session.scalars(
-                select(AuthorityRecord)
-                .where(
-                    AuthorityRecord.project_id == project_id,
-                    AuthorityRecord.lifecycle_status == "active",
-                )
-                .order_by(AuthorityRecord.normalized_name, AuthorityRecord.id)
             ).all()
     finally:
         engine.dispose()
@@ -763,9 +750,6 @@ def render_open_discovery_section(
     success = st.session_state.pop("open_discovery_success", None)
     if success:
         st.success(success)
-    decision_success = st.session_state.pop("open_discovery_decision_success", None)
-    if decision_success:
-        st.success(decision_success)
 
     if selected_profile is None:
         st.info("Guardá un perfil antes de ejecutar el descubrimiento.")
@@ -796,20 +780,53 @@ def render_open_discovery_section(
                 f"Corrida completada: {summary.candidate_count} candidatos en "
                 f"{summary.object_count} objetos."
             )
+            request_tab(
+                st,
+                key="open_discovery_tasks",
+                label="Revisar candidatos",
+            )
             rerun_view(st)
+
+
+def _render_discovery_candidate_workspace(
+    st,
+    *,
+    db_path: Path,
+    project_id: str,
+    actor: str,
+) -> None:
+    st.subheader("Revisar candidatos")
+    st.caption(
+        "Elegí una corrida, filtrá los candidatos y registrá una decisión explícita. "
+        "Los datos técnicos quedan cerrados por defecto."
+    )
 
     run_success = st.session_state.pop("open_discovery_run_success", None)
     if run_success:
         st.success(run_success)
+    decision_success = st.session_state.pop("open_discovery_decision_success", None)
+    if decision_success:
+        st.success(decision_success)
 
     engine = create_sqlite_engine(db_path)
     try:
         with session_scope(engine) as session:
             runs = discovery_run_rows(session, project_id=project_id, limit=25)
+            authorities = session.scalars(
+                select(AuthorityRecord)
+                .where(
+                    AuthorityRecord.project_id == project_id,
+                    AuthorityRecord.lifecycle_status == "active",
+                )
+                .order_by(AuthorityRecord.normalized_name, AuthorityRecord.id)
+            ).all()
     finally:
         engine.dispose()
+
     if not runs:
-        st.caption("Todavía no hay corridas registradas.")
+        st.info(
+            "Todavía no hay corridas registradas. Abrí ‘Nueva corrida’ para crear la primera."
+        )
         return
 
     run_map = {row.run_id: row for row in runs}
@@ -826,14 +843,16 @@ def render_open_discovery_section(
         key="open_discovery_run_selected",
     )
     selected_run = run_map[selected_run_id]
-    metrics = st.columns(3)
-    metrics[0].metric("Objetos recorridos", selected_run.object_count)
-    metrics[1].metric("Candidatos", selected_run.candidate_count)
-    metrics[2].metric("Estado", selected_run.status)
-    st.caption(
-        f"Proveedor: {selected_run.provider_key}@{selected_run.provider_version} · "
-        f"Páginas: {', '.join(selected_run.page_review_statuses) or 'todos los estados'}"
-    )
+
+    with st.expander("Resumen de la corrida", expanded=False):
+        metrics = st.columns(3)
+        metrics[0].metric("Objetos recorridos", selected_run.object_count)
+        metrics[1].metric("Candidatos", selected_run.candidate_count)
+        metrics[2].metric("Estado", selected_run.status)
+        st.caption(
+            f"Proveedor: {selected_run.provider_key}@{selected_run.provider_version} · "
+            f"Páginas: {', '.join(selected_run.page_review_statuses) or 'todos los estados'}"
+        )
 
     engine = create_sqlite_engine(db_path)
     try:
@@ -849,6 +868,7 @@ def render_open_discovery_section(
             )
     finally:
         engine.dispose()
+
     if not candidates:
         st.info("La corrida no produjo candidatos con el umbral configurado.")
         return
@@ -857,23 +877,25 @@ def render_open_discovery_section(
     for item in decisions:
         decisions_by[item.candidate_id].append(item)
 
-    filters = st.columns(2)
-    with filters[0]:
-        candidate_families = st.multiselect(
-            "Filtrar candidatos por familia",
-            options=list(DISCOVERY_FAMILIES),
-            default=[],
-            format_func=family_label,
-            key=f"open_discovery_candidate_family_filter_{selected_run_id}",
-        )
-    with filters[1]:
-        candidate_statuses = st.multiselect(
-            "Filtrar por estado de decisión",
-            options=["pending", "modified", "deferred", "accepted", "rejected"],
-            default=[],
-            format_func=candidate_status_label,
-            key=f"open_discovery_candidate_status_filter_{selected_run_id}",
-        )
+    with st.expander("Filtros de candidatos", expanded=False):
+        filters = st.columns(2)
+        with filters[0]:
+            candidate_families = st.multiselect(
+                "Familia",
+                options=list(DISCOVERY_FAMILIES),
+                default=[],
+                format_func=family_label,
+                key=f"open_discovery_candidate_family_filter_{selected_run_id}",
+            )
+        with filters[1]:
+            candidate_statuses = st.multiselect(
+                "Estado de decisión",
+                options=["pending", "modified", "deferred", "accepted", "rejected"],
+                default=[],
+                format_func=candidate_status_label,
+                key=f"open_discovery_candidate_status_filter_{selected_run_id}",
+            )
+
     visible = [
         row
         for row in candidates
@@ -881,6 +903,7 @@ def render_open_discovery_section(
         and (not candidate_statuses or row.status in candidate_statuses)
     ]
     st.caption(f"Candidatos visibles: {len(visible)}")
+
     for row in visible:
         with st.container(border=True):
             head, confidence = st.columns([5, 1])
@@ -904,7 +927,6 @@ def render_open_discovery_section(
                 )
             if row.is_stale:
                 st.warning("El objeto cambió después de esta corrida; el candidato está obsoleto.")
-            _render_decision_history(st, decisions_by.get(row.candidate_id, []))
             _render_candidate_review(
                 st,
                 db_path=db_path,
@@ -914,6 +936,7 @@ def render_open_discovery_section(
                 decisions=decisions_by.get(row.candidate_id, []),
                 authorities=authorities,
             )
+            _render_decision_history(st, decisions_by.get(row.candidate_id, []))
             with st.expander("Trazabilidad técnica", expanded=False):
                 st.write(row.explanation)
                 st.code(
@@ -931,13 +954,59 @@ def render_open_discovery_section(
                         ]
                     )
                 )
-    _render_grouping_and_continuity(
-        st,
-        db_path=db_path,
-        project_id=project_id,
-        actor=actor,
-    )
+
     st.caption(
         "Las decisiones son append-only. Aceptar una referencia nunca crea relaciones. "
         "Las autoridades nuevas quedan con estado Sin revisar."
     )
+
+
+def render_open_discovery_section(
+    st,
+    *,
+    db_path: Path,
+    project_id: str,
+    actor: str,
+) -> None:
+    st.caption(
+        "Propone actores, espacios, tiempos, acontecimientos, acciones, procesos y obras "
+        "a partir del texto. Las corridas crean candidatos revisables y nunca crean "
+        "relaciones automáticamente. Separá la revisión cotidiana de la configuración "
+        "de corridas y de las tareas de continuidad."
+    )
+
+    review_tab, run_tab, grouping_tab = tracked_tabs(
+        st,
+        ["Revisar candidatos", "Nueva corrida", "Agrupamiento y continuidad"],
+        key="open_discovery_tasks",
+        default="Revisar candidatos",
+    )
+
+    with review_tab:
+        _render_discovery_candidate_workspace(
+            st,
+            db_path=db_path,
+            project_id=project_id,
+            actor=actor,
+        )
+
+    with run_tab:
+        _render_discovery_run_setup(
+            st,
+            db_path=db_path,
+            project_id=project_id,
+            actor=actor,
+        )
+
+    with grouping_tab:
+        st.subheader("Agrupamiento y continuidad")
+        st.caption(
+            "Usá estas herramientas solo para revisar duplicados o mantener el anclaje "
+            "después de una edición textual. No fusionan candidatos ni trasladan decisiones."
+        )
+        _render_grouping_and_continuity(
+            st,
+            db_path=db_path,
+            project_id=project_id,
+            actor=actor,
+        )

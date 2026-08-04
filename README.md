@@ -6,7 +6,7 @@ Está pensada especialmente para equipos de archivos, bibliotecas, ciencias soci
 
 Los documentos y la base de datos permanecen en la computadora del equipo: la aplicación no necesita subir el corpus a un servicio externo.
 
-**Versión actual:** 0.71.2 — validación de continuidad desde candidatos equivalentes y registro de UX-03.
+**Versión actual:** 0.73.0 — cierre de DISC-01 con evaluación reproducible y proveedores auditables.
 
 ## Qué permite hacer
 
@@ -25,7 +25,7 @@ Archive Workbench reúne en una misma interfaz:
 - edición, anotaciones y cronología integrada por página;
 - búsqueda literal y búsqueda semántica opcional;
 - entidades, alias, menciones y relaciones;
-- descubrimiento abierto reproducible con candidatos y decisiones humanas append-only;
+- descubrimiento abierto reproducible con candidatos, decisiones humanas append-only y evaluación por familia;
 - grafo documental;
 - exportaciones reproducibles en CSV y JSONL;
 - asignación de tareas entre integrantes del equipo;
@@ -211,11 +211,11 @@ La documentación cerrada y las guías de versiones anteriores están separadas 
 Para instalar también las herramientas de desarrollo:
 
 ```bash
-pip install -e ".[dev,extraction,streamlit,semantic,tiff]"
+pip install -e ".[dev,extraction,streamlit,semantic,tiff,discovery]"
 pytest
 ```
 
-La versión 0.71.2 recopila 413 pruebas automatizadas.
+La versión 0.73.0 incorpora pruebas automatizadas para evaluación, proveedores y comparación reproducible.
 
 ## Licencia y cita
 
@@ -227,6 +227,6 @@ El desarrollo fue realizado por **Alex Colman** en el marco del **Grupo de Inves
 
 Cuando Archive Workbench sea utilizado en una investigación, publicación, informe, actividad docente o desarrollo derivado, solicitamos citar:
 
-> Colman, Alex, y Grupo de Investigación en Archivos de la Represión (GIAR). 2026. *Archive Workbench* (versión 0.71.2) [software]. https://github.com/alexdcolman/archive-workbench
+> Colman, Alex, y Grupo de Investigación en Archivos de la Represión (GIAR). 2026. *Archive Workbench* (versión 0.73.0) [software]. https://github.com/alexdcolman/archive-workbench
 
 El archivo [`CITATION.cff`](CITATION.cff) contiene los metadatos de cita reconocidos por GitHub y por distintos gestores bibliográficos.

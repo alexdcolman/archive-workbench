@@ -418,7 +418,7 @@ def test_discovery_ui_keeps_profile_and_detection_controls_explicit() -> None:
     assert "Guardar perfil de descubrimiento" in source
     assert "Ejecutar descubrimiento abierto" in source
     assert "Trazabilidad técnica" in source
-    assert "nunca crean relaciones automáticamente" in source
+    assert "nunca crean" in source and "relaciones automáticamente" in source
     assert "disabled=" not in source[
         source.index('"Guardar perfil de descubrimiento"') :
         source.index('"Ejecutar descubrimiento abierto"')
@@ -851,6 +851,11 @@ def test_discovery_review_ui_offers_explicit_append_only_actions() -> None:
     assert 'with st.expander("Revisar candidato", expanded=False):' not in source
     assert 'key=f"open_discovery_profile_panel_{profile_key}"' in source
     assert 'with st.expander("Configurar perfil", expanded=not profiles):' not in source
+    assert '["Revisar candidatos", "Nueva corrida", "Agrupamiento y continuidad"]' in source
+    assert 'key="open_discovery_tasks"' in source
+    assert '["Revisar grupos", "Continuidad textual"]' in source
+    assert 'key="open_discovery_grouping_tasks"' in source
+    assert 'key="open_discovery_grouping_continuity_panel"' not in source
     assert '"Registrar decisión"' in source
     assert '"Historial de decisiones"' in source
     assert '"Confirmo la creación de una autoridad nueva con estado Sin revisar"' in source

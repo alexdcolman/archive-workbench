@@ -75,91 +75,65 @@ def _run(st, *, db_path: Path, callback, selection: str | None = None) -> None:
         st.session_state["authority_pending_selection"] = str(selected)
     rerun_view(st)
 
-
-def _render_open_discovery_panel(
+def _render_authority_creation(
     st,
     *,
     db_path: Path,
     project_id: str,
     actor: str,
 ) -> None:
-    st.divider()
-    panel_open = st.toggle(
-        "Descubrimiento abierto",
-        value=False,
-        key="open_discovery_main_panel",
-        help="El panel permanece abierto mientras trabajás con sus controles.",
-    )
-    if panel_open:
-        with st.container(border=True):
-            render_open_discovery_section(
-                st,
-                db_path=db_path,
-                project_id=project_id,
-                actor=actor,
-            )
-
-
-def render_authorities_view(
-    st,
-    *,
-    db_path: Path,
-    project_id: str,
-    actor: str,
-) -> None:
-    st.header("Entidades y menciones")
+    st.subheader("Crear una entidad")
     st.caption(
-        "Reuní bajo una identidad estable los nombres, variantes, menciones y relaciones "
-        "que aparecen en los documentos."
+        "Creá una ficha canónica cuando ya conocés la referencia. "
+        "Las sugerencias automáticas se revisan en Descubrimiento abierto."
     )
-    with st.expander("Qué es una entidad", expanded=False):
-        st.write(
-            "Una entidad es la ficha canónica de una persona, organismo, lugar u otro referente. "
-            "En archivística y bibliotecología también se la llama registro de autoridad: reúne "
-            "el nombre preferido, sus variantes y las menciones documentales. Las coincidencias "
-            "automáticas siempre quedan pendientes de revisión humana."
+    with st.form("authority_create", clear_on_submit=True, enter_to_submit=False):
+        entity_type = st.selectbox(
+            "Tipo", options=list(AUTHORITY_TYPES), format_func=lambda value: _TYPE_LABELS[value]
+        )
+        preferred_name = st.text_input("Nombre preferido")
+        description = st.text_area("Descripción / nota de identificación", height=100)
+        temporal_expression = st.text_input(
+            "Período de existencia o vigencia",
+            placeholder="Ej.: 1930 - 1990, 03/1975, años setenta, desde 1974",
+            help="Puede ser una fecha exacta, un mes, un año, una década, un rango o un intervalo abierto.",
+        )
+        temporal_note = st.text_area(
+            "Nota temporal",
+            placeholder="Fuente, duda o criterio usado para fechar la entidad.",
+            height=80,
+        )
+        review_status = st.selectbox(
+            "Estado de revisión",
+            options=list(AUTHORITY_REVIEW_STATUSES),
+            format_func=lambda value: _REVIEW_LABELS[value],
+        )
+        create_submit = st.form_submit_button("Crear entidad", type="primary")
+    if create_submit:
+        _run(
+            st,
+            db_path=db_path,
+            callback=lambda session: create_authority(
+                session,
+                project_id=project_id,
+                entity_type=entity_type,
+                preferred_name=preferred_name,
+                description=description,
+                temporal_expression=temporal_expression,
+                temporal_note=temporal_note,
+                review_status=review_status,
+                created_by=actor or "local_user",
+            ),
         )
 
-    with st.expander("Crear entidad", expanded=False):
-        with st.form("authority_create", clear_on_submit=True, enter_to_submit=False):
-            entity_type = st.selectbox(
-                "Tipo", options=list(AUTHORITY_TYPES), format_func=lambda value: _TYPE_LABELS[value]
-            )
-            preferred_name = st.text_input("Nombre preferido")
-            description = st.text_area("Descripción / nota de identificación", height=100)
-            temporal_expression = st.text_input(
-                "Período de existencia o vigencia",
-                placeholder="Ej.: 1930 - 1990, 03/1975, años setenta, desde 1974",
-                help="Puede ser una fecha exacta, un mes, un año, una década, un rango o un intervalo abierto.",
-            )
-            temporal_note = st.text_area(
-                "Nota temporal",
-                placeholder="Fuente, duda o criterio usado para fechar la entidad.",
-                height=80,
-            )
-            review_status = st.selectbox(
-                "Estado de revisión",
-                options=list(AUTHORITY_REVIEW_STATUSES),
-                format_func=lambda value: _REVIEW_LABELS[value],
-            )
-            create_submit = st.form_submit_button("Crear entidad", type="primary")
-        if create_submit:
-            _run(
-                st,
-                db_path=db_path,
-                callback=lambda session: create_authority(
-                    session,
-                    project_id=project_id,
-                    entity_type=entity_type,
-                    preferred_name=preferred_name,
-                    description=description,
-                    temporal_expression=temporal_expression,
-                    temporal_note=temporal_note,
-                    review_status=review_status,
-                    created_by=actor or "local_user",
-                ),
-            )
 
+def _render_authority_workspace(
+    st,
+    *,
+    db_path: Path,
+    project_id: str,
+    actor: str,
+) -> None:
     query = st.text_input("Buscar nombre, nombre alternativo o descripción", key="authority_query")
     with st.expander("Filtros de entidades", expanded=False):
         filter_left, filter_right = st.columns(2)
@@ -207,12 +181,9 @@ def render_authorities_view(
 
     st.caption(f"Entidades encontradas: {len(rows)}")
     if not rows:
-        st.info("Todavía no hay entidades con esos filtros.")
-        _render_open_discovery_panel(
-            st,
-            db_path=db_path,
-            project_id=project_id,
-            actor=actor,
+        st.info(
+            "Todavía no hay entidades con esos filtros. Podés cambiar la búsqueda, "
+            "crear una entidad o abrir Descubrimiento abierto desde las tareas superiores."
         )
         return
 
@@ -963,9 +934,55 @@ def render_authorities_view(
                     st.write(revision.note)
                 st.json(revision.snapshot_json)
 
-    _render_open_discovery_panel(
-        st,
-        db_path=db_path,
-        project_id=project_id,
-        actor=actor,
+
+
+def render_authorities_view(
+    st,
+    *,
+    db_path: Path,
+    project_id: str,
+    actor: str,
+) -> None:
+    st.header("Entidades y menciones")
+    st.caption(
+        "Elegí una tarea: revisar fichas y menciones existentes, crear una entidad "
+        "o descubrir referencias nuevas en el corpus."
     )
+    with st.expander("Qué es una entidad", expanded=False):
+        st.write(
+            "Una entidad es la ficha canónica de una persona, organismo, lugar u otro referente. "
+            "En archivística y bibliotecología también se la llama registro de autoridad: reúne "
+            "el nombre preferido, sus variantes y las menciones documentales. Las coincidencias "
+            "automáticas siempre quedan pendientes de revisión humana."
+        )
+
+    entities_tab, create_tab, discovery_tab = tracked_tabs(
+        st,
+        ["Revisar entidades", "Crear entidad", "Descubrimiento abierto"],
+        key="authority_main_tasks",
+        default="Revisar entidades",
+    )
+
+    with entities_tab:
+        _render_authority_workspace(
+            st,
+            db_path=db_path,
+            project_id=project_id,
+            actor=actor,
+        )
+
+    with create_tab:
+        _render_authority_creation(
+            st,
+            db_path=db_path,
+            project_id=project_id,
+            actor=actor,
+        )
+
+    with discovery_tab:
+        render_open_discovery_section(
+            st,
+            db_path=db_path,
+            project_id=project_id,
+            actor=actor,
+        )

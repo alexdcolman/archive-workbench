@@ -1,6 +1,6 @@
 # Pendientes activos — Archive Workbench
 
-**Estado verificado:** 2026-08-03 · **versión:** 0.71.2
+**Estado verificado:** 2026-08-03 · **versión:** 0.73.0
 
 Este es el único inventario vigente de trabajo abierto. Cuando una tarea se completa, se elimina de este archivo y se registra en `IMPLEMENTACIONES_REALIZADAS.md`.
 
@@ -8,14 +8,12 @@ Este es el único inventario vigente de trabajo abierto. Cuando una tarea se com
 
 | ID | Prioridad | Estado | Tarea |
 |---|---|---|---|
-| DISC-01 | Alta | Parcial | Descubrimiento abierto de actores, espacios, tiempos y acontecimientos |
 | DISC-02 | Media | Pendiente | Importación de diccionarios de autoridades y relaciones |
 | PILOT-01 | Alta | Parcial | Corpus de evaluación, verdad terreno y cierre del piloto |
 | OCR-01 | Media | Parcial | Preprocesamiento, layout y clasificación documental |
 | OCR-02 | Media | Pendiente | Detección de duplicados y versiones más legibles |
 | SEM-01 | Media | Pendiente | Calibración de búsqueda semántica |
 | GRAPH-01 | Media | Pendiente | Grafo sin colisiones |
-| UX-03 | Crítica | Pendiente | Reformulación completa de Entidades y menciones y Descubrimiento abierto |
 | UX-02 | Alta | Pendiente | Revisión final de complejidad acumulada de la interfaz |
 | AV-01 | Media | Pendiente | Registro audiovisual local y transcripción segmentada |
 | AV-02 | Baja | Pendiente | Plugin opcional de descarga desde YouTube y otras plataformas |
@@ -27,28 +25,6 @@ Este es el único inventario vigente de trabajo abierto. Cuando una tarea se com
 | INT-01 | Baja | Pendiente | Integración opcional con Google Drive como transporte |
 
 ## Alta prioridad
-
-### DISC-01 — Descubrimiento abierto de actores, espacios, tiempos y acontecimientos — PARCIAL
-
-La definición completa y los contratos están en [`docs/referencia/DESCUBRIMIENTO_ABIERTO_DISC_01.md`](../referencia/DESCUBRIMIENTO_ABIERTO_DISC_01.md).
-
-`DISC-01A` está implementada y validada. La corrida conservada recorrió 17 objetos aprobados, produjo 13 candidatos totales y confirmó los siete candidatos controlados. No debe repetirse.
-
-`DISC-01B` está implementada y validada. La copia conserva nueve decisiones append-only —ocho controladas y una aceptación adicional sobre `manifestación`—, cuatro registros propios, doce menciones, siete autoridades y tres relaciones previas. Los paneles interactivos conservan su apertura durante los reruns y ninguna aceptación creó relaciones automáticamente.
-
-`DISC-01C` está implementada en 0.71.0, corregida en 0.71.1 y 0.71.2, y pendiente únicamente de repetir el validador final. Las acciones manuales ya terminaron correctamente; 0.71.2 acepta como origen de continuidad cualquiera de los dos snapshots controlados equivalentes de `Cuaderno del Delta`. Incluye:
-
-- migración `0040_discovery_grouping_continuity`;
-- grupos propuestos por coincidencia exacta o normalizada entre corridas, conservando texto exacto y offsets;
-- grupos manuales sin fusionar candidatos ni procedencias;
-- pertenencias conservadas incluso después de una separación;
-- acciones append-only para creación, incorporación, restauración y separación;
-- proyección exacta única o nueva detección local después de una revisión textual;
-- candidatos obsoletos visibles junto con el candidato nuevo vigente;
-- interfaz secundaria cerrada inicialmente y persistente durante reruns;
-- comandos de terminal y validador de conservación canónica.
-
-Después de validar `DISC-01C` debe resolverse primero `UX-03`. `DISC-01D` queda bloqueada hasta que la interfaz de descubrimiento sea utilizable; agregar proveedores antes agravaría la complejidad denunciada.
 
 ### PILOT-01 — Corpus de evaluación, verdad terreno y cierre del piloto — PARCIAL
 
@@ -64,24 +40,6 @@ Debe permitir:
 - completar al menos un recorrido real de extremo a extremo antes de la candidata a v1.0.
 
 ## Mejora transversal de interfaz
-
-### UX-03 — Reformulación completa de Entidades y menciones y Descubrimiento abierto — PENDIENTE CRÍTICO
-
-La validación manual de `DISC-01C` confirmó que la pantalla actual es un laberinto difícil de comprender y, en la práctica, inutilizable incluso para quien siguió todo el desarrollo. No es una petición de retirar capacidades ni de cambiar los contratos funcionales: debe reformularse completamente la arquitectura de información y el recorrido de interfaz.
-
-La misma prueba dejó una evidencia concreta de la confusión: el grupo manual formado por dos candidatos de acontecimientos quedó etiquetado internamente con familia `actor`, aunque la instrucción indicaba `event`. El grupo no modifica registros canónicos y se conserva como evidencia del problema; no se pedirá repetir ni reescribir el historial para ocultar la incidencia.
-
-La reformulación debe conservar autoridades, menciones, relaciones, descubrimiento, revisión, decisiones, agrupamiento, continuidad y auditoría, pero separar con claridad al menos estos trabajos:
-
-- buscar o administrar autoridades y menciones conocidas;
-- configurar y ejecutar descubrimiento abierto;
-- revisar candidatos y registrar decisiones;
-- agrupar duplicados y mantener continuidad textual;
-- consultar historial, procedencia y datos técnicos.
-
-Cada recorrido debe presentar una acción principal, contexto persistente, pasos comprensibles y datos técnicos secundarios. No se deben apilar todos los selectores, historiales y operaciones en una misma pantalla ni exigir una guía externa para saber qué hacer.
-
-`UX-03` se ejecutará inmediatamente después de cerrar `DISC-01C` y antes de `DISC-01D`. Su criterio de cierre requiere validar recorridos representativos con la misma copia de prueba, sin alterar funcionalidades ni datos y sin que la persona se pierda entre paneles anidados.
 
 ### UX-02 — Revisión final de complejidad acumulada de la interfaz — PENDIENTE
 

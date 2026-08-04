@@ -1,41 +1,8 @@
 # Implementaciones realizadas — Archive Workbench
 
-**Estado verificado:** 2026-08-03 · **versión:** 0.71.2
+**Estado verificado:** 2026-08-03 · **versión:** 0.73.0
 
 Este documento registra capacidades ya implementadas y, cuando corresponde, validadas. No deben volver a aparecer en `PENDIENTES_ACTIVOS.md` salvo evidencia de regresión o ampliación explícita del alcance.
-
-
-### Validación de continuidad desde snapshots equivalentes — 0.71.2
-
-La continuidad de `Cuaderno del Delta` puede iniciarse desde cualquiera de los dos candidatos obsoletos controlados que representan el mismo texto, objeto y revisión y ya pertenecen al mismo grupo. El validador dejó de exigir arbitrariamente el identificador `work_original` y comprueba en cambio que el origen sea uno de los snapshots controlados equivalentes, que esté obsoleto, que el destino sea vigente y que ambos permanezcan en el grupo. La regresión de extremo a extremo usa ahora el candidato duplicado, que fue el seleccionado durante la prueba manual.
-
-
-### Selección segura después de crear un grupo manual — 0.71.1
-
-La creación del grupo se confirma y persiste antes del rerun. La interfaz ya no intenta modificar la clave de un `selectbox` después de instanciarlo: guarda una selección pendiente en una clave separada, ejecuta el rerun y aplica esa selección antes de crear el widget. Esto evita `StreamlitAPIException`, conserva abierto el recorrido y no duplica el grupo ya escrito.
-
-
-### DISC-01C — agrupamiento y continuidad implementados — 0.71.0
-
-La migración `0040_discovery_grouping_continuity` agrega grupos, pertenencias, acciones append-only y vínculos de continuidad entre candidatos. El agrupamiento automático propone coincidencias exactas o normalizadas entre corridas; el agrupamiento manual permite reunir y separar candidatos sin fusionar sus filas ni borrar procedencias. Una separación conserva la pertenencia histórica con estado retirado y no es revertida por una reconstrucción automática posterior.
-
-Cuando una revisión textual vuelve obsoleto un candidato, la continuidad crea una corrida y un candidato nuevos mediante proyección exacta única o nueva detección local. El candidato anterior continúa visible, el nuevo snapshot conserva offsets y revisión vigentes y las pertenencias activas de grupo se trasladan como procedencia, nunca como decisión humana. La interfaz ubica la función en un panel secundario cerrado por defecto y usa paneles persistentes para que los reruns no interrumpan el recorrido. La validación manual permanece abierta.
-
-### DISC-01B — revisión persistente validada — 0.70.2
-
-La validación manual confirmó ocho decisiones controladas y una decisión adicional append-only sobre `manifestación`, cuatro registros propios, dos menciones controladas y ninguna relación creada automáticamente. Los conteos finales conservados son siete autoridades, doce menciones, tres relaciones, nueve decisiones y cuatro registros propios. Los paneles interactivos permanecieron abiertos al cambiar decisiones y destinos.
-
-### Verificación de descubrimiento sobre corpus no vacío — 0.69.2
-
-La validación de `DISC-01A` identifica el objeto controlado por su ID y comprueba sus siete candidatos sin asumir que la corrida excluye otros documentos aprobados. El total de candidatos y objetos puede ser mayor.
-
-### DISC-01A — detección reproducible validada — 0.69.2
-
-La validación manual de la corrida existente quedó cerrada con 17 objetos aprobados recorridos, 13 candidatos totales y siete candidatos controlados correctos. Se comprobaron las seis familias previstas, offsets, revisión textual, ausencia de escrituras canónicas durante la detección, revisión `0038_open_discovery`, integridad `ok` y claves foráneas vacías. La cantidad mayor de objetos y candidatos corresponde a otros documentos aprobados presentes en la copia y no es una anomalía.
-
-### DISC-01B — revisión persistente implementada — 0.70.0
-
-La migración `0039_discovery_decisions` agrega `discovery_decisions` y `discovery_context_records`. Cada candidato puede aceptar, rechazar, modificar o aplazar mediante una decisión append-only. Actores, espacios, acontecimientos y obras pueden vincularse a una autoridad existente o iniciar explícitamente una autoridad `unreviewed`; tiempos, acontecimientos y acciones o procesos conservan datos propios. Las decisiones obsoletas se bloquean por revisión textual, toda escritura conserva responsable y origen, y ninguna aceptación crea relaciones automáticamente.
 
 ## Índice de capacidades cerradas
 
@@ -55,12 +22,62 @@ La migración `0039_discovery_decisions` agrega `discovery_decisions` y `discove
 | Reparación auditable de menciones históricas | Implementada y validada en 0.62.1 |
 | Política auditable de análisis automáticos | Implementada y validada en 0.64.1 |
 | Organización documental | Implementada en 0.50.0 |
+| Descubrimiento abierto DISC-01A–D | Implementado y validado en 0.73.0 |
+| Reformulación UX-03 de Entidades y descubrimiento | Implementada y validada en 0.72.0 |
 
-## Correcciones validadas de descubrimiento
+## Descubrimiento abierto
 
 ### Primera ejecución con menciones existentes — 0.69.1
 
 Se reemplazó el acceso inválido a `EntityMention.lifecycle_status` por el contrato real de `EntityMention.status`. Solo las menciones no rechazadas y con offsets completos bloquean un tramo ya registrado. El panel se movió al final de la vista y queda colapsado por defecto. La corrección quedó incluida en la validación final de `DISC-01A`.
+
+### DISC-01A — detección reproducible validada — 0.69.2
+
+La validación manual de la corrida existente quedó cerrada con 17 objetos aprobados recorridos, 13 candidatos totales y siete candidatos controlados correctos. Se comprobaron las seis familias previstas, offsets, revisión textual, ausencia de escrituras canónicas durante la detección, revisión `0038_open_discovery`, integridad `ok` y claves foráneas vacías. La cantidad mayor de objetos y candidatos corresponde a otros documentos aprobados presentes en la copia y no es una anomalía.
+
+### Verificación de descubrimiento sobre corpus no vacío — 0.69.2
+
+La validación de `DISC-01A` identifica el objeto controlado por su ID y comprueba sus siete candidatos sin asumir que la corrida excluye otros documentos aprobados. El total de candidatos y objetos puede ser mayor.
+
+### DISC-01B — revisión persistente implementada — 0.70.0
+
+La migración `0039_discovery_decisions` agrega `discovery_decisions` y `discovery_context_records`. Cada candidato puede aceptar, rechazar, modificar o aplazar mediante una decisión append-only. Actores, espacios, acontecimientos y obras pueden vincularse a una autoridad existente o iniciar explícitamente una autoridad `unreviewed`; tiempos, acontecimientos y acciones o procesos conservan datos propios. Las decisiones obsoletas se bloquean por revisión textual, toda escritura conserva responsable y origen, y ninguna aceptación crea relaciones automáticamente.
+
+### DISC-01B — revisión persistente validada — 0.70.2
+
+La validación manual confirmó ocho decisiones controladas y una decisión adicional append-only sobre `manifestación`, cuatro registros propios, dos menciones controladas y ninguna relación creada automáticamente. Los conteos finales conservados son siete autoridades, doce menciones, tres relaciones, nueve decisiones y cuatro registros propios. Los paneles interactivos permanecieron abiertos al cambiar decisiones y destinos.
+
+### DISC-01C — agrupamiento y continuidad implementados — 0.71.0
+
+La migración `0040_discovery_grouping_continuity` agrega grupos, pertenencias, acciones append-only y vínculos de continuidad entre candidatos. El agrupamiento automático propone coincidencias exactas o normalizadas entre corridas; el agrupamiento manual permite reunir y separar candidatos sin fusionar sus filas ni borrar procedencias. Una separación conserva la pertenencia histórica con estado retirado y no es revertida por una reconstrucción automática posterior.
+
+Cuando una revisión textual vuelve obsoleto un candidato, la continuidad crea una corrida y un candidato nuevos mediante proyección exacta única o nueva detección local. El candidato anterior continúa visible, el nuevo snapshot conserva offsets y revisión vigentes y las pertenencias activas de grupo se trasladan como procedencia, nunca como decisión humana. La interfaz ubica la función en un panel secundario cerrado por defecto y usa paneles persistentes para que los reruns no interrumpan el recorrido. La validación manual quedó cerrada en 0.72.0.
+
+### Selección segura después de crear un grupo manual — 0.71.1
+
+La creación del grupo se confirma y persiste antes del rerun. La interfaz ya no intenta modificar la clave de un `selectbox` después de instanciarlo: guarda una selección pendiente en una clave separada, ejecuta el rerun y aplica esa selección antes de crear el widget. Esto evita `StreamlitAPIException`, conserva abierto el recorrido y no duplica el grupo ya escrito.
+
+### Validación de continuidad desde snapshots equivalentes — 0.71.2
+
+La continuidad de `Cuaderno del Delta` puede iniciarse desde cualquiera de los dos candidatos obsoletos controlados que representan el mismo texto, objeto y revisión y ya pertenecen al mismo grupo. El validador dejó de exigir arbitrariamente el identificador `work_original` y comprueba en cambio que el origen sea uno de los snapshots controlados equivalentes, que esté obsoleto, que el destino sea vigente y que ambos permanezcan en el grupo. La regresión de extremo a extremo usa ahora el candidato duplicado, que fue el seleccionado durante la prueba manual.
+
+### DISC-01C — agrupamiento y continuidad validados — 0.72.0
+
+El validador final confirmó cuatro grupos —tres automáticos y uno manual—, nueve pertenencias conservadas, catorce acciones append-only y una continuidad desde un snapshot equivalente. También conservó exactamente siete autoridades, doce menciones, tres relaciones, nueve decisiones y cuatro registros propios. La revisión es `0040_discovery_grouping_continuity`, la integridad es correcta y no hay claves foráneas inválidas. La prueba no debe repetirse.
+
+### DISC-01D — evaluación reproducible y proveedor opcional — 0.73.0
+
+Se agregó un corpus JSONL inicial con cobertura explícita de las siete familias, texto exacto, offsets, subtipo y procedencia. El evaluador calcula precisión, recuperación y F1 micro, macro y por familia; conserva predicciones, falsos positivos, falsos negativos, discrepancias de familia o subtipo, parámetros y huellas SHA-256. Los informes del mismo corpus pueden compararse por proveedor, versión y configuración.
+
+El proveedor `local_deterministic@local_rules_v1` continúa disponible sin declararse empíricamente superior. El adaptador opcional `spacy_ner` usa el mismo contrato auditable y exige fijar `modelo@versión`; la dependencia y el modelo se cargan únicamente al ejecutar ese perfil. El corpus inicial es un control sintético de contrato, no un benchmark representativo: muestra seis aciertos de siete y documenta que la familia `other` no es cubierta por las reglas locales. `DISC-01` queda cerrado sin migración nueva.
+
+### UX-03 — recorridos separados para entidades y descubrimiento — 0.72.0
+
+La vista **Entidades y menciones** separa ahora tres tareas principales persistentes: revisar entidades, crear una entidad y abrir Descubrimiento abierto. La creación dejó de competir visualmente con la búsqueda y el descubrimiento ya no aparece como un panel agregado al final de una ficha.
+
+Dentro de Descubrimiento abierto se distinguen **Revisar candidatos**, **Nueva corrida** y **Agrupamiento y continuidad**. La revisión cotidiana queda primero; la configuración de perfiles y la ejecución se aíslan en su propia tarea; agrupamiento y continuidad se dividen en recorridos persistentes. Los historiales, resúmenes y datos técnicos permanecen cerrados por defecto. Se conservaron autoridades, menciones, relaciones, perfiles, corridas, decisiones, grupos, continuidades y contratos de datos sin migración nueva.
+
+La validación manual confirmó los recorridos separados, la conservación de la pestaña activa y el cierre inicial de resúmenes, historiales, filtros y detalles técnicos.
 
 ## Correcciones validadas
 

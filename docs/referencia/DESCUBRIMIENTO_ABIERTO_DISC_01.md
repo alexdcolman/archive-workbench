@@ -6,11 +6,9 @@
 
 `DISC-01B` está **implementada y validada**. La migración `0039_discovery_decisions` agrega decisiones append-only y registros propios por familia. El estado manual confirmado conserva nueve decisiones —ocho controladas y una aceptación adicional accidental sobre `manifestación`—, cuatro registros propios, doce menciones, siete autoridades y tres relaciones previas. La decisión adicional se conserva como historial válido y no se borra ni se reinterpreta. Los paneles interactivos mantienen su apertura durante los reruns.
 
-`DISC-01C` está **implementada en Archive Workbench 0.71.0, corregida en 0.71.1 y 0.71.2, y pendiente únicamente de repetir el validador final**. La migración `0040_discovery_grouping_continuity` agrega grupos de candidatos, pertenencias, acciones append-only y vínculos de continuidad textual. La fase propone coincidencias exactas o normalizadas entre corridas, permite crear y separar grupos manualmente y proyecta o vuelve a detectar un candidato obsoleto sobre la revisión vigente sin ocultar el snapshot histórico. No fusiona candidatos, no borra procedencias y no modifica autoridades, menciones, relaciones, decisiones ni registros propios.
+`DISC-01C` está **implementada y validada**. La migración `0040_discovery_grouping_continuity` agrega grupos de candidatos, pertenencias, acciones append-only y vínculos de continuidad textual. El cierre confirmó cuatro grupos, nueve pertenencias conservadas, catorce acciones append-only, una continuidad desde un snapshot equivalente y la conservación exacta de los conteos canónicos de `DISC-01B`. La integridad es correcta, las claves foráneas están vacías y la prueba no debe repetirse.
 
-La corrección 0.71.1 difiere la selección de un grupo manual recién creado hasta el rerun siguiente. La corrección 0.71.2 valida la continuidad desde cualquiera de los dos snapshots controlados equivalentes de `Cuaderno del Delta`, en lugar de exigir un identificador arbitrario. Los grupos, la separación y la continuidad ya fueron creados y no deben repetirse.
-
-`DISC-01D` continúa pendiente y no debe adelantarse antes de validar `DISC-01C` ni antes de resolver `UX-03`, la reformulación completa de la interfaz de descubrimiento.
+`UX-03` reorganizó y validó en 0.72.0 la interfaz de Entidades y menciones y Descubrimiento abierto sin cambiar contratos ni datos. `DISC-01D` quedó implementada y validada en 0.73.0; `DISC-01` está cerrado.
 
 ## Objetivo
 
@@ -139,7 +137,7 @@ Implementación 0.70.0:
 
 Criterio de cierre cumplido: se conservaron las ocho decisiones controladas, la novena decisión adicional append-only, cuatro registros propios, dos menciones controladas y ninguna relación automática. Los paneles interactivos permanecieron abiertos durante los reruns y la integridad de SQLite continuó correcta.
 
-### DISC-01C — Agrupamiento, deduplicación y continuidad textual — IMPLEMENTADA, VALIDADOR FINAL PENDIENTE
+### DISC-01C — Agrupamiento, deduplicación y continuidad textual — VALIDADA
 
 - migración `0040_discovery_grouping_continuity`;
 - `discovery_candidate_groups` para la identidad y método del grupo;
@@ -154,17 +152,23 @@ Criterio de cierre cumplido: se conservaron las ocho decisiones controladas, la 
 
 Los grupos no son registros canónicos y no trasladan decisiones automáticamente. Un candidato separado conserva la pertenencia histórica con estado `removed`; las reconstrucciones automáticas posteriores no revierten esa separación. La continuidad crea una corrida y un candidato nuevos, conserva el candidato obsoleto y hereda únicamente las pertenencias activas de grupo como procedencia, no sus decisiones humanas.
 
-Criterio de cierre pendiente: validar tres grupos controlados —exacto, normalizado y exacto—, un grupo manual con una separación, una continuidad textual y la conservación exacta de los conteos canónicos ya confirmados en `DISC-01B`.
+Criterio de cierre cumplido: el validador confirmó cuatro grupos —tres automáticos y uno manual—, nueve pertenencias conservadas, catorce acciones append-only, una continuidad textual desde un snapshot equivalente y los conteos canónicos exactos de `DISC-01B`. La revisión es `0040_discovery_grouping_continuity`, la integridad es correcta y las claves foráneas están vacías.
 
-### DISC-01D — Evaluación y proveedores adicionales
+### DISC-01D — Evaluación y proveedores adicionales — VALIDADA
 
-- corpus de evaluación por familia;
-- precisión, recuperación y errores por proveedor;
-- adaptadores opcionales para NER, extracción de eventos o modelos locales;
-- comparación reproducible de versiones y parámetros;
-- documentación de límites y falsos positivos.
+La versión 0.73.0 agrega:
 
-Criterio de cierre: ningún proveedor se declara predeterminado sin evidencia empírica y todos usan el mismo contrato auditable.
+- `config/discovery_evaluation_corpus.jsonl`, con texto exacto, offsets, familia, subtipo y procedencia para las siete familias;
+- métricas de precisión, recuperación y F1 micro, macro y por familia;
+- registro explícito de falsos positivos, falsos negativos y discrepancias de familia o subtipo;
+- informes JSON reproducibles con huellas del corpus, parámetros y resultado;
+- comparación de informes del mismo corpus por proveedor, versión y configuración;
+- `local_deterministic@local_rules_v1` y el adaptador opcional `spacy_ner` mediante un contrato común;
+- selección explícita de `modelo@versión` para spaCy, sin cargar dependencias opcionales hasta ejecutar el perfil.
+
+El corpus inicial es sintético y verifica el contrato, no representa la diversidad documental del piloto. Las reglas locales obtienen seis coincidencias exactas de siete y no cubren la familia `other`; ese límite queda visible en el informe. Ningún proveedor se declara mejor ni predeterminado por evidencia empírica. La revisión de base continúa en `0040_discovery_grouping_continuity`.
+
+Criterio de cierre cumplido: todos los proveedores usan el mismo contrato auditable y la comparación no permite mezclar corpus con huellas diferentes.
 
 ## No regresión
 

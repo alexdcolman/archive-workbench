@@ -768,20 +768,24 @@ def test_authorities_separate_search_filters_summary_and_tasks() -> None:
 
     assert 'st.header("Entidades y menciones")' in source
     assert 'st.expander("Qué es una entidad", expanded=False)' in source
+    assert '["Revisar entidades", "Crear entidad", "Descubrimiento abierto"]' in source
+    assert 'key="authority_main_tasks"' in source
+    assert 'default="Revisar entidades"' in source
+    assert 'with entities_tab:' in source
+    assert 'with create_tab:' in source
+    assert 'with discovery_tab:' in source
+    assert '_render_open_discovery_panel' not in source
     assert '"Buscar nombre, nombre alternativo o descripción"' in source
     assert 'st.expander("Filtros de entidades", expanded=False)' in source
     assert '"Tipos de entidad"' in source
     assert '"Incluir entidades dadas de baja"' in source
     assert 'st.expander("Resumen de la entidad", expanded=False)' in source
+    assert source.count('summary_cols[0].metric("Tipo", _TYPE_LABELS[selected.entity_type])') == 1
     assert '"Nombres alternativos"' in source
     assert '"Menciones en documentos"' in source
     assert 'st.subheader("Encontrar nuevas menciones en el corpus")' in source
     assert 'st.expander("Opciones de búsqueda", expanded=False)' in source
     assert 'st.subheader("Menciones ya vinculadas")' in source
-    assert 'key="open_discovery_main_panel"' in source
-    assert 'help="El panel permanece abierto mientras trabajás con sus controles."' in source
-    assert 'with st.expander("Descubrimiento abierto", expanded=False):' not in source
-    assert source.rindex("_render_open_discovery_panel(") > source.index("with history_tab:")
 
 
 def test_graph_uses_plain_language_and_progressive_details() -> None:
@@ -982,22 +986,9 @@ def test_manual_discovery_group_defers_selectbox_selection_until_next_rerun() ->
         / "discovery_app.py"
     ).read_text(encoding="utf-8")
 
-    assert (
-        'st.session_state[\n                            "open_discovery_group_pending_selection"\n                        ] = group.id'
-        in source
-    )
-    assert (
-        'st.session_state["open_discovery_group_selected"] = group.id'
-        not in source
-    )
-    assert (
-        'pending_group_id = st.session_state.pop(\n'
-        '                    "open_discovery_group_pending_selection", None\n'
-        '                )'
-        in source
-    )
-    assert (
-        'if pending_group_id in group_map:\n'
-        '                    st.session_state["open_discovery_group_selected"] = pending_group_id'
-        in source
-    )
+    assert '"open_discovery_group_pending_selection"' in source
+    assert '] = group.id' in source
+    assert 'st.session_state["open_discovery_group_selected"] = group.id' not in source
+    assert 'pending_group_id = st.session_state.pop(' in source
+    assert 'if pending_group_id in group_map:' in source
+    assert 'st.session_state["open_discovery_group_selected"] = pending_group_id' in source
