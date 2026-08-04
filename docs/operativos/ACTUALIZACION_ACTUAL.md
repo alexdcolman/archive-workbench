@@ -1,6 +1,6 @@
-# Actualización y prueba — Archive Workbench 0.73.0
+# Actualización y prueba — Archive Workbench 0.74.0
 
-Esta versión cierra `DISC-01D` y el bloque `DISC-01`: agrega evaluación reproducible por familia, comparación de informes y un adaptador opcional para spaCy. No cambia el esquema de la base ni agrega controles a la pantalla principal.
+Esta versión implementa la calibración reproducible de la búsqueda semántica (`SEM-01`) y mejora el canvas del grafo para separar relaciones paralelas y conservar su procedencia (`GRAPH-01`). También registra el cierre por alcance de `OCR-02`. No modifica el esquema de la base.
 
 ## 1. Actualizar sin mover ni eliminar archivos locales
 
@@ -10,7 +10,7 @@ source .venv/bin/activate
 
 TMP_DIR="$(mktemp -d)"
 unzip -q \
-  ~/Downloads/archive_workbench_v0.73.0.zip \
+  ~/Downloads/archive_workbench_v0.74.0.zip \
   -d "$TMP_DIR"
 
 cp -a "$TMP_DIR"/. .
@@ -23,7 +23,7 @@ python -m pip install \
 python -c "import archive_workbench; print(archive_workbench.__version__)"
 ```
 
-Debe devolver `0.73.0`. La copia no se mueve ni se elimina: `project_data`, `.dev`, `.assistant` y los demás archivos locales existentes permanecen en su lugar.
+Debe devolver `0.74.0`. La copia no mueve ni elimina archivos locales: `project_data`, `.dev`, `.assistant` y los demás contenidos existentes permanecen en su lugar.
 
 ## 2. Base de datos
 
@@ -33,53 +33,78 @@ Debe devolver `0.73.0`. La copia no se mueve ni se elimina: `project_data`, `.de
 
 ```bash
 pytest -q \
-  tests/test_discovery_evaluation.py \
-  tests/test_open_discovery.py \
+  tests/test_semantic_evaluation.py \
+  tests/test_semantic_search.py \
+  tests/test_graph.py \
   tests/test_ui_navigation.py \
   tests/test_documentation.py \
   tests/test_packaging.py && \
 pytest --collect-only -q
 ```
 
-No hace falta repetir `DISC-01A`, `DISC-01B`, `DISC-01C` ni la validación manual de `UX-03`.
+No repetir `UX-03` ni `DISC-01A`, `DISC-01B`, `DISC-01C` o `DISC-01D`: esos bloques ya están validados.
 
-## 4. Validación breve de DISC-01D
+## 4. Validación controlada de SEM-01 y GRAPH-01
 
-Esta prueba no abre ni modifica ninguna base. Usa el corpus sintético incluido y escribe tres informes en `~/Downloads`.
+La preparación crea una base descartable nueva en `~/Downloads`. No lee ni modifica `project_data`. No uses `--force`: si la ruta ya existe, el bloque se detiene sin reemplazarla.
 
 ```bash
 cd ~/projects/archive_app
 source .venv/bin/activate
 
-archive-workbench discovery-providers
+VALIDATION_ROOT="$HOME/Downloads/archive_workbench_sem_graph_validation_0740"
 
-archive-workbench discovery-evaluate \
-  config/discovery_evaluation_corpus.jsonl \
-  --provider local_deterministic \
-  --provider-version local_rules_v1 \
-  --minimum-confidence 0.0 \
-  --output ~/Downloads/aw_disc01d_local_000.json
-
-archive-workbench discovery-evaluate \
-  config/discovery_evaluation_corpus.jsonl \
-  --provider local_deterministic \
-  --provider-version local_rules_v1 \
-  --minimum-confidence 0.95 \
-  --output ~/Downloads/aw_disc01d_local_095.json
-
-archive-workbench discovery-evaluation-compare \
-  ~/Downloads/aw_disc01d_local_000.json \
-  ~/Downloads/aw_disc01d_local_095.json \
-  --output ~/Downloads/aw_disc01d_comparacion.json
+test ! -e "$VALIDATION_ROOT" && \
+python scripts/create_semantic_graph_validation_project.py \
+  --destination "$VALIDATION_ROOT" && \
+archive-workbench semantic-evaluation-compare \
+  "$VALIDATION_ROOT/validation/semantic_evaluation.json" \
+  "$VALIDATION_ROOT/validation/semantic_evaluation_alt.json" \
+  --output "$VALIDATION_ROOT/validation/semantic_comparison.json"
 ```
 
-Resultado esperado:
+Resultado esperado en terminal:
 
-- `local_deterministic` aparece disponible;
-- `spacy_ner` aparece disponible o no disponible según el entorno, sin impedir la prueba;
-- con umbral `0.0`: precisión `1.000000`, recuperación `0.857143` y F1 `0.923077`;
-- con umbral `0.95`: precisión `1.000000`, recuperación `0.142857` y F1 `0.250000`;
-- la comparación se crea porque ambos informes conservan la misma huella del corpus;
-- el informe por familia deja visible que las reglas locales no cubren `other`.
+- revisión `0040_discovery_grouping_continuity`;
+- perfil `Control SEM-01`;
+- umbral recomendado `0.7` y F1 `0.8` en el informe principal;
+- tres relaciones paralelas controladas;
+- confirmación explícita de que `project_data` no fue leído ni modificado;
+- comparación creada porque ambos informes comparten la misma huella del corpus y el mismo tipo de fragmento.
 
-El corpus incluido es un control de contrato y offsets, no un benchmark representativo. Ningún proveedor queda declarado como empíricamente superior o recomendado por defecto.
+El corpus controlado verifica el contrato y la comparación de umbrales. No establece un umbral universal ni declara un modelo superior fuera de ese corpus, perfil, revisión de índice y conjunto de parámetros.
+
+## 5. Revisión manual limitada al grafo nuevo
+
+Abrí la base descartable:
+
+```bash
+cd ~/projects/archive_app
+source .venv/bin/activate
+
+VALIDATION_ROOT="$HOME/Downloads/archive_workbench_sem_graph_validation_0740"
+archive-workbench review-app "$VALIDATION_ROOT"
+```
+
+En **Mapa de relaciones**:
+
+1. Mostrá todos los tipos y estados de revisión.
+2. Confirmá que entre **Persona Investigada** y **Dirección de Inteligencia** aparecen tres relaciones curvas separadas, incluida una en sentido inverso.
+3. Pasá el cursor sobre nodos, aristas y etiquetas: el tooltip debe conservar tipo, dirección, procedencia y evidencia.
+4. Arrastrá uno de los nodos: las curvas y etiquetas deben recalcularse sin superponerse sobre el nodo.
+5. Cambiá los filtros de tipo y estado: el canvas debe corresponder exactamente con el resumen y la tabla visibles.
+
+Detené Streamlit con `Ctrl+C` al terminar. La base descartable no se elimina automáticamente; cualquier limpieza posterior requiere indicar y autorizar su ruta exacta.
+
+## 6. Resultado de la validación
+
+`SEM-01` y `GRAPH-01` quedaron validados el 2026-08-04 sobre el proyecto descartable `archive_workbench_sem_graph_validation_0740`:
+
+- revisión `0040_discovery_grouping_continuity`;
+- umbral controlado recomendado `0.7` y F1 `0.8` en el informe principal;
+- comparación reproducible creada con el informe alternativo;
+- tres relaciones curvas separadas, incluida una en sentido inverso;
+- tooltips, arrastre de nodos y filtros coherentes con el resumen y la tabla;
+- `project_data` no fue leído ni modificado.
+
+La base descartable y el temporal de instalación se conservan hasta recibir autorización expresa para eliminarlos.

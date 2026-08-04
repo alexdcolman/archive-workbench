@@ -216,6 +216,12 @@ from archive_workbench.semantic_search import (
     semantic_profile_rows,
     semantic_search,
 )
+from archive_workbench.semantic_evaluation import (
+    DEFAULT_SEMANTIC_THRESHOLDS,
+    compare_semantic_evaluation_reports,
+    evaluate_semantic_search,
+    write_semantic_evaluation_report,
+)
 from archive_workbench.lineage_diagnostics import diagnose_unmatched_bundle_lineage
 from archive_workbench.lineage_recovery import (
     lineage_recovery_rows,
@@ -4486,6 +4492,79 @@ def semantic_search_command(
         typer.echo(f"{index}. {row.score:.4f} | {row.title} | páginas {pages} | {row.source_key or '-'}")
         typer.echo(f"    {' '.join(row.excerpt.split())}")
     typer.echo(f"Total: {len(rows)} resultados")
+
+
+@app.command("semantic-evaluate")
+def semantic_evaluate_command(
+    project_root: Path = typer.Argument(..., help="Raíz del proyecto operativo"),
+    profile_ref: str = typer.Argument(..., help="ID o nombre del perfil"),
+    corpus: Path = typer.Argument(..., help="Corpus JSONL de consultas verificadas"),
+    output: Path = typer.Option(..., "--output", help="Informe JSON reproducible"),
+    threshold: list[float] | None = typer.Option(
+        None,
+        "--threshold",
+        min=-1.0,
+        max=1.0,
+        help="Umbral a evaluar; puede repetirse",
+    ),
+    top_k: int = typer.Option(20, "--top-k", min=1, max=500),
+    device: str = typer.Option("auto", "--device", help="auto, cpu o cuda"),
+) -> None:
+    """Calibra umbrales semánticos sin modificar el corpus ni el índice."""
+    if device not in {"auto", "cpu", "cuda"}:
+        raise typer.BadParameter("--device debe ser auto, cpu o cuda")
+    _require_current_database(project_root)
+    engine = create_sqlite_engine(database_path(project_root))
+    try:
+        with session_scope(engine) as session:
+            project_id = _single_project_id(session)
+            profile = resolve_semantic_profile(
+                session, project_id=project_id, profile_ref=profile_ref
+            )
+            result = evaluate_semantic_search(
+                session,
+                project_root=project_root.resolve(),
+                project_id=project_id,
+                profile=profile,
+                corpus_path=corpus,
+                thresholds=tuple(threshold or DEFAULT_SEMANTIC_THRESHOLDS),
+                top_k=top_k,
+                device=device,
+            )
+            written = write_semantic_evaluation_report(result, output)
+    except (ValueError, RuntimeError, OSError) as exc:
+        raise typer.BadParameter(str(exc)) from exc
+    finally:
+        engine.dispose()
+    recommended = result.payload["recommended_threshold"]
+    metrics = recommended["micro"]
+    typer.echo(
+        f"OK: {written} | umbral={recommended['value']:.6f} | "
+        f"precisión={metrics['precision']:.6f} | "
+        f"recuperación={metrics['recall']:.6f} | F1={metrics['f1']:.6f}"
+    )
+    typer.echo(f"SHA-256 informe: {result.report_sha256}")
+    typer.echo(f"SHA-256 parámetros: {result.payload['parameters']['sha256']}")
+    typer.echo("El umbral recomendado se limita al corpus, perfil, modelo e índice evaluados.")
+
+
+@app.command("semantic-evaluation-compare")
+def semantic_evaluation_compare_command(
+    reports: list[Path] = typer.Argument(..., help="Dos o más informes JSON"),
+    output: Path | None = typer.Option(None, "--output"),
+) -> None:
+    """Compara calibraciones del mismo corpus y tipo de fragmento."""
+    try:
+        payload = compare_semantic_evaluation_reports(reports)
+    except (ValueError, OSError) as exc:
+        raise typer.BadParameter(str(exc)) from exc
+    rendered = json.dumps(payload, ensure_ascii=False, indent=2, sort_keys=True)
+    if output is not None:
+        output.parent.mkdir(parents=True, exist_ok=True)
+        output.write_text(rendered + "\n", encoding="utf-8")
+        typer.echo(f"OK: comparación escrita en {output.resolve()}")
+    else:
+        typer.echo(rendered)
 
 
 @app.command("processing-status")

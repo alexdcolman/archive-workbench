@@ -39,11 +39,11 @@ Mantiene objetos editables con texto, tipo, orden, geometría, atributos, estado
 
 ### Búsqueda
 
-La búsqueda literal usa índices reconstruibles. La búsqueda semántica utiliza perfiles con modelo, fragmentación, filtros y estado del corpus.
+La búsqueda literal usa índices reconstruibles. La búsqueda semántica utiliza perfiles con modelo, fragmentación, filtros y estado del corpus. Su calibración se ejecuta sin modificar la base: un corpus JSONL de consultas positivas, negativas y ambiguas se compara contra una revisión concreta del índice, se evalúan umbrales y se conservan métricas, falsos positivos, falsos negativos, parámetros y huellas reproducibles. Las comparaciones solo aceptan informes del mismo corpus y tipo de fragmento; cualquier umbral recomendado queda limitado al corpus, perfil, modelo, revisión de índice y grilla evaluada.
 
-### Autoridades
+### Autoridades y grafo
 
-Separa autoridad canónica, alias y menciones contextuales. Una grafía coincidente no implica identidad automática. Las relaciones explícitas requieren evidencia y revisión.
+Separa autoridad canónica, alias y menciones contextuales. Una grafía coincidente no implica identidad automática. Las relaciones explícitas requieren evidencia y revisión. El canvas del grafo es una proyección de lectura: separa de forma determinista relaciones paralelas o inversas, recalcula rutas y etiquetas al mover nodos y conserva tooltips de tipo, dirección, procedencia y evidencia. Cambiar el layout visual no escribe relaciones ni altera el modelo canónico.
 
 ### Exportación
 
@@ -85,6 +85,8 @@ Los backups incluyen manifiesto, base y configuración. La restauración crea pr
 - Grupo, pertenencia y acción de descubrimiento: deduplicación explícita sin fusionar procedencias.
 - Continuidad de candidato: vínculo entre un snapshot obsoleto y uno nuevo sobre la revisión vigente.
 - Corpus e informe de evaluación de descubrimiento: verdad terreno y comparación reproducible por proveedor, versión y parámetros.
+- Corpus e informe de calibración semántica: consultas verificadas, métricas por umbral y comparación reproducible por perfil, modelo, revisión de índice y parámetros.
+- Layout del grafo: proyección visual reconstruible sin identidad ni persistencia propias.
 
 ## Reglas de seguridad
 

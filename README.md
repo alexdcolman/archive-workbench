@@ -6,7 +6,7 @@ Está pensada especialmente para equipos de archivos, bibliotecas, ciencias soci
 
 Los documentos y la base de datos permanecen en la computadora del equipo: la aplicación no necesita subir el corpus a un servicio externo.
 
-**Versión actual:** 0.73.0 — cierre de DISC-01 con evaluación reproducible y proveedores auditables.
+**Versión actual:** 0.74.0 — calibración semántica reproducible y grafo con rutas separadas.
 
 ## Qué permite hacer
 
@@ -215,7 +215,7 @@ pip install -e ".[dev,extraction,streamlit,semantic,tiff,discovery]"
 pytest
 ```
 
-La versión 0.73.0 incorpora pruebas automatizadas para evaluación, proveedores y comparación reproducible.
+La versión 0.74.0 incorpora pruebas automatizadas para calibración semántica, comparación de informes y geometría del grafo.
 
 ## Licencia y cita
 
@@ -227,6 +227,6 @@ El desarrollo fue realizado por **Alex Colman** en el marco del **Grupo de Inves
 
 Cuando Archive Workbench sea utilizado en una investigación, publicación, informe, actividad docente o desarrollo derivado, solicitamos citar:
 
-> Colman, Alex, y Grupo de Investigación en Archivos de la Represión (GIAR). 2026. *Archive Workbench* (versión 0.73.0) [software]. https://github.com/alexdcolman/archive-workbench
+> Colman, Alex, y Grupo de Investigación en Archivos de la Represión (GIAR). 2026. *Archive Workbench* (versión 0.74.0) [software]. https://github.com/alexdcolman/archive-workbench
 
 El archivo [`CITATION.cff`](CITATION.cff) contiene los metadatos de cita reconocidos por GitHub y por distintos gestores bibliográficos.

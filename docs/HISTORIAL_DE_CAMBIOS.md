@@ -13,6 +13,11 @@ Este es el único documento en la raíz de `docs/`. Resume la evolución del pro
 
 ## Versiones recientes — más reciente primero
 
+### 0.74.0 — 2026-08-04
+- Implementa y valida la calibración semántica reproducible y la comparación de informes por corpus, perfil, modelo, revisión de índice y umbrales.
+- Separa y valida relaciones paralelas e inversas en el grafo, conserva tooltips de procedencia y evita colisiones básicas de nodos y etiquetas.
+- Cierra `OCR-02` por alcance, incorpora `CAT-01`, `CAT-02` y `GRAPH-02` al plan y mantiene `QA-01` en el cierre pre-release; sin migración, continúa `0040_discovery_grouping_continuity`.
+
 ### 0.73.0 — 2026-08-03
 - Cierra `DISC-01D` y `DISC-01` con corpus JSONL por familia, métricas reproducibles, errores auditables y comparación de informes.
 - Agrega el adaptador opcional `spacy_ner` con selección exacta de modelo y versión, sin declararlo superior al proveedor local.

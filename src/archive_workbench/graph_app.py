@@ -675,6 +675,11 @@ def render_graph_view(
             key=(
                 "graph_canvas_"
                 + "_".join(sorted(edge_types))
+                + "_entities_"
+                + "_".join(sorted(entity_types))
+                + "_reviews_"
+                + "_".join(sorted(review_statuses))
+                + f"_{include_inactive}_{include_pending_mentions}"
                 + f"_{focus_node_id}_{depth_value}_{max_nodes}_{min_shared}"
                 + f"_{temporal_enabled}_{temporal_from}_{temporal_to}_{temporal_include_undated}"
             ),

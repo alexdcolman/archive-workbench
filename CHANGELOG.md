@@ -1,3 +1,10 @@
+## 0.74.0 — 2026-08-04
+
+- Implementa y valida `SEM-01` con corpus JSONL de consultas positivas, negativas y ambiguas, barrido de umbrales, métricas por tipo de consulta, falsos positivos y negativos, huellas reproducibles y comparación de informes.
+- Implementa y valida `GRAPH-01` con aristas curvas y separadas para relaciones paralelas o inversas, etiquetas desplazadas, separación mínima de nodos y tooltips de procedencia y evidencia.
+- Cierra `OCR-02` por decisión de alcance: los binarios idénticos ya se deduplican mediante SHA-256, mientras que copias catalográficamente distintas conservan su OCR propio.
+- Programa `CAT-01`, `CAT-02` y `GRAPH-02` para plantillas distribuibles, roles archivísticos y estructura documental filtrable; mantiene `QA-01` junto con `OPS-02` en el cierre pre-release. No agrega migraciones; la revisión continúa en `0040_discovery_grouping_continuity`.
+
 ## 0.73.0 — 2026-08-03
 
 - Cierra `DISC-01D` y el bloque `DISC-01` con un corpus JSONL que conserva texto exacto, offsets, familia, subtipo y procedencia.

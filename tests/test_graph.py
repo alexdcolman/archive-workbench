@@ -8,10 +8,15 @@ from xml.etree import ElementTree as ET
 from archive_workbench.authorities import create_authority, create_mention
 from archive_workbench.db import create_sqlite_engine, database_path, session_scope
 from archive_workbench.graph import (
+    GraphEdge,
+    GraphNode,
+    GraphView,
     build_graph,
     export_graph,
     graph_consistency_issues,
     graph_layout,
+    graph_parallel_edge_metadata,
+    graph_payload,
 )
 from archive_workbench.relations import create_entity_relation
 from tests.test_search import _seed_search_project
@@ -241,3 +246,132 @@ def test_graph_filters_entities_and_explicit_relations_by_period(tmp_path: Path)
         assert outside.nodes == []
     finally:
         engine.dispose()
+
+
+def _parallel_graph_view() -> GraphView:
+    nodes = [
+        GraphNode(
+            node_id="entity:a",
+            kind="entity",
+            record_id="a",
+            label="Entidad A",
+            context="Contexto A",
+            subtype="person",
+            review_status="approved",
+            lifecycle_status="active",
+        ),
+        GraphNode(
+            node_id="entity:b",
+            kind="entity",
+            record_id="b",
+            label="Entidad B",
+            context="Contexto B",
+            subtype="organization",
+            review_status="approved",
+            lifecycle_status="active",
+        ),
+    ]
+    edges = [
+        GraphEdge(
+            edge_id="edge:3",
+            source="entity:b",
+            target="entity:a",
+            edge_type="explicit",
+            label="respondía a",
+            explanation="Relación explícita registrada por el equipo.",
+            evidence_note="Acta 3",
+        ),
+        GraphEdge(
+            edge_id="edge:1",
+            source="entity:a",
+            target="entity:b",
+            edge_type="explicit",
+            label="investigaba a",
+            explanation="Relación explícita registrada por el equipo.",
+            evidence_note="Acta 1",
+        ),
+        GraphEdge(
+            edge_id="edge:2",
+            source="entity:a",
+            target="entity:b",
+            edge_type="mention",
+            label="aparece en",
+            explanation="Vínculo derivado de una mención aceptada.",
+            source_key="doc-1",
+            page_number=4,
+        ),
+    ]
+    return GraphView(
+        nodes=nodes,
+        edges=edges,
+        truncated=False,
+        total_nodes_before_limit=2,
+        total_edges_before_limit=3,
+    )
+
+
+def test_parallel_edges_receive_distinct_deterministic_slots_and_tooltips() -> None:
+    view = _parallel_graph_view()
+    first = graph_parallel_edge_metadata(view)
+    second = graph_parallel_edge_metadata(
+        GraphView(
+            nodes=list(reversed(view.nodes)),
+            edges=list(reversed(view.edges)),
+            truncated=False,
+            total_nodes_before_limit=2,
+            total_edges_before_limit=3,
+        )
+    )
+    assert first == second
+    assert {row["parallel_count"] for row in first.values()} == {3}
+    assert len({row["parallel_slot"] for row in first.values()}) == 3
+
+    payload = graph_payload(view)
+    edge_rows = {row["id"]: row for row in payload["edges"]}
+    assert "Origen del vínculo" in edge_rows["edge:1"]["tooltip"]
+    assert "Acta 1" in edge_rows["edge:1"]["tooltip"]
+    assert "doc-1, página 4" in edge_rows["edge:2"]["tooltip"]
+    assert all("parallel_slot" in row for row in payload["edges"])
+    assert "Contexto A" in payload["nodes"][0]["tooltip"]
+
+
+def test_graph_layout_separates_node_centers() -> None:
+    nodes = [
+        GraphNode(
+            node_id=f"entity:{index}",
+            kind="entity",
+            record_id=str(index),
+            label=f"Entidad {index}",
+            context=None,
+            subtype="person",
+            review_status="approved",
+            lifecycle_status="active",
+        )
+        for index in range(16)
+    ]
+    view = GraphView(
+        nodes=nodes,
+        edges=[],
+        truncated=False,
+        total_nodes_before_limit=len(nodes),
+        total_edges_before_limit=0,
+    )
+    positions = graph_layout(view, width=1000, height=720)
+    distances = []
+    node_ids = sorted(positions)
+    for index, left in enumerate(node_ids):
+        for right in node_ids[index + 1 :]:
+            lx, ly = positions[left]
+            rx, ry = positions[right]
+            distances.append(((lx - rx) ** 2 + (ly - ry) ** 2) ** 0.5)
+    assert min(distances) >= 80
+
+
+def test_graph_canvas_uses_curved_paths_and_automatic_label_displacement() -> None:
+    import archive_workbench.graph_canvas as canvas
+
+    assert "makeSvg('path'" in canvas._COMPONENT_JS
+    assert "parallel_slot" in canvas._COMPONENT_JS
+    assert "labelCollision" in canvas._COMPONENT_JS
+    assert "addTitle(path" in canvas._COMPONENT_JS
+    assert "labelPlacement" in canvas._COMPONENT_JS

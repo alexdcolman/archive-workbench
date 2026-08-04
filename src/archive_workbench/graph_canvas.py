@@ -12,7 +12,7 @@ _COMPONENT_HTML = """
   <button type="button" data-action="fit" title="Ajustar">Ajustar</button>
   <button type="button" data-action="zoom-in" title="Acercar">+</button>
   <span class="awg-zoom">100%</span>
-  <span class="awg-help">Arrastrá nodos para reubicarlos. Arrastrá el fondo para desplazarte.</span>
+  <span class="awg-help">Arrastrá nodos para reubicarlos. Pasá el puntero sobre elementos y vínculos para ver su procedencia.</span>
 </div>
 <div class="awg-viewport">
   <svg class="awg-svg" viewBox="0 0 1000 720" role="img" aria-label="Grafo documental">
@@ -43,7 +43,7 @@ _COMPONENT_CSS = """
 .awg-viewport.dragging { cursor: grabbing; user-select: none; }
 .awg-svg { width: 100%; height: 100%; display: block; }
 .awg-world { transform-origin: 0 0; }
-.awg-edge { fill: none; stroke: color-mix(in srgb, var(--st-text-color) 36%, transparent); cursor: pointer; }
+.awg-edge { fill: none; stroke: color-mix(in srgb, var(--st-text-color) 36%, transparent); cursor: pointer; stroke-linecap: round; }
 .awg-edge.explicit { stroke-width: 2.4; }
 .awg-edge.mention { stroke-width: 1.7; stroke-dasharray: 7 5; }
 .awg-edge.shared_entity { stroke-width: 1.3; stroke-dasharray: 2 5; }
@@ -101,6 +101,32 @@ export default function(component) {
     for (const [key, value] of Object.entries(attributes)) element.setAttribute(key, String(value));
     return element;
   };
+  const addTitle = (element, value) => {
+    const title = makeSvg('title');
+    title.textContent = value || '';
+    element.appendChild(title);
+  };
+  const truncate = (value, maximum) => value.length > maximum ? `${value.slice(0, maximum - 1)}…` : value;
+  const wrapLabel = (value, maximum = 25) => {
+    const words = String(value || '').split(/\s+/).filter(Boolean);
+    const lines = [];
+    let current = '';
+    for (const word of words) {
+      const candidate = current ? `${current} ${word}` : word;
+      if (candidate.length <= maximum || !current) {
+        current = candidate;
+      } else {
+        lines.push(current);
+        current = word;
+      }
+      if (lines.length === 2) break;
+    }
+    if (current && lines.length < 2) lines.push(current);
+    if (lines.length === 2 && words.join(' ').length > lines.join(' ').length) {
+      lines[1] = truncate(lines[1], maximum);
+    }
+    return lines.length ? lines : ['Sin nombre'];
+  };
   world.replaceChildren();
 
   if (!(data.nodes || []).length) {
@@ -111,35 +137,64 @@ export default function(component) {
 
   const nodeById = Object.fromEntries((data.nodes || []).map((node) => [node.id, node]));
   const edgeElements = [];
+  const routeFor = (edge) => {
+    const source = state.positions[edge.source];
+    const target = state.positions[edge.target];
+    if (!source || !target) return null;
+    const slot = Number(edge.parallel_slot || 0);
+    const direction = Number(edge.parallel_direction || 1);
+    if (edge.source === edge.target) {
+      const radius = 48 + Math.abs(slot) * 24;
+      const side = slot < 0 ? -1 : 1;
+      const x = source[0], y = source[1];
+      return {
+        d: `M ${x} ${y - 16} C ${x + side * radius} ${y - radius}, ${x + side * radius} ${y + radius}, ${x} ${y + 16}`,
+        labelX: x + side * radius * .82,
+        labelY: y - 4,
+        nx: side,
+        ny: 0,
+      };
+    }
+    const dx = target[0] - source[0];
+    const dy = target[1] - source[1];
+    const distance = Math.max(1, Math.hypot(dx, dy));
+    const nx = -dy / distance;
+    const ny = dx / distance;
+    const offset = slot * 38 * direction;
+    const cx = (source[0] + target[0]) / 2 + nx * offset;
+    const cy = (source[1] + target[1]) / 2 + ny * offset;
+    return {
+      d: `M ${source[0]} ${source[1]} Q ${cx} ${cy} ${target[0]} ${target[1]}`,
+      labelX: source[0] * .25 + cx * .5 + target[0] * .25,
+      labelY: source[1] * .25 + cy * .5 + target[1] * .25 - 5,
+      nx,
+      ny,
+    };
+  };
+
   for (const edge of data.edges || []) {
-    const sourcePos = state.positions[edge.source];
-    const targetPos = state.positions[edge.target];
-    if (!sourcePos || !targetPos) continue;
     const group = makeSvg('g');
-    const line = makeSvg('line', {
-      x1: sourcePos[0], y1: sourcePos[1], x2: targetPos[0], y2: targetPos[1],
+    const path = makeSvg('path', {
       class: `awg-edge ${edge.edge_type}${edge.selected ? ' selected' : ''}`,
       'stroke-width': Math.min(6, 1.2 + Math.log1p(Number(edge.weight || 1))),
-      tabindex: 0, role: 'button', 'aria-label': edge.label,
+      tabindex: 0, role: 'button', 'aria-label': edge.tooltip || edge.label,
     });
-    line.onclick = (event) => { event.stopPropagation(); setTriggerValue('selected_edge', edge.id); };
-    line.onkeydown = (event) => {
+    addTitle(path, edge.tooltip || edge.label);
+    path.onclick = (event) => { event.stopPropagation(); setTriggerValue('selected_edge', edge.id); };
+    path.onkeydown = (event) => {
       if (event.key === 'Enter' || event.key === ' ') {
         event.preventDefault(); setTriggerValue('selected_edge', edge.id);
       }
     };
-    group.appendChild(line);
-    const label = makeSvg('text', {
-      x: (sourcePos[0] + targetPos[0]) / 2,
-      y: (sourcePos[1] + targetPos[1]) / 2 - 5,
-      class: 'awg-edge-label',
-    });
-    label.textContent = edge.label.length > 34 ? `${edge.label.slice(0, 33)}…` : edge.label;
+    group.appendChild(path);
+    const label = makeSvg('text', {class: 'awg-edge-label'});
+    label.textContent = truncate(edge.label, 40);
     group.appendChild(label);
     world.appendChild(group);
-    edgeElements.push({edge, line, label});
+    edgeElements.push({edge, path, label});
   }
 
+  const nodeElements = [];
   const kindLabel = {entity: 'entidad', archival_unit: 'unidad', document_part: 'parte'};
   for (const node of data.nodes || []) {
     const position = state.positions[node.id];
@@ -147,14 +202,14 @@ export default function(component) {
     const group = makeSvg('g', {
       class: `awg-node ${node.kind}${node.selected ? ' selected' : ''}`,
       transform: `translate(${position[0]} ${position[1]})`,
-      tabindex: 0, role: 'button', 'aria-label': `${kindLabel[node.kind] || node.kind}: ${node.label}`,
+      tabindex: 0, role: 'button', 'aria-label': node.tooltip || `${kindLabel[node.kind] || node.kind}: ${node.label}`,
     });
+    addTitle(group, node.tooltip || node.label);
     const circle = makeSvg('circle', {cx: 0, cy: 0, r: radius});
     group.appendChild(circle);
-    const text = makeSvg('text', {x: 0, y: radius + 17});
-    text.textContent = node.label.length > 30 ? `${node.label.slice(0, 29)}…` : node.label;
+    const text = makeSvg('text');
     group.appendChild(text);
-    const subtype = makeSvg('text', {x: 0, y: radius + 31, class: 'awg-kind'});
+    const subtype = makeSvg('text', {class: 'awg-kind'});
     subtype.textContent = node.subtype || kindLabel[node.kind] || node.kind;
     group.appendChild(subtype);
 
@@ -177,15 +232,7 @@ export default function(component) {
       const [x, y] = pointerToWorld(event);
       state.positions[node.id] = [x, y];
       group.setAttribute('transform', `translate(${x} ${y})`);
-      for (const item of edgeElements) {
-        if (item.edge.source !== node.id && item.edge.target !== node.id) continue;
-        const source = state.positions[item.edge.source];
-        const target = state.positions[item.edge.target];
-        item.line.setAttribute('x1', source[0]); item.line.setAttribute('y1', source[1]);
-        item.line.setAttribute('x2', target[0]); item.line.setAttribute('y2', target[1]);
-        item.label.setAttribute('x', (source[0] + target[0]) / 2);
-        item.label.setAttribute('y', (source[1] + target[1]) / 2 - 5);
-      }
+      scheduleGeometryRefresh();
     };
     group.onpointerup = (event) => {
       if (!draggingNode) return;
@@ -199,7 +246,92 @@ export default function(component) {
       }
     };
     world.appendChild(group);
+    nodeElements.push({node, group, text, subtype, radius});
   }
+
+  const labelPlacement = (item) => {
+    const position = state.positions[item.node.id];
+    const radius = item.radius;
+    const candidates = [
+      {name: 'below', x: 0, y: radius + 17, anchor: 'middle', bias: 3},
+      {name: 'above', x: 0, y: -radius - 30, anchor: 'middle', bias: 2},
+      {name: 'right', x: radius + 12, y: -7, anchor: 'start', bias: 1},
+      {name: 'left', x: -radius - 12, y: -7, anchor: 'end', bias: 0},
+    ];
+    for (const candidate of candidates) {
+      const wx = position[0] + candidate.x;
+      const wy = position[1] + candidate.y;
+      let nearest = 1000;
+      for (const other of data.nodes || []) {
+        if (other.id === item.node.id) continue;
+        const otherPosition = state.positions[other.id];
+        nearest = Math.min(nearest, Math.hypot(wx - otherPosition[0], wy - otherPosition[1]));
+      }
+      candidate.score = nearest + candidate.bias;
+    }
+    return candidates.sort((left, right) => right.score - left.score || right.bias - left.bias)[0];
+  };
+
+  const refreshNodeLabels = () => {
+    for (const item of nodeElements) {
+      const placement = labelPlacement(item);
+      const lines = wrapLabel(item.node.label);
+      item.text.replaceChildren();
+      item.text.setAttribute('x', placement.x);
+      item.text.setAttribute('y', placement.y);
+      item.text.setAttribute('text-anchor', placement.anchor);
+      lines.forEach((line, index) => {
+        const tspan = makeSvg('tspan', {
+          x: placement.x,
+          dy: index === 0 ? 0 : 14,
+        });
+        tspan.textContent = line;
+        item.text.appendChild(tspan);
+      });
+      item.subtype.setAttribute('x', placement.x);
+      item.subtype.setAttribute('y', placement.y + lines.length * 14);
+      item.subtype.setAttribute('text-anchor', placement.anchor);
+    }
+  };
+
+  const refreshEdges = () => {
+    const occupied = [];
+    const sorted = [...edgeElements].sort((left, right) => left.edge.id.localeCompare(right.edge.id));
+    for (const item of sorted) {
+      const route = routeFor(item.edge);
+      if (!route) continue;
+      item.path.setAttribute('d', route.d);
+      let x = route.labelX;
+      let y = route.labelY;
+      for (let attempt = 0; attempt < 10; attempt += 1) {
+        const nodeCollision = (data.nodes || []).some((node) => {
+          const position = state.positions[node.id];
+          return Math.hypot(x - position[0], y - position[1]) < 54;
+        });
+        const labelCollision = occupied.some((point) => Math.abs(x - point.x) < 92 && Math.abs(y - point.y) < 22);
+        if (!nodeCollision && !labelCollision) break;
+        const step = (Math.floor(attempt / 2) + 1) * 18 * (attempt % 2 === 0 ? 1 : -1);
+        x = route.labelX + route.nx * step;
+        y = route.labelY + route.ny * step;
+      }
+      item.label.setAttribute('x', x);
+      item.label.setAttribute('y', y);
+      occupied.push({x, y});
+    }
+  };
+
+  let refreshPending = false;
+  function scheduleGeometryRefresh() {
+    if (refreshPending) return;
+    refreshPending = true;
+    window.requestAnimationFrame(() => {
+      refreshPending = false;
+      refreshNodeLabels();
+      refreshEdges();
+    });
+  }
+  refreshNodeLabels();
+  refreshEdges();
 
   let panning = false;
   let startX = 0, startY = 0, startTx = 0, startTy = 0;

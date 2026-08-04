@@ -62,7 +62,10 @@ def test_active_pending_ledger_has_index_and_recovers_all_major_lines() -> None:
     text = (OPERATIVE / "PENDIENTES_ACTIVOS.md").read_text(encoding="utf-8")
     assert "## Índice" in text
     for item in (
+        "CAT-01 — Plantillas distribuibles de catálogo",
         "DISC-02 — Importación de diccionarios",
+        "CAT-02 — Entidades productoras y gestoras",
+        "GRAPH-02 — Estructura archivística, documentos y partes",
         "AV-01 — Registro audiovisual local y transcripción",
         "AV-02 — Plugin opcional de descarga desde YouTube",
         "AI-01 — Herramientas CLI opcionales con LLM",
@@ -71,7 +74,11 @@ def test_active_pending_ledger_has_index_and_recovers_all_major_lines() -> None:
         "INT-01 — Integración opcional con Google Drive",
     ):
         assert item in text
-    assert "un bloque no pertinente obtuvo similitud `0.830`" in text
+    assert "SEM-01 — Calibración reproducible de búsqueda semántica" not in text
+    assert "GRAPH-01 — Grafo sin colisiones" not in text
+    assert "QA-01 — Control estático y tipado" in text
+    assert "OCR-02" not in text
+    assert "post-release" in text.lower()
     assert "BUG-01 — Duplicación visual al archivar un perfil" not in text
     assert "UX-01 — Simplificación de la interfaz" not in text
     assert "DATA-01 — Reparación asistida" not in text
@@ -118,6 +125,11 @@ def test_implemented_ledger_separates_closed_work_from_active_pending() -> None:
     assert "project_data" in text and "pruebas OCR" in text
     assert "DISC-01D — evaluación reproducible" in text
     assert "DISC-01` queda cerrado" in text
+    assert "Calibración reproducible de búsqueda semántica — SEM-01, 0.74.0" in text
+    assert "Grafo sin colisiones — GRAPH-01, 0.74.0" in text
+    assert "Validada en 0.74.0" in text
+    assert "Validado manualmente en 0.74.0" in text
+    assert "Decisión de alcance sobre duplicados y copias — OCR-02, 0.74.0" in text
 
 
 def test_streamlit_form_policy_prevents_circular_disabled_buttons() -> None:
@@ -170,6 +182,7 @@ def test_interface_policy_requires_persistent_interactive_panels() -> None:
 def test_history_map_is_concise_and_references_historical_detail() -> None:
     text = (DOCS / "HISTORIAL_DE_CAMBIOS.md").read_text(encoding="utf-8")
     assert "## Documentación vigente" in text
+    assert "### 0.74.0" in text
     assert "### 0.73.0" in text
     assert "### 0.72.0" in text
     assert "### 0.71.2" in text
@@ -206,9 +219,10 @@ def test_history_map_is_concise_and_references_historical_detail() -> None:
     assert "historico/actualizaciones" in text
     assert "historico/decisiones_tecnicas" in text
     assert "CHANGELOG.md" in text
+    assert text.index("### 0.74.0") < text.index("### 0.73.0")
     assert text.index("### 0.73.0") < text.index("### 0.72.0")
     assert text.index("### 0.72.0") < text.index("### 0.71.2")
-    assert len(text.splitlines()) < 230
+    assert len(text.splitlines()) < 240
 
 
 def test_current_architecture_is_separate_from_historical_design() -> None:
@@ -359,6 +373,7 @@ def test_historical_update_guides_046_to_0630_are_preserved() -> None:
         "ACTUALIZACION_Y_PRUEBA_0.71.0.md",
         "ACTUALIZACION_Y_PRUEBA_0.71.1.md",
         "ACTUALIZACION_Y_PRUEBA_0.72.0.md",
+        "ACTUALIZACION_Y_PRUEBA_0.73.0.md",
     ]
     assert sorted(path.name for path in HISTORICAL_UPDATES.glob("*.md")) == expected
     text_047 = (HISTORICAL_UPDATES / expected[1]).read_text(encoding="utf-8")
@@ -438,16 +453,21 @@ def test_automatic_analysis_quality_decision_is_preserved_and_auditable() -> Non
     assert "st.form" in text
 
 
-def test_current_update_guide_is_stable_named_and_validates_disc01d() -> None:
+def test_current_update_guide_is_stable_named_and_validates_sem01_graph01() -> None:
     text = (OPERATIVE / "ACTUALIZACION_ACTUAL.md").read_text(encoding="utf-8")
-    assert "Archive Workbench 0.73.0" in text
+    assert "Archive Workbench 0.74.0" in text
     assert "0040_discovery_grouping_continuity" in text
     assert "No hay migración" in text
     assert "project_data" in text
-    assert "no se mueve ni se elimina" in text.lower()
-    assert "discovery-evaluate" in text
-    assert "discovery-evaluation-compare" in text
+    assert "no mueve ni elimina" in text.lower()
+    assert "create_semantic_graph_validation_project.py" in text
+    assert "semantic-evaluation-compare" in text
+    assert "tres relaciones curvas separadas" in text
     assert "pytest --collect-only -q" in text
+    assert "DISC-01D" in text and "No repetir" in text
+    assert "## 6. Resultado de la validación" in text
+    assert "umbral controlado recomendado `0.7`" in text
+    assert "project_data` no fue leído ni modificado" in text
 
 
 def test_ex01_lineage_recovery_plan_is_complete_and_conservative() -> None:
@@ -504,10 +524,10 @@ def test_pilot_guide_delegates_future_work_to_single_pending_ledger() -> None:
 def test_readme_points_only_to_current_documentation_map() -> None:
     text = (ROOT / "README.md").read_text(encoding="utf-8")
     citation = (ROOT / "CITATION.cff").read_text(encoding="utf-8")
-    assert "**Versión actual:** 0.73.0" in text
-    assert "La versión 0.73.0 incorpora pruebas automatizadas" in text
-    assert "(versión 0.73.0)" in text
-    assert 'version: "0.73.0"' in citation
+    assert "**Versión actual:** 0.74.0" in text
+    assert "La versión 0.74.0 incorpora pruebas automatizadas" in text
+    assert "(versión 0.74.0)" in text
+    assert 'version: "0.74.0"' in citation
     assert "docs/HISTORIAL_DE_CAMBIOS.md" in text
     assert "docs/operativos/PENDIENTES_ACTIVOS.md" in text
     assert "docs/operativos/IMPLEMENTACIONES_REALIZADAS.md" in text

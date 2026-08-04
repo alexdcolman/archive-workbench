@@ -165,8 +165,8 @@ def test_version_docs_and_discovery_plan_are_packaged() -> None:
         / "0040_discovery_grouping_continuity.py"
     )
 
-    assert data["project"]["version"] == "0.73.0"
-    assert '__version__ = "0.73.0"' in version_source
+    assert data["project"]["version"] == "0.74.0"
+    assert '__version__ = "0.74.0"' in version_source
     assert migration.is_file()
     assert 'down_revision = "0039_discovery_decisions"' in migration.read_text(
         encoding="utf-8"
@@ -181,6 +181,13 @@ def test_version_docs_and_discovery_plan_are_packaged() -> None:
     assert (root / "src" / "archive_workbench" / "discovery_providers.py").is_file()
     assert (root / "src" / "archive_workbench" / "discovery_evaluation.py").is_file()
     assert (root / "config" / "discovery_evaluation_corpus.jsonl").is_file()
+    assert (root / "src" / "archive_workbench" / "semantic_evaluation.py").is_file()
+    assert (root / "config" / "semantic_evaluation_corpus.example.jsonl").is_file()
+    semantic_validator = root / "scripts" / "create_semantic_graph_validation_project.py"
+    assert semantic_validator.is_file()
+    semantic_validator_source = semantic_validator.read_text(encoding="utf-8")
+    assert "project_data no fue leído ni modificado" in semantic_validator_source
+    assert "semantic_evaluation_alt.json" in semantic_validator_source
     assert data["project"]["optional-dependencies"]["discovery"] == [
         "spacy>=3.8,<4"
     ]

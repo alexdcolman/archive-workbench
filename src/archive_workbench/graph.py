@@ -926,8 +926,74 @@ def export_graph(
     return paths
 
 
+def graph_parallel_edge_metadata(view: GraphView) -> dict[str, dict[str, float | int]]:
+    """Asigna carriles estables a aristas paralelas, incluidas las de sentido inverso."""
+
+    groups: dict[tuple[str, str], list[GraphEdge]] = defaultdict(list)
+    for edge in view.edges:
+        groups[tuple(sorted((edge.source, edge.target)))].append(edge)
+    metadata: dict[str, dict[str, float | int]] = {}
+    for pair in sorted(groups):
+        rows = sorted(
+            groups[pair],
+            key=lambda row: (row.edge_type, _normalized(row.label), row.edge_id),
+        )
+        count = len(rows)
+        for index, edge in enumerate(rows):
+            slot = index - (count - 1) / 2
+            direction = 1 if edge.source <= edge.target else -1
+            metadata[edge.edge_id] = {
+                "parallel_index": index,
+                "parallel_count": count,
+                "parallel_slot": slot,
+                "parallel_direction": direction,
+            }
+    return metadata
+
+
+def _node_tooltip(row: GraphNode) -> str:
+    labels = {
+        "entity": "Entidad",
+        "archival_unit": "Unidad archivística",
+        "document_part": "Parte documental",
+    }
+    lines = [f"{labels.get(row.kind, row.kind)}: {row.label}"]
+    if row.subtype:
+        lines.append(f"Tipo: {row.subtype}")
+    if row.context:
+        lines.append(f"Contexto: {row.context}")
+    if row.review_status:
+        lines.append(f"Revisión: {row.review_status}")
+    if row.temporal_expression:
+        lines.append(f"Período: {row.temporal_expression}")
+    if row.source_key:
+        source = row.source_key
+        if row.page_number is not None:
+            source += f", página {row.page_number}"
+        lines.append(f"Fuente: {source}")
+    return "\n".join(lines)
+
+
+def _edge_tooltip(row: GraphEdge) -> str:
+    lines = [row.label, f"Origen del vínculo: {row.explanation}"]
+    if row.evidence_note:
+        lines.append(f"Evidencia: {row.evidence_note}")
+    if row.review_status:
+        lines.append(f"Revisión: {row.review_status}")
+    if row.temporal_expression:
+        lines.append(f"Período: {row.temporal_expression}")
+    if row.source_key:
+        source = row.source_key
+        if row.page_number is not None:
+            source += f", página {row.page_number}"
+        lines.append(f"Fuente: {source}")
+    return "\n".join(lines)
+
+
 def graph_payload(view: GraphView, *, selected_node: str | None = None, selected_edge: str | None = None) -> dict[str, object]:
     """Payload serializable para el componente interactivo."""
+
+    parallel = graph_parallel_edge_metadata(view)
     return {
         "nodes": [
             {
@@ -936,6 +1002,7 @@ def graph_payload(view: GraphView, *, selected_node: str | None = None, selected
                 "kind": row.kind,
                 "subtype": row.subtype,
                 "degree": row.degree,
+                "tooltip": _node_tooltip(row),
                 "selected": row.node_id == selected_node,
             }
             for row in view.nodes
@@ -948,6 +1015,8 @@ def graph_payload(view: GraphView, *, selected_node: str | None = None, selected
                 "label": row.label,
                 "edge_type": row.edge_type,
                 "weight": row.weight,
+                "tooltip": _edge_tooltip(row),
+                **parallel[row.edge_id],
                 "selected": row.edge_id == selected_edge,
             }
             for row in view.edges
@@ -955,6 +1024,45 @@ def graph_payload(view: GraphView, *, selected_node: str | None = None, selected
         "selected_node": selected_node,
         "selected_edge": selected_edge,
     }
+
+
+def _separate_graph_positions(
+    positions: dict[str, list[float]],
+    *,
+    width: float,
+    height: float,
+    minimum_distance: float = 82.0,
+) -> None:
+    """Separa centros demasiado próximos sin introducir aleatoriedad."""
+
+    node_ids = sorted(positions)
+    for _iteration in range(18):
+        changed = False
+        for index, left in enumerate(node_ids):
+            for right in node_ids[index + 1 :]:
+                lx, ly = positions[left]
+                rx, ry = positions[right]
+                dx, dy = rx - lx, ry - ly
+                distance = math.hypot(dx, dy)
+                if distance >= minimum_distance:
+                    continue
+                if distance < 0.001:
+                    digest = hashlib.sha256(f"{left}\x1f{right}".encode("utf-8")).digest()
+                    angle = int.from_bytes(digest[:2], "big") / 65535.0 * 2 * math.pi
+                    dx, dy = math.cos(angle), math.sin(angle)
+                    distance = 1.0
+                push = (minimum_distance - distance) / 2
+                ux, uy = dx / distance, dy / distance
+                positions[left][0] -= ux * push
+                positions[left][1] -= uy * push
+                positions[right][0] += ux * push
+                positions[right][1] += uy * push
+                changed = True
+        for node_id in node_ids:
+            positions[node_id][0] = min(width - 70, max(70, positions[node_id][0]))
+            positions[node_id][1] = min(height - 70, max(70, positions[node_id][1]))
+        if not changed:
+            break
 
 
 def graph_layout(view: GraphView, *, width: float = 1000.0, height: float = 720.0) -> dict[str, tuple[float, float]]:
@@ -1011,7 +1119,8 @@ def graph_layout(view: GraphView, *, width: float = 1000.0, height: float = 720.
             x += dx / distance * min(distance, cooling)
             y += dy / distance * min(distance, cooling)
             positions[node_id] = [
-                min(width - 55, max(55, x)),
-                min(height - 55, max(55, y)),
+                min(width - 70, max(70, x)),
+                min(height - 70, max(70, y)),
             ]
+    _separate_graph_positions(positions, width=width, height=height)
     return {key: (round(value[0], 2), round(value[1], 2)) for key, value in positions.items()}

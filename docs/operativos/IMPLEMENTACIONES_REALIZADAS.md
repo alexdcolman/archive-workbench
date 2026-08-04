@@ -1,6 +1,6 @@
 # Implementaciones realizadas — Archive Workbench
 
-**Estado verificado:** 2026-08-03 · **versión:** 0.73.0
+**Estado verificado:** 2026-08-04 · **versión:** 0.74.0
 
 Este documento registra capacidades ya implementadas y, cuando corresponde, validadas. No deben volver a aparecer en `PENDIENTES_ACTIVOS.md` salvo evidencia de regresión o ampliación explícita del alcance.
 
@@ -12,7 +12,7 @@ Este documento registra capacidades ya implementadas y, cuando corresponde, vali
 | Extracciones versionadas y selección canónica | Implementado y validado |
 | Revisión, historial y rebase | Implementado y validado |
 | Calidad de página y derivados OCR | Implementación parcial operativa |
-| Búsqueda literal y semántica | Implementado; calibración semántica pendiente |
+| Búsqueda literal y semántica | Implementado; calibración reproducible cerrada en 0.74.0 |
 | Autoridades, menciones y relaciones | Núcleo implementado y validado |
 | Exportaciones reproducibles | Implementado y validado |
 | Backups y restauración | Implementado y validado |
@@ -24,6 +24,9 @@ Este documento registra capacidades ya implementadas y, cuando corresponde, vali
 | Organización documental | Implementada en 0.50.0 |
 | Descubrimiento abierto DISC-01A–D | Implementado y validado en 0.73.0 |
 | Reformulación UX-03 de Entidades y descubrimiento | Implementada y validada en 0.72.0 |
+| Calibración semántica SEM-01 | Implementada y validada en 0.74.0 |
+| Grafo sin colisiones GRAPH-01 | Implementado y validado en 0.74.0 |
+| Duplicados OCR-02 | Cerrado por decisión de alcance en 0.74.0 |
 
 ## Descubrimiento abierto
 
@@ -108,6 +111,15 @@ La validación manual confirmó los recorridos separados, la conservación de la
 
 La evaluación empírica inicial de Surya y las decisiones técnicas se conservan en `docs/historico/decisiones_tecnicas/`.
 
+### Decisión de alcance sobre duplicados y copias — OCR-02, 0.74.0
+
+- Los archivos binariamente idénticos ya se reconocen por SHA-256 dentro de cada proyecto: `DigitalObject` conserva unicidad por `project_id + sha256` y una nueva ubicación se registra como otra instancia del mismo objeto digital.
+- Dos copias, ejemplares o digitalizaciones catalográficamente distintas pueden contener el mismo texto y seguir siendo documentos diferentes por procedencia, soporte o contexto.
+- Cada objeto documental distinto conserva su propio OCR y sus derivados; Archive Workbench no sustituye automáticamente una representación por otra ni elige una copia “más legible” para reemplazar la fuente.
+- La identificación intelectual de duplicados documentales corresponde al proceso de catalogación. No se implementa una deduplicación OCR adicional que pueda mezclar procedencias.
+
+`OCR-02` queda cerrado como decisión de alcance, sin migración ni cambios de datos.
+
 ## Revisión e historial
 
 ### Editor y auditoría
@@ -145,7 +157,18 @@ La validación manual confirmó tres rebases sucesivos, conservación de atribut
 - Navegación desde resultados hacia documento, página y objeto.
 - Filtros por estado de página en búsqueda literal y semántica.
 
-La calibración de umbrales continúa activa en `SEM-01`.
+### Calibración reproducible de búsqueda semántica — SEM-01, 0.74.0
+
+- `semantic-evaluate` ejecuta consultas verificadas contra un perfil y un índice vigentes sin modificar la base, el corpus ni los vectores.
+- El corpus JSONL distingue consultas `positive`, `negative` y `ambiguous`, fija el tipo de fragmento y permite evaluar por `chunk_id`, `record_id`, `source_key` u `object_id`.
+- Cada informe conserva corpus, perfil, modelo, revisión, corrida de índice, parámetros, resultados ordenados, falsos positivos, falsos negativos y métricas por umbral y tipo de consulta.
+- El umbral recomendado maximiza F1 dentro del conjunto evaluado y queda acompañado por una advertencia explícita: no es universal y solo vale para ese corpus, perfil, modelo, revisión de índice y grilla de umbrales.
+- `semantic-evaluation-compare` compara informes del mismo corpus y tipo de fragmento sin declarar un modelo superior fuera de esa evidencia.
+- `config/semantic_evaluation_corpus.example.jsonl` documenta los tres tipos de consulta y exige reemplazar las claves de ejemplo por referencias verificadas del proyecto.
+
+No hay migración: los informes son archivos JSON reproducibles y la ejecución solo lee el índice y la base existentes.
+
+**Validada en 0.74.0.** El proyecto descartable conservó la revisión `0040_discovery_grouping_continuity`, recomendó el umbral controlado `0.7` con F1 `0.8`, produjo un informe alternativo comparable y confirmó que `project_data` no fue leído ni modificado. El resultado valida el contrato y la comparación reproducible; no fija un umbral universal.
 
 ### Autoridades y menciones
 
@@ -157,7 +180,7 @@ La calibración de umbrales continúa activa en `SEM-01`.
 - Deduplicación transrevisionaria y conflicto cuando un fragmento ya está vinculado a otra autoridad.
 - Diagnósticos para menciones huérfanas, antiguas y duplicadas.
 
-El descubrimiento de elementos desconocidos es otra función y continúa como `DISC-01`.
+El descubrimiento de elementos desconocidos es una función separada y quedó cerrado como `DISC-01` en 0.73.0.
 
 ### Relaciones
 
@@ -169,7 +192,19 @@ El descubrimiento de elementos desconocidos es otra función y continúa como `D
 - Filtros de entidades o relaciones inactivas.
 - Advertencias de consistencia y procedencia de aristas.
 
-La mejora visual de colisiones continúa como `GRAPH-01`.
+### Grafo sin colisiones — GRAPH-01, 0.74.0
+
+- Las aristas paralelas, incluidas las de sentido inverso, reciben carriles deterministas y separados.
+- El canvas usa rutas cuadráticas o bucles propios en lugar de líneas superpuestas, y recalcula la geometría al arrastrar nodos.
+- Las etiquetas de aristas se desplazan automáticamente cuando colisionan con nodos u otras etiquetas.
+- Las etiquetas de nodos se envuelven en dos líneas y eligen automáticamente el lado menos ocupado.
+- Los tooltips de nodos y aristas muestran tipo, contexto, explicación del origen, evidencia, estado, período y fuente cuando esos datos existen.
+- El layout aplica una separación mínima determinista entre centros de nodos y conserva el mismo resultado ante la misma vista.
+- La identidad del componente incorpora todos los filtros visibles para que el estado corresponda exactamente a la vista solicitada.
+
+Los filtros y la explicación detallada ya existentes se conservan; no se agrega un panel nuevo a la pantalla principal.
+
+**Validado manualmente en 0.74.0.** Se comprobaron tres relaciones curvas separadas entre los nodos controlados, incluida una relación en sentido inverso; los tooltips conservaron tipo, dirección, procedencia y evidencia; al arrastrar nodos se recalcularon curvas y etiquetas; y los filtros coincidieron con el resumen, la tabla y el canvas.
 
 
 ## Reparación auditable de menciones
