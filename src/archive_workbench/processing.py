@@ -60,6 +60,8 @@ class ProcessingInventoryRow:
     file_presence: str
     status: str
     preprocessing_status: str | None
+    preprocessing_profile: str | None
+    preprocessing_ocr_treatment: str | None
     extraction_status: str | None
     extraction_profile: str | None
     extracted_pages: int
@@ -362,6 +364,12 @@ def processing_inventory_rows(
                 file_presence=file_presence,
                 status=status,
                 preprocessing_status=preprocessing.status if preprocessing else None,
+                preprocessing_profile=preprocessing.profile_key if preprocessing else None,
+                preprocessing_ocr_treatment=(
+                    str((preprocessing.options_json or {}).get("ocr_treatment", "original"))
+                    if preprocessing
+                    else None
+                ),
                 extraction_status=extraction.status if extraction else None,
                 extraction_profile=extraction.profile_key if extraction else None,
                 extracted_pages=len(extracted_pages),

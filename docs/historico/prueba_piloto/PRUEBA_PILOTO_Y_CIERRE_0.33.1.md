@@ -52,8 +52,13 @@ Los datos de la prueba piloto fueron considerados descartables. 0.33.1 no incorp
 
 ## Pendientes posteriores a 0.33.1
 
-- Previsualizar y comparar corridas OCR candidatas antes de volverlas canónicas; adoptar o rebasar sin perder ediciones humanas.
-- Integrar un historial cronológico de página y objeto que muestre estado OCR inicial, operaciones, autoría y cambios de selección.
+Resueltos en 0.34.0:
+
+- previsualización y comparación de corridas OCR candidatas antes de volverlas canónicas, con adopción segura o conservación explícita de ediciones humanas;
+- historial cronológico integrado de página y objeto, con estado OCR inicial, operaciones, autoría y cambios de selección.
+
+Continúan pendientes:
+
 - Evaluar calidad automática de imagen, deskew, dewarp, OCR regional, Surya y CUDA sobre un corpus mayor.
 - Mejorar fragmentación, orden de lectura, columnas, sellos, firmas, ilustraciones y ruido geométrico.
 - Evitar colisiones de textos y aristas paralelas en el grafo.

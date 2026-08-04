@@ -6,6 +6,7 @@ from importlib import metadata
 import shutil
 import shlex
 import subprocess
+import sys
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from pathlib import Path
@@ -30,9 +31,11 @@ from archive_workbench.db.models import (
     ArchivalUnit,
     DerivativeAsset,
     DigitalObject,
+    EditablePage,
     ExtractedObject,
     ExtractionPage,
     ExtractionPageSelection,
+    ExtractionPageSelectionRevision,
     ExtractionRun,
     PreprocessingRun,
     SourceRegistration,
@@ -40,12 +43,20 @@ from archive_workbench.db.models import (
 from archive_workbench.domain.enums import ExtractionStatus, MediaType
 from archive_workbench.identity import new_id, sha256_file, sha256_json, stable_id
 from archive_workbench.io.jsonl import write_models_atomic
+from archive_workbench.page_quality import assess_extraction_page_quality
 from archive_workbench.tesseract_engine import (
     normalize_tesseract_result,
     prepare_image_variant,
     run_tesseract_page,
     text_quality_metrics,
     write_tesseract_raw,
+)
+from archive_workbench.surya_engine import (
+    normalize_surya_page,
+    resolve_surya_command,
+    resolve_surya_torch_device,
+    run_surya_cli_batch,
+    surya_version,
 )
 
 
@@ -77,6 +88,21 @@ class ExtractionSummary:
     paragraphs_created: int = 0
     characters_created: int = 0
     warnings: list[str] = field(default_factory=list)
+    failed_source_keys: list[str] = field(default_factory=list)
+
+
+@dataclass(slots=True)
+class ExtractionProfileResolution:
+    requested: ExtractionProfile
+    effective: ExtractionProfile
+    requested_report: ExtractionDoctorReport
+    effective_report: ExtractionDoctorReport
+    fallback_used: bool = False
+    reason: str | None = None
+
+    @property
+    def ready(self) -> bool:
+        return self.effective_report.ready
 
 
 @dataclass(slots=True)
@@ -155,6 +181,10 @@ DoclingBatchRunner = Callable[
     [list[tuple[int, Path]], Path, ExtractionProfile],
     tuple[dict[int, Path], str | None, str],
 ]
+SuryaBatchRunner = Callable[
+    [list[tuple[int, Path]], Path, ExtractionProfile],
+    tuple[dict[int, Path], str | None, str],
+]
 
 
 LABEL_MAP: dict[str, str] = {
@@ -222,23 +252,119 @@ def _run_probe(command: list[str], timeout: int = 30) -> tuple[bool, str]:
     return result.returncode == 0, first_line
 
 
+def _surya_url_check(url: str) -> tuple[bool, str]:
+    from urllib.error import HTTPError, URLError
+    from urllib.request import urlopen
+
+    endpoint = url.rstrip("/") + "/models"
+    try:
+        with urlopen(endpoint, timeout=5) as response:  # noqa: S310 - URL local/configurada
+            status = int(getattr(response, "status", 200))
+    except HTTPError as exc:
+        return False, f"{endpoint}: HTTP {exc.code}"
+    except (URLError, OSError, TimeoutError) as exc:
+        return False, f"{endpoint}: {type(exc).__name__}: {exc}"
+    return 200 <= status < 400, f"{endpoint}: HTTP {status}"
+
+
+def _surya_local_backend_check(profile: ExtractionProfile) -> tuple[bool, str]:
+    if profile.device == "cpu":
+        ok, detail = _run_probe(["llama-server", "--version"])
+        return ok, f"llama.cpp: {detail}"
+
+    nvidia_ok, nvidia_detail = _run_probe(
+        ["nvidia-smi", "--query-gpu=name,memory.total", "--format=csv,noheader"]
+    )
+    docker_ok, docker_detail = _run_probe(["docker", "info", "--format", "{{json .Runtimes}}"])
+    nvidia_runtime = docker_ok and "nvidia" in docker_detail.lower()
+    gpu_ready = nvidia_ok and docker_ok and nvidia_runtime
+    if profile.device == "cuda":
+        return (
+            gpu_ready,
+            f"NVIDIA: {nvidia_detail}; Docker: {docker_detail}; "
+            f"runtime nvidia {'disponible' if nvidia_runtime else 'no detectado'}",
+        )
+
+    cpu_ok, cpu_detail = _run_probe(["llama-server", "--version"])
+    if gpu_ready:
+        return True, f"ruta GPU disponible ({nvidia_detail})"
+    if cpu_ok:
+        return True, f"ruta CPU disponible ({cpu_detail}); GPU no lista: {nvidia_detail}"
+    return False, (
+        "no hay backend local utilizable: "
+        f"GPU ({nvidia_detail}; {docker_detail}) y llama-server ({cpu_detail})"
+    )
+
+
+def _surya_auxiliary_torch_check(profile: ExtractionProfile) -> tuple[bool, str]:
+    resolved_command = resolve_surya_command(profile.surya_command)
+    command_path = Path(shutil.which(resolved_command) or resolved_command)
+    sibling_python = command_path.parent / "python"
+    runtime_python = sibling_python if sibling_python.is_file() else Path(sys.executable)
+
+    env = os.environ.copy()
+    if profile.surya_clean_library_path:
+        env.pop("LD_LIBRARY_PATH", None)
+    torch_device = resolve_surya_torch_device(profile)
+    if torch_device != "auto":
+        env["TORCH_DEVICE"] = torch_device
+    script = r"""
+import os
+import torch
+import torch.nn.functional as F
+
+device = os.environ.get("TORCH_DEVICE", "auto")
+resolved = device
+if device == "auto":
+    resolved = "cuda" if torch.cuda.is_available() else "cpu"
+if resolved == "cuda":
+    x = torch.zeros((1, 1, 8, 8), device="cuda")
+    kernel = torch.ones((1, 1, 3, 3), device="cuda")
+    F.conv2d(x, kernel)
+    torch.cuda.synchronize()
+else:
+    torch.zeros((1, 1, 8, 8), device="cpu")
+print(f"torch {torch.__version__}; dispositivo auxiliar {resolved}; CUDA {'disponible' if torch.cuda.is_available() else 'no disponible'}")
+"""
+    try:
+        result = subprocess.run(
+            [str(runtime_python), "-c", script],
+            text=True,
+            capture_output=True,
+            timeout=60,
+            check=False,
+            env=env,
+        )
+    except (FileNotFoundError, subprocess.TimeoutExpired) as exc:
+        return False, f"{type(exc).__name__}: {exc}"
+    output = (result.stdout or result.stderr or "").strip()
+    detail = output.splitlines()[-1] if output else f"código {result.returncode}"
+    return result.returncode == 0, detail
+
+
 def extraction_doctor(profile: ExtractionProfile) -> ExtractionDoctorReport:
     checks: list[ToolCheck] = []
+
     docling_required = profile.backend == "docling_cli"
-    ok, probe_detail = _run_probe([profile.docling_command, "--help"])
+    docling_ok, probe_detail = _run_probe([profile.docling_command, "--help"])
     try:
         package_version = metadata.version("docling")
     except metadata.PackageNotFoundError:
         package_version = None
-    detail = f"docling {package_version}" if ok and package_version else probe_detail
-    checks.append(ToolCheck("Docling CLI", ok, detail, required=docling_required))
+    detail = f"docling {package_version}" if docling_ok and package_version else probe_detail
+    checks.append(ToolCheck("Docling CLI", docling_ok, detail, required=docling_required))
 
-    ok, detail = _run_probe([profile.tesseract_command, "--version"])
-    checks.append(ToolCheck("Tesseract", ok, detail))
+    tesseract_required = profile.backend == "tesseract_tsv" or (
+        profile.backend == "docling_cli" and profile.ocr_engine == "tesseract"
+    )
+    tesseract_ok, tesseract_detail = _run_probe([profile.tesseract_command, "--version"])
+    checks.append(
+        ToolCheck("Tesseract", tesseract_ok, tesseract_detail, required=tesseract_required)
+    )
 
     langs_ok = False
-    langs_detail = "no se pudo consultar"
-    if ok:
+    langs_detail = "no requerido por este backend"
+    if tesseract_required and tesseract_ok:
         try:
             result = subprocess.run(
                 [profile.tesseract_command, "--list-langs"],
@@ -260,52 +386,273 @@ def extraction_doctor(profile: ExtractionProfile) -> ExtractionDoctorReport:
                 else f"faltan: {', '.join(missing)}"
             )
         except (FileNotFoundError, subprocess.TimeoutExpired):
-            pass
-    checks.append(ToolCheck("Idiomas OCR", langs_ok, langs_detail))
+            langs_detail = "no se pudo consultar"
+    checks.append(
+        ToolCheck(
+            "Idiomas OCR",
+            langs_ok or not tesseract_required,
+            langs_detail,
+            required=tesseract_required,
+        )
+    )
 
-    try:
-        import torch  # type: ignore[import-not-found]
-        import torch.nn.functional as torch_functional  # type: ignore[import-not-found]
+    surya_required = profile.backend == "surya_cli"
+    surya_command = resolve_surya_command(profile.surya_command)
+    surya_ok, surya_detail = _run_probe([surya_command, "--help"])
+    installed_version = surya_version(profile.surya_command) if surya_ok else None
+    if installed_version:
+        surya_detail = f"surya-ocr {installed_version}"
+    checks.append(ToolCheck("Surya CLI", surya_ok, surya_detail, required=surya_required))
+    if surya_required:
+        inference_url = profile.surya_inference_url or os.environ.get("SURYA_INFERENCE_URL")
+        if inference_url:
+            backend_ok, backend_detail = _surya_url_check(inference_url)
+            backend_name = "Servidor Surya configurado"
+        else:
+            backend_ok, backend_detail = _surya_local_backend_check(profile)
+            backend_name = "Backend de inferencia Surya"
+        checks.append(ToolCheck(backend_name, backend_ok, backend_detail, required=True))
 
-        cuda = bool(torch.cuda.is_available())
-        detail = f"torch {torch.__version__}; CUDA {'disponible' if cuda else 'no disponible'}"
-        if cuda:
-            detail += f"; {torch.cuda.get_device_name(0)}"
-        checks.append(ToolCheck("Aceleración detectada", True, detail, required=False))
-        if cuda:
-            try:
-                sample = torch.zeros((1, 1, 8, 8), device="cuda")
-                kernel = torch.ones((1, 1, 3, 3), device="cuda")
-                torch_functional.conv2d(sample, kernel)
-                torch.cuda.synchronize()
-                checks.append(
-                    ToolCheck("Runtime CUDA/cuDNN", True, "convolución CUDA ejecutada", required=False)
-                )
-            except Exception as exc:  # pragma: no cover - depende del host
-                fallback = (
-                    f"; se usará fallback {profile.fallback_device}"
-                    if profile.retry_on_accelerator_error and profile.fallback_device
-                    else ""
-                )
-                checks.append(
-                    ToolCheck(
-                        "Runtime CUDA/cuDNN",
-                        False,
-                        f"{type(exc).__name__}: {exc}{fallback}",
-                        required=False,
-                    )
-                )
-    except ImportError:
+    if surya_required:
+        auxiliary_ok, auxiliary_detail = _surya_auxiliary_torch_check(profile)
         checks.append(
             ToolCheck(
-                "Aceleración detectada",
-                True,
-                "PyTorch no importable; Docling puede usar CPU",
-                required=False,
+                "Modelos auxiliares Surya",
+                auxiliary_ok,
+                auxiliary_detail,
+                required=True,
             )
         )
+    else:
+        try:
+            import torch  # type: ignore[import-not-found]
+            import torch.nn.functional as torch_functional  # type: ignore[import-not-found]
+
+            cuda = bool(torch.cuda.is_available())
+            detail = f"torch {torch.__version__}; CUDA {'disponible' if cuda else 'no disponible'}"
+            if cuda:
+                detail += f"; {torch.cuda.get_device_name(0)}"
+            checks.append(ToolCheck("Aceleración detectada", True, detail, required=False))
+            if cuda:
+                try:
+                    sample = torch.zeros((1, 1, 8, 8), device="cuda")
+                    kernel = torch.ones((1, 1, 3, 3), device="cuda")
+                    torch_functional.conv2d(sample, kernel)
+                    torch.cuda.synchronize()
+                    checks.append(
+                        ToolCheck(
+                            "Runtime CUDA/cuDNN",
+                            True,
+                            "convolución CUDA ejecutada",
+                            required=False,
+                        )
+                    )
+                except Exception as exc:  # pragma: no cover - depende del host
+                    fallback = (
+                        f"; se usará fallback {profile.fallback_device}"
+                        if profile.retry_on_accelerator_error and profile.fallback_device
+                        else ""
+                    )
+                    checks.append(
+                        ToolCheck(
+                            "Runtime CUDA/cuDNN",
+                            False,
+                            f"{type(exc).__name__}: {exc}{fallback}",
+                            required=False,
+                        )
+                    )
+        except ImportError:
+            checks.append(
+                ToolCheck(
+                    "Aceleración detectada",
+                    True,
+                    "PyTorch no importable en el entorno principal; los backends CLI pueden estar aislados",
+                    required=False,
+                )
+            )
 
     return ExtractionDoctorReport(checks)
+
+
+def _profile_path(project_root: str | Path, value: str) -> Path:
+    path = Path(value).expanduser()
+    if path.is_absolute():
+        return path
+    return Path(project_root) / path
+
+
+def resolve_extraction_profile(
+    project_root: str | Path,
+    profile: ExtractionProfile,
+) -> ExtractionProfileResolution:
+    requested_report = extraction_doctor(profile)
+    if requested_report.ready or not profile.fallback_profile:
+        return ExtractionProfileResolution(
+            requested=profile,
+            effective=profile,
+            requested_report=requested_report,
+            effective_report=requested_report,
+        )
+
+    fallback_path = _profile_path(project_root, profile.fallback_profile)
+    try:
+        fallback = load_extraction_profile(fallback_path)
+    except (OSError, ValueError) as exc:
+        return ExtractionProfileResolution(
+            requested=profile,
+            effective=profile,
+            requested_report=requested_report,
+            effective_report=requested_report,
+            reason=f"No se pudo cargar el fallback {fallback_path}: {exc}",
+        )
+    fallback_report = extraction_doctor(fallback)
+    failures = [
+        f"{check.name}: {check.detail}"
+        for check in requested_report.checks
+        if check.required and not check.ok
+    ]
+    reason = "; ".join(failures) or "el backend preferido no está disponible"
+    return ExtractionProfileResolution(
+        requested=profile,
+        effective=fallback if fallback_report.ready else profile,
+        requested_report=requested_report,
+        effective_report=fallback_report if fallback_report.ready else requested_report,
+        fallback_used=fallback_report.ready,
+        reason=reason,
+    )
+
+
+def _fallback_profile(
+    project_root: str | Path,
+    profile: ExtractionProfile,
+) -> tuple[ExtractionProfile, ExtractionDoctorReport] | None:
+    if not profile.fallback_profile:
+        return None
+    try:
+        fallback = load_extraction_profile(_profile_path(project_root, profile.fallback_profile))
+    except (OSError, ValueError):
+        return None
+    report = extraction_doctor(fallback)
+    return (fallback, report) if report.ready else None
+
+
+def _merge_preferred_summaries(
+    primary: ExtractionSummary,
+    fallback: ExtractionSummary,
+    *,
+    fallback_profile: ExtractionProfile,
+) -> ExtractionSummary:
+    failed_keys = set(primary.failed_source_keys)
+    recovered = failed_keys - set(fallback.failed_source_keys)
+    warnings = list(primary.warnings)
+    if recovered:
+        warnings.append(
+            "Fallback automático completado con "
+            f"{fallback_profile.profile_key}: {', '.join(sorted(recovered))}"
+        )
+    warnings.extend(fallback.warnings)
+    return ExtractionSummary(
+        objects_seen=primary.objects_seen,
+        runs_created=primary.runs_created + fallback.runs_created,
+        runs_reused=primary.runs_reused + fallback.runs_reused,
+        failed=fallback.failed,
+        pages_processed=primary.pages_processed + fallback.pages_processed,
+        objects_created=primary.objects_created + fallback.objects_created,
+        paragraphs_created=primary.paragraphs_created + fallback.paragraphs_created,
+        characters_created=primary.characters_created + fallback.characters_created,
+        warnings=warnings,
+        failed_source_keys=list(fallback.failed_source_keys),
+    )
+
+
+def extract_documents_preferred(
+    session: Session,
+    *,
+    project_root: str | Path,
+    decisions: ProjectDecisions,
+    profile: ExtractionProfile,
+    source_keys: set[str] | None = None,
+    selected_pages: set[int] | None = None,
+    force: bool = False,
+    created_by: str = "local_user",
+    selection_policy: str = "if_unselected",
+    runner: DoclingBatchRunner | None = None,
+    surya_runner: SuryaBatchRunner | None = None,
+) -> ExtractionSummary:
+    if runner is None:
+        runner = run_docling_cli_batch
+    if surya_runner is None:
+        surya_runner = run_surya_cli_batch
+    resolution = resolve_extraction_profile(project_root, profile)
+    if not resolution.ready:
+        failures = [
+            f"{check.name}: {check.detail}"
+            for check in resolution.effective_report.checks
+            if check.required and not check.ok
+        ]
+        detail = "; ".join(failures) or resolution.reason or "entorno no disponible"
+        raise RuntimeError(f"El entorno de extracción no está listo: {detail}")
+
+    if resolution.fallback_used:
+        summary = extract_documents(
+            session,
+            project_root=project_root,
+            decisions=decisions,
+            profile=resolution.effective,
+            source_keys=source_keys,
+            selected_pages=selected_pages,
+            force=force,
+            created_by=created_by,
+            selection_policy=selection_policy,
+            runner=runner,
+            surya_runner=surya_runner,
+        )
+        summary.warnings.insert(
+            0,
+            "Backend preferido no disponible; se utilizó automáticamente "
+            f"{resolution.effective.profile_key}. Motivo: {resolution.reason}",
+        )
+        return summary
+
+    primary = extract_documents(
+        session,
+        project_root=project_root,
+        decisions=decisions,
+        profile=profile,
+        source_keys=source_keys,
+        selected_pages=selected_pages,
+        force=force,
+        created_by=created_by,
+        selection_policy=selection_policy,
+        runner=runner,
+        surya_runner=surya_runner,
+    )
+    if not primary.failed_source_keys:
+        return primary
+
+    fallback_entry = _fallback_profile(project_root, profile)
+    if fallback_entry is None:
+        return primary
+    fallback_profile, _fallback_report = fallback_entry
+    failed_keys = set(primary.failed_source_keys)
+    fallback_summary = extract_documents(
+        session,
+        project_root=project_root,
+        decisions=decisions,
+        profile=fallback_profile,
+        source_keys=failed_keys,
+        selected_pages=selected_pages,
+        force=True,
+        created_by=created_by,
+        selection_policy=selection_policy,
+        runner=runner,
+        surya_runner=surya_runner,
+    )
+    return _merge_preferred_summaries(
+        primary,
+        fallback_summary,
+        fallback_profile=fallback_profile,
+    )
 
 
 def _relative(path: Path, root: Path) -> str:
@@ -869,6 +1216,44 @@ def _persist_objects(session: Session, records: list[ExtractedObjectRecord]) -> 
         )
 
 
+def _append_selection_revision(
+    session: Session,
+    selection: ExtractionPageSelection,
+    *,
+    operation: str,
+    selected_by: str,
+    note: str | None,
+    previous_extraction_run_id: str | None,
+    previous_extraction_page_id: str | None,
+    created_at: datetime | None = None,
+) -> ExtractionPageSelectionRevision:
+    revision_number = int(
+        session.scalar(
+            select(func.max(ExtractionPageSelectionRevision.revision_number)).where(
+                ExtractionPageSelectionRevision.selection_id == selection.id
+            )
+        )
+        or 0
+    ) + 1
+    revision = ExtractionPageSelectionRevision(
+        id=new_id(),
+        selection_id=selection.id,
+        digital_object_id=selection.digital_object_id,
+        page_number=selection.page_number,
+        revision_number=revision_number,
+        operation=operation,
+        previous_extraction_run_id=previous_extraction_run_id,
+        previous_extraction_page_id=previous_extraction_page_id,
+        extraction_run_id=selection.extraction_run_id,
+        extraction_page_id=selection.extraction_page_id,
+        note=note,
+        selected_by=selected_by,
+        created_at=created_at or datetime.now(timezone.utc),
+    )
+    session.add(revision)
+    return revision
+
+
 def _apply_page_selections(
     session: Session,
     *,
@@ -912,12 +1297,58 @@ def _apply_page_selections(
                 selected_at=now,
             )
             session.add(current)
+            session.flush()
+            _append_selection_revision(
+                session,
+                current,
+                operation="select",
+                selected_by=selected_by,
+                note=note,
+                previous_extraction_run_id=None,
+                previous_extraction_page_id=None,
+                created_at=now,
+            )
         else:
+            previous_run_id = current.extraction_run_id
+            previous_page_id = current.extraction_page_id
+            if previous_run_id == run.id and previous_page_id == page_row.id:
+                continue
             current.extraction_run_id = run.id
             current.extraction_page_id = page_row.id
             current.selected_by = selected_by
             current.note = note
             current.selected_at = now
+            _append_selection_revision(
+                session,
+                current,
+                operation="replace",
+                selected_by=selected_by,
+                note=note,
+                previous_extraction_run_id=previous_run_id,
+                previous_extraction_page_id=previous_page_id,
+                created_at=now,
+            )
+        editable_page = session.scalar(
+            select(EditablePage).where(
+                EditablePage.digital_object_id == run.digital_object_id,
+                EditablePage.page_number == page_row.page_number,
+            )
+        )
+        if editable_page is not None and editable_page.source_extraction_page_id != page_row.id:
+            from archive_workbench.editing import _set_page_status
+
+            _set_page_status(
+                session,
+                editable_page,
+                status="stale",
+                changed_by=selected_by,
+                operation="mark_stale",
+                note="La selección canónica cambió; la edición existente se conservó.",
+                details={
+                    "selected_extraction_run_id": run.id,
+                    "selected_extraction_page_id": page_row.id,
+                },
+            )
         changed += 1
     session.flush()
     return changed
@@ -1132,6 +1563,7 @@ def extract_documents(
     created_by: str = "local_user",
     selection_policy: str = "if_unselected",
     runner: DoclingBatchRunner = run_docling_cli_batch,
+    surya_runner: SuryaBatchRunner = run_surya_cli_batch,
 ) -> ExtractionSummary:
     root = Path(project_root)
     summary = ExtractionSummary()
@@ -1288,6 +1720,86 @@ def extract_documents(
                         )
                     )
                     all_objects.extend(page_objects)
+            elif profile.backend == "surya_cli":
+                surya_sources = source_images
+                if profile.image_variant != "original":
+                    variant_dir = output_dir / ".work" / "surya_variants"
+                    surya_sources = []
+                    for page_number, source_image in source_images:
+                        variant_path = variant_dir / f"page_{page_number:04d}.png"
+                        prepare_image_variant(source_image, variant_path, profile.image_variant)
+                        surya_sources.append((page_number, variant_path))
+                page_json, engine_version, log_text = surya_runner(
+                    surya_sources, output_dir / ".work" / "surya", profile
+                )
+                if log_text:
+                    raw_dir.mkdir(parents=True, exist_ok=True)
+                    (raw_dir / "surya.log").write_text(log_text, encoding="utf-8")
+                if "ARCHIVE_WORKBENCH_FALLBACK_DEVICE=cpu" in log_text:
+                    warnings_out.append(
+                        "El backend acelerado de Surya falló; la extracción se completó "
+                        "con llama.cpp en CPU"
+                    )
+
+                for asset in ordered_assets:
+                    json_path = page_json[asset.page_number]
+                    payload = json.loads(json_path.read_text(encoding="utf-8"))
+                    if not isinstance(payload, dict):
+                        raise RuntimeError(
+                            f"Surya produjo JSON inválido para página {asset.page_number}"
+                        )
+                    raw_destination = raw_dir / f"page_{asset.page_number:04d}.json"
+                    raw_destination.parent.mkdir(parents=True, exist_ok=True)
+                    shutil.copy2(json_path, raw_destination)
+                    page_objects = normalize_surya_page(
+                        payload,
+                        digital_object_id=digital.id,
+                        extraction_run_id=run_id,
+                        page_number=asset.page_number,
+                        width=asset.width,
+                        height=asset.height,
+                        decisions=decisions,
+                        order_start=order_start,
+                    )
+                    order_start += len(page_objects)
+                    characters = sum(len(item.original_text) for item in page_objects)
+                    page_warnings: list[str] = []
+                    if characters < profile.minimum_characters_per_page_warning:
+                        page_warnings.append(f"solo {characters} caracteres reconocidos")
+                    blocks = payload.get("blocks")
+                    if isinstance(blocks, list):
+                        errors = sum(
+                            bool(block.get("error"))
+                            for block in blocks
+                            if isinstance(block, dict)
+                        )
+                        if errors:
+                            page_warnings.append(f"{errors} bloques informaron error")
+                    page_warning = (
+                        f"Página {asset.page_number}: " + "; ".join(page_warnings)
+                        if page_warnings
+                        else None
+                    )
+                    if page_warning:
+                        warnings_out.append(page_warning)
+                    session.add(
+                        ExtractionPage(
+                            id=new_id(),
+                            extraction_run_id=run_id,
+                            page_number=asset.page_number,
+                            source_asset_id=asset.id,
+                            raw_json_path=_relative(raw_destination, root),
+                            object_count=len(page_objects),
+                            character_count=characters,
+                            status=(
+                                ExtractionStatus.COMPLETED_WITH_WARNINGS.value
+                                if page_warning
+                                else ExtractionStatus.COMPLETED.value
+                            ),
+                            warning_text=page_warning,
+                        )
+                    )
+                    all_objects.extend(page_objects)
             elif profile.backend == "tesseract_tsv":
                 engine_version = _tesseract_version(profile.tesseract_command)
                 variant_dir = output_dir / ".work" / "variants"
@@ -1366,6 +1878,27 @@ def extract_documents(
             write_models_atomic(paragraphs_path, paragraphs)
             write_models_atomic(images_path, images)
             _persist_objects(session, all_objects)
+            session.flush()
+            extraction_pages = list(
+                session.scalars(
+                    select(ExtractionPage)
+                    .where(ExtractionPage.extraction_run_id == run_id)
+                    .order_by(ExtractionPage.page_number)
+                ).all()
+            )
+            for extraction_page in extraction_pages:
+                try:
+                    assess_extraction_page_quality(
+                        session,
+                        project_root=root,
+                        extraction_page_id=extraction_page.id,
+                        assessed_by="system:extraction",
+                    )
+                except (OSError, ValueError) as exc:
+                    warnings_out.append(
+                        f"Página {extraction_page.page_number}: "
+                        f"no se pudo evaluar automáticamente la calidad ({exc})"
+                    )
 
             character_count = sum(len(item.original_text) for item in all_objects)
             status = (
@@ -1444,13 +1977,15 @@ def extract_documents(
             summary.warnings.extend(f"{registration.source_key}: {item}" for item in warnings_out)
         except Exception as exc:
             summary.failed += 1
+            summary.failed_source_keys.append(registration.source_key)
             summary.warnings.append(f"{registration.source_key}: {exc}")
             if run is not None:
                 diagnostic_log = getattr(exc, "log_text", "")
                 if diagnostic_log:
                     raw_dir = root / run.raw_pages_path
                     raw_dir.mkdir(parents=True, exist_ok=True)
-                    (raw_dir / "docling.log").write_text(diagnostic_log, encoding="utf-8")
+                    log_name = "surya.log" if profile.backend == "surya_cli" else "docling.log"
+                    (raw_dir / log_name).write_text(diagnostic_log, encoding="utf-8")
                 run.status = ExtractionStatus.FAILED.value
                 run.error_text = str(exc)
                 run.completed_at = datetime.now(timezone.utc)

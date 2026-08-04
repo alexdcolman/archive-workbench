@@ -28,9 +28,16 @@ class ExtractionProfile(ContractModel):
 
     schema_version: str = "1.0"
     profile_key: str = "docling_tesseract_es_v1"
-    backend: Literal["docling_cli", "tesseract_tsv"] = "docling_cli"
+    backend: Literal["docling_cli", "tesseract_tsv", "surya_cli"] = "docling_cli"
     docling_command: str = "docling"
     tesseract_command: str = "tesseract"
+    surya_command: str = "surya_ocr"
+    surya_inference_url: str | None = None
+    surya_parallel: int = Field(default=1, ge=1, le=64)
+    surya_keep_server: bool = False
+    surya_torch_device: Literal["auto", "cpu", "cuda"] = "auto"
+    surya_clean_library_path: bool = False
+    fallback_profile: str | None = None
     pipeline: Literal["standard"] = "standard"
     ocr_engine: str = "tesseract"
     ocr_languages: list[str] = Field(default_factory=lambda: ["spa"], min_length=1)

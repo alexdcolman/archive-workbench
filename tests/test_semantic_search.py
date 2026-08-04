@@ -285,3 +285,61 @@ def test_authority_alias_change_does_not_invalidate_object_semantic_index(tmp_pa
             assert status.reason == "Índice actualizado"
     finally:
         engine.dispose()
+
+
+def test_semantic_execution_requires_current_quality_authorization(tmp_path: Path) -> None:
+    import pytest
+
+    root = tmp_path / "authorized_semantic_project"
+    _seed_search_project(root)
+    backend = FakeSemanticBackend()
+    engine = create_sqlite_engine(database_path(root))
+    try:
+        with session_scope(engine) as session:
+            profile = save_semantic_profile(
+                session,
+                project_id="search_project",
+                values=SemanticProfileValues(
+                    name="Autorización semántica",
+                    model_name="fake/model",
+                    query_prefix="",
+                    document_prefix="",
+                ),
+                changed_by="tests",
+            )
+            profile.chunk_size = 777
+            session.flush()
+            with pytest.raises(ValueError, match="autorización vigente"):
+                build_semantic_index(
+                    session,
+                    project_root=root,
+                    project_id="search_project",
+                    profile=profile,
+                    created_by="tests",
+                    backend=backend,
+                )
+
+            save_semantic_profile(
+                session,
+                project_id="search_project",
+                profile_id=profile.id,
+                values=SemanticProfileValues(
+                    name=profile.name,
+                    model_name="fake/model",
+                    query_prefix="",
+                    document_prefix="",
+                    chunk_size=777,
+                ),
+                changed_by="tests",
+            )
+            summary = build_semantic_index(
+                session,
+                project_root=root,
+                project_id="search_project",
+                profile=profile,
+                created_by="tests",
+                backend=backend,
+            )
+            assert summary.vector_count == 1
+    finally:
+        engine.dispose()

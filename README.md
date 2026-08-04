@@ -6,7 +6,7 @@ Está pensada especialmente para equipos de archivos, bibliotecas, ciencias soci
 
 Los documentos y la base de datos permanecen en la computadora del equipo: la aplicación no necesita subir el corpus a un servicio externo.
 
-**Versión actual:** 0.33.1 — primera versión pública funcional.
+**Versión actual:** 0.71.2 — validación de continuidad desde candidatos equivalentes y registro de UX-03.
 
 ## Qué permite hacer
 
@@ -14,28 +14,38 @@ Archive Workbench reúne en una misma interfaz:
 
 - catálogo y descripción archivística jerárquica;
 - registro de archivos originales sin modificarlos;
-- preparación de derivados para procesamiento;
+- preparación versionada de derivados para OCR, con opciones conservadoras de autocontraste, Otsu y reducción de ruido;
 - extracción de texto y OCR versionados;
-- selección humana de la mejor extracción por página;
+- Surya como backend OCR/layout preferido cuando está disponible, siempre como candidato revisable;
+- fallback automático a Docling/Tesseract si Surya no está instalado o una corrida falla;
+- comparación y selección humana de extracciones por página;
+- control automático de contraste, desenfoque probable, ruido, fragmentación y solapamiento;
+- adopción segura de una nueva candidata mediante rebase de correcciones, conflictos textuales y menciones;
 - revisión del texto junto con la imagen y sus regiones;
-- edición, anotaciones e historial;
+- edición, anotaciones y cronología integrada por página;
 - búsqueda literal y búsqueda semántica opcional;
 - entidades, alias, menciones y relaciones;
+- descubrimiento abierto reproducible con candidatos y decisiones humanas append-only;
 - grafo documental;
 - exportaciones reproducibles en CSV y JSONL;
 - asignación de tareas entre integrantes del equipo;
 - intercambio offline de cambios entre distintas copias;
-- backups y pruebas de recuperación.
+- copias de seguridad y pruebas de recuperación.
 
 La extracción automática siempre produce candidatos revisables. La aplicación no reemplaza la lectura ni las decisiones del equipo de investigación.
 
 ## Estado del proyecto
+
+El estado operativo se mantiene en una sola lista: [`docs/operativos/PENDIENTES_ACTIVOS.md`](docs/operativos/PENDIENTES_ACTIVOS.md). Las funciones cerradas se registran por separado en [`IMPLEMENTACIONES_REALIZADAS.md`](docs/operativos/IMPLEMENTACIONES_REALIZADAS.md).
 
 Esta es la primera versión pública y funcional. El circuito completo fue probado con un corpus piloto, pero el proyecto todavía se encuentra en etapa de estabilización.
 
 La instalación actual requiere ejecutar algunos comandos en una terminal. Está prevista una **imagen Docker** para una próxima versión, con el objetivo de simplificar la instalación en equipos sin experiencia técnica.
 
 La calidad del OCR depende mucho del estado y la disposición gráfica de cada documento. La búsqueda semántica es experimental y sus resultados deben evaluarse críticamente.
+
+Los análisis automáticos usan únicamente páginas aprobadas de manera predeterminada. Toda ampliación exige confirmación y fundamento, y queda registrada en una auditoría append-only consultable desde la interfaz o con `analysis-quality-audit`.
+Las exportaciones y las operaciones semánticas solo se ejecutan cuando la configuración funcional vigente del perfil coincide con una autorización persistida; los perfiles anteriores a 0.64.0 deben guardarse nuevamente antes de su próximo uso.
 
 ## Requisitos actuales
 
@@ -101,7 +111,25 @@ La búsqueda semántica es opcional. Para agregarla:
 pip install -e ".[semantic]"
 ```
 
+Surya OCR es el backend preferido desde 0.38.0, pero sigue siendo opcional: si no está disponible, el perfil principal usa automáticamente el fallback Docling/Tesseract. Se instala en un runtime separado para no modificar Pillow, Torch ni Transformers del entorno principal:
+
+```bash
+./scripts/install_surya_runtime.sh --dry-run
+./scripts/install_surya_runtime.sh
+```
+
+El script crea `.venv-surya`, instala `surya-ocr==0.22.1`, ejecuta `pip check` y deja disponible `.venv-surya/bin/surya_ocr`. En equipos NVIDIA, el perfil validado usa el VLM mediante vLLM/Docker y mantiene los modelos auxiliares de Torch en CPU.
+
+El servidor vLLM queda activo entre corridas para evitar repetir la carga y el calentamiento del modelo. Podés consultar su estado y liberar la VRAM al terminar:
+
+```bash
+archive-workbench surya-server-status
+archive-workbench surya-server-stop
+```
+
 La primera instalación puede demorar varios minutos. Algunas funciones pueden descargar modelos la primera vez que se utilizan.
+
+Los proyectos ya existentes conservan sus perfiles para no sobrescribir personalizaciones. Para adoptar explícitamente la política preferida de 0.38.0, respaldá sus perfiles y copiá `extraction.yaml`, `extraction_surya_es.yaml` y `extraction_docling_es.yaml` desde la carpeta `config/` de la aplicación hacia la carpeta `config/` de cada proyecto.
 
 ## Crear el primer proyecto
 
@@ -125,11 +153,13 @@ mi_proyecto/config/decisions.yaml
 
 Al principio del archivo, reemplazá `project_name` y `project_id` por el nombre y un identificador breve de tu proyecto. No hace falta modificar toda la configuración para realizar una primera exploración.
 
-Prepará la base local:
+Prepará la base local. Las migraciones solo se ejecutan mediante este comando explícito:
 
 ```bash
 archive-workbench db-upgrade mi_proyecto
 ```
+
+Los demás comandos nunca migran la base de forma implícita. Si la revisión es anterior, la aplicación se detiene y explica que debe ejecutarse `db-upgrade`.
 
 ## Abrir la aplicación
 
@@ -153,25 +183,28 @@ Para detenerla, volvé a la terminal y presioná `Ctrl+C`.
 Dentro de la interfaz:
 
 1. **Catálogo:** definí la estructura archivística y registrá los archivos.
-2. **Procesamiento:** prepará derivados, ejecutá extracciones y seleccioná candidatos.
+2. **Procesamiento:** prepará derivados, ejecutá extracciones, evaluá su calidad y seleccioná candidatos.
 3. **Revisión:** contrastá imagen y texto, corregí objetos y aprobá páginas.
 4. **Búsqueda y Entidades:** explorá el corpus revisado y vinculá menciones.
 5. **Exportar:** generá corpus reproducibles en CSV o JSONL.
-6. **Administración:** revisá el estado operativo y creá backups.
+6. **Administrar y recuperar:** revisá el estado operativo y creá copias de seguridad.
 
 Los originales se conservan sin modificaciones. Las extracciones, correcciones y decisiones quedan separadas y versionadas.
 
 ## Documentación
 
-La carpeta [`docs/`](docs/) contiene:
+La raíz de [`docs/`](docs/) contiene un único mapa breve: [Historial de cambios y mapa documental](docs/HISTORIAL_DE_CAMBIOS.md).
 
-- [Diseño y plan de implementación](docs/DISEÑO_Y_PLAN_DE_IMPLEMENTACION.md)
-- [Guía de la prueba piloto](docs/GUIA_PRUEBA_PILOTO_ARCHIVE_WORKBENCH.md)
-- [Cierre funcional de la versión 0.33.1](docs/PRUEBA_PILOTO_Y_CIERRE_0.33.1.md)
-- [Pendientes y mejoras](docs/PENDIENTES_Y_MEJORAS_ARCHIVE_WORKBENCH_PILOTO_FINAL_20260727_203735.md)
-- [Registro completo de la prueba piloto](docs/REGISTRO_PRUEBA_PILOTO_ARCHIVE_WORKBENCH_CIERRE_FINAL_20260727_203735.md)
+Documentación vigente:
 
-Los cambios entre versiones se registran en [`CHANGELOG.md`](CHANGELOG.md).
+- [Pendientes activos](docs/operativos/PENDIENTES_ACTIVOS.md)
+- [Implementaciones realizadas](docs/operativos/IMPLEMENTACIONES_REALIZADAS.md)
+- [Actualización actual](docs/operativos/ACTUALIZACION_ACTUAL.md)
+- [Estrategia de pruebas](docs/operativos/ESTRATEGIA_DE_PRUEBAS.md)
+- [Guía de prueba piloto](docs/operativos/GUIA_PRUEBA_PILOTO.md)
+- [Arquitectura y modelo actual](docs/referencia/ARQUITECTURA_Y_MODELO_ACTUAL.md)
+
+La documentación cerrada y las guías de versiones anteriores están separadas en [`docs/historico/`](docs/historico/). Los cambios técnicos exhaustivos se registran en [`CHANGELOG.md`](CHANGELOG.md).
 
 ## Desarrollo y pruebas
 
@@ -182,7 +215,7 @@ pip install -e ".[dev,extraction,streamlit,semantic,tiff]"
 pytest
 ```
 
-La versión 0.33.1 cuenta con 171 pruebas automatizadas.
+La versión 0.71.2 recopila 413 pruebas automatizadas.
 
 ## Licencia y cita
 
@@ -194,6 +227,6 @@ El desarrollo fue realizado por **Alex Colman** en el marco del **Grupo de Inves
 
 Cuando Archive Workbench sea utilizado en una investigación, publicación, informe, actividad docente o desarrollo derivado, solicitamos citar:
 
-> Colman, Alex, y Grupo de Investigación en Archivos de la Represión (GIAR). 2026. *Archive Workbench* (versión 0.33.1) [software]. https://github.com/alexdcolman/archive-workbench
+> Colman, Alex, y Grupo de Investigación en Archivos de la Represión (GIAR). 2026. *Archive Workbench* (versión 0.71.2) [software]. https://github.com/alexdcolman/archive-workbench
 
 El archivo [`CITATION.cff`](CITATION.cff) contiene los metadatos de cita reconocidos por GitHub y por distintos gestores bibliográficos.

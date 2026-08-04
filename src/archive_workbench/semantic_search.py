@@ -14,6 +14,15 @@ from typing import Any, Protocol, Sequence
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
+from archive_workbench.analysis_audit import (
+    record_automatic_analysis_authorization,
+    require_automatic_analysis_authorization,
+)
+from archive_workbench.analysis_quality import (
+    DEFAULT_AUTOMATIC_PAGE_REVIEW_STATUSES,
+    quality_scope_snapshot,
+    validate_automatic_quality_scope,
+)
 from archive_workbench.corpus_export import (
     AGGREGATION_LEVELS,
     CorpusExportProfile,
@@ -48,7 +57,7 @@ class SemanticProfileValues:
     aggregation_level: str = "object"
     include_object_types: tuple[str, ...] = ()
     include_review_statuses: tuple[str, ...] = ()
-    include_page_review_statuses: tuple[str, ...] = ()
+    include_page_review_statuses: tuple[str, ...] = DEFAULT_AUTOMATIC_PAGE_REVIEW_STATUSES
     chunk_size: int = 1800
     chunk_overlap: int = 200
     query_prefix: str = "query: "
@@ -183,7 +192,12 @@ def _clean_text(value: str, *, field: str, maximum: int) -> str:
     return clean
 
 
-def _validate_profile(values: SemanticProfileValues) -> SemanticProfileValues:
+def _validate_profile(
+    values: SemanticProfileValues,
+    *,
+    broader_quality_scope_confirmed: bool = False,
+    quality_scope_reason: str | None = None,
+) -> SemanticProfileValues:
     name = _clean_text(values.name, field="El nombre", maximum=200)
     model_name = _clean_text(values.model_name, field="El modelo", maximum=500)
     if values.aggregation_level not in SEMANTIC_AGGREGATION_LEVELS:
@@ -195,9 +209,13 @@ def _validate_profile(values: SemanticProfileValues) -> SemanticProfileValues:
     if len(values.query_prefix) > 200 or len(values.document_prefix) > 200:
         raise ValueError("Los prefijos no pueden superar 200 caracteres")
     invalid_object = set(values.include_review_statuses) - set(REVIEW_STATUSES)
-    invalid_page = set(values.include_page_review_statuses) - set(REVIEW_STATUSES)
-    if invalid_object or invalid_page:
-        raise ValueError("El perfil contiene estados de revisión inválidos")
+    if invalid_object:
+        raise ValueError("El perfil contiene estados de revisión de objeto inválidos")
+    page_scope = validate_automatic_quality_scope(
+        values.include_page_review_statuses,
+        broader_scope_confirmed=broader_quality_scope_confirmed,
+        confirmation_reason=quality_scope_reason,
+    )
     return SemanticProfileValues(
         name=name,
         description=values.description.strip() if values.description and values.description.strip() else None,
@@ -206,7 +224,7 @@ def _validate_profile(values: SemanticProfileValues) -> SemanticProfileValues:
         aggregation_level=values.aggregation_level,
         include_object_types=tuple(sorted(set(values.include_object_types))),
         include_review_statuses=tuple(sorted(set(values.include_review_statuses))),
-        include_page_review_statuses=tuple(sorted(set(values.include_page_review_statuses))),
+        include_page_review_statuses=page_scope.page_review_statuses,
         chunk_size=int(values.chunk_size),
         chunk_overlap=int(values.chunk_overlap),
         query_prefix=values.query_prefix,
@@ -233,12 +251,47 @@ def profile_values(profile: SemanticSearchProfile) -> SemanticProfileValues:
     )
 
 
-def profile_snapshot(profile: SemanticSearchProfile) -> dict[str, Any]:
+def semantic_profile_authorization_parameters(
+    profile: SemanticSearchProfile,
+) -> dict[str, Any]:
+    """Parámetros funcionales cuya autorización habilita el índice y la búsqueda."""
+
     payload = asdict(profile_values(profile))
-    for key in ("include_object_types", "include_review_statuses", "include_page_review_statuses"):
+    for key in (
+        "include_object_types",
+        "include_review_statuses",
+        "include_page_review_statuses",
+    ):
         payload[key] = list(payload[key])
+    payload["analysis_quality"] = quality_scope_snapshot(
+        analysis_kind="semantic_index",
+        page_review_statuses=profile.include_page_review_statuses_json or [],
+    )
+    return payload
+
+
+def profile_snapshot(profile: SemanticSearchProfile) -> dict[str, Any]:
+    payload = semantic_profile_authorization_parameters(profile)
     payload.update({"id": profile.id, "revision": profile.revision})
     return payload
+
+
+def _require_semantic_profile_authorization(
+    session: Session, *, project_id: str, profile: SemanticSearchProfile
+) -> None:
+    require_automatic_analysis_authorization(
+        session,
+        project_id=project_id,
+        analysis_kind="semantic_index",
+        page_review_statuses=tuple(profile.include_page_review_statuses_json or ()),
+        target_type="semantic_search_profile",
+        target_id=profile.id,
+        parameters=semantic_profile_authorization_parameters(profile),
+        remediation=(
+            "Abrí Preparar búsqueda y guardá el perfil nuevamente para "
+            "registrar su alcance de calidad."
+        ),
+    )
 
 
 def save_semantic_profile(
@@ -248,8 +301,15 @@ def save_semantic_profile(
     values: SemanticProfileValues,
     changed_by: str,
     profile_id: str | None = None,
+    broader_quality_scope_confirmed: bool = False,
+    quality_scope_reason: str | None = None,
+    quality_scope_source: str = "api",
 ) -> SemanticSearchProfile:
-    clean = _validate_profile(values)
+    clean = _validate_profile(
+        values,
+        broader_quality_scope_confirmed=broader_quality_scope_confirmed,
+        quality_scope_reason=quality_scope_reason,
+    )
     profile = session.get(SemanticSearchProfile, profile_id) if profile_id else None
     if profile is None:
         profile = session.scalar(
@@ -312,6 +372,19 @@ def save_semantic_profile(
         profile.updated_at = now
         profile.revision += 1
     session.flush()
+    record_automatic_analysis_authorization(
+        session,
+        project_id=project_id,
+        analysis_kind="semantic_index",
+        page_review_statuses=clean.include_page_review_statuses,
+        broader_scope_confirmed=broader_quality_scope_confirmed,
+        confirmed_by=changed_by,
+        confirmation_reason=quality_scope_reason,
+        source=quality_scope_source,
+        target_type="semantic_search_profile",
+        target_id=profile.id,
+        parameters=semantic_profile_authorization_parameters(profile),
+    )
     return profile
 
 
@@ -332,6 +405,7 @@ def ensure_default_semantic_profile(
         values=SemanticProfileValues(
             name="Multilingüe E5 — objetos",
             description="Perfil inicial para recuperar objetos textuales por afinidad semántica.",
+            include_page_review_statuses=DEFAULT_AUTOMATIC_PAGE_REVIEW_STATUSES,
         ),
         changed_by=changed_by,
     )
@@ -535,6 +609,9 @@ def build_semantic_index(
 ) -> SemanticIndexSummary:
     if profile.project_id != project_id:
         raise ValueError("El perfil pertenece a otro proyecto")
+    _require_semantic_profile_authorization(
+        session, project_id=project_id, profile=profile
+    )
     if batch_size < 1 or batch_size > 2048:
         raise ValueError("El tamaño de lote debe estar entre 1 y 2048")
     chunks = build_semantic_chunks(session, project_id=project_id, profile=profile)
@@ -733,6 +810,9 @@ def semantic_search(
     backend: EmbeddingBackend | None = None,
     device: str = "auto",
 ) -> list[SemanticSearchResult]:
+    _require_semantic_profile_authorization(
+        session, project_id=project_id, profile=profile
+    )
     clean_query = " ".join(query.split())
     if not clean_query:
         raise ValueError("Escribí una consulta semántica")

@@ -71,7 +71,7 @@ def test_migration_and_registration_are_idempotent(tmp_path: Path) -> None:
     corpus = _corpus()
 
     upgrade_database(root)
-    assert current_revision(root) == "0028_operational_readiness"
+    assert current_revision(root) == "0040_discovery_grouping_continuity"
 
     engine = create_sqlite_engine(database_path(root))
     try:
@@ -135,7 +135,7 @@ def test_quality_and_page_selection_migrations_upgrade_existing_0003_database(tm
     upgrade_database(root, revision="0003_extraction_objects")
     assert current_revision(root) == "0003_extraction_objects"
     upgrade_database(root)
-    assert current_revision(root) == "0028_operational_readiness"
+    assert current_revision(root) == "0040_discovery_grouping_continuity"
     engine = create_sqlite_engine(database_path(root))
     try:
         inspector = inspect(engine)
@@ -163,6 +163,8 @@ def test_quality_and_page_selection_migrations_upgrade_existing_0003_database(tm
         "reviewed_at",
     } <= columns
     assert "extraction_page_selections" in tables
+    assert "extraction_page_selection_revisions" in tables
+    assert "editable_page_revisions" in tables
     assert "extraction_regions" in tables
     assert "document_parts" in tables
     assert "document_processing_plans" in tables
@@ -177,7 +179,13 @@ def test_quality_and_page_selection_migrations_upgrade_existing_0003_database(tm
     assert "archival_unit_revisions" in tables
     assert "editable_search_state" in tables
     assert "editable_search_fts" in tables
-    assert {"review_status", "review_note", "reviewed_by", "reviewed_at"} <= editable_page_columns
+    assert {
+        "revision_number",
+        "review_status",
+        "review_note",
+        "reviewed_by",
+        "reviewed_at",
+    } <= editable_page_columns
     assert {"review_status", "document_part_id"} <= editable_object_columns
     assert "document_part_id" in editable_revision_columns
     assert "tag_kind" in editable_tag_columns
@@ -190,7 +198,7 @@ def test_temporal_migration_upgrades_existing_031_database(tmp_path: Path) -> No
     upgrade_database(root, revision="0026_team_workflow")
     assert current_revision(root) == "0026_team_workflow"
     upgrade_database(root)
-    assert current_revision(root) == "0028_operational_readiness"
+    assert current_revision(root) == "0040_discovery_grouping_continuity"
     engine = create_sqlite_engine(database_path(root))
     try:
         inspector = inspect(engine)
@@ -215,7 +223,7 @@ def test_operational_readiness_migration_upgrades_existing_032_database(tmp_path
     upgrade_database(root, revision="0027_temporal_authorities_relations")
     assert current_revision(root) == "0027_temporal_authorities_relations"
     upgrade_database(root)
-    assert current_revision(root) == "0028_operational_readiness"
+    assert current_revision(root) == "0040_discovery_grouping_continuity"
     engine = create_sqlite_engine(database_path(root))
     try:
         inspector = inspect(engine)
@@ -450,7 +458,7 @@ def test_temporal_migration_preserves_authority_mentions_and_relations(tmp_path:
         engine.dispose()
 
     upgrade_database(root)
-    assert current_revision(root) == "0028_operational_readiness"
+    assert current_revision(root) == "0040_discovery_grouping_continuity"
 
     engine = create_sqlite_engine(database_path(root))
     try:
@@ -505,3 +513,759 @@ def test_temporal_migration_preserves_authority_mentions_and_relations(tmp_path:
         "entity_relation_revisions": 1,
     }
     assert foreign_key_errors == []
+
+
+def test_candidate_history_migration_preserves_populated_0331_database(tmp_path: Path) -> None:
+    from sqlalchemy import select, text
+
+    from archive_workbench.db.models import (
+        DigitalObject,
+        EditableObject,
+        EditablePage,
+        EditablePageRevision,
+        ExtractionPage,
+        ExtractionPageSelection,
+        ExtractionPageSelectionRevision,
+        ExtractionRun,
+    )
+    from archive_workbench.identity import new_id
+    from tests.test_search import _seed_search_project
+
+    root = tmp_path / "project"
+    object_id, page_id = _seed_search_project(
+        root, revision="0028_operational_readiness"
+    )
+    engine = create_sqlite_engine(database_path(root))
+    try:
+        with session_scope(engine) as session:
+            digital_id = session.scalar(text("SELECT id FROM digital_objects LIMIT 1"))
+            run_id = session.scalar(text("SELECT id FROM extraction_runs LIMIT 1"))
+            extraction_page_id = session.scalar(
+                text("SELECT id FROM extraction_pages LIMIT 1")
+            )
+            assert digital_id and run_id and extraction_page_id
+            selection_id = new_id()
+            session.execute(
+                text(
+                    """
+                    INSERT INTO extraction_page_selections (
+                        id, digital_object_id, page_number, extraction_run_id,
+                        extraction_page_id, selected_by, note, selected_at
+                    ) VALUES (
+                        :id, :digital_object_id, 1, :run_id,
+                        :page_id, 'tests', 'selección 0.33.1', CURRENT_TIMESTAMP
+                    )
+                    """
+                ),
+                {
+                    "id": selection_id,
+                    "digital_object_id": digital_id,
+                    "run_id": run_id,
+                    "page_id": extraction_page_id,
+                },
+            )
+            session.execute(
+                text(
+                    "UPDATE editable_pages SET source_selection_id = :selection_id "
+                    "WHERE id = :page_id"
+                ),
+                {"selection_id": selection_id, "page_id": page_id},
+            )
+    finally:
+        engine.dispose()
+
+    upgrade_database(root)
+    assert current_revision(root) == "0040_discovery_grouping_continuity"
+    engine = create_sqlite_engine(database_path(root))
+    try:
+        with session_scope(engine) as session:
+            page = session.get(EditablePage, page_id)
+            obj = session.get(EditableObject, object_id)
+            selection = session.get(ExtractionPageSelection, selection_id)
+            assert page is not None and page.revision_number == 1
+            assert obj is not None and obj.editable_page_id == page_id
+            assert selection is not None
+            page_revision = session.scalar(
+                select(EditablePageRevision).where(
+                    EditablePageRevision.editable_page_id == page_id
+                )
+            )
+            selection_revision = session.scalar(
+                select(ExtractionPageSelectionRevision).where(
+                    ExtractionPageSelectionRevision.selection_id == selection_id
+                )
+            )
+            assert page_revision is not None and page_revision.operation == "import"
+            assert selection_revision is not None and selection_revision.operation == "import"
+    finally:
+        engine.dispose()
+
+
+def test_require_current_database_rejects_outdated_schema_without_migrating(tmp_path: Path) -> None:
+    import pytest
+    from archive_workbench.db import DatabaseRevisionError, require_current_database
+
+    root = tmp_path / "project"
+    upgrade_database(root, revision="0030_source_replaced_exchange")
+
+    with pytest.raises(DatabaseRevisionError, match="No se aplicó ninguna migración"):
+        require_current_database(root)
+
+    assert current_revision(root) == "0030_source_replaced_exchange"
+
+
+def test_page_quality_migration_from_0031_is_explicit_and_empty(tmp_path: Path) -> None:
+    from sqlalchemy import inspect, text
+    from typer.testing import CliRunner
+    from archive_workbench.cli import app
+
+    root = tmp_path / "project"
+    upgrade_database(root, revision="0031_page_action_exchange")
+    assert current_revision(root) == "0031_page_action_exchange"
+
+    status = CliRunner().invoke(app, ["db-status", str(root)])
+    assert status.exit_code == 0, status.output
+    assert "Revisión: 0031_page_action_exchange" in status.output
+    assert current_revision(root) == "0031_page_action_exchange"
+
+    upgrade_database(root)
+    assert current_revision(root) == "0040_discovery_grouping_continuity"
+    engine = create_sqlite_engine(database_path(root))
+    try:
+        assert "extraction_page_quality_assessments" in inspect(engine).get_table_names()
+        with session_scope(engine) as session:
+            count = session.execute(
+                text("SELECT COUNT(*) FROM extraction_page_quality_assessments")
+            ).scalar_one()
+            assert count == 0
+    finally:
+        engine.dispose()
+
+
+def test_export_exchange_lifecycle_migration_upgrades_existing_0032_database(
+    tmp_path: Path,
+) -> None:
+    from sqlalchemy import inspect
+
+    root = tmp_path / "project"
+    upgrade_database(root, revision="0032_page_quality_assessments")
+    assert current_revision(root) == "0032_page_quality_assessments"
+
+    engine = create_sqlite_engine(database_path(root))
+    try:
+        inspector = inspect(engine)
+        assert "lifecycle_status" not in {
+            row["name"] for row in inspector.get_columns("corpus_export_profiles")
+        }
+        assert "lifecycle_status" not in {
+            row["name"] for row in inspector.get_columns("exchange_dry_runs")
+        }
+        with engine.begin() as connection:
+            connection.exec_driver_sql(
+                """
+                INSERT INTO projects (
+                    id, name, decisions_schema_version, decisions_json,
+                    created_at, updated_at
+                ) VALUES (
+                    'migration_project', 'Migración', '1', '{}',
+                    CURRENT_TIMESTAMP, CURRENT_TIMESTAMP
+                )
+                """
+            )
+            connection.exec_driver_sql(
+                """
+                INSERT INTO corpus_export_profiles (
+                    id, project_id, name, aggregation_level, text_policy,
+                    created_by, created_at, updated_by, updated_at
+                ) VALUES (
+                    'profile-0032', 'migration_project', 'Perfil previo',
+                    'document', 'corrected_fallback_original',
+                    'tests', CURRENT_TIMESTAMP, 'tests', CURRENT_TIMESTAMP
+                )
+                """
+            )
+            connection.exec_driver_sql(
+                """
+                INSERT INTO exchange_workspaces (
+                    id, project_id, workspace_name, created_by,
+                    created_at, updated_at
+                ) VALUES (
+                    'workspace-0032', 'migration_project', 'copia-previa',
+                    'tests', CURRENT_TIMESTAMP, CURRENT_TIMESTAMP
+                )
+                """
+            )
+            connection.exec_driver_sql(
+                """
+                INSERT INTO exchange_bundle_records (
+                    id, workspace_id, bundle_id, direction, bundle_sha256,
+                    relative_path, base_sequence, last_sequence, event_count,
+                    status, created_by, created_at
+                ) VALUES (
+                    'record-0032', 'workspace-0032',
+                    '00000000-0000-0000-0000-000000000032', 'incoming',
+                    'aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa',
+                    'exchange/incoming/previo.zip', 0, 1, 1,
+                    'assessed', 'tests', CURRENT_TIMESTAMP
+                )
+                """
+            )
+            connection.exec_driver_sql(
+                """
+                INSERT INTO exchange_dry_runs (
+                    id, workspace_id, bundle_record_id, bundle_id,
+                    source_workspace_id, source_workspace_name,
+                    base_match_status, overall_status, counts_json, warnings_json,
+                    assessed_by, assessed_at, assessed_state_sha256,
+                    assessed_sequence_number
+                ) VALUES (
+                    'dry-0032', 'workspace-0032', 'record-0032',
+                    '00000000-0000-0000-0000-000000000032',
+                    'source-0032', 'origen-previo', 'matched', 'ready_to_apply',
+                    '{"apply": 1, "duplicate": 0, "review": 0, "conflict": 0}',
+                    '[]', 'tests', CURRENT_TIMESTAMP,
+                    'bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb', 0
+                )
+                """
+            )
+    finally:
+        engine.dispose()
+
+    upgrade_database(root)
+    assert current_revision(root) == "0040_discovery_grouping_continuity"
+
+    engine = create_sqlite_engine(database_path(root))
+    try:
+        inspector = inspect(engine)
+        profile_columns = {
+            row["name"]: row for row in inspector.get_columns("corpus_export_profiles")
+        }
+        dry_run_columns = {
+            row["name"]: row for row in inspector.get_columns("exchange_dry_runs")
+        }
+        profile_indexes = {
+            row["name"] for row in inspector.get_indexes("corpus_export_profiles")
+        }
+        dry_run_indexes = {
+            row["name"] for row in inspector.get_indexes("exchange_dry_runs")
+        }
+        with engine.connect() as connection:
+            profile_row = connection.exec_driver_sql(
+                "SELECT name, lifecycle_status FROM corpus_export_profiles "
+                "WHERE id = 'profile-0032'"
+            ).one()
+            dry_run_row = connection.exec_driver_sql(
+                "SELECT source_workspace_name, lifecycle_status, archive_note "
+                "FROM exchange_dry_runs WHERE id = 'dry-0032'"
+            ).one()
+    finally:
+        engine.dispose()
+
+    assert {"lifecycle_status", "archived_by", "archived_at"} <= set(
+        profile_columns
+    )
+    assert {
+        "lifecycle_status",
+        "archived_by",
+        "archived_at",
+        "archive_note",
+    } <= set(dry_run_columns)
+    assert profile_columns["lifecycle_status"]["nullable"] is False
+    assert dry_run_columns["lifecycle_status"]["nullable"] is False
+    assert "active" in str(profile_columns["lifecycle_status"]["default"])
+    assert "active" in str(dry_run_columns["lifecycle_status"]["default"])
+    assert "ix_corpus_export_profiles_lifecycle" in profile_indexes
+    assert "ix_exchange_dry_runs_lifecycle" in dry_run_indexes
+    assert profile_row == ("Perfil previo", "active")
+    assert dry_run_row == ("origen-previo", "active", None)
+
+
+def test_analysis_authorization_migration_upgrades_existing_0033_database(
+    tmp_path: Path,
+) -> None:
+    from sqlalchemy import inspect, text
+
+    root = tmp_path / "project"
+    upgrade_database(root, revision="0033_export_exchange_lifecycle")
+    assert current_revision(root) == "0033_export_exchange_lifecycle"
+
+    engine = create_sqlite_engine(database_path(root))
+    try:
+        assert "automatic_analysis_authorizations" not in inspect(engine).get_table_names()
+        with engine.begin() as connection:
+            connection.exec_driver_sql(
+                """
+                INSERT INTO projects (
+                    id, name, decisions_schema_version, decisions_json,
+                    created_at, updated_at
+                ) VALUES (
+                    'analysis-migration-project', 'Migración de análisis', '1', '{}',
+                    CURRENT_TIMESTAMP, CURRENT_TIMESTAMP
+                )
+                """
+            )
+            connection.exec_driver_sql(
+                """
+                INSERT INTO corpus_export_profiles (
+                    id, project_id, name, aggregation_level, text_policy,
+                    output_format, include_page_review_statuses_json,
+                    lifecycle_status, created_by, created_at, updated_by, updated_at
+                ) VALUES (
+                    'profile-before-0034', 'analysis-migration-project',
+                    'Perfil anterior', 'document', 'corrected_fallback_original',
+                    'jsonl', '[\"approved\"]', 'active',
+                    'tests', CURRENT_TIMESTAMP, 'tests', CURRENT_TIMESTAMP
+                )
+                """
+            )
+    finally:
+        engine.dispose()
+
+    upgrade_database(root)
+    assert current_revision(root) == "0040_discovery_grouping_continuity"
+
+    engine = create_sqlite_engine(database_path(root))
+    try:
+        inspector = inspect(engine)
+        assert "automatic_analysis_authorizations" in inspector.get_table_names()
+        columns = {
+            row["name"]: row
+            for row in inspector.get_columns("automatic_analysis_authorizations")
+        }
+        assert {
+            "id",
+            "project_id",
+            "policy_version",
+            "analysis_kind",
+            "page_review_statuses_json",
+            "scope_key",
+            "broader_scope_confirmed",
+            "confirmed_by",
+            "confirmation_reason",
+            "source",
+            "target_type",
+            "target_id",
+            "parameters_sha256",
+            "created_at",
+        } <= set(columns)
+        with engine.connect() as connection:
+            profile = connection.exec_driver_sql(
+                "SELECT name, include_page_review_statuses_json "
+                "FROM corpus_export_profiles WHERE id = 'profile-before-0034'"
+            ).one()
+            authorization_count = connection.exec_driver_sql(
+                "SELECT COUNT(*) FROM automatic_analysis_authorizations"
+            ).scalar_one()
+            integrity = connection.execute(text("PRAGMA integrity_check")).scalar_one()
+            foreign_keys = connection.execute(text("PRAGMA foreign_key_check")).all()
+    finally:
+        engine.dispose()
+
+    assert profile == ("Perfil anterior", '["approved"]')
+    assert authorization_count == 0
+    assert integrity == "ok"
+    assert foreign_keys == []
+
+
+def test_lineage_recovery_migration_upgrades_existing_0034_database(
+    tmp_path: Path,
+) -> None:
+    from sqlalchemy import inspect, text
+
+    root = tmp_path / "project"
+    upgrade_database(root, revision="0034_automatic_analysis_authorizations")
+    assert current_revision(root) == "0034_automatic_analysis_authorizations"
+
+    engine = create_sqlite_engine(database_path(root))
+    try:
+        inspector = inspect(engine)
+        assert "exchange_lineage_cases" not in inspector.get_table_names()
+        assert "base_match_method" not in {
+            row["name"] for row in inspector.get_columns("exchange_dry_runs")
+        }
+        with engine.begin() as connection:
+            connection.exec_driver_sql(
+                """
+                INSERT INTO projects (
+                    id, name, decisions_schema_version, decisions_json,
+                    created_at, updated_at
+                ) VALUES (
+                    'lineage-migration-project', 'Migración de linaje', '1', '{}',
+                    CURRENT_TIMESTAMP, CURRENT_TIMESTAMP
+                )
+                """
+            )
+            connection.exec_driver_sql(
+                """
+                INSERT INTO exchange_workspaces (
+                    id, project_id, workspace_name, created_by, created_at, updated_at
+                ) VALUES (
+                    'workspace-before-0035', 'lineage-migration-project',
+                    'Copia previa', 'tests', CURRENT_TIMESTAMP, CURRENT_TIMESTAMP
+                )
+                """
+            )
+            connection.exec_driver_sql(
+                """
+                INSERT INTO exchange_bundle_records (
+                    id, workspace_id, bundle_id, direction, bundle_sha256,
+                    relative_path, base_sequence, last_sequence, event_count,
+                    status, counterpart_workspace_id, created_by, created_at
+                ) VALUES (
+                    'record-before-0035', 'workspace-before-0035',
+                    'bundle-before-0035', 'incoming',
+                    'aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa',
+                    'exchange/incoming/prior.zip', 0, 1, 1,
+                    'assessed', 'remote-before-0035', 'tests', CURRENT_TIMESTAMP
+                )
+                """
+            )
+            connection.exec_driver_sql(
+                """
+                INSERT INTO exchange_dry_runs (
+                    id, workspace_id, bundle_record_id, bundle_id,
+                    source_workspace_id, source_workspace_name,
+                    common_checkpoint_id, common_checkpoint_label,
+                    common_checkpoint_sequence, base_match_status,
+                    overall_status, counts_json, warnings_json,
+                    report_json_path, report_markdown_path,
+                    assessed_state_sha256, assessed_sequence_number,
+                    assessed_by, assessed_at, lifecycle_status,
+                    archived_by, archived_at, archive_note
+                ) VALUES (
+                    'dry-before-0035', 'workspace-before-0035',
+                    'record-before-0035', 'bundle-before-0035',
+                    'remote-before-0035', 'Copia remota',
+                    NULL, NULL, NULL, 'unmatched',
+                    'needs_review', '{}', '[]',
+                    NULL, NULL, NULL, 0,
+                    'tests', CURRENT_TIMESTAMP, 'active',
+                    NULL, NULL, NULL
+                )
+                """
+            )
+    finally:
+        engine.dispose()
+
+    upgrade_database(root)
+    assert current_revision(root) == "0040_discovery_grouping_continuity"
+
+    engine = create_sqlite_engine(database_path(root))
+    try:
+        inspector = inspect(engine)
+        tables = set(inspector.get_table_names())
+        assert {
+            "exchange_lineage_cases",
+            "exchange_lineage_evidence",
+            "exchange_lineage_decisions",
+        } <= tables
+        dry_columns = {
+            row["name"]: row for row in inspector.get_columns("exchange_dry_runs")
+        }
+        assert "base_match_method" in dry_columns
+        assert dry_columns["base_match_method"]["nullable"] is False
+        with engine.connect() as connection:
+            preserved = connection.exec_driver_sql(
+                """
+                SELECT source_workspace_name, base_match_status, base_match_method
+                FROM exchange_dry_runs WHERE id = 'dry-before-0035'
+                """
+            ).one()
+            counts = {
+                table: connection.exec_driver_sql(
+                    f'SELECT COUNT(*) FROM "{table}"'
+                ).scalar_one()
+                for table in (
+                    "exchange_lineage_cases",
+                    "exchange_lineage_evidence",
+                    "exchange_lineage_decisions",
+                )
+            }
+            integrity = connection.execute(text("PRAGMA integrity_check")).scalar_one()
+            foreign_keys = connection.execute(text("PRAGMA foreign_key_check")).all()
+    finally:
+        engine.dispose()
+
+    assert preserved == ("Copia remota", "unmatched", "unknown")
+    assert counts == {
+        "exchange_lineage_cases": 0,
+        "exchange_lineage_evidence": 0,
+        "exchange_lineage_decisions": 0,
+    }
+    assert integrity == "ok"
+    assert foreign_keys == []
+
+
+def test_common_base_migration_upgrades_existing_0035_database(tmp_path: Path) -> None:
+    from sqlalchemy import inspect
+
+    root = tmp_path / "project_common_base"
+    upgrade_database(root, revision="0035_exchange_lineage_recovery")
+    assert current_revision(root) == "0035_exchange_lineage_recovery"
+    upgrade_database(root)
+    assert current_revision(root) == "0040_discovery_grouping_continuity"
+    engine = create_sqlite_engine(database_path(root))
+    try:
+        inspector = inspect(engine)
+        tables = set(inspector.get_table_names())
+        columns = {
+            row["name"]
+            for row in inspector.get_columns("exchange_common_base_agreements")
+        }
+    finally:
+        engine.dispose()
+    assert "exchange_common_base_agreements" in tables
+    assert {
+        "agreement_id",
+        "local_workspace_id",
+        "counterpart_workspace_id",
+        "state_sha256",
+        "local_checkpoint_id",
+        "manifest_sha256",
+        "proposal_sha256",
+        "registered_by",
+        "registration_reason",
+    } <= columns
+
+
+def test_state_adoption_migration_upgrades_existing_0036_database(
+    tmp_path: Path,
+) -> None:
+    from sqlalchemy import inspect, text
+
+    root = tmp_path / "project_state_adoption"
+    upgrade_database(root, revision="0036_exchange_common_base_agreements")
+    assert current_revision(root) == "0036_exchange_common_base_agreements"
+    upgrade_database(root)
+    assert current_revision(root) == "0040_discovery_grouping_continuity"
+
+    engine = create_sqlite_engine(database_path(root))
+    try:
+        inspector = inspect(engine)
+        tables = set(inspector.get_table_names())
+        adoption_columns = {
+            row["name"] for row in inspector.get_columns("exchange_state_adoptions")
+        }
+        rollback_columns = {
+            row["name"]
+            for row in inspector.get_columns("exchange_state_adoption_rollbacks")
+        }
+        with engine.connect() as connection:
+            integrity = connection.execute(text("PRAGMA integrity_check")).scalar_one()
+            foreign_keys = connection.execute(text("PRAGMA foreign_key_check")).all()
+    finally:
+        engine.dispose()
+
+    assert {
+        "exchange_state_adoptions",
+        "exchange_state_adoption_rollbacks",
+    } <= tables
+    assert {
+        "adoption_id",
+        "previous_state_sha256",
+        "adopted_state_sha256",
+        "backup_path",
+        "backup_sha256",
+        "impact_json",
+        "parameters_sha256",
+    } <= adoption_columns
+    assert {
+        "adoption_record_id",
+        "restored_state_sha256",
+        "safety_backup_path",
+        "rollback_reason",
+        "parameters_sha256",
+    } <= rollback_columns
+    assert integrity == "ok"
+    assert foreign_keys == []
+
+
+def test_open_discovery_migration_upgrades_existing_0037_database(tmp_path: Path) -> None:
+    from sqlalchemy import inspect, text
+
+    root = tmp_path / "project_open_discovery"
+    upgrade_database(root, revision="0037_exchange_state_adoptions")
+    assert current_revision(root) == "0037_exchange_state_adoptions"
+    upgrade_database(root)
+    assert current_revision(root) == "0040_discovery_grouping_continuity"
+
+    engine = create_sqlite_engine(database_path(root))
+    try:
+        inspector = inspect(engine)
+        tables = set(inspector.get_table_names())
+        profile_columns = {
+            row["name"] for row in inspector.get_columns("discovery_profiles")
+        }
+        run_columns = {row["name"] for row in inspector.get_columns("discovery_runs")}
+        candidate_columns = {
+            row["name"] for row in inspector.get_columns("discovery_candidates")
+        }
+        with engine.connect() as connection:
+            counts = {
+                table: connection.exec_driver_sql(
+                    f'SELECT COUNT(*) FROM "{table}"'
+                ).scalar_one()
+                for table in (
+                    "discovery_profiles",
+                    "discovery_runs",
+                    "discovery_candidates",
+                )
+            }
+            integrity = connection.execute(text("PRAGMA integrity_check")).scalar_one()
+            foreign_keys = connection.execute(text("PRAGMA foreign_key_check")).all()
+    finally:
+        engine.dispose()
+
+    assert {"discovery_profiles", "discovery_runs", "discovery_candidates"} <= tables
+    assert {
+        "provider_key",
+        "provider_version",
+        "families_json",
+        "include_page_review_statuses_json",
+        "minimum_confidence",
+        "revision",
+    } <= profile_columns
+    assert {
+        "authorization_id",
+        "profile_snapshot_json",
+        "parameters_sha256",
+        "corpus_state_sha256",
+        "family_counts_json",
+    } <= run_columns
+    assert {
+        "editable_object_id",
+        "object_revision_number",
+        "start_offset",
+        "end_offset",
+        "exact_text",
+        "semantic_family",
+        "suggested_subtype",
+        "provider_version",
+        "explanation",
+    } <= candidate_columns
+    assert counts == {
+        "discovery_profiles": 0,
+        "discovery_runs": 0,
+        "discovery_candidates": 0,
+    }
+    assert integrity == "ok"
+    assert foreign_keys == []
+
+
+def test_discovery_decisions_migration_upgrades_existing_0038_database(
+    tmp_path: Path,
+) -> None:
+    from sqlalchemy import inspect, text
+
+    root = tmp_path / "project_discovery_decisions"
+    upgrade_database(root, revision="0038_open_discovery")
+    assert current_revision(root) == "0038_open_discovery"
+    upgrade_database(root)
+    assert current_revision(root) == "0040_discovery_grouping_continuity"
+
+    engine = create_sqlite_engine(database_path(root))
+    try:
+        inspector = inspect(engine)
+        tables = set(inspector.get_table_names())
+        decision_columns = {
+            row["name"] for row in inspector.get_columns("discovery_decisions")
+        }
+        context_columns = {
+            row["name"]
+            for row in inspector.get_columns("discovery_context_records")
+        }
+        with engine.connect() as connection:
+            counts = {
+                table: connection.exec_driver_sql(
+                    f'SELECT COUNT(*) FROM "{table}"'
+                ).scalar_one()
+                for table in (
+                    "discovery_decisions",
+                    "discovery_context_records",
+                )
+            }
+            integrity = connection.execute(text("PRAGMA integrity_check")).scalar_one()
+            foreign_keys = connection.execute(text("PRAGMA foreign_key_check")).all()
+    finally:
+        engine.dispose()
+
+    assert {"discovery_decisions", "discovery_context_records"} <= tables
+    assert {
+        "candidate_id",
+        "decision_number",
+        "decision_type",
+        "reviewed_text",
+        "semantic_family",
+        "reviewed_subtype",
+        "acceptance_mode",
+        "target_authority_id",
+        "created_mention_id",
+        "candidate_state_sha256",
+        "decided_by",
+    } <= decision_columns
+    assert {
+        "candidate_id",
+        "decision_id",
+        "semantic_family",
+        "subtype",
+        "label",
+        "temporal_expression",
+        "editable_object_id",
+        "object_revision_number",
+        "target_authority_id",
+        "data_json",
+    } <= context_columns
+    assert counts == {
+        "discovery_decisions": 0,
+        "discovery_context_records": 0,
+    }
+    assert integrity == "ok"
+    assert foreign_keys == []
+
+
+def test_discovery_grouping_continuity_migration_upgrades_existing_0039_database(
+    tmp_path: Path,
+) -> None:
+    from sqlalchemy import inspect, text
+
+    root = tmp_path / "project_discovery_grouping"
+    upgrade_database(root, revision="0039_discovery_decisions")
+    assert current_revision(root) == "0039_discovery_decisions"
+    upgrade_database(root)
+    assert current_revision(root) == "0040_discovery_grouping_continuity"
+
+    engine = create_sqlite_engine(database_path(root))
+    try:
+        inspector = inspect(engine)
+        tables = set(inspector.get_table_names())
+        with engine.connect() as connection:
+            counts = {
+                table: connection.exec_driver_sql(
+                    f'SELECT COUNT(*) FROM "{table}"'
+                ).scalar_one()
+                for table in (
+                    "discovery_candidate_groups",
+                    "discovery_group_memberships",
+                    "discovery_group_actions",
+                    "discovery_candidate_continuities",
+                )
+            }
+            integrity = connection.execute(text("PRAGMA integrity_check")).scalar_one()
+            foreign_keys = connection.execute(text("PRAGMA foreign_key_check")).all()
+    finally:
+        engine.dispose()
+
+    assert {
+        "discovery_candidate_groups",
+        "discovery_group_memberships",
+        "discovery_group_actions",
+        "discovery_candidate_continuities",
+    } <= tables
+    assert counts == {
+        "discovery_candidate_groups": 0,
+        "discovery_group_memberships": 0,
+        "discovery_group_actions": 0,
+        "discovery_candidate_continuities": 0,
+    }
+    assert integrity == "ok"
+    assert foreign_keys == []

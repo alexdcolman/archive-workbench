@@ -10,7 +10,7 @@ from pathlib import Path
 from typing import Iterator
 
 import fitz
-from PIL import Image
+from PIL import Image, ImageFilter, ImageOps
 from sqlalchemy import select, update
 from sqlalchemy.orm import Session
 
@@ -30,7 +30,46 @@ from archive_workbench.db.models import (
 from archive_workbench.domain.enums import FilePresence, MediaType
 from archive_workbench.identity import new_id, sha256_file, sha256_json
 from archive_workbench.inspection import inspect_input
+from archive_workbench.tesseract_engine import otsu_threshold
 
+
+
+OCR_TREATMENT_LABELS = {
+    "original": "Sin cambios",
+    "grayscale_autocontrast": "Escala de grises y autocontraste",
+    "otsu": "Binarización Otsu",
+    "denoise_autocontrast": "Reducción de ruido y autocontraste",
+}
+
+
+def profile_for_ocr_treatment(
+    decisions: ProjectDecisions, treatment: str
+) -> DerivativeProfile:
+    if treatment not in OCR_TREATMENT_LABELS:
+        raise ValueError(f"Tratamiento OCR desconocido: {treatment}")
+    base = profile_from_decisions(decisions)
+    return base.model_copy(
+        update={
+            "profile_key": ("default" if treatment == "original" else f"ocr_{treatment}"),
+            "ocr_treatment": treatment,
+        }
+    )
+
+
+def apply_ocr_treatment(image: Image.Image, treatment: str) -> Image.Image:
+    """Genera un derivado OCR conservador sin alterar el original ni la previsualización."""
+    if treatment == "original":
+        return image.copy()
+    gray = ImageOps.grayscale(image)
+    if treatment == "denoise_autocontrast":
+        gray = gray.filter(ImageFilter.MedianFilter(size=3))
+    gray = ImageOps.autocontrast(gray)
+    if treatment in {"grayscale_autocontrast", "denoise_autocontrast"}:
+        return gray
+    if treatment == "otsu":
+        threshold = otsu_threshold(gray)
+        return gray.point(lambda value: 255 if value > threshold else 0, mode="1")
+    raise ValueError(f"Tratamiento OCR desconocido: {treatment}")
 
 @dataclass(slots=True)
 class PreprocessingSummary:
@@ -49,6 +88,8 @@ class PreprocessingStatusRow:
     media_type: str
     page_count: int | None
     run_status: str | None
+    profile_key: str | None
+    ocr_treatment: str | None
     assets: int
     output_root: str | None
 
@@ -214,7 +255,8 @@ def _render_pdf(
             source_rect = page.rect
 
             ocr_pix = page.get_pixmap(dpi=profile.ocr_dpi, colorspace=fitz.csRGB, alpha=False)
-            ocr_image = Image.frombytes("RGB", (ocr_pix.width, ocr_pix.height), ocr_pix.samples)
+            rendered_ocr = Image.frombytes("RGB", (ocr_pix.width, ocr_pix.height), ocr_pix.samples)
+            ocr_image = apply_ocr_treatment(rendered_ocr, profile.ocr_treatment)
             ocr_path = output_dir / "ocr" / f"page_{page_number:04d}.{_extension(ocr_fmt)}"
             _save_pillow(
                 ocr_image,
@@ -294,6 +336,13 @@ def _render_raster_pillow(
         default=0.0,
     )
     if max_megapixels > profile.pillow_megapixel_guard:
+        if profile.ocr_treatment != "original":
+            raise RuntimeError(
+                f"La imagen alcanza {max_megapixels:.1f} MP. El tratamiento "
+                f"{OCR_TREATMENT_LABELS[profile.ocr_treatment]!r} requiere cargarla con "
+                "Pillow y supera el límite de memoria configurado. Use 'Sin cambios' o "
+                "procese una copia más pequeña; el original no fue modificado."
+            )
         raise RuntimeError(
             f"La imagen alcanza {max_megapixels:.1f} MP y supera el límite seguro de Pillow "
             f"({profile.pillow_megapixel_guard:.0f} MP). Instale el extra [tiff] para usar pyvips."
@@ -310,7 +359,7 @@ def _render_raster_pillow(
             source_width, source_height = image.size
 
             # Para rasteres no se inventan píxeles: el derivado OCR conserva resolución nativa.
-            ocr_image = image.copy()
+            ocr_image = apply_ocr_treatment(image, profile.ocr_treatment)
             ocr_path = output_dir / "ocr" / f"page_{frame + 1:04d}.{_extension(profile.ocr_format)}"
             _save_pillow(
                 ocr_image,
@@ -516,31 +565,38 @@ def _reusable_run(
     *,
     digital_object_id: str,
     source_sha256: str,
-    options_hash: str,
+    options: dict[str, object],
     project_root: Path,
 ) -> PreprocessingRun | None:
-    run = session.scalar(
+    runs = session.scalars(
         select(PreprocessingRun)
         .where(
             PreprocessingRun.digital_object_id == digital_object_id,
             PreprocessingRun.source_sha256 == source_sha256,
-            PreprocessingRun.options_hash == options_hash,
             PreprocessingRun.status.in_(["completed", "completed_with_warnings"]),
         )
         .order_by(PreprocessingRun.created_at.desc())
-    )
-    if run is None or not run.manifest_path:
-        return None
-    assets = session.scalars(
-        select(DerivativeAsset).where(DerivativeAsset.preprocessing_run_id == run.id)
     ).all()
-    if not assets:
-        return None
-    if not (project_root / run.manifest_path).is_file():
-        return None
-    if any(not (project_root / asset.relative_path).is_file() for asset in assets):
-        return None
-    return run
+    for run in runs:
+        stored_options = dict(run.options_json or {})
+        # Las corridas anteriores a 0.36.0 no declaraban este campo; su valor era
+        # materialmente equivalente a "original".
+        stored_options.setdefault("ocr_treatment", "original")
+        if stored_options != options:
+            continue
+        if not run.manifest_path:
+            continue
+        assets = session.scalars(
+            select(DerivativeAsset).where(DerivativeAsset.preprocessing_run_id == run.id)
+        ).all()
+        if not assets:
+            continue
+        if not (project_root / run.manifest_path).is_file():
+            continue
+        if any(not (project_root / asset.relative_path).is_file() for asset in assets):
+            continue
+        return run
+    return None
 
 
 def _insert_assets(session: Session, records: list[DerivativeAssetRecord]) -> None:
@@ -575,9 +631,10 @@ def prepare_derivatives(
     decisions: ProjectDecisions,
     source_keys: set[str] | None = None,
     force: bool = False,
+    profile: DerivativeProfile | None = None,
 ) -> PreprocessingSummary:
     root = Path(project_root).resolve()
-    profile = profile_from_decisions(decisions)
+    profile = profile or profile_from_decisions(decisions)
     options = profile.model_dump(mode="json")
     options_hash = sha256_json(options)
     summary = PreprocessingSummary()
@@ -619,10 +676,19 @@ def prepare_derivatives(
                 session,
                 digital_object_id=digital_object.id,
                 source_sha256=digital_object.sha256,
-                options_hash=options_hash,
+                options=options,
                 project_root=root,
             )
             if reusable is not None:
+                session.execute(
+                    update(PreprocessingRun)
+                    .where(
+                        PreprocessingRun.digital_object_id == digital_object.id,
+                        PreprocessingRun.id != reusable.id,
+                    )
+                    .values(is_current=False)
+                )
+                reusable.is_current = True
                 summary.runs_reused += 1
                 continue
 
@@ -667,7 +733,7 @@ def prepare_derivatives(
             elif media_type in {MediaType.TIFF, MediaType.IMAGE}:
                 inspection = inspect_input(source)
                 pyvips = _pyvips_module() if profile.use_pyvips_when_available else None
-                use_pyvips = pyvips is not None and (
+                use_pyvips = pyvips is not None and profile.ocr_treatment == "original" and (
                     media_type == MediaType.TIFF
                     or any(
                         (float(page.width) * float(page.height)) / 1_000_000
@@ -812,6 +878,12 @@ def preprocessing_status_rows(session: Session) -> list[PreprocessingStatusRow]:
                 media_type=digital_object.media_type,
                 page_count=digital_object.page_count,
                 run_status=current.status if current else None,
+                profile_key=current.profile_key if current else None,
+                ocr_treatment=(
+                    str((current.options_json or {}).get("ocr_treatment", "original"))
+                    if current
+                    else None
+                ),
                 assets=asset_count,
                 output_root=current.output_root if current else None,
             )

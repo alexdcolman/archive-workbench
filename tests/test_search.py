@@ -1,8 +1,10 @@
 from __future__ import annotations
 
+from datetime import datetime, timezone
 from pathlib import Path
 
 import pytest
+from sqlalchemy import inspect, text
 from archive_workbench.db import create_sqlite_engine, database_path, session_scope, upgrade_database
 from archive_workbench.db.models import (
     ArchivalUnit,
@@ -111,21 +113,54 @@ def _seed_search_project(
             )
             session.add(original)
             session.flush()
-            editable_page = EditablePage(
-                id=new_id(),
-                digital_object_id=digital.id,
-                page_number=1,
-                source_extraction_run_id=run.id,
-                source_extraction_page_id=extraction_page.id,
-                status="active",
-                review_status="reviewed",
-                bootstrapped_by="tests",
-            )
-            session.add(editable_page)
+            editable_page_id = new_id()
+            editable_page_columns = {
+                row["name"] for row in inspect(session.get_bind()).get_columns("editable_pages")
+            }
+            if "revision_number" in editable_page_columns:
+                editable_page = EditablePage(
+                    id=editable_page_id,
+                    digital_object_id=digital.id,
+                    page_number=1,
+                    source_extraction_run_id=run.id,
+                    source_extraction_page_id=extraction_page.id,
+                    status="active",
+                    review_status="approved",
+                    bootstrapped_by="tests",
+                )
+                session.add(editable_page)
+            else:
+                now = datetime.now(timezone.utc)
+                session.execute(
+                    text(
+                        """
+                        INSERT INTO editable_pages (
+                            id, digital_object_id, page_number,
+                            source_extraction_run_id, source_extraction_page_id,
+                            source_selection_id, status, review_status, review_note,
+                            reviewed_by, reviewed_at, bootstrapped_by,
+                            bootstrapped_at, updated_at
+                        ) VALUES (
+                            :id, :digital_object_id, 1,
+                            :source_run_id, :source_page_id,
+                            NULL, 'active', 'approved', NULL,
+                            NULL, NULL, 'tests', :created_at, :updated_at
+                        )
+                        """
+                    ),
+                    {
+                        "id": editable_page_id,
+                        "digital_object_id": digital.id,
+                        "source_run_id": run.id,
+                        "source_page_id": extraction_page.id,
+                        "created_at": now,
+                        "updated_at": now,
+                    },
+                )
             session.flush()
             editable = EditableObject(
                 id=new_id(),
-                editable_page_id=editable_page.id,
+                editable_page_id=editable_page_id,
                 digital_object_id=digital.id,
                 page_number=1,
                 source_extracted_object_id=original.id,
@@ -169,7 +204,7 @@ def _seed_search_project(
                     ),
                 ]
             )
-            return editable.id, editable_page.id
+            return editable.id, editable_page_id
     finally:
         engine.dispose()
 
@@ -214,7 +249,7 @@ def test_search_filters_by_status_and_tag_kind(tmp_path: Path) -> None:
                 query="teatro",
                 fields=["tags"],
                 object_review_statuses=["approved"],
-                page_review_statuses=["reviewed"],
+                page_review_statuses=["approved"],
                 tag_kinds=["thematic"],
             )
             none = search_editable_objects(
@@ -399,7 +434,10 @@ def test_dictionary_suggestions_preserve_offsets_and_become_stale(tmp_path: Path
                 created_by="tests",
             )
             summary = suggest_dictionary_mentions(
-                session, object_id=object_id, created_by="tests"
+                session,
+                object_id=object_id,
+                created_by="tests",
+                page_review_statuses=("approved",),
             )
             assert summary.created == 1
             revisions = authority_revision_rows(session, authority.id)
@@ -602,9 +640,63 @@ def test_scan_command_reports_entity_uuid_confusion_and_scan_all_is_safe(tmp_pat
                 session,
                 project_id="search_project",
                 created_by="tests",
+                page_review_statuses=("approved",),
             )
             assert summary.objects_scanned == 1
             assert summary.created == 0
+    finally:
+        engine.dispose()
+
+
+def test_automatic_mention_suggestions_require_approved_pages_by_default(
+    tmp_path: Path,
+) -> None:
+    from archive_workbench.authorities import (
+        create_authority,
+        mention_rows,
+        suggest_dictionary_mentions,
+        suggest_dictionary_mentions_all,
+    )
+    from archive_workbench.db.models import EditableObject, EditablePage
+
+    root = tmp_path / "quality_mentions_project"
+    object_id, page_id = _seed_search_project(root)
+    engine = create_sqlite_engine(database_path(root))
+    try:
+        with session_scope(engine) as session:
+            obj = session.get(EditableObject, object_id)
+            page = session.get(EditablePage, page_id)
+            assert obj is not None
+            assert page is not None
+            obj.current_text = "La Entidad de prueba aparece en el documento."
+            create_authority(
+                session,
+                project_id="search_project",
+                entity_type="organization",
+                preferred_name="Entidad de prueba",
+                created_by="tests",
+            )
+            page.review_status = "needs_review"
+
+            with pytest.raises(ValueError, match="no cumple el filtro de calidad"):
+                suggest_dictionary_mentions(
+                    session, object_id=object_id, created_by="tests"
+                )
+            blocked = suggest_dictionary_mentions_all(
+                session, project_id="search_project", created_by="tests"
+            )
+            assert blocked.objects_scanned == 0
+            assert mention_rows(session, object_id=object_id) == []
+
+            page.review_status = "approved"
+            approved = suggest_dictionary_mentions_all(
+                session, project_id="search_project", created_by="tests"
+            )
+            mentions = mention_rows(session, object_id=object_id)
+
+        assert approved.objects_scanned == 1
+        assert approved.created == 1
+        assert [row.mention_text for row in mentions] == ["Entidad de prueba"]
     finally:
         engine.dispose()
 

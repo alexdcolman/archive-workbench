@@ -175,6 +175,7 @@ def test_processing_inventory_follows_manual_canonical_flow(tmp_path: Path) -> N
                 session, project_root=root, project_id=decisions.project_id
             )[0]
         assert row.status == "prepared"
+        assert row.preprocessing_ocr_treatment == "original"
 
         with session_scope(engine) as session:
             run = _seed_completed_extraction(session)
@@ -341,10 +342,96 @@ def test_processing_migration_upgrades_an_existing_029_database(tmp_path: Path) 
     assert current_revision(root) == "0024_semantic_search"
 
     upgrade_database(root)
-    assert current_revision(root) == "0028_operational_readiness"
+    assert current_revision(root) == "0040_discovery_grouping_continuity"
     engine = create_sqlite_engine(database_path(root))
     try:
         tables = set(inspect(engine).get_table_names())
     finally:
         engine.dispose()
     assert {"processing_jobs", "processing_job_items"}.issubset(tables)
+
+
+def test_quality_panel_explains_indicators_without_presenting_accuracy_percentage() -> None:
+    from archive_workbench.page_quality import PageQualityResult
+    from archive_workbench.processing_app import _render_automatic_quality
+
+    class Context:
+        def __init__(self, st):
+            self.st = st
+
+        def __enter__(self):
+            return self.st
+
+        def __exit__(self, exc_type, exc, traceback):
+            return False
+
+    class FakeStreamlit:
+        def __init__(self):
+            self.messages: list[str] = []
+            self.tables: list[list[dict[str, str]]] = []
+
+        def success(self, message):
+            self.messages.append(str(message))
+
+        def warning(self, message):
+            self.messages.append(str(message))
+
+        def error(self, message):
+            self.messages.append(str(message))
+
+        def caption(self, message):
+            self.messages.append(str(message))
+
+        def write(self, message):
+            self.messages.append(str(message))
+
+        def expander(self, label, **_kwargs):
+            self.messages.append(str(label))
+            return Context(self)
+
+        def columns(self, count):
+            return [Context(self) for _ in range(count)]
+
+        def dataframe(self, rows, **_kwargs):
+            self.tables.append(rows)
+
+    st = FakeStreamlit()
+    assessment = PageQualityResult(
+        assessment_id="assessment",
+        extraction_page_id="page",
+        status="clear",
+        score=1.0,
+        metrics={
+            "mean_brightness": 0.75,
+            "contrast": 0.32,
+            "edge_variance": 0.01,
+            "noise_ratio": 0.005,
+            "object_count": 4,
+            "character_count": 300,
+            "tiny_object_ratio": 0.0,
+            "overlapping_bbox_ratio": 0.0,
+        },
+    )
+
+    _render_automatic_quality(st, assessment)
+
+    joined = "\n".join(st.messages)
+    assert "Sin alertas detectadas" in joined
+    assert "100%" not in joined
+    assert "no miden la exactitud del OCR" in joined
+    assert "no demuestra que el texto reconocido sea correcto" in joined
+    assert len(st.tables) == 2
+
+
+def test_processing_ui_distinguishes_derivative_treatment_from_profile_variant() -> None:
+    source = (
+        Path(__file__).parents[1]
+        / "src"
+        / "archive_workbench"
+        / "processing_app.py"
+    ).read_text(encoding="utf-8")
+
+    assert "Tratamiento del derivado vigente" in source
+    assert "Transformación adicional del perfil" in source
+    assert "`original` no significa que se use el archivo original sin " in source
+    assert "preparación. Significa que el perfil no agrega otra transformación" in source

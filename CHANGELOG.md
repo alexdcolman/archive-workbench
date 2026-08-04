@@ -1,4 +1,617 @@
+## 0.71.2 — 2026-08-03
+
+- Corrige el validador de `DISC-01C` para aceptar como origen de continuidad cualquiera de los dos snapshots controlados equivalentes de `Cuaderno del Delta`.
+- La regresión de extremo a extremo usa el candidato duplicado, reproduciendo la selección real de la interfaz.
+- Registra `UX-03` como pendiente crítico para reformular completamente la interfaz de Entidades y menciones y Descubrimiento abierto sin retirar funcionalidades.
+- Bloquea `DISC-01D` hasta resolver `UX-03`.
+- No agrega migraciones; la revisión continúa en `0040_discovery_grouping_continuity`.
+
+## 0.71.1 — 2026-08-03
+
+- Corrige la creación de grupos manuales en Streamlit: la selección del grupo nuevo se difiere al rerun siguiente, antes de instanciar el selector.
+- Evita `StreamlitAPIException` por modificar `open_discovery_group_selected` después de crear su widget.
+- Conserva el grupo que ya fue escrito antes del error y permite continuar la validación sin repetir migraciones, preparación ni agrupamiento automático.
+- Agrega una regresión estática que impide volver a asignar directamente la clave del selector después de una escritura.
+- No agrega migraciones; la revisión continúa en `0040_discovery_grouping_continuity`.
+
+## 0.71.0 — 2026-08-03
+
+- Registra como validada `DISC-01B` con nueve decisiones append-only, cuatro registros propios y conteos canónicos conservados.
+- Implementa `DISC-01C` mediante la migración `0040_discovery_grouping_continuity`.
+- Agrega grupos de candidatos, pertenencias y acciones append-only sin fusionar procedencias.
+- Propone grupos por coincidencia exacta o normalizada entre corridas y permite agrupamiento y separación manuales.
+- Agrega continuidad textual por proyección exacta única o nueva detección local, manteniendo visible el candidato obsoleto.
+- Incorpora interfaz secundaria persistente, comandos de terminal y preparación y validación controladas sobre la copia existente.
+- Conserva autoridades, menciones, relaciones, decisiones y registros propios sin escrituras canónicas nuevas durante agrupamiento o continuidad.
+
+## 0.70.2 — 2026-08-03
+
+- Agrega `.assistant/05_CRITERIOS_INTERFAZ.md` con jerarquía, divulgación progresiva, estabilidad durante reruns y lista de control obligatoria por versión.
+- Reemplaza los expansores interactivos de descubrimiento abierto, configuración de perfil y revisión de candidatos por paneles persistentes con claves estables.
+- Evita que cambiar la decisión, el destino de aceptación u otros controles cierre el panel activo.
+- Ajusta `validate_open_discovery_disc01b.py` para validar estrictamente las ocho decisiones controladas y conservar decisiones adicionales append-only.
+- La copia manual conserva una aceptación adicional de `manifestación`: nueve decisiones totales y cuatro registros propios, sin relaciones nuevas.
+- No agrega migraciones; la revisión continúa en `0039_discovery_decisions`.
+
+## 0.70.1 — 2026-08-03
+
+- Registra como regla obligatoria que toda modificación relea y respete los principios de **Interfaz y formularios**.
+- Agrega `UX-02` como revisión integral de complejidad acumulada después de los bloques funcionales activos y antes de v1.0.
+- Establece que las guías entreguen todas las pruebas relevantes y `pytest --collect-only -q` en un único bloque encadenado.
+- No cambia la lógica de `DISC-01B` ni el esquema; la revisión continúa en `0039_discovery_decisions`.
+
+## 0.70.0 — 2026-08-03
+
+- Registra como validada `DISC-01A`: 17 objetos recorridos, 13 candidatos totales y siete candidatos controlados correctos.
+- Implementa `DISC-01B`, revisión humana y decisiones persistentes por familia semántica.
+- Agrega la migración `0039_discovery_decisions` con `discovery_decisions` y `discovery_context_records`.
+- Permite aceptar, rechazar, modificar o aplazar candidatos mediante historial append-only.
+- Permite vincular referencias con autoridades existentes o crear explícitamente autoridades nuevas con estado `unreviewed`.
+- Conserva tiempos, acontecimientos y acciones o procesos como registros propios y bloquea candidatos obsoletos.
+- Agrega interfaz, comandos `discovery-decide`, `discovery-decisions` y `discovery-context-records`, preparación de la corrida existente y verificación final.
+- Ninguna decisión crea relaciones automáticamente.
+
+## 0.69.2 — 2026-08-03
+
+- Corrige la verificación manual de `DISC-01A` para copias que ya contienen otros documentos aprobados.
+- Agrega `scripts/validate_open_discovery_disc01a.py`, que valida exactamente el objeto controlado y admite candidatos adicionales legítimos.
+- No cambia el detector, la persistencia ni la revisión de base `0038_open_discovery`.
+
+## 0.69.1 — 2026-08-03
+
+- Corrige la ejecución de `DISC-01A` sobre proyectos que ya contienen menciones: `EntityMention` usa `status`, no un campo inexistente `lifecycle_status`.
+- Las menciones no rechazadas con offsets válidos impiden duplicar el mismo tramo; las rechazadas y las filas sin offsets no bloquean candidatos ni provocan errores.
+- Mueve **Descubrimiento abierto** al final de **Entidades y menciones** y deja el panel cerrado por defecto.
+- La corrida fallida se revierte completa y el perfil previamente guardado puede reutilizarse.
+- No agrega migraciones; la revisión continúa en `0038_open_discovery`.
+
+## 0.69.0 — 2026-08-03
+
+- Implementa `DISC-01A`, contrato, persistencia y detección reproducible para descubrimiento abierto.
+- Agrega la migración `0038_open_discovery` con perfiles, corridas inmutables y candidatos trazables.
+- Incorpora el proveedor local determinista `local_deterministic@local_rules_v1` para actores, espacios, tiempos, acontecimientos, acciones o procesos y obras.
+- Cada candidato conserva texto exacto, documento, página, objeto, offsets, revisión textual, confianza, método, versión, explicación y SHA-256 de parámetros.
+- Reutiliza la autorización común `open_discovery`; por defecto solo recorre páginas aprobadas y bloquea perfiles cuya configuración ya no coincide con la autorización persistida.
+- Agrega interfaz en **Entidades y menciones**, comandos de terminal para perfiles, corridas, candidatos y auditoría, y `create_open_discovery_validation_project.py`.
+- No crea autoridades, menciones ni relaciones; las decisiones humanas quedan para `DISC-01B`.
+
+## 0.68.1 — 2026-08-03
+
+- Registra como validada `EX-01D` y cierra `EX-01` después de comprobar vista previa, adopción, rollback, segunda adopción, acuerdo bilateral posterior e integridad.
+- Registra que `project_data` fue respaldada y migrada a `0037_exchange_state_adoptions` y que las pruebas OCR continúan visibles.
+- Retira `EX-01` de pendientes y agrega el plan de referencia de `DISC-01`, dividido en contrato y detección, decisiones, deduplicación y evaluación.
+- No agrega migraciones ni cambia la lógica funcional.
+
+## 0.68.0 — 2026-08-03
+
+- Implementa `EX-01D`, adopción explícita, respaldada y reversible de un estado editable divergente.
+- Agrega la migración `0037_exchange_state_adoptions` con `exchange_state_adoptions` y `exchange_state_adoption_rollbacks` append-only.
+- Incorpora paquetes completos de estado 1.0 dirigidos a una contraparte concreta, con manifiesto, checksums, estado editable y huella de la base documental.
+- Agrega vista previa de solo lectura con impacto por sección, adopción transaccional con backup previo, verificación de SHA-256, integridad y claves foráneas.
+- Incorpora rollback explícito que restaura el backup anterior, crea un backup de seguridad y conserva la auditoría de adopción y reversión.
+- La adopción invalida simulaciones anteriores pero no crea parentesco ni una base común; el acuerdo bilateral continúa siendo una operación separada posterior a la igualdad de hashes.
+- Agrega comandos de terminal, el panel **Reconciliar estados divergentes** y `create_state_adoption_validation_projects.py`.
+- Registra como validada `EX-01C`: ambas copias conservaron el mismo acuerdo y un paquete posterior fue reconocido mediante `common_base_agreement` sin cambios.
+
+## 0.67.0 — 2026-08-03
+
+- Implementa `EX-01C`, creación bilateral y auditable de una nueva base común entre dos copias con estado editable idéntico.
+- Agrega la migración `0036_exchange_common_base_agreements` y el modelo append-only `exchange_common_base_agreements`.
+- Incorpora propuesta, aceptación y finalización mediante ZIP verificables con manifiestos JSON 1.0 y checksums SHA-256.
+- Registra en ambas copias el mismo identificador, manifiesto y estado, con puntos de control locales propios y simulaciones anteriores obsoletas.
+- Agrega reconocimiento posterior mediante `common_base_agreement`, comandos de terminal, formularios Streamlit y un generador de copias descartables.
+- Rechaza estados divergentes, identidades incompatibles, cambios posteriores a la propuesta y registros repetidos sin modificar el corpus.
+- `EX-01D`, adopción explícita de un estado divergente con backup y rollback, continúa pendiente.
+
+## 0.66.0 — 2026-08-03
+
+- Implementa `EX-01B`, recuperación de linaje separada de la aplicación de cambios y limitada a diagnósticos concluyentes, únicos y sin contradicciones.
+- Agrega la migración `0035_exchange_lineage_recovery` con `exchange_lineage_cases`, `exchange_lineage_evidence`, `exchange_lineage_decisions` y `exchange_dry_runs.base_match_method`.
+- Cada decisión conserva evidencia seleccionada, cadena de paquetes, punto y secuencia comparables, responsable, fundamento, origen y SHA-256 de parámetros.
+- La recuperación vuelve obsoleta la simulación anterior; una reevaluación posterior reconoce la base mediante `recovered_lineage`.
+- Agrega `exchange-lineage-recover`, `exchange-lineage-recoveries` y un formulario explícito en Intercambiar cambios.
+- No modifica el corpus ni aplica eventos recibidos; `EX-01C` y `EX-01D` continúan pendientes.
+
+## 0.65.0 — 2026-08-03
+
+- Implementa `EX-01A`, diagnóstico de evidencia para paquetes de intercambio cuya base quedó `unmatched`.
+- El diagnóstico es de solo lectura: no crea casos, decisiones, puntos de control, reportes persistentes ni cambios de contenido.
+- Verifica el paquete recibido, la SQLite vigente y artefactos adicionales seleccionados explícitamente.
+- Reconoce puntos de control exactos, aplicaciones anteriores, backups íntegros de la misma copia y cadenas continuas de paquetes.
+- Clasifica el resultado como recuperable, ambiguo o insuficiente y explica evidencias concluyentes, de apoyo y rechazadas.
+- Rechaza paquetes o backups alterados, proyectos diferentes, copias de origen incompatibles, ciclos y bifurcaciones.
+- Agrega el comando `exchange-lineage-diagnose`, un panel de diagnóstico en Intercambio y `scripts/create_lineage_diagnostic_validation_projects.py`.
+- No agrega migraciones; la revisión continúa en `0034_automatic_analysis_authorizations`.
+
+## 0.64.2 — 2026-08-03
+
+- Cierra `DATA-02` después de validar interfaz, auditoría por terminal, revisión de base, integridad SQLite y claves foráneas.
+- Retira `DATA-02` de los pendientes activos y registra la evidencia final en implementaciones realizadas.
+- Agrega la definición completa de `EX-01`: objetivo, contratos actuales, evidencia, persistencia prevista, fases, criterios de no regresión, pruebas mínimas y exclusiones.
+- Fija `EX-01A` como primera fase funcional: diagnóstico de solo lectura para paquetes sin base común reconocida.
+- No cambia la lógica ni agrega migraciones; la revisión continúa en `0034_automatic_analysis_authorizations`.
+
+## 0.64.1 — 2026-08-03
+
+- Corrige el botón **Buscar coincidencias** de sugerencias automáticas de menciones, que podía permanecer deshabilitado después de confirmar un alcance ampliado y escribir su fundamento.
+- El botón queda siempre disponible; al pulsarlo, la validación común exige confirmación y fundamento antes de registrar la autorización o iniciar la búsqueda.
+- Un envío incompleto muestra el error correspondiente y no escribe en la base.
+- Agrega una regresión estática que impide reintroducir `disabled` en este recorrido.
+- No agrega migraciones; la revisión continúa en `0034_automatic_analysis_authorizations`.
+
+## 0.64.0 — 2026-08-03
+
+- Completa la implementación de `DATA-02`, pendiente de validación manual: el alcance programático predeterminado para análisis automáticos es únicamente `approved` y ya no existe una ruta de compatibilidad que permita ampliarlo sin autorización.
+- Los alcances ampliados requieren confirmación explícita, responsable y fundamento no vacío.
+- Agrega `automatic_analysis_authorizations` mediante la migración `0034_automatic_analysis_authorizations`; cada autorización conserva política, tipo de análisis, estados, origen, destino y hash de parámetros.
+- Registra de manera append-only los guardados de perfiles de exportación, perfiles semánticos y búsquedas automáticas de menciones.
+- Impide previsualizar o ejecutar exportaciones y construir o consultar índices semánticos cuando la configuración vigente del perfil no coincide con una autorización persistida; los perfiles migrados deben guardarse nuevamente antes de su próximo uso.
+- Agrega **Administrar y recuperar → Auditoría de análisis** y el comando `analysis-quality-audit`.
+- Declara un contrato común para resúmenes, estadísticas, descubrimiento abierto, importaciones asistidas, herramientas LLM, RAG e integraciones futuras.
+- Agrega `.assistant/06_RELEVO_NUEVA_CONVERSACION.md` y un procedimiento explícito de continuidad.
+
+## 0.63.0 — 2026-08-03
+
+- Cierra `DATA-01` después de validar la decisión conjunta de menciones, las reubicaciones agrupadas, la integridad SQLite y las claves foráneas.
+- Agrega `analysis_quality.py` como política común para alcances de calidad en análisis automáticos.
+- Los perfiles nuevos de exportación y búsqueda semántica usan solo páginas aprobadas; ampliar el alcance exige confirmación visible al guardar.
+- La búsqueda automática de menciones muestra y valida el alcance de páginas antes de comenzar.
+- Agrega `.assistant/05_FORMULARIOS_STREAMLIT.md` para impedir bloqueos circulares entre widgets y botones dentro de `st.form`.
+- No modifica el esquema de base de datos.
+
+## 0.62.1 — 2026-08-03
+
+- Corrige el botón permanentemente deshabilitado en la decisión conjunta de menciones coincidentes.
+- Elimina la dependencia circular entre un selector dentro de `st.form` y la propiedad `disabled` del botón, ya que los cambios internos del formulario no provocan rerender.
+- Valida al enviar que exista una mención ganadora y muestra un error sin modificar la base cuando falta la selección.
+- Registra una regresión automatizada para impedir que reaparezca el bloqueo.
+- No cambia las operaciones de dominio ni agrega migraciones; la revisión continúa en `0033_export_exchange_lifecycle`.
+
+## 0.62.0 — 2026-08-02
+
+- Continúa `DATA-01` con revisión conjunta de tres o más menciones activas que convergen sobre el mismo fragmento.
+- Obliga a elegir una única mención ganadora y registra `repair_group_duplicate_rejected`, `repair_group_duplicate_relocated` o `repair_group_duplicate_kept` sin resolver pares aislados.
+- Agrega reubicaciones seguras agrupadas mediante `repair_group_relocation`, conservando una revisión individual por mención.
+- Revalida revisiones, snapshots, texto, offsets y composición exacta antes de escribir; cualquier cambio cancela la transacción completa.
+- Agrega `scripts/create_grouped_mention_validation_project.py` con un conjunto de tres menciones y tres reubicaciones seguras agrupables.
+- Registra como validada la reconciliación entre fila e historial de 0.61.0.
+- No agrega migraciones; la revisión continúa en `0033_export_exchange_lifecycle`.
+
+## 0.61.0 — 2026-08-02
+
+- Continúa `DATA-01` con reconciliación auditable de divergencias entre filas vigentes y snapshots de menciones.
+- Muestra una comparación campo por campo y permite conservar la fila vigente mediante `repair_adopt_current_row`.
+- Al restaurar el historial, registra primero la fila divergente con `repair_capture_divergent_row` y luego repone el snapshot mediante `repair_restore_snapshot`.
+- Bloquea formularios obsoletos y valida objeto, entidad, proyecto, estado, procedencia, offsets y revisión textual antes de restaurar.
+- Agrega `scripts/create_snapshot_divergence_validation_project.py` con dos rutas descartables independientes.
+- No agrega migraciones; la revisión continúa en `0033_export_exchange_lifecycle`.
+
+## 0.60.0 — 2026-08-02
+
+- Continúa `DATA-01` con resolución manual y auditable de ubicaciones sin proyección única.
+- Permite seleccionar un fragmento literal y una aparición concreta mediante `repair_manual_relocation`.
+- Permite retirar una mención cuyo fragmento ya no aparece mediante `repair_mark_absent`, sin borrar entidad, texto histórico, offsets ni snapshots.
+- Bloquea ausencia falsa, ubicaciones ocupadas, formularios obsoletos y divergencias entre fila y snapshot.
+- Agrega `scripts/create_unresolved_mention_validation_project.py` con una ubicación ambigua y un fragmento ausente.
+- No agrega migraciones; la revisión continúa en `0033_export_exchange_lifecycle`.
+
+## 0.59.0 — 2026-08-02
+
+- Continúa `DATA-01` con resolución auditable de duplicados entre una mención histórica y una mención ya ubicada en el texto vigente.
+- Permite conservar la mención vigente y retirar la histórica, o conservar la histórica, retirar la vigente y reubicar la elegida.
+- Registra `repair_duplicate_rejected` y `repair_duplicate_relocated` sin modificar snapshots anteriores.
+- Exige revisiones vigentes, snapshots consistentes, una única contraparte activa, confirmación explícita, actor y fundamento.
+- Bloquea automáticamente conjuntos con más de una contraparte o cambios posteriores a la evaluación.
+- Agrega `scripts/create_duplicate_mention_validation_project.py` con dos rutas descartables independientes.
+- No agrega migraciones; la revisión continúa en `0033_export_exchange_lifecycle`.
+
+## 0.58.0 — 2026-08-02
+
+- Continúa `DATA-01` con reparación auditable de menciones aceptadas o modificadas que quedaron sin entidad vinculada.
+- Permite vincular una entidad activa existente mediante `repair_link_authority` o devolver la mención a pendiente mediante `repair_return_pending`.
+- Exige revisión vigente, snapshot consistente, confirmación explícita, actor y nota; no crea entidades ni reescribe historial.
+- Agrega `scripts/create_missing_authority_validation_project.py` con dos rutas descartables independientes.
+- Corrige el generador de reubicación segura para seleccionar fragmentos completos en límites de palabra.
+- No agrega migraciones; la revisión continúa en `0033_export_exchange_lifecycle`.
+
+## 0.57.0 — 2026-08-02
+
+- Cierra `UX-01` después de validar las seis fases de simplificación y legibilidad.
+- Inicia `DATA-01` con una revisión centralizada de menciones activas en el mapa de relaciones.
+- Clasifica reubicaciones seguras, ubicaciones ambiguas, duplicados, vínculos faltantes y divergencias de snapshots.
+- Reubica una mención solo cuando la proyección es única, no existe otra mención activa en el mismo fragmento y la fila coincide con su último snapshot.
+- Registra actor, nota y snapshot nuevo mediante la operación `repair_relocation`, sin reescribir revisiones anteriores.
+- Agrega `scripts/create_mention_repair_validation_project.py` y regresiones para casos seguros, ambiguos, duplicados y divergentes.
+- No agrega migraciones; la revisión continúa en `0033_export_exchange_lifecycle`.
+
+## 0.56.0 — 2026-08-02
+
+- Continúa `UX-01` con una revisión final de legibilidad y densidad.
+- Sustituye las cuatro métricas angostas de los datos del objeto por tarjetas en dos columnas que permiten envolver “Sin revisar” y otros valores largos.
+- Traduce los estados de ciclo de vida visibles del objeto a “Activo” y “Eliminado”.
+- Organización del trabajo adopta un encabezado orientado a tareas, un resumen en tarjetas, tablas plegables y filtros de asignaciones desplegables.
+- Exportar presenta el recorrido como configurar perfil, revisar contenido y crear archivo; mueve identificadores de registros y hashes a detalles técnicos.
+- No agrega migraciones; la revisión continúa en `0033_export_exchange_lifecycle`.
+
+## 0.55.0 — 2026-08-02
+
+- Continúa `UX-01` en Revisión, Entidades y Grafo, sin cambiar contratos ni lógica de dominio.
+- Revisión agrupa opciones de visualización, resumen documental, herramientas, estado de página, deshacer/rehacer y datos del objeto.
+- Renombra las tareas del objeto con etiquetas orientadas a la acción: editar texto, orden y estructura, anotaciones, datos adicionales y menciones.
+- Entidades separa búsqueda general, filtros, resumen y opciones de búsqueda de menciones; reemplaza “alias” por “nombres alternativos” en el recorrido principal.
+- El grafo se presenta como mapa de relaciones y usa “elementos” y “vínculos”, conservando identificadores y pesos en detalles técnicos.
+- Agrega regresiones de interfaz para las tres pantallas.
+- No agrega migraciones; la revisión continúa en `0033_export_exchange_lifecycle`.
+
+## 0.54.0 — 2026-08-02
+
+- Continúa `UX-01` en Catálogo y Procesamiento, sin cambiar contratos ni lógica de dominio.
+- Catálogo deja visible la búsqueda general y agrupa el resumen, los filtros por nivel/estado y los datos internos de la unidad en desplegables.
+- Procesamiento usa lenguaje orientado a tareas, agrupa el resumen de avance y ubica la repetición forzada de versiones dentro de `Opciones avanzadas`.
+- Buscar texto muestra `Buscar también dentro de las palabras` junto a `Cómo combinar las palabras`, conservando los parámetros internos `match_mode` y `partial_words`.
+- Agrega pruebas de interfaz para la jerarquía progresiva de Catálogo, Procesamiento y búsqueda literal.
+- No agrega migraciones; la revisión continúa en `0033_export_exchange_lifecycle`.
+
+## 0.53.0 — 2026-08-02
+
+- Continúa `UX-01` simplificando las dos búsquedas sin retirar filtros ni opciones técnicas.
+- La búsqueda literal deja visibles solamente la consulta y la forma de combinar palabras; el resto queda en `Filtros opcionales`.
+- El mantenimiento y los datos técnicos del índice literal quedan en desplegables separados.
+- La búsqueda semántica se presenta como `Buscar por significado`, con opciones de consulta y estado técnico progresivos.
+- La preparación del índice separa contenido incluido de configuración técnica y traduce CPU/CUDA en el recorrido visible.
+- No agrega migraciones; la revisión continúa en `0033_export_exchange_lifecycle`.
+
+## 0.52.0 — 2026-08-02
+
+- Continúa `UX-01` con un recorrido de cinco etapas y once pasos.
+- Agrega orientación contextual opcional y navegación anterior/siguiente entre secciones.
+- Traduce el léxico principal de copias de seguridad en Administración.
+- Colapsa el comando técnico de restauración y agrega etiquetas explicativas a JSONL y CSV.
+- No agrega migraciones; la revisión continúa en `0033_export_exchange_lifecycle`.
+
+## 0.51.0 — 2026-08-02
+
+- Inicia `UX-01` con etiquetas de navegación orientadas a tareas y ayuda contextual por sección.
+- Renombra el recorrido principal de intercambio con términos comprensibles: paquete de intercambio, simulación, punto de control y copia de seguridad.
+- Traduce estados operativos de intercambio y separa los códigos internos en un desplegable de detalles técnicos.
+- Actualiza Inicio para usar el mismo recorrido visible.
+- Marca como resuelto y validado el bug de duplicación visual al archivar perfiles de exportación.
+- No agrega migraciones; la revisión continúa en `0033_export_exchange_lifecycle`.
+
+## 0.50.3 — 2026-08-02
+
+- Cambia el ciclo de vida de perfiles de exportación a una secuencia previa al render: el callback del botón encola la acción y el siguiente rerun ordinario la procesa antes de construir la vista.
+- Elimina los reruns explícitos a mitad del render para archivar, restaurar y eliminar perfiles.
+- Conserva una nueva generación del selector después de cada operación.
+- Agrega pruebas unitarias de encolado, confirmación y procesamiento sin rerun anidado.
+- No agrega migraciones; la revisión continúa en `0033_export_exchange_lifecycle`.
+
+## 0.50.2 — 2026-08-02
+
+- Intentó limpiar el árbol visual mediante rerun del fragmento al archivar perfiles.
+- La validación manual posterior demostró que Streamlit todavía podía conservar el formulario anterior junto con el nuevo.
+- No produjo pérdida de datos ni de historial.
+
+## 0.50.1 — 2026-08-02
+
+- Corrige la duplicación y desincronización visual del perfil de exportación después de guardar, archivar, restaurar o eliminar.
+- Separa el identificador lógico de selección de la clave del widget y cambia la generación del selector tras cada acción de ciclo de vida.
+- Usa un rerun completo para reconstruir de manera atómica selector, pestañas y formulario, evitando restos de un fragmento anterior.
+- Agrega regresiones para la selección posterior y el incremento de generación.
+- No agrega migraciones; la revisión continúa en `0033_export_exchange_lifecycle`.
+
+## 0.50.0 — 2026-08-02
+
+- Reorganiza `docs/` en documentación operativa, referencia actual e historial clasificado por tipo.
+- Deja un único documento en la raíz de `docs/`: `HISTORIAL_DE_CAMBIOS.md`, que funciona como mapa breve.
+- Agrega `.assistant/` con instrucciones obligatorias de continuidad, interacción, documentación y pruebas para conversaciones futuras.
+- Consolida `PENDIENTES_ACTIVOS.md` como única lista de trabajo abierto e `IMPLEMENTACIONES_REALIZADAS.md` como registro separado de funciones cerradas.
+- Recupera pendientes de audiovisual local, transcripción, plugin de YouTube, imagen Docker, Drive, verdad terreno y cierre de v1.0.
+- Incorpora como pendientes evaluados la simplificación de interfaz y léxico, importación de diccionarios de autoridades, herramientas CLI con LLM y RAG trazable.
+- Agrega pruebas estructurales para impedir documentos sueltos en `docs/`, listas activas duplicadas y guías versionadas fuera del archivo histórico.
+- No agrega migraciones ni cambia la lógica funcional; la revisión continúa en `0033_export_exchange_lifecycle`.
+
+## 0.49.2 — 2026-08-02
+
+- Consolida `docs/PENDIENTES_ACTIVOS.md` como lista operativa breve con estados e identificadores estables.
+- Marca la migración 0027 y sus regresiones con autoridades, menciones y relaciones como resueltas y validadas en 0.49.1.
+- Registra explícitamente la recuperación asistida de linaje y la creación de una base común verificada como pendiente independiente de la resolución de campos.
+- Registra la desincronización visual del perfil de exportación después de archivar, restaurar o eliminar, sin confundirla con pérdida de datos.
+- Define una estrategia de pruebas por subsistema afectado, transversales, recopilación completa y suite monolítica local, conservando toda la cobertura.
+- No agrega migraciones ni cambia el comportamiento de la aplicación; la revisión continúa en `0033_export_exchange_lifecycle`.
+
+## 0.49.1 — 2026-08-01
+
+- Corrige el bloqueo circular de las confirmaciones dentro de formularios para archivar, restaurar o limpiar bundles y para archivar, restaurar o eliminar perfiles de exportación.
+- Mantiene desactivadas solamente las acciones que dependen de un estado operativo externo; la confirmación se valida al pulsar el botón y nunca habilita escrituras mediante `Enter`.
+- Agrega una prueba AST que impide volver a usar una casilla `confirm_*` para deshabilitar el propio botón de envío del formulario.
+- Define explícitamente como pendiente el descubrimiento abierto y revisable de actores, espacios, tiempos y acontecimientos, diferenciándolo del rastreo por diccionario de autoridades ya conocidas.
+- Documenta actualización y continuación de la validación en `docs/ACTUALIZACION_Y_PRUEBA_0.49.1.md`.
+
+## 0.49.0 — 2026-08-01
+
+- Corrige la vista de bundles sin base común con varios eventos revisables: inicializa el agrupamiento por evento y presenta todos los eventos y campos sin `NameError`.
+- Explica globalmente el linaje no reconocido y deshabilita las decisiones masivas incompatibles con creaciones sin una base común verificable.
+- Detalla por qué un dry-run quedó `stale`, incluyendo secuencia evaluada, secuencia vigente y eventos locales posteriores.
+- Permite archivar, restaurar y limpiar entradas de bundles no aplicados; las entradas archivadas quedan fuera de la vista operativa normal sin perder auditoría.
+- Hace persistente la confirmación de exportación con ruta, formato, registros, caracteres, tamaño, SHA-256 y descarga directa.
+- Permite archivar, restaurar y eliminar perfiles de exportación con confirmación explícita, mostrando las exportaciones históricas vinculadas y conservándolas después de eliminar el perfil.
+- Agrega la migración `0033_export_exchange_lifecycle` para el ciclo de vida de perfiles y dry-runs de intercambio.
+- Documenta actualización y validación en `docs/ACTUALIZACION_Y_PRUEBA_0.49.0.md`.
+- 273 pruebas automatizadas recopiladas.
+
+## 0.48.0 — 2026-07-31
+
+- Convierte las tres entradas manuales del rebase —texto conflictivo, fragmento de mención y valor JSON de atributo— en formularios independientes con `enter_to_submit=False` y botón explícito.
+- Conserva la decisión manual confirmada en el estado de sesión y recalcula la vista previa únicamente después de pulsar su botón; escribir o presionar Enter no incorpora la resolución.
+- Oculta globalmente las instrucciones automáticas `Press Enter…` / `Press Ctrl+Enter…` de Streamlit, que contradecían la política de acciones explícitas.
+- Amplía las pruebas de arquitectura para comprobar que las entradas manuales están dentro de formularios no enviables por teclado y que la política visual se monta en toda la aplicación.
+- Actualiza “Pendientes y mejoras” distinguiendo con precisión los bloques resueltos, validados, parciales y todavía abiertos.
+- Documenta actualización y prueba en `docs/ACTUALIZACION_Y_PRUEBA_0.48.0.md`.
+- No agrega migración; la revisión continúa en `0032_page_quality_assessments`.
+- 264 pruebas automatizadas recopiladas.
+
+## 0.47.0 — 2026-07-31
+
+- Permite rebases repetidos sobre candidatas ya usadas (`A → B → A → B`) sin violar la unicidad histórica de los objetos OCR.
+- Conserva la procedencia de los vínculos liberados en `historical_source_extracted_object_ids` y audita `rebase_source_release` y `source_links_released`.
+- Proyecta menciones históricas sobre el texto vigente mediante bloques iguales o una única coincidencia literal, sin inventar correspondencias ambiguas.
+- Impide crear o incorporar una segunda mención sobre el mismo fragmento vigente aunque los offsets pertenezcan a otra revisión textual.
+- Agrega el diagnóstico `graph_duplicate_mention` para duplicados históricos ya existentes.
+- Corrige el formulario anidado de edición de menciones y amplía la prueba global a cualquier llamada `.form(...)`.
+- Renombra el control de incorporación como **Estado que se asignará a las nuevas menciones**.
+- Documenta actualización y prueba en `docs/ACTUALIZACION_Y_PRUEBA_0.47.0.md`.
+- No agrega migración; la revisión continúa en `0032_page_quality_assessments`.
+- 261 pruebas automatizadas recopiladas.
+
+## 0.46.0 — 2026-07-31
+
+- Monta el contenedor raíz dentro del propio fragmento y elimina el uso operativo de un `st.empty` externo, evitando restos visuales al navegar después de un rerun local de rebase.
+- Exige `enter_to_submit=False` en los 39 formularios de la aplicación y agrega una prueba de arquitectura que impide reintroducir envíos por `Enter`.
+- Agrega en Revisión una pestaña **Atributos** que muestra el `current_attributes_json` completo del objeto seleccionado.
+- Aplica por defecto el filtro de páginas `approved` a la búsqueda transversal y al escaneo automático de menciones; Entidades permite ampliar explícitamente los estados incluidos.
+- Revalida las coincidencias al incorporarlas usando el mismo filtro de calidad con el que fueron buscadas.
+- Documenta actualización y prueba en `docs/ACTUALIZACION_Y_PRUEBA_0.46.0.md`.
+- No agrega migración; la revisión continúa en `0032_page_quality_assessments`.
+- 258 pruebas automatizadas recopiladas.
+
+## 0.45.0 — 2026-07-31
+
+- Corrige el bloqueo circular del botón final de rebase dentro de formularios: la confirmación se valida al enviar y nunca controla su propio botón antes del envío.
+- Distingue atributos de procedencia, indicadores estructurales transitorios y atributos especializados humanos.
+- Conserva automáticamente valores especializados únicos e iguales; presenta conflictos cuando difieren entre objetos o frente a la candidata.
+- Permite conservar un valor existente, no trasladar el atributo o escribir un JSON manual válido y confirmado.
+- Audita `manual_attribute_resolution_count`, métodos de resolución y cantidad de atributos especializados.
+- Incluye `scripts/create_rebase_validation_project.py` para probar de forma descartable proyección estructural y convergencia de atributos.
+- Documenta el flujo en `docs/REBASE_ATRIBUTOS_Y_PRUEBA_GUIADA_0.45.0.md`.
+- No agrega migración; la revisión continúa en `0032_page_quality_assessments`.
+- 252 pruebas automatizadas recopiladas.
+
 # Changelog
+
+## 0.44.0 — 2026-07-31
+
+- Renderiza la vista activa como fragmento independiente para que las interacciones locales no reconstruyan la barra lateral, el encabezado ni las demás vistas.
+- Distingue explícitamente entre rerun local de la vista y rerun completo por navegación entre modos.
+- Centraliza ambos ámbitos en `ui_navigation.py` y prohíbe mediante una prueba de arquitectura las llamadas directas a `st.rerun` desde los módulos de interfaz.
+- Agrupa en formularios las confirmaciones finales de rebase, conservación de edición, desvinculación archivística y aplicación o resolución masiva de bundles.
+- Mantiene abierto el panel de rebase durante las recalculaciones de sus controles.
+- Agrega resolución manual de objetos anotados con proyección estructural débil o ambigua, mostrando similitud textual y solapamiento posicional por bloque candidato.
+- Revalida el destino elegido contra la candidata vigente y registra `manual_object_projection` en la revisión append-only de página.
+- Conserva el aislamiento atómico de vistas incorporado en 0.42.0 y la persistencia de pestañas de 0.36.1/0.40.0.
+- Documenta la política en `docs/CONTINUIDAD_INTERACCION_STREAMLIT_0.44.0.md`.
+- No incorpora migraciones; la revisión permanece en `0032_page_quality_assessments`.
+- 246 pruebas automatizadas.
+
+## 0.43.0 — 2026-07-31
+
+- Usa el snapshot editable activo como fuente de verdad para el rebase y deja de bloquear por la mera existencia de divisiones, uniones, reordenamientos, deshacer o rehacer históricos.
+- Conserva íntegramente el historial estructural y registra cuántas acciones fueron absorbidas por el nuevo rebase.
+- Agrega resolución asistida de partes documentales, estados de revisión y tipos de objeto incompatibles cuando varios objetos convergen en un bloque candidato.
+- Revalida las decisiones de metadatos contra las opciones visibles y las registra en la revisión append-only de página.
+- Traslada todos los comentarios y deduplica etiquetas idénticas sin borrar las copias asociadas a los objetos históricos retirados.
+- Mantiene bloqueadas las incompatibilidades estructurales reales, los conflictos textuales o de menciones y los cambios concurrentes.
+- Documenta el procedimiento en `docs/REBASE_ESTRUCTURA_Y_METADATOS_0.43.0.md`.
+- No incorpora migraciones; la revisión permanece en `0032_page_quality_assessments`.
+- 240 pruebas automatizadas.
+
+## 0.42.0 — 2026-07-31
+
+- Agrega resolución manual asistida de correcciones humanas que se superponen con cambios distintos de una candidata OCR.
+- Permite conservar la candidata, reaplicar la corrección humana o escribir un texto exacto para el tramo conflictivo.
+- Revalida cada decisión contra los fragmentos humano y candidato visibles y recalcula después las menciones y offsets.
+- Registra cantidad y métodos de resoluciones textuales en la revisión append-only de página.
+- Centraliza todas las navegaciones entre vistas mediante `request_app_view`.
+- Renderiza cada vista completa dentro de un contenedor raíz atómico identificado por modo, evitando árboles visuales anteriores superpuestos e interactivos.
+- Mantiene bloqueadas las acciones estructurales previas y los metadatos incompatibles.
+- Documenta el procedimiento en `docs/REBASE_CONFLICTOS_TEXTUALES_Y_NAVEGACION_0.42.0.md`.
+- No incorpora migraciones; la revisión permanece en `0032_page_quality_assessments`.
+- 237 pruebas automatizadas.
+
+## 0.41.0 — 2026-07-31
+
+- Agrega resolución manual asistida de conflictos de menciones dentro del rebase de edición.
+- Busca coincidencias exactas o normalizadas en todos los bloques candidatos antes de declarar perdida una mención.
+- Permite elegir una sugerencia, seleccionar un fragmento exacto manualmente o rechazar explícitamente un duplicado.
+- Conserva intactas las autoridades canónicas y sus relaciones; el rechazo afecta únicamente a la mención textual y queda auditado.
+- Registra `rebase_relocate_manual` y `rebase_reject_conflict`, además de conteos de decisiones manuales en la revisión de página.
+- Mantiene bloqueados los conflictos textuales, estructurales y de metadatos que todavía no admiten una resolución segura.
+- Documenta el procedimiento en `docs/RESOLUCION_CONFLICTOS_REBASE_0.41.0.md`.
+- No incorpora migraciones; la revisión permanece en `0032_page_quality_assessments`.
+- 229 pruebas automatizadas.
+
+## 0.40.0 — 2026-07-31
+
+- Agrega un rebase transaccional de tres vías entre la extracción anterior, la edición humana y una nueva candidata OCR.
+- Traslada menciones, comentarios, etiquetas, estados de revisión y partes documentales cuando el destino es inequívoco.
+- Muestra una vista previa y bloquea toda escritura ante cambios superpuestos, menciones no relocalizables o conflictos estructurales.
+- Conserva los objetos anteriores como retirados y registra revisiones append-only de página, objetos y menciones.
+- Reconoce `rebase` en el intercambio offline como estrategia `three_way_text_rebase`.
+- Corrige globalmente la persistencia de pestañas después de navegaciones programáticas y reruns posteriores.
+- Documenta el procedimiento en `docs/REBASE_EDICION_OCR_0.40.0.md`.
+- No incorpora migraciones; la revisión permanece en `0032_page_quality_assessments`.
+- 226 pruebas automatizadas.
+
+## 0.39.0 — 2026-07-30
+
+- Integra en el control automático una primera revisión estructural de ordinales legales y casilleros de formularios.
+- Detecta secuencias compatibles con ordinales de un dígito leídos como números de dos cifras y muestra una lectura posible sin modificar el texto OCR.
+- Reconoce controles `checkbox`/`radio` preservados en el HTML de Surya, símbolos explícitos y marcas pequeñas próximas a rótulos como candidatos `marked`, `unmarked` o `indeterminate`, conservando el método de asociación.
+- Explica en la interfaz que los estados son candidatos, que requieren revisión visual y que los casilleros vacíos sin objeto OCR no pueden inferirse con seguridad.
+- Actualiza el algoritmo append-only de calidad a `page_quality_v2`; las evaluaciones históricas `page_quality_v1` permanecen intactas y pueden recalcularse bajo demanda.
+- Documenta evidencia, reglas, límites y próximos pasos en `docs/CONTROL_ESTRUCTURAL_OCR_0.39.0.md`.
+- No incorpora migraciones; la revisión permanece en `0032_page_quality_assessments`.
+- 221 pruebas automatizadas.
+
+## 0.38.1 — 2026-07-30
+
+- Corrige la resolución del dispositivo auxiliar de Surya para que un perfil CPU no pruebe CUDA/cuDNN del host cuando `surya_torch_device` permanece en `auto`.
+- Comparte una única regla entre diagnóstico y ejecución, mantiene la configuración híbrida VLM-GPU/auxiliares-CPU y aísla las pruebas del hardware real.
+- No incorpora migraciones; la revisión permanece en `0032_page_quality_assessments`.
+- 216 pruebas automatizadas.
+
+## 0.38.0 — 2026-07-30
+
+- Documenta en `docs/EVALUACION_SURYA_OCR_0.38.0.md` la prueba real de Surya sobre seis páginas con deterioro, mala orientación, manuscritos y formularios, incluidos resultados cualitativos, tiempos, uso de GPU, limitaciones y decisión de diseño.
+- Convierte a Surya en el backend preferido del perfil `config/extraction.yaml`, siempre como candidata revisable y sin modificar la selección canónica automáticamente.
+- Mantiene intactos los perfiles de proyectos existentes: la adopción del nuevo perfil preferido se realiza mediante una copia explícita, con respaldo previo, para no sobrescribir personalizaciones locales.
+- Agrega `config/extraction_docling_es.yaml` como fallback general de Docling/Tesseract para instalaciones sin runtime Surya o fallos durante la ejecución.
+- Resuelve el perfil efectivo antes de extraer; si Surya no está disponible, usa el fallback e informa el motivo. Si falla durante un documento, conserva el intento fallido y reintenta solo ese documento con el fallback.
+- Mantiene vLLM activo entre corridas mediante `surya_keep_server: true`, evitando repetir la carga y el warmup del modelo en cada trabajo.
+- Agrega `archive-workbench surya-server-status` y `archive-workbench surya-server-stop` para inspeccionar y liberar explícitamente los contenedores persistentes y su VRAM.
+- Automatiza la configuración híbrida validada: VLM en GPU mediante vLLM/Docker, modelos auxiliares Torch en CPU, y limpieza de `LD_LIBRARY_PATH` dentro del subproceso Surya.
+- Corrige `extraction-doctor` para diagnosticar por separado el backend VLM y los modelos auxiliares, sin confundir un conflicto local de cuDNN con la disponibilidad real de la ruta GPU.
+- Actualiza la interfaz para explicar el servidor persistente, la reserva de VRAM, la configuración híbrida y el fallback configurado.
+- Registra como pendientes específicos la semántica de casilleros, las alertas para ordinales legales y un benchmark con verdad terreno/CER/WER.
+- No incorpora migraciones; la revisión permanece en `0032_page_quality_assessments`.
+- 214 pruebas automatizadas.
+
+## 0.37.1 — 2026-07-30
+
+- Corrige la incompatibilidad de metadatos entre Archive Workbench y `surya-ocr==0.22.1`: el rango base de Pillow admite 10.2–12.x y Surya queda fijado exactamente a la versión integrada.
+- Instala Surya por defecto en un entorno separado `.venv-surya`, evitando que Pillow, Torch y Transformers del backend experimental alteren el entorno principal de la aplicación.
+- Agrega `scripts/install_surya_runtime.sh` con modo `--dry-run`, instalación real y `pip check`.
+- Configura los perfiles Surya para usar `.venv-surya/bin/surya_ocr` y resuelve rutas relativas o con `~` antes de ejecutar el subproceso.
+- Mejora el diagnóstico cuando falta el ejecutable y conserva la consulta de versión desde el Python hermano del runtime aislado.
+- Agrega una regresión de empaquetado que exige la intersección con Pillow 10.4, el pin exacto de Surya, el script aislado y su exclusión de Git.
+- No incorpora migraciones; la revisión permanece en `0032_page_quality_assessments`.
+- 210 pruebas automatizadas.
+
+## 0.37.0 — 2026-07-30
+
+- Incorpora `surya_cli` como backend experimental de OCR, layout y orden de lectura, siempre como corrida candidata y sin selección automática.
+- Normaliza bloques Surya a tipos configurables, texto visible, HTML crudo, confianza, geometría, etiquetas y orden de lectura.
+- Agrega el perfil `config/extraction_surya_es.yaml` y el extra opcional `surya` fijado a la rama 0.22.
+- Ejecuta Surya por CLI, permitiendo usar el mismo entorno o un entorno virtual separado mediante una ruta absoluta a `surya_ocr`.
+- Mapea `device: cuda` a vLLM con NVIDIA/Docker, `device: cpu` a llama.cpp y `device: auto` a selección automática.
+- Agrega un único fallback conservador desde la ruta acelerada a llama.cpp en CPU, con diagnóstico completo en `raw/surya.log`.
+- Amplía `extraction-doctor` para verificar el ejecutable, el servidor configurado o los prerrequisitos locales de GPU/CPU sin exigir Tesseract a un perfil Surya.
+- La interfaz explica qué backend solicitará y conserva la política de candidatas revisables.
+- No incorpora migraciones; la revisión permanece en `0032_page_quality_assessments`.
+- 208 pruebas automatizadas.
+
+## 0.36.1 — 2026-07-30
+
+- Hace persistentes todas las pestañas de la aplicación mediante navegación con estado: los reruns de Streamlit ya no devuelven a la primera pestaña después de guardar, cambiar un control o ejecutar una operación.
+- Aplica la misma política en Procesamiento, Trabajo, Revisión, Catálogo, Entidades, Grafo, Exportar, Búsqueda semántica y Administración, con una única implementación compartida.
+- Mantiene abierta **Ejecutar** y conserva la operación elegida después de preparar páginas, extraer texto o cambiar controles del formulario.
+- En **Extraer texto**, muestra por documento el tratamiento del derivado vigente y, por separado, la transformación adicional del perfil OCR.
+- Aclara que `image_variant: original` significa que el perfil no agrega una segunda transformación: el OCR usa el derivado vigente tal como fue preparado.
+- Eleva el requisito mínimo a Streamlit 1.55 para usar pestañas con estado nativo (`key` y `on_change="rerun"`).
+- No incorpora migraciones; la revisión permanece en `0032_page_quality_assessments`.
+- 202 pruebas automatizadas.
+
+## 0.36.0 — 2026-07-30
+
+- Corrige la presentación del control automático para que sus puntajes internos no se interpreten como exactitud OCR.
+- Distingue en la interfaz el estado asignado por el equipo del diagnóstico heurístico automático.
+- Muestra indicadores compactos de imagen y extracción, alertas, sugerencias, versión del algoritmo, fecha y responsable incluso cuando no se detectan alertas.
+- Aclara expresamente que la ausencia de alertas no demuestra que el texto reconocido sea correcto.
+- Agrega un primer flujo de preprocesamiento conservador en **Procesamiento → Ejecutar → Preparar páginas**.
+- Permite generar derivados OCR reproducibles sin cambios, con escala de grises y autocontraste, binarización Otsu o reducción de ruido mediana y autocontraste.
+- Mantiene intactos el original y la previsualización; el tratamiento se aplica únicamente al derivado usado por las extracciones posteriores.
+- Reactiva una corrida de preprocesamiento equivalente cuando ya existe, en lugar de duplicarla, y muestra el tratamiento vigente en el inventario y en `preprocessing-status`.
+- Advierte cuando un perfil de extracción va a encadenar otra variante de imagen sobre un derivado que ya fue tratado.
+- Detiene con una explicación los tratamientos que excederían el límite seguro de memoria de Pillow en rasteres grandes; la ruta sin cambios conserva pyvips.
+- Reconstruye la documentación técnica en un único archivo `docs/DISENO_Y_PLAN_DE_IMPLEMENTACION.md`, con las secciones 1–32 completas y ordenadas.
+- No agrega migración; la revisión permanece en `0032_page_quality_assessments`.
+- 197 pruebas automatizadas.
+
+## 0.35.0 — 2026-07-29
+
+- Agrega control automático y explicable de calidad por página de extracción.
+- Evalúa brillo, contraste, bordes débiles, ruido, cantidad de texto, fragmentación, objetos mínimos, símbolos sospechosos y solapamiento de bounding boxes.
+- Clasifica cada evaluación como `clear`, `attention` o `critical`, con puntaje, indicadores medidos y sugerencias conservadoras; nunca aprueba, selecciona ni adopta una extracción automáticamente.
+- Las nuevas extracciones reciben una evaluación inicial; las corridas anteriores pueden evaluarse desde **Procesamiento → Selección canónica** o con `page-quality-assess`.
+- Conserva evaluaciones sucesivas y distingue cuál es la vigente mediante `extraction_page_quality_assessments`.
+- Incorpora la migración `0032_page_quality_assessments`, que crea la tabla sin modificar extracciones, selecciones, textos ni historiales existentes.
+- Elimina las migraciones implícitas de todos los comandos de trabajo, consulta, intercambio y apertura de la interfaz. Solo `db-upgrade` puede cambiar la revisión de la base.
+- Los comandos que requieren el esquema actual se detienen con un mensaje explícito; `db-status` y los backups continúan permitiendo inspeccionar o preservar una revisión anterior.
+- Agrega regresiones para la política de migración explícita, actualización desde `0031`, evaluación automática al extraer y versionado de controles de calidad.
+- Revisión de base `0032_page_quality_assessments`.
+- 192 pruebas automatizadas.
+
+## 0.34.5 — 2026-07-29
+
+- Conserva al aplicar bundles las operaciones originales de revisión de objetos (`import`, `edit`, `source_replaced`, `undo`, `redo`, entre otras), en lugar de reemplazarlas por `create` o `exchange_apply`.
+- Transporta las acciones de página completas, incluidos snapshots, secuencia, objeto seleccionado, estado y marcas de deshacer/rehacer.
+- La migración `0031_page_action_exchange` registra acciones futuras y agrega eventos para acciones históricas que todavía no estaban representadas en el intercambio.
+- Las acciones históricas compartidas se reconocen como duplicadas; las acciones nuevas se aplican sin decisiones artificiales.
+- Incluye las acciones de página en el hash del estado compartido para que la disponibilidad de deshacer/rehacer forme parte de la consistencia entre copias.
+- Corrige cadenas dentro de un mismo bundle como `edit → undo → redo`, que ahora se evalúan y aplican en orden.
+- `project-backup-create` deja de migrar silenciosamente la base antes de copiarla: el backup conserva la revisión existente y la informa en su manifiesto.
+- Agrega regresiones end-to-end para acciones creadas antes de `0031`, historial exacto de revisiones, undo/redo e inmovilidad de la revisión al crear backups.
+- Revisión de base `0031_page_action_exchange`.
+- 185 pruebas automatizadas.
+
+## 0.34.4 — 2026-07-29
+
+- Corrige los conflictos falsos producidos al transportar objetos retirados por una adopción OCR cuando su revisión base histórica no estaba registrada.
+- La migración `0030_source_replaced_exchange` instala un trigger que representa `source_replaced` exclusivamente como `lifecycle_status: active → deleted`.
+- Completa, sin generar eventos de intercambio, las revisiones base que pueden reconstruirse de forma segura: objetos intactos en revisión 1 y objetos cuya primera revisión fue `source_replaced`.
+- Normaliza al exportar los eventos defectuosos ya creados con `0.34.0`–`0.34.3`, de modo que no sea necesario repetir las decisiones realizadas antes de actualizar.
+- Agrega una regresión completa desde `0029`: evento histórico defectuoso, migración, reexportación, dry-run sin conflictos y aplicación en la copia receptora.
+- Revisión de base `0030_source_replaced_exchange`.
+- 182 pruebas automatizadas.
+
+## 0.34.3 — 2026-07-29
+
+- Permite transportar mediante bundles los cambios de selección OCR, la adopción segura de candidatas y las resoluciones que conservan la edición humana.
+- Exige que la copia receptora ya contenga las corridas, páginas y objetos OCR referenciados; el dry-run deja el bundle en revisión si falta alguna dependencia y explica que primero debe compartirse una copia física completa.
+- Simula en orden varias decisiones sucesivas sobre una misma página dentro del mismo bundle, por ejemplo adoptar una candidata, volver a otra selección y conservar las correcciones existentes.
+- Conserva en la copia receptora las notas y el tipo de decisión registrados en el historial de selección y de página. Los eventos creados con `0.34.0`–`0.34.2` se enriquecen al exportarlos, sin exigir repetir las acciones.
+- Mantiene abierta **Selección canónica** después de cambiar una selección, adoptar una candidata o resolver manualmente una página.
+- No incorpora migraciones: la revisión de base continúa siendo `0029_extraction_candidate_history`.
+- 180 pruebas automatizadas.
+
+## 0.34.2 — 2026-07-29
+
+- Mantiene abierta la pestaña **Selección canónica** después de cambiar una selección, adoptar una candidata o resolver manualmente una página.
+- Evita que el rerun de Streamlit devuelva a la persona usuaria a **Inventario** después de esas acciones.
+- No incorpora migraciones ni modifica el esquema de datos de `0.34.1`.
+
+## 0.34.1 — 2026-07-29
+
+- Corrige seis pruebas de migración histórica desde las revisiones `0012` a `0017`.
+- Los fixtures ya no intentan consultar con el ORM actual la columna `editable_pages.revision_number` antes de que exista.
+- El estado editable histórico se siembra con las columnas reales de cada esquema antiguo y luego se valida su actualización hasta `0029_extraction_candidate_history`.
+- No modifica la migración `0029`, el esquema final, los datos de usuario ni el funcionamiento de la interfaz.
+- Mantiene 177 pruebas automatizadas: los 44 tests de intercambio pasan, incluidos los seis casos corregidos.
+
+## 0.34.0 — 2026-07-29
+
+- Agrega comparación por página entre la selección OCR vigente y cualquier corrida candidata completada, con texto, imagen, bounding boxes, objetos, caracteres y diferencias línea por línea.
+- Mantiene separadas tres decisiones: seleccionar una extracción, adoptarla como base editable y aprobar su calidad.
+- Permite adoptar automáticamente una candidata solo cuando la página no contiene correcciones, anotaciones, revisiones ni operaciones humanas.
+- Conserva los objetos OCR anteriores como historial en lugar de eliminarlos al adoptar una base nueva.
+- Incorpora una resolución manual simple para páginas trabajadas: conserva íntegramente la edición existente, vincula la candidata elegida y registra qué objetos se mantuvieron y cuáles no se importaron.
+- Agrega historial append-only para cambios de selección OCR y estado general de la página editable.
+- Integra selección, inicialización, ediciones, acciones estructurales, comentarios, etiquetas, entidades, revisión, deshacer y rehacer en una única cronología de página.
+- Marca inmediatamente una página como desactualizada cuando cambia su selección, sin reemplazar ni mezclar correcciones.
+- Incluye selección y procedencia OCR en el hash de checkpoints.
+- Bloquea bundles offline que intenten transportar cambios de base OCR sin las corridas y páginas necesarias; exige una nueva copia física compartida y un checkpoint común.
+- Migración `0029_extraction_candidate_history`.
+- 177 tests automatizados.
 
 ## 0.33.1 — 2026-07-28
 

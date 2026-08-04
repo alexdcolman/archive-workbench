@@ -34,6 +34,8 @@ def initialize_project(destination: str | Path, template_root: str | Path | None
             "decisions.yaml",
             "test_corpus.yaml",
             "extraction.yaml",
+            "extraction_docling_es.yaml",
+            "extraction_surya_es.yaml",
             "extraction_tesseract.yaml",
             "extraction_press_columns.yaml",
             "ocr_benchmark.yaml",

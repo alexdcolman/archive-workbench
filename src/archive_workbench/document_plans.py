@@ -26,13 +26,16 @@ from archive_workbench.db.models import (
 from archive_workbench.extraction import (
     ExtractionSummary,
     _current_assets,
-    extract_documents,
+    extract_documents_preferred,
     extraction_doctor,
     load_extraction_profile,
+    resolve_extraction_profile,
 )
 from archive_workbench.identity import new_id, sha256_file, sha256_json
 from archive_workbench.region_extraction import extract_regions, load_region_template
 
+# Alias local para conservar un punto de extensión estable en pruebas e integraciones.
+extract_documents = extract_documents_preferred
 
 @dataclass(slots=True)
 class ContactSheetResult:
@@ -470,8 +473,12 @@ def execute_document_plan(
         if assignment.mode == "ocr":
             assert assignment.profile
             profile = load_extraction_profile(plan.resolve_path(root, assignment.profile))
-            doctor = extraction_doctor(profile)
-            failures = [check for check in doctor.checks if check.required and not check.ok]
+            resolution = resolve_extraction_profile(root, profile)
+            failures = [
+                check
+                for check in resolution.effective_report.checks
+                if check.required and not check.ok
+            ]
             if failures:
                 details = "; ".join(f"{check.name}: {check.detail}" for check in failures)
                 raise RuntimeError(f"El entorno no está listo para {assignment.assignment_key}: {details}")

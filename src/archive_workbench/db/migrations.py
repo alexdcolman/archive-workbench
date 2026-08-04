@@ -5,6 +5,7 @@ from pathlib import Path
 
 from alembic import command
 from alembic.config import Config
+from alembic.script import ScriptDirectory
 from sqlalchemy import inspect
 
 from archive_workbench.db.session import create_sqlite_engine, database_path, sqlite_url
@@ -40,3 +41,39 @@ def current_revision(project_root: str | Path) -> str | None:
             return str(row[0]) if row else None
     finally:
         engine.dispose()
+
+class DatabaseRevisionError(ValueError):
+    """La base no está lista para operar con la versión instalada."""
+
+
+def head_revision() -> str:
+    migrations_ref = files("archive_workbench").joinpath("migrations")
+    with as_file(migrations_ref) as migrations_path:
+        script = ScriptDirectory.from_config(
+            _new_config(Path(":memory:"), migrations_path)
+        )
+        head = script.get_current_head()
+    if head is None:
+        raise RuntimeError("No se pudo determinar la revisión actual de la aplicación")
+    return str(head)
+
+
+def require_current_database(project_root: str | Path) -> Path:
+    """Comprueba la revisión sin ejecutar migraciones implícitas."""
+    root = Path(project_root)
+    db_path = database_path(root)
+    expected = head_revision()
+    actual = current_revision(root)
+    if not db_path.is_file():
+        raise DatabaseRevisionError(
+            "La base todavía no existe. Ejecutá explícitamente: "
+            f"archive-workbench db-upgrade {root}"
+        )
+    if actual != expected:
+        shown = actual or "sin revisión Alembic"
+        raise DatabaseRevisionError(
+            f"La base está en {shown} y esta versión requiere {expected}. "
+            "No se aplicó ninguna migración. Ejecutá explícitamente: "
+            f"archive-workbench db-upgrade {root}"
+        )
+    return db_path

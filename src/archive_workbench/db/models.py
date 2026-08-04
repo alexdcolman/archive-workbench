@@ -293,6 +293,30 @@ class ExtractionPage(Base):
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utc_now, nullable=False)
 
 
+class ExtractionPageQualityAssessment(Base):
+    __tablename__ = "extraction_page_quality_assessments"
+    __table_args__ = (
+        Index("ix_page_quality_extraction_page", "extraction_page_id", "assessed_at"),
+        Index("ix_page_quality_current", "extraction_page_id", "is_current"),
+    )
+
+    id: Mapped[str] = mapped_column(String(36), primary_key=True)
+    extraction_page_id: Mapped[str] = mapped_column(
+        ForeignKey("extraction_pages.id", ondelete="CASCADE"), nullable=False
+    )
+    algorithm_version: Mapped[str] = mapped_column(String(64), nullable=False)
+    status: Mapped[str] = mapped_column(String(32), nullable=False)
+    score: Mapped[float] = mapped_column(Float, nullable=False)
+    metrics_json: Mapped[dict[str, Any]] = mapped_column(JSON, nullable=False, default=dict)
+    flags_json: Mapped[list[str]] = mapped_column(JSON, nullable=False, default=list)
+    suggestions_json: Mapped[list[str]] = mapped_column(JSON, nullable=False, default=list)
+    is_current: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True)
+    assessed_by: Mapped[str] = mapped_column(String(200), nullable=False, default="system")
+    assessed_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), default=utc_now, nullable=False
+    )
+
+
 class ExtractedObject(Base):
     __tablename__ = "extracted_objects"
     __table_args__ = (
@@ -457,6 +481,58 @@ class ExtractionPageSelection(Base):
     )
 
 
+class ExtractionPageSelectionRevision(Base):
+    """Historial append-only de la selección OCR canónica de una página."""
+
+    __tablename__ = "extraction_page_selection_revisions"
+    __table_args__ = (
+        Index(
+            "ix_extraction_page_selection_revisions_page",
+            "digital_object_id",
+            "page_number",
+            "created_at",
+        ),
+        Index(
+            "ix_extraction_page_selection_revisions_selection",
+            "selection_id",
+            "revision_number",
+        ),
+        UniqueConstraint(
+            "selection_id",
+            "revision_number",
+            name="uq_extraction_page_selection_revision_number",
+        ),
+    )
+
+    id: Mapped[str] = mapped_column(String(36), primary_key=True)
+    selection_id: Mapped[str] = mapped_column(
+        ForeignKey("extraction_page_selections.id", ondelete="CASCADE"), nullable=False
+    )
+    digital_object_id: Mapped[str] = mapped_column(
+        ForeignKey("digital_objects.id", ondelete="CASCADE"), nullable=False
+    )
+    page_number: Mapped[int] = mapped_column(Integer, nullable=False)
+    revision_number: Mapped[int] = mapped_column(Integer, nullable=False)
+    operation: Mapped[str] = mapped_column(String(32), nullable=False)
+    previous_extraction_run_id: Mapped[str | None] = mapped_column(
+        ForeignKey("extraction_runs.id", ondelete="RESTRICT"), nullable=True
+    )
+    previous_extraction_page_id: Mapped[str | None] = mapped_column(
+        ForeignKey("extraction_pages.id", ondelete="RESTRICT"), nullable=True
+    )
+    extraction_run_id: Mapped[str] = mapped_column(
+        ForeignKey("extraction_runs.id", ondelete="RESTRICT"), nullable=False
+    )
+    extraction_page_id: Mapped[str] = mapped_column(
+        ForeignKey("extraction_pages.id", ondelete="RESTRICT"), nullable=False
+    )
+    note: Mapped[str | None] = mapped_column(Text, nullable=True)
+    selected_by: Mapped[str] = mapped_column(String(200), nullable=False)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), default=utc_now, nullable=False
+    )
+
+
 class DocumentPart(Base):
     """Documento o sección interna provisional dentro de un objeto multipágina."""
 
@@ -563,6 +639,7 @@ class EditablePage(Base):
         ForeignKey("extraction_page_selections.id", ondelete="SET NULL"), nullable=True
     )
     status: Mapped[str] = mapped_column(String(32), nullable=False, default="active")
+    revision_number: Mapped[int] = mapped_column(Integer, nullable=False, default=1)
     review_status: Mapped[str] = mapped_column(String(32), nullable=False, default="unreviewed")
     review_note: Mapped[str | None] = mapped_column(Text, nullable=True)
     reviewed_by: Mapped[str | None] = mapped_column(String(200), nullable=True)
@@ -573,6 +650,47 @@ class EditablePage(Base):
     )
     updated_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), default=utc_now, onupdate=utc_now, nullable=False
+    )
+
+
+class EditablePageRevision(Base):
+    """Historial append-only del origen y estado general de una página editable."""
+
+    __tablename__ = "editable_page_revisions"
+    __table_args__ = (
+        UniqueConstraint(
+            "editable_page_id",
+            "revision_number",
+            name="uq_editable_page_revision_number",
+        ),
+        Index("ix_editable_page_revisions_page", "editable_page_id", "revision_number"),
+        Index("ix_editable_page_revisions_created", "created_at"),
+    )
+
+    id: Mapped[str] = mapped_column(String(36), primary_key=True)
+    editable_page_id: Mapped[str] = mapped_column(
+        ForeignKey("editable_pages.id", ondelete="CASCADE"), nullable=False
+    )
+    revision_number: Mapped[int] = mapped_column(Integer, nullable=False)
+    base_revision_number: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    operation: Mapped[str] = mapped_column(String(32), nullable=False)
+    source_extraction_run_id: Mapped[str] = mapped_column(
+        ForeignKey("extraction_runs.id", ondelete="RESTRICT"), nullable=False
+    )
+    source_extraction_page_id: Mapped[str] = mapped_column(
+        ForeignKey("extraction_pages.id", ondelete="RESTRICT"), nullable=False
+    )
+    source_selection_id: Mapped[str | None] = mapped_column(
+        ForeignKey("extraction_page_selections.id", ondelete="SET NULL"), nullable=True
+    )
+    status: Mapped[str] = mapped_column(String(32), nullable=False)
+    review_status: Mapped[str] = mapped_column(String(32), nullable=False)
+    review_note: Mapped[str | None] = mapped_column(Text, nullable=True)
+    details_json: Mapped[dict[str, Any]] = mapped_column(JSON, nullable=False, default=dict)
+    note: Mapped[str | None] = mapped_column(Text, nullable=True)
+    created_by: Mapped[str] = mapped_column(String(200), nullable=False)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), default=utc_now, nullable=False
     )
 
 
@@ -1063,6 +1181,9 @@ class ExchangeDryRun(Base):
     common_checkpoint_label: Mapped[str | None] = mapped_column(String(200), nullable=True)
     common_checkpoint_sequence: Mapped[int | None] = mapped_column(Integer, nullable=True)
     base_match_status: Mapped[str] = mapped_column(String(32), nullable=False)
+    base_match_method: Mapped[str] = mapped_column(
+        String(64), nullable=False, default="unknown"
+    )
     overall_status: Mapped[str] = mapped_column(String(32), nullable=False)
     counts_json: Mapped[dict[str, Any]] = mapped_column(JSON, nullable=False, default=dict)
     warnings_json: Mapped[list[str]] = mapped_column(JSON, nullable=False, default=list)
@@ -1074,6 +1195,14 @@ class ExchangeDryRun(Base):
     assessed_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), default=utc_now, nullable=False
     )
+    lifecycle_status: Mapped[str] = mapped_column(
+        String(16), nullable=False, default="active"
+    )
+    archived_by: Mapped[str | None] = mapped_column(String(200), nullable=True)
+    archived_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
+    archive_note: Mapped[str | None] = mapped_column(Text, nullable=True)
 
 
 
@@ -1147,6 +1276,298 @@ class ExchangeBundleApplication(Base):
     )
 
 
+class ExchangeLineageCase(Base):
+    """Caso cerrado de recuperación verificable de linaje."""
+
+    __tablename__ = "exchange_lineage_cases"
+    __table_args__ = (
+        UniqueConstraint("bundle_id", name="uq_exchange_lineage_case_bundle"),
+        Index(
+            "ix_exchange_lineage_cases_workspace_created",
+            "workspace_id",
+            "closed_at",
+        ),
+    )
+
+    id: Mapped[str] = mapped_column(String(36), primary_key=True)
+    project_id: Mapped[str] = mapped_column(
+        ForeignKey("projects.id", ondelete="CASCADE"), nullable=False
+    )
+    workspace_id: Mapped[str] = mapped_column(
+        ForeignKey("exchange_workspaces.id", ondelete="CASCADE"), nullable=False
+    )
+    dry_run_id: Mapped[str] = mapped_column(
+        ForeignKey("exchange_dry_runs.id", ondelete="RESTRICT"), nullable=False
+    )
+    bundle_record_id: Mapped[str] = mapped_column(
+        ForeignKey("exchange_bundle_records.id", ondelete="RESTRICT"), nullable=False
+    )
+    bundle_id: Mapped[str] = mapped_column(String(36), nullable=False)
+    source_workspace_id: Mapped[str] = mapped_column(String(36), nullable=False)
+    diagnostic_classification: Mapped[str] = mapped_column(String(32), nullable=False)
+    candidate_fingerprint: Mapped[str] = mapped_column(Text, nullable=False)
+    diagnostic_parameters_sha256: Mapped[str] = mapped_column(String(64), nullable=False)
+    status: Mapped[str] = mapped_column(String(32), nullable=False)
+    opened_by: Mapped[str] = mapped_column(String(200), nullable=False)
+    opened_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), default=utc_now, nullable=False
+    )
+    closed_by: Mapped[str] = mapped_column(String(200), nullable=False)
+    closed_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), default=utc_now, nullable=False
+    )
+
+
+class ExchangeLineageEvidence(Base):
+    """Evidencia inmutable registrada dentro de un caso de linaje."""
+
+    __tablename__ = "exchange_lineage_evidence"
+    __table_args__ = (
+        Index("ix_exchange_lineage_evidence_case", "case_id", "recorded_at"),
+        Index(
+            "ix_exchange_lineage_evidence_artifact",
+            "artifact_sha256",
+            "artifact_type",
+        ),
+    )
+
+    id: Mapped[str] = mapped_column(String(36), primary_key=True)
+    case_id: Mapped[str] = mapped_column(
+        ForeignKey("exchange_lineage_cases.id", ondelete="RESTRICT"), nullable=False
+    )
+    artifact_type: Mapped[str] = mapped_column(String(64), nullable=False)
+    artifact_reference: Mapped[str] = mapped_column(Text, nullable=False)
+    artifact_sha256: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    verification_status: Mapped[str] = mapped_column(String(32), nullable=False)
+    strength: Mapped[str] = mapped_column(String(32), nullable=False)
+    code: Mapped[str] = mapped_column(String(100), nullable=False)
+    explanation: Mapped[str] = mapped_column(Text, nullable=False)
+    observed_project_id: Mapped[str | None] = mapped_column(String(128), nullable=True)
+    observed_workspace_id: Mapped[str | None] = mapped_column(String(36), nullable=True)
+    observed_sequence_number: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    observed_checkpoint_id: Mapped[str | None] = mapped_column(String(36), nullable=True)
+    observed_checkpoint_label: Mapped[str | None] = mapped_column(
+        String(200), nullable=True
+    )
+    observed_state_sha256: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    selected_for_decision: Mapped[bool] = mapped_column(
+        Boolean, nullable=False, default=False
+    )
+    details_json: Mapped[dict[str, Any]] = mapped_column(JSON, nullable=False, default=dict)
+    recorded_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), default=utc_now, nullable=False
+    )
+
+
+class ExchangeLineageDecision(Base):
+    """Decisión append-only que recupera una ascendencia demostrada."""
+
+    __tablename__ = "exchange_lineage_decisions"
+    __table_args__ = (
+        UniqueConstraint("case_id", name="uq_exchange_lineage_decision_case"),
+        UniqueConstraint(
+            "target_bundle_id", name="uq_exchange_lineage_decision_bundle"
+        ),
+        Index(
+            "ix_exchange_lineage_decisions_workspace_created",
+            "workspace_id",
+            "created_at",
+        ),
+        Index(
+            "ix_exchange_lineage_decisions_match",
+            "workspace_id",
+            "source_workspace_id",
+            "target_bundle_id",
+            "target_base_sequence",
+            "result",
+        ),
+    )
+
+    id: Mapped[str] = mapped_column(String(36), primary_key=True)
+    case_id: Mapped[str] = mapped_column(
+        ForeignKey("exchange_lineage_cases.id", ondelete="RESTRICT"), nullable=False
+    )
+    project_id: Mapped[str] = mapped_column(
+        ForeignKey("projects.id", ondelete="CASCADE"), nullable=False
+    )
+    workspace_id: Mapped[str] = mapped_column(
+        ForeignKey("exchange_workspaces.id", ondelete="CASCADE"), nullable=False
+    )
+    operation: Mapped[str] = mapped_column(String(32), nullable=False)
+    source: Mapped[str] = mapped_column(String(32), nullable=False)
+    target_bundle_id: Mapped[str] = mapped_column(String(36), nullable=False)
+    target_bundle_sha256: Mapped[str] = mapped_column(String(64), nullable=False)
+    source_workspace_id: Mapped[str] = mapped_column(String(36), nullable=False)
+    target_base_checkpoint_id: Mapped[str] = mapped_column(String(36), nullable=False)
+    target_base_checkpoint_label: Mapped[str] = mapped_column(String(200), nullable=False)
+    target_base_state_sha256: Mapped[str] = mapped_column(String(64), nullable=False)
+    target_base_sequence: Mapped[int] = mapped_column(Integer, nullable=False)
+    candidate_fingerprint: Mapped[str] = mapped_column(Text, nullable=False)
+    recovery_method: Mapped[str] = mapped_column(String(64), nullable=False)
+    local_checkpoint_id: Mapped[str | None] = mapped_column(String(36), nullable=True)
+    local_checkpoint_label: Mapped[str | None] = mapped_column(String(200), nullable=True)
+    local_checkpoint_sequence: Mapped[int] = mapped_column(Integer, nullable=False)
+    local_checkpoint_state_sha256: Mapped[str | None] = mapped_column(
+        String(64), nullable=True
+    )
+    remote_workspace_id: Mapped[str] = mapped_column(String(36), nullable=False)
+    remote_sequence: Mapped[int] = mapped_column(Integer, nullable=False)
+    evidence_ids_json: Mapped[list[str]] = mapped_column(JSON, nullable=False, default=list)
+    chain_bundle_ids_json: Mapped[list[str]] = mapped_column(
+        JSON, nullable=False, default=list
+    )
+    recovery_confirmed: Mapped[bool] = mapped_column(
+        Boolean, nullable=False, default=False
+    )
+    confirmed_by: Mapped[str] = mapped_column(String(200), nullable=False)
+    confirmation_reason: Mapped[str] = mapped_column(Text, nullable=False)
+    parameters_sha256: Mapped[str] = mapped_column(String(64), nullable=False)
+    result: Mapped[str] = mapped_column(String(32), nullable=False)
+    rejection_reason: Mapped[str | None] = mapped_column(Text, nullable=True)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), default=utc_now, nullable=False
+    )
+
+
+class ExchangeCommonBaseAgreement(Base):
+    """Registro local append-only de un acuerdo bilateral de base común."""
+
+    __tablename__ = "exchange_common_base_agreements"
+    __table_args__ = (
+        UniqueConstraint("agreement_id", name="uq_exchange_common_base_agreement"),
+        Index(
+            "ix_exchange_common_base_workspace_registered",
+            "local_workspace_id",
+            "registered_at",
+        ),
+        Index(
+            "ix_exchange_common_base_match",
+            "local_checkpoint_id",
+            "counterpart_workspace_id",
+            "state_sha256",
+            "result",
+        ),
+    )
+
+    id: Mapped[str] = mapped_column(String(36), primary_key=True)
+    agreement_id: Mapped[str] = mapped_column(String(36), nullable=False)
+    project_id: Mapped[str] = mapped_column(
+        ForeignKey("projects.id", ondelete="CASCADE"), nullable=False
+    )
+    local_workspace_id: Mapped[str] = mapped_column(
+        ForeignKey("exchange_workspaces.id", ondelete="CASCADE"), nullable=False
+    )
+    counterpart_workspace_id: Mapped[str] = mapped_column(String(36), nullable=False)
+    local_role: Mapped[str] = mapped_column(String(16), nullable=False)
+    adopted_state: Mapped[str] = mapped_column(String(32), nullable=False)
+    state_sha256: Mapped[str] = mapped_column(String(64), nullable=False)
+    local_sequence: Mapped[int] = mapped_column(Integer, nullable=False)
+    counterpart_sequence: Mapped[int] = mapped_column(Integer, nullable=False)
+    local_checkpoint_id: Mapped[str] = mapped_column(
+        ForeignKey("exchange_checkpoints.id", ondelete="RESTRICT"), nullable=False
+    )
+    local_checkpoint_label: Mapped[str] = mapped_column(String(200), nullable=False)
+    proposal_sha256: Mapped[str] = mapped_column(String(64), nullable=False)
+    manifest_sha256: Mapped[str] = mapped_column(String(64), nullable=False)
+    manifest_version: Mapped[str] = mapped_column(String(16), nullable=False)
+    initiator_workspace_id: Mapped[str] = mapped_column(String(36), nullable=False)
+    initiator_workspace_name: Mapped[str] = mapped_column(String(200), nullable=False)
+    initiator_sequence: Mapped[int] = mapped_column(Integer, nullable=False)
+    initiator_confirmed_by: Mapped[str] = mapped_column(String(200), nullable=False)
+    initiator_confirmation_reason: Mapped[str] = mapped_column(Text, nullable=False)
+    counterpart_workspace_name: Mapped[str] = mapped_column(String(200), nullable=False)
+    counterpart_confirmed_by: Mapped[str] = mapped_column(String(200), nullable=False)
+    counterpart_confirmation_reason: Mapped[str] = mapped_column(Text, nullable=False)
+    source: Mapped[str] = mapped_column(String(32), nullable=False)
+    registered_by: Mapped[str] = mapped_column(String(200), nullable=False)
+    registration_reason: Mapped[str] = mapped_column(Text, nullable=False)
+    parameters_sha256: Mapped[str] = mapped_column(String(64), nullable=False)
+    result: Mapped[str] = mapped_column(String(32), nullable=False)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+    registered_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), default=utc_now, nullable=False
+    )
+
+
+class ExchangeStateAdoption(Base):
+    """Aplicación append-only de un paquete completo de estado editable."""
+
+    __tablename__ = "exchange_state_adoptions"
+    __table_args__ = (
+        UniqueConstraint("adoption_id", name="uq_exchange_state_adoption_id"),
+        UniqueConstraint("package_sha256", name="uq_exchange_state_adoption_package"),
+        Index(
+            "ix_exchange_state_adoptions_workspace_applied",
+            "local_workspace_id",
+            "applied_at",
+        ),
+    )
+
+    id: Mapped[str] = mapped_column(String(36), primary_key=True)
+    adoption_id: Mapped[str] = mapped_column(String(36), nullable=False)
+    project_id: Mapped[str] = mapped_column(
+        ForeignKey("projects.id", ondelete="CASCADE"), nullable=False
+    )
+    local_workspace_id: Mapped[str] = mapped_column(
+        ForeignKey("exchange_workspaces.id", ondelete="CASCADE"), nullable=False
+    )
+    source_workspace_id: Mapped[str] = mapped_column(String(36), nullable=False)
+    source_workspace_name: Mapped[str] = mapped_column(String(200), nullable=False)
+    source_sequence: Mapped[int] = mapped_column(Integer, nullable=False)
+    target_workspace_id: Mapped[str] = mapped_column(String(36), nullable=False)
+    target_workspace_name: Mapped[str] = mapped_column(String(200), nullable=False)
+    previous_state_sha256: Mapped[str] = mapped_column(String(64), nullable=False)
+    adopted_state_sha256: Mapped[str] = mapped_column(String(64), nullable=False)
+    foundation_sha256: Mapped[str] = mapped_column(String(64), nullable=False)
+    package_path: Mapped[str] = mapped_column(Text, nullable=False)
+    package_sha256: Mapped[str] = mapped_column(String(64), nullable=False)
+    manifest_sha256: Mapped[str] = mapped_column(String(64), nullable=False)
+    manifest_version: Mapped[str] = mapped_column(String(16), nullable=False)
+    backup_path: Mapped[str] = mapped_column(Text, nullable=False)
+    backup_sha256: Mapped[str] = mapped_column(String(64), nullable=False)
+    backup_database_sha256: Mapped[str] = mapped_column(String(64), nullable=False)
+    backup_database_revision: Mapped[str | None] = mapped_column(String(128), nullable=True)
+    impact_json: Mapped[dict[str, Any]] = mapped_column(JSON, nullable=False, default=dict)
+    source: Mapped[str] = mapped_column(String(32), nullable=False)
+    applied_by: Mapped[str] = mapped_column(String(200), nullable=False)
+    application_reason: Mapped[str] = mapped_column(Text, nullable=False)
+    parameters_sha256: Mapped[str] = mapped_column(String(64), nullable=False)
+    stale_dry_run_count: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    applied_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), default=utc_now, nullable=False
+    )
+
+
+class ExchangeStateAdoptionRollback(Base):
+    """Rollback append-only de una adopción de estado previamente aplicada."""
+
+    __tablename__ = "exchange_state_adoption_rollbacks"
+    __table_args__ = (
+        UniqueConstraint(
+            "adoption_record_id", name="uq_exchange_state_adoption_rollback"
+        ),
+        Index("ix_exchange_state_adoption_rollbacks_time", "rolled_back_at"),
+    )
+
+    id: Mapped[str] = mapped_column(String(36), primary_key=True)
+    adoption_record_id: Mapped[str] = mapped_column(
+        ForeignKey("exchange_state_adoptions.id", ondelete="CASCADE"), nullable=False
+    )
+    restored_state_sha256: Mapped[str] = mapped_column(String(64), nullable=False)
+    restored_backup_path: Mapped[str] = mapped_column(Text, nullable=False)
+    restored_backup_sha256: Mapped[str] = mapped_column(String(64), nullable=False)
+    safety_backup_path: Mapped[str] = mapped_column(Text, nullable=False)
+    safety_backup_sha256: Mapped[str] = mapped_column(String(64), nullable=False)
+    source: Mapped[str] = mapped_column(String(32), nullable=False)
+    rolled_back_by: Mapped[str] = mapped_column(String(200), nullable=False)
+    rollback_reason: Mapped[str] = mapped_column(Text, nullable=False)
+    parameters_sha256: Mapped[str] = mapped_column(String(64), nullable=False)
+    stale_dry_run_count: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    rolled_back_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), default=utc_now, nullable=False
+    )
+
+
 class ExchangeIncomingEventAssessment(Base):
     """Clasificación de un evento recibido durante un dry-run."""
 
@@ -1185,6 +1606,503 @@ class ExchangeIncomingEventAssessment(Base):
     )
 
 
+class AutomaticAnalysisAuthorization(Base):
+    """Autorización append-only del alcance de un análisis automático."""
+
+    __tablename__ = "automatic_analysis_authorizations"
+    __table_args__ = (
+        Index(
+            "ix_automatic_analysis_authorizations_project_created",
+            "project_id",
+            "created_at",
+        ),
+        Index(
+            "ix_automatic_analysis_authorizations_target",
+            "project_id",
+            "target_type",
+            "target_id",
+        ),
+        Index(
+            "ix_automatic_analysis_authorizations_kind",
+            "project_id",
+            "analysis_kind",
+            "created_at",
+        ),
+    )
+
+    id: Mapped[str] = mapped_column(String(36), primary_key=True)
+    project_id: Mapped[str] = mapped_column(
+        ForeignKey("projects.id", ondelete="CASCADE"), nullable=False
+    )
+    policy_version: Mapped[str] = mapped_column(String(64), nullable=False)
+    analysis_kind: Mapped[str] = mapped_column(String(64), nullable=False)
+    page_review_statuses_json: Mapped[list[str]] = mapped_column(
+        JSON, nullable=False, default=list
+    )
+    scope_key: Mapped[str] = mapped_column(String(32), nullable=False)
+    broader_scope_confirmed: Mapped[bool] = mapped_column(
+        Boolean, nullable=False, default=False
+    )
+    confirmed_by: Mapped[str] = mapped_column(String(200), nullable=False)
+    confirmation_reason: Mapped[str | None] = mapped_column(Text, nullable=True)
+    source: Mapped[str] = mapped_column(String(32), nullable=False)
+    target_type: Mapped[str | None] = mapped_column(String(100), nullable=True)
+    target_id: Mapped[str | None] = mapped_column(String(100), nullable=True)
+    parameters_sha256: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), default=utc_now, nullable=False
+    )
+
+
+class DiscoveryProfile(Base):
+    """Perfil reproducible para descubrimiento abierto de candidatos."""
+
+    __tablename__ = "discovery_profiles"
+    __table_args__ = (
+        UniqueConstraint("project_id", "name", name="uq_discovery_profile_name"),
+        Index("ix_discovery_profiles_project", "project_id", "updated_at"),
+    )
+
+    id: Mapped[str] = mapped_column(String(36), primary_key=True)
+    project_id: Mapped[str] = mapped_column(
+        ForeignKey("projects.id", ondelete="CASCADE"), nullable=False
+    )
+    name: Mapped[str] = mapped_column(String(200), nullable=False)
+    description: Mapped[str | None] = mapped_column(Text, nullable=True)
+    provider_key: Mapped[str] = mapped_column(String(100), nullable=False)
+    provider_version: Mapped[str] = mapped_column(String(100), nullable=False)
+    families_json: Mapped[list[str]] = mapped_column(JSON, nullable=False, default=list)
+    include_object_types_json: Mapped[list[str]] = mapped_column(
+        JSON, nullable=False, default=list
+    )
+    include_object_review_statuses_json: Mapped[list[str]] = mapped_column(
+        JSON, nullable=False, default=list
+    )
+    include_page_review_statuses_json: Mapped[list[str]] = mapped_column(
+        JSON, nullable=False, default=list
+    )
+    minimum_confidence: Mapped[float] = mapped_column(Float, nullable=False, default=0.75)
+    lifecycle_status: Mapped[str] = mapped_column(
+        String(16), nullable=False, default="active"
+    )
+    created_by: Mapped[str] = mapped_column(String(200), nullable=False)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), default=utc_now, nullable=False
+    )
+    updated_by: Mapped[str] = mapped_column(String(200), nullable=False)
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), default=utc_now, onupdate=utc_now, nullable=False
+    )
+    revision: Mapped[int] = mapped_column(Integer, nullable=False, default=1)
+
+
+class DiscoveryRun(Base):
+    """Ejecución inmutable de un perfil de descubrimiento abierto."""
+
+    __tablename__ = "discovery_runs"
+    __table_args__ = (
+        Index("ix_discovery_runs_project_started", "project_id", "started_at"),
+        Index("ix_discovery_runs_profile_started", "profile_id", "started_at"),
+    )
+
+    id: Mapped[str] = mapped_column(String(36), primary_key=True)
+    project_id: Mapped[str] = mapped_column(
+        ForeignKey("projects.id", ondelete="CASCADE"), nullable=False
+    )
+    profile_id: Mapped[str] = mapped_column(
+        ForeignKey("discovery_profiles.id", ondelete="RESTRICT"), nullable=False
+    )
+    authorization_id: Mapped[str] = mapped_column(
+        ForeignKey("automatic_analysis_authorizations.id", ondelete="RESTRICT"),
+        nullable=False,
+    )
+    profile_name: Mapped[str] = mapped_column(String(200), nullable=False)
+    profile_snapshot_json: Mapped[dict[str, Any]] = mapped_column(JSON, nullable=False)
+    provider_key: Mapped[str] = mapped_column(String(100), nullable=False)
+    provider_version: Mapped[str] = mapped_column(String(100), nullable=False)
+    method: Mapped[str] = mapped_column(String(100), nullable=False)
+    parameters_sha256: Mapped[str] = mapped_column(String(64), nullable=False)
+    corpus_state_sha256: Mapped[str] = mapped_column(String(64), nullable=False)
+    page_review_statuses_json: Mapped[list[str]] = mapped_column(
+        JSON, nullable=False, default=list
+    )
+    status: Mapped[str] = mapped_column(String(32), nullable=False)
+    object_count: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    candidate_count: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    family_counts_json: Mapped[dict[str, int]] = mapped_column(
+        JSON, nullable=False, default=dict
+    )
+    created_by: Mapped[str] = mapped_column(String(200), nullable=False)
+    started_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), default=utc_now, nullable=False
+    )
+    finished_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
+    error_message: Mapped[str | None] = mapped_column(Text, nullable=True)
+
+
+class DiscoveryCandidate(Base):
+    """Snapshot exacto de una sugerencia producida por descubrimiento abierto."""
+
+    __tablename__ = "discovery_candidates"
+    __table_args__ = (
+        UniqueConstraint(
+            "run_id",
+            "editable_object_id",
+            "start_offset",
+            "end_offset",
+            "semantic_family",
+            "suggested_subtype",
+            name="uq_discovery_candidate_location",
+        ),
+        CheckConstraint("start_offset >= 0", name="ck_discovery_candidate_start"),
+        CheckConstraint("end_offset > start_offset", name="ck_discovery_candidate_end"),
+        Index("ix_discovery_candidates_run", "run_id", "semantic_family"),
+        Index("ix_discovery_candidates_object", "editable_object_id", "start_offset"),
+        Index("ix_discovery_candidates_project_created", "project_id", "created_at"),
+    )
+
+    id: Mapped[str] = mapped_column(String(36), primary_key=True)
+    project_id: Mapped[str] = mapped_column(
+        ForeignKey("projects.id", ondelete="CASCADE"), nullable=False
+    )
+    run_id: Mapped[str] = mapped_column(
+        ForeignKey("discovery_runs.id", ondelete="CASCADE"), nullable=False
+    )
+    profile_id: Mapped[str] = mapped_column(
+        ForeignKey("discovery_profiles.id", ondelete="RESTRICT"), nullable=False
+    )
+    editable_object_id: Mapped[str] = mapped_column(
+        ForeignKey("editable_objects.id", ondelete="RESTRICT"), nullable=False
+    )
+    editable_page_id: Mapped[str] = mapped_column(
+        ForeignKey("editable_pages.id", ondelete="RESTRICT"), nullable=False
+    )
+    digital_object_id: Mapped[str] = mapped_column(
+        ForeignKey("digital_objects.id", ondelete="RESTRICT"), nullable=False
+    )
+    document_part_id: Mapped[str | None] = mapped_column(
+        ForeignKey("document_parts.id", ondelete="SET NULL"), nullable=True
+    )
+    source_key: Mapped[str | None] = mapped_column(String(500), nullable=True)
+    original_filename: Mapped[str] = mapped_column(Text, nullable=False)
+    page_number: Mapped[int] = mapped_column(Integer, nullable=False)
+    object_revision_number: Mapped[int] = mapped_column(Integer, nullable=False)
+    page_revision_number: Mapped[int] = mapped_column(Integer, nullable=False)
+    start_offset: Mapped[int] = mapped_column(Integer, nullable=False)
+    end_offset: Mapped[int] = mapped_column(Integer, nullable=False)
+    exact_text: Mapped[str] = mapped_column(Text, nullable=False)
+    context_before: Mapped[str] = mapped_column(Text, nullable=False, default="")
+    context_after: Mapped[str] = mapped_column(Text, nullable=False, default="")
+    semantic_family: Mapped[str] = mapped_column(String(32), nullable=False)
+    suggested_subtype: Mapped[str] = mapped_column(String(100), nullable=False)
+    confidence: Mapped[float | None] = mapped_column(Float, nullable=True)
+    method: Mapped[str] = mapped_column(String(100), nullable=False)
+    provider_key: Mapped[str] = mapped_column(String(100), nullable=False)
+    provider_version: Mapped[str] = mapped_column(String(100), nullable=False)
+    model_name: Mapped[str | None] = mapped_column(String(500), nullable=True)
+    model_version: Mapped[str | None] = mapped_column(String(200), nullable=True)
+    explanation: Mapped[str] = mapped_column(Text, nullable=False)
+    parameters_sha256: Mapped[str] = mapped_column(String(64), nullable=False)
+    status: Mapped[str] = mapped_column(String(32), nullable=False, default="pending")
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), default=utc_now, nullable=False
+    )
+
+
+class DiscoveryDecision(Base):
+    """Decisión humana append-only sobre un candidato de descubrimiento."""
+
+    __tablename__ = "discovery_decisions"
+    __table_args__ = (
+        UniqueConstraint(
+            "candidate_id",
+            "decision_number",
+            name="uq_discovery_decision_number",
+        ),
+        Index(
+            "ix_discovery_decisions_project_decided",
+            "project_id",
+            "decided_at",
+        ),
+        Index(
+            "ix_discovery_decisions_candidate",
+            "candidate_id",
+            "decision_number",
+        ),
+    )
+
+    id: Mapped[str] = mapped_column(String(36), primary_key=True)
+    project_id: Mapped[str] = mapped_column(
+        ForeignKey("projects.id", ondelete="CASCADE"), nullable=False
+    )
+    candidate_id: Mapped[str] = mapped_column(
+        ForeignKey("discovery_candidates.id", ondelete="CASCADE"), nullable=False
+    )
+    decision_number: Mapped[int] = mapped_column(Integer, nullable=False)
+    decision_type: Mapped[str] = mapped_column(String(32), nullable=False)
+    reviewed_text: Mapped[str] = mapped_column(Text, nullable=False)
+    semantic_family: Mapped[str] = mapped_column(String(32), nullable=False)
+    reviewed_subtype: Mapped[str] = mapped_column(String(100), nullable=False)
+    acceptance_mode: Mapped[str | None] = mapped_column(String(32), nullable=True)
+    target_authority_id: Mapped[str | None] = mapped_column(
+        ForeignKey("authority_records.id", ondelete="SET NULL"), nullable=True
+    )
+    created_mention_id: Mapped[str | None] = mapped_column(
+        ForeignKey("entity_mentions.id", ondelete="SET NULL"), nullable=True
+    )
+    reason: Mapped[str | None] = mapped_column(Text, nullable=True)
+    source: Mapped[str] = mapped_column(String(32), nullable=False)
+    candidate_state_sha256: Mapped[str] = mapped_column(String(64), nullable=False)
+    payload_json: Mapped[dict[str, Any]] = mapped_column(JSON, nullable=False, default=dict)
+    decided_by: Mapped[str] = mapped_column(String(200), nullable=False)
+    decided_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), default=utc_now, nullable=False
+    )
+
+
+class DiscoveryContextRecord(Base):
+    """Registro propio aceptado para tiempos, eventos, procesos u otras clases."""
+
+    __tablename__ = "discovery_context_records"
+    __table_args__ = (
+        UniqueConstraint("decision_id", name="uq_discovery_context_record_decision"),
+        Index(
+            "ix_discovery_context_records_project_family",
+            "project_id",
+            "semantic_family",
+            "created_at",
+        ),
+        Index(
+            "ix_discovery_context_records_object",
+            "editable_object_id",
+            "start_offset",
+        ),
+    )
+
+    id: Mapped[str] = mapped_column(String(36), primary_key=True)
+    project_id: Mapped[str] = mapped_column(
+        ForeignKey("projects.id", ondelete="CASCADE"), nullable=False
+    )
+    candidate_id: Mapped[str] = mapped_column(
+        ForeignKey("discovery_candidates.id", ondelete="RESTRICT"), nullable=False
+    )
+    decision_id: Mapped[str] = mapped_column(
+        ForeignKey("discovery_decisions.id", ondelete="CASCADE"), nullable=False
+    )
+    semantic_family: Mapped[str] = mapped_column(String(32), nullable=False)
+    subtype: Mapped[str] = mapped_column(String(100), nullable=False)
+    label: Mapped[str] = mapped_column(Text, nullable=False)
+    normalized_label: Mapped[str] = mapped_column(Text, nullable=False)
+    description: Mapped[str | None] = mapped_column(Text, nullable=True)
+    temporal_expression: Mapped[str | None] = mapped_column(Text, nullable=True)
+    temporal_start: Mapped[date | None] = mapped_column(Date, nullable=True)
+    temporal_end: Mapped[date | None] = mapped_column(Date, nullable=True)
+    temporal_precision: Mapped[str | None] = mapped_column(String(32), nullable=True)
+    temporal_approximate: Mapped[bool] = mapped_column(
+        Boolean, nullable=False, default=False
+    )
+    editable_object_id: Mapped[str] = mapped_column(
+        ForeignKey("editable_objects.id", ondelete="RESTRICT"), nullable=False
+    )
+    editable_page_id: Mapped[str] = mapped_column(
+        ForeignKey("editable_pages.id", ondelete="RESTRICT"), nullable=False
+    )
+    digital_object_id: Mapped[str] = mapped_column(
+        ForeignKey("digital_objects.id", ondelete="RESTRICT"), nullable=False
+    )
+    document_part_id: Mapped[str | None] = mapped_column(
+        ForeignKey("document_parts.id", ondelete="SET NULL"), nullable=True
+    )
+    object_revision_number: Mapped[int] = mapped_column(Integer, nullable=False)
+    start_offset: Mapped[int] = mapped_column(Integer, nullable=False)
+    end_offset: Mapped[int] = mapped_column(Integer, nullable=False)
+    target_authority_id: Mapped[str | None] = mapped_column(
+        ForeignKey("authority_records.id", ondelete="SET NULL"), nullable=True
+    )
+    data_json: Mapped[dict[str, Any]] = mapped_column(JSON, nullable=False, default=dict)
+    lifecycle_status: Mapped[str] = mapped_column(
+        String(16), nullable=False, default="active"
+    )
+    created_by: Mapped[str] = mapped_column(String(200), nullable=False)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), default=utc_now, nullable=False
+    )
+
+
+class DiscoveryCandidateGroup(Base):
+    """Grupo explícito de candidatos semejantes, sin fusionar sus procedencias."""
+
+    __tablename__ = "discovery_candidate_groups"
+    __table_args__ = (
+        Index(
+            "ix_discovery_candidate_groups_project_family",
+            "project_id",
+            "semantic_family",
+            "normalized_label",
+        ),
+        Index(
+            "ix_discovery_candidate_groups_project_status",
+            "project_id",
+            "lifecycle_status",
+            "created_at",
+        ),
+    )
+
+    id: Mapped[str] = mapped_column(String(36), primary_key=True)
+    project_id: Mapped[str] = mapped_column(
+        ForeignKey("projects.id", ondelete="CASCADE"), nullable=False
+    )
+    preferred_label: Mapped[str] = mapped_column(Text, nullable=False)
+    normalized_label: Mapped[str] = mapped_column(Text, nullable=False)
+    semantic_family: Mapped[str] = mapped_column(String(32), nullable=False)
+    suggested_subtype: Mapped[str | None] = mapped_column(String(100), nullable=True)
+    grouping_method: Mapped[str] = mapped_column(String(32), nullable=False)
+    lifecycle_status: Mapped[str] = mapped_column(
+        String(16), nullable=False, default="active"
+    )
+    created_by: Mapped[str] = mapped_column(String(200), nullable=False)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), default=utc_now, nullable=False
+    )
+    updated_by: Mapped[str] = mapped_column(String(200), nullable=False)
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), default=utc_now, onupdate=utc_now, nullable=False
+    )
+
+
+class DiscoveryGroupMembership(Base):
+    """Pertenencia reversible de un candidato a un grupo, con historia conservada."""
+
+    __tablename__ = "discovery_group_memberships"
+    __table_args__ = (
+        UniqueConstraint(
+            "group_id", "candidate_id", name="uq_discovery_group_membership"
+        ),
+        Index(
+            "ix_discovery_group_memberships_group_status",
+            "group_id",
+            "membership_status",
+        ),
+        Index(
+            "ix_discovery_group_memberships_candidate_status",
+            "candidate_id",
+            "membership_status",
+        ),
+    )
+
+    id: Mapped[str] = mapped_column(String(36), primary_key=True)
+    project_id: Mapped[str] = mapped_column(
+        ForeignKey("projects.id", ondelete="CASCADE"), nullable=False
+    )
+    group_id: Mapped[str] = mapped_column(
+        ForeignKey("discovery_candidate_groups.id", ondelete="CASCADE"), nullable=False
+    )
+    candidate_id: Mapped[str] = mapped_column(
+        ForeignKey("discovery_candidates.id", ondelete="CASCADE"), nullable=False
+    )
+    membership_status: Mapped[str] = mapped_column(
+        String(16), nullable=False, default="active"
+    )
+    source: Mapped[str] = mapped_column(String(32), nullable=False)
+    added_by: Mapped[str] = mapped_column(String(200), nullable=False)
+    added_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), default=utc_now, nullable=False
+    )
+    removed_by: Mapped[str | None] = mapped_column(String(200), nullable=True)
+    removed_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
+    removal_reason: Mapped[str | None] = mapped_column(Text, nullable=True)
+
+
+class DiscoveryGroupAction(Base):
+    """Acción append-only sobre un grupo o una pertenencia."""
+
+    __tablename__ = "discovery_group_actions"
+    __table_args__ = (
+        Index(
+            "ix_discovery_group_actions_group_created",
+            "group_id",
+            "created_at",
+        ),
+        Index(
+            "ix_discovery_group_actions_project_created",
+            "project_id",
+            "created_at",
+        ),
+    )
+
+    id: Mapped[str] = mapped_column(String(36), primary_key=True)
+    project_id: Mapped[str] = mapped_column(
+        ForeignKey("projects.id", ondelete="CASCADE"), nullable=False
+    )
+    group_id: Mapped[str] = mapped_column(
+        ForeignKey("discovery_candidate_groups.id", ondelete="CASCADE"), nullable=False
+    )
+    candidate_id: Mapped[str | None] = mapped_column(
+        ForeignKey("discovery_candidates.id", ondelete="SET NULL"), nullable=True
+    )
+    action_type: Mapped[str] = mapped_column(String(32), nullable=False)
+    reason: Mapped[str | None] = mapped_column(Text, nullable=True)
+    source: Mapped[str] = mapped_column(String(32), nullable=False)
+    payload_json: Mapped[dict[str, Any]] = mapped_column(JSON, nullable=False, default=dict)
+    created_by: Mapped[str] = mapped_column(String(200), nullable=False)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), default=utc_now, nullable=False
+    )
+
+
+class DiscoveryCandidateContinuity(Base):
+    """Vínculo auditable entre un candidato obsoleto y su nuevo anclaje textual."""
+
+    __tablename__ = "discovery_candidate_continuities"
+    __table_args__ = (
+        UniqueConstraint(
+            "source_candidate_id",
+            "target_object_revision_number",
+            name="uq_discovery_candidate_continuity_revision",
+        ),
+        UniqueConstraint(
+            "target_candidate_id", name="uq_discovery_candidate_continuity_target"
+        ),
+        Index(
+            "ix_discovery_candidate_continuities_source",
+            "source_candidate_id",
+            "created_at",
+        ),
+        Index(
+            "ix_discovery_candidate_continuities_project",
+            "project_id",
+            "created_at",
+        ),
+    )
+
+    id: Mapped[str] = mapped_column(String(36), primary_key=True)
+    project_id: Mapped[str] = mapped_column(
+        ForeignKey("projects.id", ondelete="CASCADE"), nullable=False
+    )
+    source_candidate_id: Mapped[str] = mapped_column(
+        ForeignKey("discovery_candidates.id", ondelete="RESTRICT"), nullable=False
+    )
+    target_candidate_id: Mapped[str] = mapped_column(
+        ForeignKey("discovery_candidates.id", ondelete="RESTRICT"), nullable=False
+    )
+    method: Mapped[str] = mapped_column(String(32), nullable=False)
+    source_object_revision_number: Mapped[int] = mapped_column(Integer, nullable=False)
+    target_object_revision_number: Mapped[int] = mapped_column(Integer, nullable=False)
+    source_start_offset: Mapped[int] = mapped_column(Integer, nullable=False)
+    source_end_offset: Mapped[int] = mapped_column(Integer, nullable=False)
+    target_start_offset: Mapped[int] = mapped_column(Integer, nullable=False)
+    target_end_offset: Mapped[int] = mapped_column(Integer, nullable=False)
+    evidence_sha256: Mapped[str] = mapped_column(String(64), nullable=False)
+    created_by: Mapped[str] = mapped_column(String(200), nullable=False)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), default=utc_now, nullable=False
+    )
+
+
 class CorpusExportProfile(Base):
     """Perfil reproducible para exportar la capa textual revisada."""
 
@@ -1212,6 +2130,13 @@ class CorpusExportProfile(Base):
     object_separator: Mapped[str] = mapped_column(Text, nullable=False, default="\n\n")
     page_separator: Mapped[str] = mapped_column(Text, nullable=False, default="\n\n")
     include_page_markers: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
+    lifecycle_status: Mapped[str] = mapped_column(
+        String(16), nullable=False, default="active"
+    )
+    archived_by: Mapped[str | None] = mapped_column(String(200), nullable=True)
+    archived_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
     created_by: Mapped[str] = mapped_column(String(200), nullable=False)
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), default=utc_now, nullable=False

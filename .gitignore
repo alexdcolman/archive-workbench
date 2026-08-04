@@ -1,5 +1,6 @@
 # Entornos y secretos
 .venv/
+.venv-surya/
 venv/
 env/
 .env
@@ -52,6 +53,9 @@ coverage.xml
 htmlcov/
 .tox/
 .nox/
+
+# Documentación privada de continuidad
+.assistant/
 
 # Versiones anteriores y parches
 .dev/

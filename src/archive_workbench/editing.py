@@ -27,6 +27,7 @@ from archive_workbench.db.models import (
     EditableObjectRevision,
     EditableObjectTag,
     EditablePage,
+    EditablePageRevision,
     ExtractedObject,
     ExtractionPage,
     ExtractionPageSelection,
@@ -140,6 +141,7 @@ def _append_revision(
     created_by: str,
     note: str | None,
     base_revision_number: int | None,
+    created_at: datetime | None = None,
 ) -> EditableObjectRevision:
     revision = EditableObjectRevision(
         id=new_id(),
@@ -156,10 +158,69 @@ def _append_revision(
         document_part_id=obj.document_part_id,
         note=note,
         created_by=created_by,
+        created_at=created_at or utc_now(),
+    )
+    session.add(revision)
+    return revision
+
+
+def _append_page_revision(
+    session: Session,
+    page: EditablePage,
+    *,
+    operation: str,
+    created_by: str,
+    note: str | None = None,
+    details: dict[str, Any] | None = None,
+    base_revision_number: int | None = None,
+) -> EditablePageRevision:
+    revision = EditablePageRevision(
+        id=new_id(),
+        editable_page_id=page.id,
+        revision_number=page.revision_number,
+        base_revision_number=base_revision_number,
+        operation=operation,
+        source_extraction_run_id=page.source_extraction_run_id,
+        source_extraction_page_id=page.source_extraction_page_id,
+        source_selection_id=page.source_selection_id,
+        status=page.status,
+        review_status=page.review_status,
+        review_note=page.review_note,
+        details_json=details or {},
+        note=note,
+        created_by=created_by,
         created_at=utc_now(),
     )
     session.add(revision)
     return revision
+
+
+def _set_page_status(
+    session: Session,
+    page: EditablePage,
+    *,
+    status: str,
+    changed_by: str,
+    operation: str,
+    note: str | None = None,
+    details: dict[str, Any] | None = None,
+) -> bool:
+    if page.status == status:
+        return False
+    base = page.revision_number
+    page.status = status
+    page.revision_number += 1
+    page.updated_at = utc_now()
+    _append_page_revision(
+        session,
+        page,
+        operation=operation,
+        created_by=changed_by,
+        note=note,
+        details=details,
+        base_revision_number=base,
+    )
+    return True
 
 
 def bootstrap_editable_layer(
@@ -215,10 +276,28 @@ def bootstrap_editable_layer(
             )
             if existing is not None:
                 if existing.source_extraction_page_id == extraction_page.id:
-                    existing.status = "active"
+                    _set_page_status(
+                        session,
+                        existing,
+                        status="active",
+                        changed_by=created_by,
+                        operation="reactivate",
+                        note="La selección canónica vuelve a coincidir con el origen editable.",
+                    )
                     summary.pages_reused += 1
                 else:
-                    existing.status = "stale"
+                    _set_page_status(
+                        session,
+                        existing,
+                        status="stale",
+                        changed_by=created_by,
+                        operation="mark_stale",
+                        note="La selección OCR cambió; la capa editable se conservó sin reemplazos.",
+                        details={
+                            "selected_extraction_run_id": selection.extraction_run_id,
+                            "selected_extraction_page_id": extraction_page.id,
+                        },
+                    )
                     summary.pages_stale += 1
                     summary.warnings.append(
                         f"{registration.source_key}, página {selection.page_number}: "
@@ -240,6 +319,15 @@ def bootstrap_editable_layer(
             )
             session.add(editable_page)
             session.flush()
+            _append_page_revision(
+                session,
+                editable_page,
+                operation="bootstrap",
+                created_by=created_by,
+                note="Página inicializada desde la extracción seleccionada.",
+                details={"source_key": registration.source_key},
+                base_revision_number=None,
+            )
             summary.pages_created += 1
 
             source_objects = session.scalars(

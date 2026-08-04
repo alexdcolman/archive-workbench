@@ -11,6 +11,11 @@ from uuid import UUID
 import typer
 from sqlalchemy import select
 
+from archive_workbench.analysis_audit import automatic_analysis_authorization_rows
+from archive_workbench.analysis_quality import (
+    DEFAULT_AUTOMATIC_PAGE_REVIEW_STATUSES,
+    PAGE_REVIEW_STATUSES,
+)
 from archive_workbench.authorities import (
     ALIAS_TYPES,
     AUTHORITY_TYPES,
@@ -20,6 +25,7 @@ from archive_workbench.authorities import (
     create_authority,
     include_authority_mention_candidates,
     mention_rows,
+    record_mention_suggestion_authorization,
     suggest_dictionary_mentions,
     suggest_dictionary_mentions_all,
 )
@@ -43,9 +49,11 @@ from archive_workbench.catalog_management import (
     search_catalog_units,
 )
 from archive_workbench.db import (
+    DatabaseRevisionError,
     create_sqlite_engine,
     current_revision,
     database_path,
+    require_current_database,
     session_scope,
     upgrade_database,
 )
@@ -74,7 +82,7 @@ from archive_workbench.editing import (
     update_editable_object,
 )
 from archive_workbench.extraction import (
-    extract_documents,
+    extract_documents_preferred,
     extraction_doctor,
     extraction_history_rows,
     extraction_status_rows,
@@ -83,7 +91,9 @@ from archive_workbench.extraction import (
     load_extraction_profile,
     review_current_extraction,
     restore_profile_page_selections,
+    resolve_extraction_profile,
 )
+from archive_workbench.surya_engine import list_surya_servers, stop_surya_servers
 from archive_workbench.graph import (
     build_graph,
     export_graph,
@@ -107,7 +117,13 @@ from archive_workbench.ocr_benchmark import (
     load_ocr_benchmark_profile,
     run_ocr_benchmark,
 )
-from archive_workbench.preprocessing import prepare_derivatives, preprocessing_status_rows
+from archive_workbench.page_quality import assess_source_page_quality
+from archive_workbench.preprocessing import (
+    OCR_TREATMENT_LABELS,
+    prepare_derivatives,
+    preprocessing_status_rows,
+    profile_for_ocr_treatment,
+)
 from archive_workbench.work import (
     ASSIGNMENT_KINDS,
     ASSIGNMENT_PRIORITIES,
@@ -151,6 +167,34 @@ from archive_workbench.search import (
     search_editable_objects,
     search_index_status,
 )
+from archive_workbench.open_discovery import (
+    DISCOVERY_FAMILIES,
+    DiscoveryProfileValues,
+    discovery_audit_payload,
+    discovery_candidate_rows,
+    discovery_profile_rows,
+    discovery_run_rows,
+    resolve_discovery_profile,
+    run_open_discovery,
+    save_discovery_profile,
+)
+from archive_workbench.discovery_review import (
+    DISCOVERY_ACCEPTANCE_MODES,
+    DISCOVERY_DECISION_TYPES,
+    discovery_context_record_rows,
+    discovery_decision_rows,
+    review_discovery_candidate,
+)
+from archive_workbench.discovery_grouping import (
+    CONTINUITY_METHODS,
+    add_candidate_to_group,
+    create_manual_group,
+    discovery_continuity_rows,
+    discovery_group_rows,
+    project_discovery_candidate,
+    rebuild_discovery_groups,
+    remove_candidate_from_group,
+)
 from archive_workbench.semantic_search import (
     DEFAULT_MODEL_NAME,
     DEFAULT_MODEL_REVISION,
@@ -163,6 +207,24 @@ from archive_workbench.semantic_search import (
     semantic_index_status,
     semantic_profile_rows,
     semantic_search,
+)
+from archive_workbench.lineage_diagnostics import diagnose_unmatched_bundle_lineage
+from archive_workbench.lineage_recovery import (
+    lineage_recovery_rows,
+    recover_unmatched_bundle_lineage,
+)
+from archive_workbench.common_base import (
+    accept_common_base_proposal,
+    common_base_agreement_rows,
+    create_common_base_proposal,
+    finalize_common_base_agreement,
+)
+from archive_workbench.state_adoption import (
+    apply_state_adoption,
+    create_state_adoption_package,
+    preview_state_adoption,
+    rollback_state_adoption,
+    state_adoption_rows,
 )
 from archive_workbench.exchange import (
     apply_change_bundle,
@@ -185,6 +247,13 @@ from archive_workbench.exchange import (
 )
 
 app = typer.Typer(no_args_is_help=True, help="Utilidades iniciales de Archive Workbench.")
+
+
+def _require_current_database(project_root: Path) -> Path:
+    try:
+        return require_current_database(project_root)
+    except DatabaseRevisionError as exc:
+        raise typer.BadParameter(str(exc)) from exc
 
 
 @app.command("validate-decisions")
@@ -269,7 +338,7 @@ def register_test_corpus_command(
     corpus_path = project_root / "config" / "test_corpus.yaml"
     decisions = load_decisions(decisions_path)
     corpus = load_test_corpus(corpus_path)
-    upgrade_database(project_root)
+    _require_current_database(project_root)
     engine = create_sqlite_engine(database_path(project_root))
     try:
         with session_scope(engine) as session:
@@ -351,7 +420,7 @@ def catalog_tree_command(
         raise typer.BadParameter(
             "Estado inválido; use " + ", ".join(REGISTRATION_STATUSES)
         )
-    upgrade_database(project_root)
+    _require_current_database(project_root)
     engine = create_sqlite_engine(database_path(project_root))
     try:
         with session_scope(engine) as session:
@@ -394,7 +463,7 @@ def catalog_register_file_command(
             "Relación inválida; use " + ", ".join(RELATION_TYPES)
         )
     decisions = load_decisions(project_root / "config" / "decisions.yaml")
-    upgrade_database(project_root)
+    _require_current_database(project_root)
     engine = create_sqlite_engine(database_path(project_root))
     try:
         with session_scope(engine) as session:
@@ -448,20 +517,35 @@ def prepare_derivatives_command(
         None, "--source-key", help="Procesa solo uno o más identificadores del corpus"
     ),
     force: bool = typer.Option(False, help="Genera una nueva corrida aunque exista una equivalente"),
+    ocr_treatment: str = typer.Option(
+        "original",
+        "--ocr-treatment",
+        help=(
+            "Tratamiento del derivado OCR: original, grayscale_autocontrast, "
+            "otsu o denoise_autocontrast"
+        ),
+    ),
 ) -> None:
     """Genera PNG para OCR y previsualizaciones WebP/JPEG/PNG por página."""
+    if ocr_treatment not in OCR_TREATMENT_LABELS:
+        raise typer.BadParameter(
+            "--ocr-treatment debe ser uno de: "
+            + ", ".join(OCR_TREATMENT_LABELS)
+        )
     decisions_path = project_root / "config" / "decisions.yaml"
     decisions = load_decisions(decisions_path)
-    upgrade_database(project_root)
+    _require_current_database(project_root)
     engine = create_sqlite_engine(database_path(project_root))
     try:
         with session_scope(engine) as session:
+            profile = profile_for_ocr_treatment(decisions, ocr_treatment)
             summary = prepare_derivatives(
                 session,
                 project_root=project_root,
                 decisions=decisions,
                 source_keys=set(source_key or []),
                 force=force,
+                profile=profile,
             )
     finally:
         engine.dispose()
@@ -495,6 +579,7 @@ def preprocessing_status_command(
         typer.echo(
             f"{row.source_key} | {row.run_status or 'sin_derivados'} | "
             f"{row.media_type} {pages} pág. | assets {row.assets} | "
+            f"tratamiento {OCR_TREATMENT_LABELS.get(row.ocr_treatment or '', row.ocr_treatment or '-')} | "
             f"{row.output_root or '-'} | {row.title}"
         )
     typer.echo(f"Total: {len(rows)} documentos")
@@ -510,11 +595,26 @@ def extraction_doctor_command(
     """Comprueba las herramientas requeridas por un perfil de extracción."""
     selected_profile = profile_path or (project_root / "config" / "extraction.yaml")
     profile = load_extraction_profile(selected_profile)
-    report = extraction_doctor(profile)
-    for check in report.checks:
-        marker = "OK" if check.ok else ("ERROR" if check.required else "INFO")
+    resolution = resolve_extraction_profile(project_root, profile)
+    for check in resolution.requested_report.checks:
+        if check.ok:
+            marker = "OK"
+        elif check.required and not resolution.fallback_used:
+            marker = "ERROR"
+        else:
+            marker = "INFO"
         typer.echo(f"{marker:5} {check.name}: {check.detail}")
-    if not report.ready:
+    if resolution.fallback_used:
+        typer.echo(
+            "INFO  Fallback automático: "
+            f"{resolution.effective.profile_key} ({resolution.effective.backend}). "
+            f"Motivo: {resolution.reason}"
+        )
+        for check in resolution.effective_report.checks:
+            if check.required:
+                marker = "OK" if check.ok else "ERROR"
+                typer.echo(f"{marker:5} Fallback · {check.name}: {check.detail}")
+    if not resolution.ready:
         raise typer.Exit(code=1)
 
 
@@ -569,17 +669,22 @@ def extract_command(
             )
         overrides["image_variant"] = image_variant
     profile = type(profile).model_validate(overrides)
-    doctor = extraction_doctor(profile)
-    if not doctor.ready:
-        for check in doctor.checks:
+    resolution = resolve_extraction_profile(project_root, profile)
+    if not resolution.ready:
+        for check in resolution.effective_report.checks:
             if check.required and not check.ok:
                 typer.echo(f"ERROR {check.name}: {check.detail}")
         raise typer.BadParameter("El entorno de extracción no está listo; ejecute extraction-doctor")
-    upgrade_database(project_root)
+    if resolution.fallback_used:
+        typer.echo(
+            "INFO: el backend preferido no está disponible; se usará "
+            f"{resolution.effective.profile_key}."
+        )
+    _require_current_database(project_root)
     engine = create_sqlite_engine(database_path(project_root))
     try:
         with session_scope(engine) as session:
-            summary = extract_documents(
+            summary = extract_documents_preferred(
                 session,
                 project_root=project_root,
                 decisions=decisions,
@@ -604,6 +709,29 @@ def extract_command(
         raise typer.Exit(code=1)
 
 
+@app.command("surya-server-status")
+def surya_server_status_command() -> None:
+    """Muestra los servidores vLLM persistentes iniciados por Surya."""
+    servers = list_surya_servers()
+    if not servers:
+        typer.echo("No hay contenedores Surya vLLM registrados.")
+        return
+    for server in servers:
+        marker = "ACTIVO" if server.running else "DETENIDO"
+        typer.echo(f"{marker:8} {server.name} | {server.status} | {server.image}")
+
+
+@app.command("surya-server-stop")
+def surya_server_stop_command() -> None:
+    """Detiene los servidores vLLM persistentes iniciados por Surya."""
+    stopped = stop_surya_servers()
+    if not stopped:
+        typer.echo("No había servidores Surya vLLM activos.")
+        return
+    for name in stopped:
+        typer.echo(f"OK: detenido {name}")
+
+
 @app.command("ocr-benchmark")
 def ocr_benchmark_command(
     project_root: Path = typer.Argument(..., help="Raíz del proyecto operativo"),
@@ -618,7 +746,7 @@ def ocr_benchmark_command(
     """Compara PSM y variantes de imagen con Tesseract, sin cambiar la extracción vigente."""
     selected_profile = profile_path or (project_root / "config" / "ocr_benchmark.yaml")
     profile = load_ocr_benchmark_profile(selected_profile)
-    upgrade_database(project_root)
+    _require_current_database(project_root)
     engine = create_sqlite_engine(database_path(project_root))
     try:
         with session_scope(engine) as session:
@@ -642,6 +770,48 @@ def ocr_benchmark_command(
     typer.echo(f"Salida: {summary.output_root}/summary.md")
 
 
+@app.command("page-quality-assess")
+def page_quality_assess_command(
+    project_root: Path = typer.Argument(..., help="Raíz del proyecto operativo"),
+    source_key: str = typer.Argument(..., help="Identificador del documento"),
+    page: list[int] | None = typer.Option(
+        None, "--page", help="Página concreta; puede repetirse"
+    ),
+    run_id: str | None = typer.Option(
+        None, "--run-id", help="Corrida a evaluar; por defecto usa la selección canónica"
+    ),
+    assessed_by: str = typer.Option("local_user", "--assessed-by"),
+) -> None:
+    """Evalúa imagen, fragmentación y solapamiento sin aprobar ni seleccionar OCR."""
+    _require_current_database(project_root)
+    engine = create_sqlite_engine(database_path(project_root))
+    try:
+        with session_scope(engine) as session:
+            rows = assess_source_page_quality(
+                session,
+                project_root=project_root.resolve(),
+                source_key=source_key,
+                pages=set(page or []),
+                run_id=run_id,
+                assessed_by=assessed_by,
+            )
+    except (ValueError, OSError) as exc:
+        raise typer.BadParameter(str(exc)) from exc
+    finally:
+        engine.dispose()
+    for row in rows:
+        page_number = row.metrics.get("page_number", "-")
+        typer.echo(
+            f"{row.extraction_page_id} | página {page_number} | {row.status} | "
+            f"puntaje {row.score:.3f} | alertas {len(row.flags)}"
+        )
+        for message in row.flag_messages:
+            typer.echo(f"    {message}")
+        for suggestion in row.suggestions:
+            typer.echo(f"    Sugerencia: {suggestion}")
+    typer.echo(f"Total: {len(rows)} páginas evaluadas")
+
+
 @app.command("review-extraction")
 def review_extraction_command(
     project_root: Path = typer.Argument(..., help="Raíz del proyecto operativo"),
@@ -651,7 +821,7 @@ def review_extraction_command(
     note: str | None = typer.Option(None, help="Observación breve"),
 ) -> None:
     """Marca la calidad de la extracción vigente sin borrar ninguna versión."""
-    upgrade_database(project_root)
+    _require_current_database(project_root)
     engine = create_sqlite_engine(database_path(project_root))
     try:
         with session_scope(engine) as session:
@@ -702,7 +872,7 @@ def select_extraction_command(
     note: str | None = typer.Option(None, "--note"),
 ) -> None:
     """Selecciona la extracción canónica de una o más páginas."""
-    upgrade_database(project_root)
+    _require_current_database(project_root)
     engine = create_sqlite_engine(database_path(project_root))
     try:
         with session_scope(engine) as session:
@@ -732,7 +902,7 @@ def restore_profile_pages_command(
     note: str | None = typer.Option(None, "--note"),
 ) -> None:
     """Restaura páginas desde corridas históricas de un perfil estable."""
-    upgrade_database(project_root)
+    _require_current_database(project_root)
     engine = create_sqlite_engine(database_path(project_root))
     try:
         with session_scope(engine) as session:
@@ -813,7 +983,7 @@ def create_document_plan_command(
     sample_count: int = typer.Option(5, "--sample-count", min=1, max=12),
 ) -> None:
     """Crea un plan multipágina en borrador con páginas de benchmark representativas."""
-    upgrade_database(project_root)
+    _require_current_database(project_root)
     engine = create_sqlite_engine(database_path(project_root))
     try:
         with session_scope(engine) as session:
@@ -873,7 +1043,7 @@ def validate_document_plan_command(
 ) -> None:
     """Valida rangos, cobertura, perfiles y plantillas regionales del plan."""
     plan = load_document_plan(plan_path)
-    upgrade_database(project_root)
+    _require_current_database(project_root)
     engine = create_sqlite_engine(database_path(project_root))
     try:
         with session_scope(engine) as session:
@@ -898,7 +1068,7 @@ def import_document_plan_command(
 ) -> None:
     """Registra una versión del plan y sus partes documentales en SQLite."""
     plan = load_document_plan(plan_path)
-    upgrade_database(project_root)
+    _require_current_database(project_root)
     engine = create_sqlite_engine(database_path(project_root))
     try:
         with session_scope(engine) as session:
@@ -928,7 +1098,7 @@ def benchmark_plan_sample_command(
     plan = load_document_plan(plan_path)
     selected_profile = profile_path or (project_root / "config" / "ocr_benchmark.yaml")
     profile = load_ocr_benchmark_profile(selected_profile)
-    upgrade_database(project_root)
+    _require_current_database(project_root)
     engine = create_sqlite_engine(database_path(project_root))
     try:
         with session_scope(engine) as session:
@@ -959,7 +1129,7 @@ def execute_document_plan_command(
     """Ejecuta cada grupo OCR/regional y actualiza la selección canónica por página."""
     plan = load_document_plan(plan_path)
     decisions = load_decisions(project_root / "config" / "decisions.yaml")
-    upgrade_database(project_root)
+    _require_current_database(project_root)
     engine = create_sqlite_engine(database_path(project_root))
     try:
         with session_scope(engine) as session:
@@ -1084,7 +1254,7 @@ def extract_regions_command(
     force: bool = typer.Option(False, help="Crea otra corrida aunque exista una equivalente"),
 ) -> None:
     """Extrae zonas OCR y registra sellos/manuscritos como regiones manuales."""
-    upgrade_database(project_root)
+    _require_current_database(project_root)
     template = load_region_template(template_path)
     decisions = load_decisions(project_root / "config" / "decisions.yaml")
     validate_region_template(template, decisions)
@@ -1143,7 +1313,7 @@ def editor_bootstrap_command(
     created_by: str = typer.Option("local_user", "--created-by"),
 ) -> None:
     """Crea la capa editable desde las extracciones seleccionadas sin tocar el OCR."""
-    upgrade_database(project_root)
+    _require_current_database(project_root)
     decisions = load_decisions(project_root / "config" / "decisions.yaml")
     engine = create_sqlite_engine(database_path(project_root))
     try:
@@ -1468,7 +1638,7 @@ def rebuild_search_index_command(
     project_root: Path = typer.Argument(..., help="Raíz del proyecto operativo"),
 ) -> None:
     """Reconstruye el índice FTS5 de la capa editable."""
-    upgrade_database(project_root)
+    _require_current_database(project_root)
     engine = create_sqlite_engine(database_path(project_root))
     try:
         with session_scope(engine) as session:
@@ -1521,7 +1691,7 @@ def search_editable_command(
     limit: int = typer.Option(50, "--limit", min=1, max=500),
 ) -> None:
     """Busca texto y anotaciones en todos los objetos editables."""
-    upgrade_database(project_root)
+    _require_current_database(project_root)
     engine = create_sqlite_engine(database_path(project_root))
     try:
         with session_scope(engine) as session:
@@ -1568,7 +1738,7 @@ def exchange_init_command(
     ),
 ) -> None:
     """Asigna identidad a esta copia y crea un checkpoint de referencia."""
-    upgrade_database(project_root)
+    _require_current_database(project_root)
     engine = create_sqlite_engine(database_path(project_root))
     try:
         with session_scope(engine) as session:
@@ -1602,7 +1772,7 @@ def exchange_status_command(
     project_root: Path = typer.Argument(..., help="Raíz del proyecto operativo"),
 ) -> None:
     """Muestra identidad, secuencia y cambios pendientes de exportación."""
-    upgrade_database(project_root)
+    _require_current_database(project_root)
     engine = create_sqlite_engine(database_path(project_root))
     try:
         with session_scope(engine) as session:
@@ -1632,7 +1802,7 @@ def exchange_checkpoint_command(
     note: str | None = typer.Option(None, "--note"),
 ) -> None:
     """Crea un checkpoint verificable del estado editable actual."""
-    upgrade_database(project_root)
+    _require_current_database(project_root)
     engine = create_sqlite_engine(database_path(project_root))
     try:
         with session_scope(engine) as session:
@@ -1654,7 +1824,7 @@ def exchange_checkpoints_command(
     project_root: Path = typer.Argument(..., help="Raíz del proyecto operativo"),
 ) -> None:
     """Lista checkpoints disponibles como base para un bundle."""
-    upgrade_database(project_root)
+    _require_current_database(project_root)
     engine = create_sqlite_engine(database_path(project_root))
     try:
         with session_scope(engine) as session:
@@ -1681,7 +1851,7 @@ def exchange_export_bundle_command(
     destination: Path | None = typer.Option(None, "--destination"),
 ) -> None:
     """Exporta eventos posteriores a un checkpoint en un ZIP verificable."""
-    upgrade_database(project_root)
+    _require_current_database(project_root)
     engine = create_sqlite_engine(database_path(project_root))
     try:
         with session_scope(engine) as session:
@@ -1737,6 +1907,522 @@ def exchange_inspect_bundle_command(
         typer.echo(f"⚠ {warning}")
 
 
+@app.command("exchange-lineage-diagnose")
+def exchange_lineage_diagnose_command(
+    project_root: Path = typer.Argument(..., help="Raíz del proyecto operativo"),
+    bundle: str = typer.Argument(..., help="ID del paquete sin base reconocida"),
+    evidence: list[Path] | None = typer.Option(
+        None,
+        "--evidence",
+        help="Paquete, manifest.json o backup adicional; puede repetirse",
+    ),
+) -> None:
+    """Diagnostica evidencia de linaje sin escribir en la base ni en el corpus."""
+    _require_current_database(project_root)
+    engine = create_sqlite_engine(database_path(project_root))
+    try:
+        with session_scope(engine) as session:
+            report = diagnose_unmatched_bundle_lineage(
+                session,
+                project_root=project_root.resolve(),
+                bundle_ref=bundle,
+                evidence_paths=evidence or [],
+            )
+    except (ValueError, OSError) as exc:
+        raise typer.BadParameter(str(exc)) from exc
+    finally:
+        engine.dispose()
+
+    labels = {
+        "recoverable": "recuperable",
+        "ambiguous": "ambiguo",
+        "insufficient": "insuficiente",
+    }
+    typer.echo(
+        f"Diagnóstico {report.bundle_id} | "
+        f"{labels.get(report.classification, report.classification)}"
+    )
+    typer.echo(
+        f"Origen: {report.source_workspace_name} ({report.source_workspace_id}) | "
+        f"base {report.base_checkpoint_label} | secuencia {report.base_sequence}"
+    )
+    typer.echo(report.summary)
+    typer.echo(
+        f"Evidencias: {len(report.findings)} | candidatos concluyentes: "
+        f"{len(report.recovery_candidates)} | contradicciones: {report.contradiction_count}"
+    )
+    for finding in report.findings:
+        typer.echo(
+            f"- {finding.strength} | {finding.code} | {finding.artifact_reference}"
+        )
+        typer.echo(f"    {finding.explanation}")
+    if report.recovery_candidates:
+        typer.echo("Cadenas concluyentes:")
+        for candidate in report.recovery_candidates:
+            typer.echo(
+                f"- {candidate.method} | punto {candidate.local_checkpoint_label or '-'} "
+                f"({candidate.local_checkpoint_id or '-'}) | secuencia remota "
+                f"{candidate.remote_sequence}"
+            )
+            if candidate.chain_bundle_ids:
+                typer.echo("    paquetes: " + " -> ".join(candidate.chain_bundle_ids))
+    typer.echo("No se escribió ningún dato ni se modificó el corpus.")
+
+
+@app.command("exchange-lineage-recover")
+def exchange_lineage_recover_command(
+    project_root: Path = typer.Argument(..., help="Raíz del proyecto operativo"),
+    bundle: str = typer.Argument(..., help="ID del paquete sin base reconocida"),
+    evidence: list[Path] | None = typer.Option(
+        None,
+        "--evidence",
+        help="Paquete, manifest.json o backup concluyente; puede repetirse",
+    ),
+    recovered_by: str = typer.Option(..., "--recovered-by"),
+    reason: str = typer.Option(..., "--reason"),
+    confirm_recovery: bool = typer.Option(
+        False,
+        "--confirm-recovery",
+        help="Confirma la cadena concluyente y registra la decisión append-only",
+    ),
+) -> None:
+    """Recupera linaje demostrado e invalida la simulación anterior."""
+    _require_current_database(project_root)
+    engine = create_sqlite_engine(database_path(project_root))
+    try:
+        with session_scope(engine) as session:
+            summary = recover_unmatched_bundle_lineage(
+                session,
+                project_root=project_root.resolve(),
+                bundle_ref=bundle,
+                evidence_paths=evidence or [],
+                recovered_by=recovered_by,
+                confirmation_reason=reason,
+                recovery_confirmed=confirm_recovery,
+                source="cli",
+            )
+    except (ValueError, OSError) as exc:
+        raise typer.BadParameter(str(exc)) from exc
+    finally:
+        engine.dispose()
+
+    typer.echo(
+        f"OK: linaje recuperado para {summary.bundle_id} | "
+        f"método {summary.recovery_method}"
+    )
+    typer.echo(
+        f"Punto local: {summary.local_checkpoint_label or '-'} | "
+        f"secuencia {summary.local_checkpoint_sequence}"
+    )
+    typer.echo(
+        f"Origen remoto: {summary.remote_workspace_id} | "
+        f"secuencia {summary.remote_sequence}"
+    )
+    typer.echo(
+        f"Caso: {summary.case_id} | decisión: {summary.decision_id} | "
+        f"evidencias {summary.evidence_count}"
+    )
+    typer.echo(f"Parámetros SHA-256: {summary.parameters_sha256}")
+    typer.echo(
+        "La simulación anterior quedó obsoleta. Ejecutá nuevamente "
+        "exchange-dry-run antes de resolver o aplicar el paquete."
+    )
+    typer.echo("No se modificó el corpus ni se aplicó ningún evento recibido.")
+
+
+@app.command("exchange-lineage-recoveries")
+def exchange_lineage_recoveries_command(
+    project_root: Path = typer.Argument(..., help="Raíz del proyecto operativo"),
+) -> None:
+    """Lista decisiones append-only de recuperación de linaje."""
+    _require_current_database(project_root)
+    engine = create_sqlite_engine(database_path(project_root))
+    try:
+        with session_scope(engine) as session:
+            rows = lineage_recovery_rows(session)
+    except ValueError as exc:
+        raise typer.BadParameter(str(exc)) from exc
+    finally:
+        engine.dispose()
+    for row in rows:
+        typer.echo(
+            f"{row.bundle_id} | {row.recovery_method} | "
+            f"punto={row.local_checkpoint_label or '-'} "
+            f"sec.local={row.local_checkpoint_sequence} "
+            f"sec.remota={row.remote_sequence} | {row.source} | "
+            f"{row.confirmed_by} | {row.created_at.isoformat()}"
+        )
+        typer.echo(f"    fundamento: {row.confirmation_reason}")
+        typer.echo(
+            f"    caso: {row.case_id} | decisión: {row.decision_id} | "
+            f"evidencias: {row.evidence_count}"
+        )
+        typer.echo(f"    parámetros: {row.parameters_sha256}")
+    typer.echo(f"Total: {len(rows)} recuperaciones")
+
+
+@app.command("exchange-common-base-propose")
+def exchange_common_base_propose_command(
+    project_root: Path = typer.Argument(..., help="Raíz de la copia iniciadora"),
+    counterpart_workspace_id: str = typer.Option(..., "--counterpart-workspace-id"),
+    counterpart_workspace_name: str = typer.Option(..., "--counterpart-workspace-name"),
+    proposed_by: str = typer.Option(..., "--proposed-by"),
+    reason: str = typer.Option(..., "--reason"),
+    confirm_proposal: bool = typer.Option(
+        False,
+        "--confirm-proposal",
+        help="Confirma la creación del manifiesto de propuesta",
+    ),
+    destination: Path | None = typer.Option(None, "--destination"),
+) -> None:
+    """Crea una propuesta transportable sin activar todavía una base común."""
+    _require_current_database(project_root)
+    engine = create_sqlite_engine(database_path(project_root))
+    try:
+        with session_scope(engine) as session:
+            summary = create_common_base_proposal(
+                session,
+                project_root=project_root.resolve(),
+                counterpart_workspace_id=counterpart_workspace_id,
+                counterpart_workspace_name=counterpart_workspace_name,
+                proposed_by=proposed_by,
+                proposal_reason=reason,
+                proposal_confirmed=confirm_proposal,
+                source="cli",
+                destination=destination,
+            )
+    except (ValueError, OSError) as exc:
+        raise typer.BadParameter(str(exc)) from exc
+    finally:
+        engine.dispose()
+    typer.echo(f"OK: propuesta de base común {summary.agreement_id}")
+    typer.echo(
+        f"Copia iniciadora: {summary.initiator_workspace_id} | "
+        f"contraparte: {summary.counterpart_workspace_id}"
+    )
+    typer.echo(
+        f"Secuencia: {summary.initiator_sequence} | estado: {summary.state_sha256}"
+    )
+    typer.echo(f"Propuesta: {summary.output_path}")
+    typer.echo(f"SHA-256 del manifiesto: {summary.proposal_sha256}")
+    typer.echo(f"SHA-256 del ZIP: {summary.artifact_sha256}")
+    typer.echo("La propuesta no activó ningún acuerdo ni modificó el corpus.")
+
+
+@app.command("exchange-common-base-accept")
+def exchange_common_base_accept_command(
+    project_root: Path = typer.Argument(..., help="Raíz de la copia contraparte"),
+    proposal: Path = typer.Argument(..., help="ZIP de propuesta recibido"),
+    accepted_by: str = typer.Option(..., "--accepted-by"),
+    reason: str = typer.Option(..., "--reason"),
+    confirm_agreement: bool = typer.Option(
+        False,
+        "--confirm-agreement",
+        help="Confirma estado idéntico y registra el acuerdo local",
+    ),
+    destination: Path | None = typer.Option(None, "--destination"),
+) -> None:
+    """Acepta una propuesta si el estado editable local es idéntico."""
+    _require_current_database(project_root)
+    engine = create_sqlite_engine(database_path(project_root))
+    try:
+        with session_scope(engine) as session:
+            summary = accept_common_base_proposal(
+                session,
+                project_root=project_root.resolve(),
+                proposal_path=proposal,
+                accepted_by=accepted_by,
+                confirmation_reason=reason,
+                agreement_confirmed=confirm_agreement,
+                source="cli",
+                destination=destination,
+            )
+    except (ValueError, OSError) as exc:
+        raise typer.BadParameter(str(exc)) from exc
+    finally:
+        engine.dispose()
+    typer.echo(f"OK: acuerdo aceptado {summary.agreement_id}")
+    typer.echo(
+        f"Punto local: {summary.checkpoint_label} | {summary.checkpoint_id} | "
+        f"secuencia {summary.local_sequence}"
+    )
+    typer.echo(f"Estado editable: {summary.state_sha256}")
+    typer.echo(f"Manifiesto completado: {summary.output_path}")
+    typer.echo(f"SHA-256 del manifiesto: {summary.manifest_sha256}")
+    typer.echo(
+        f"Simulaciones anteriores invalidadas: {summary.stale_dry_run_count}"
+    )
+    typer.echo(
+        "La copia iniciadora todavía debe finalizar este mismo manifiesto. "
+        "No se modificó el corpus."
+    )
+
+
+@app.command("exchange-common-base-finalize")
+def exchange_common_base_finalize_command(
+    project_root: Path = typer.Argument(..., help="Raíz de la copia iniciadora"),
+    agreement: Path = typer.Argument(..., help="ZIP de acuerdo completado"),
+    proposal: Path = typer.Option(..., "--proposal", help="ZIP de propuesta original"),
+    finalized_by: str = typer.Option(..., "--finalized-by"),
+    reason: str = typer.Option(..., "--reason"),
+    confirm_agreement: bool = typer.Option(
+        False,
+        "--confirm-agreement",
+        help="Confirma el manifiesto bilateral y registra el acuerdo local",
+    ),
+) -> None:
+    """Finaliza en la copia iniciadora el mismo acuerdo aceptado por la contraparte."""
+    _require_current_database(project_root)
+    engine = create_sqlite_engine(database_path(project_root))
+    try:
+        with session_scope(engine) as session:
+            summary = finalize_common_base_agreement(
+                session,
+                project_root=project_root.resolve(),
+                proposal_path=proposal,
+                agreement_path=agreement,
+                finalized_by=finalized_by,
+                confirmation_reason=reason,
+                agreement_confirmed=confirm_agreement,
+                source="cli",
+            )
+    except (ValueError, OSError) as exc:
+        raise typer.BadParameter(str(exc)) from exc
+    finally:
+        engine.dispose()
+    typer.echo(f"OK: acuerdo finalizado {summary.agreement_id}")
+    typer.echo(
+        f"Punto local: {summary.checkpoint_label} | {summary.checkpoint_id} | "
+        f"secuencia {summary.local_sequence}"
+    )
+    typer.echo(f"Estado editable: {summary.state_sha256}")
+    typer.echo(f"SHA-256 del manifiesto compartido: {summary.manifest_sha256}")
+    typer.echo(
+        f"Simulaciones anteriores invalidadas: {summary.stale_dry_run_count}"
+    )
+    typer.echo("La base común ya quedó registrada en esta copia. No se modificó el corpus.")
+
+
+@app.command("exchange-common-base-agreements")
+def exchange_common_base_agreements_command(
+    project_root: Path = typer.Argument(..., help="Raíz del proyecto operativo"),
+) -> None:
+    """Lista acuerdos bilaterales de base común registrados localmente."""
+    _require_current_database(project_root)
+    engine = create_sqlite_engine(database_path(project_root))
+    try:
+        with session_scope(engine) as session:
+            rows = common_base_agreement_rows(session)
+    finally:
+        engine.dispose()
+    for row in rows:
+        typer.echo(
+            f"{row.agreement_id} | rol={row.local_role} | "
+            f"local={row.local_workspace_id} sec.{row.local_sequence} | "
+            f"contraparte={row.counterpart_workspace_id} sec.{row.counterpart_sequence}"
+        )
+        typer.echo(
+            f"    punto: {row.checkpoint_label} | estado: {row.state_sha256}"
+        )
+        typer.echo(
+            f"    manifiesto: {row.manifest_sha256} | propuesta: {row.proposal_sha256}"
+        )
+        typer.echo(
+            f"    registro: {row.source} | {row.registered_by} | "
+            f"{row.created_at.isoformat()}"
+        )
+        typer.echo(f"    fundamento: {row.registration_reason}")
+    typer.echo(f"Total: {len(rows)} acuerdos")
+
+
+
+@app.command("exchange-state-package-create")
+def exchange_state_package_create_command(
+    project_root: Path = typer.Argument(..., help="Raíz de la copia cuyo estado se ofrece"),
+    target_workspace_id: str = typer.Option(..., "--target-workspace-id"),
+    target_workspace_name: str = typer.Option(..., "--target-workspace-name"),
+    created_by: str = typer.Option(..., "--created-by"),
+    reason: str = typer.Option(..., "--reason"),
+    confirm_package: bool = typer.Option(
+        False,
+        "--confirm-package",
+        help="Confirma la creación del paquete completo de estado",
+    ),
+    destination: Path | None = typer.Option(None, "--destination"),
+) -> None:
+    """Crea un paquete verificable del estado editable actual para otra copia."""
+    _require_current_database(project_root)
+    engine = create_sqlite_engine(database_path(project_root))
+    try:
+        with session_scope(engine) as session:
+            summary = create_state_adoption_package(
+                session,
+                project_root=project_root.resolve(),
+                target_workspace_id=target_workspace_id,
+                target_workspace_name=target_workspace_name,
+                created_by=created_by,
+                creation_reason=reason,
+                package_confirmed=confirm_package,
+                destination=destination,
+            )
+    except (ValueError, OSError) as exc:
+        raise typer.BadParameter(str(exc)) from exc
+    finally:
+        engine.dispose()
+    typer.echo(f"OK: paquete de estado {summary.adoption_id}")
+    typer.echo(
+        f"Origen: {summary.source_workspace_id} secuencia {summary.source_sequence} | "
+        f"destino: {summary.target_workspace_id}"
+    )
+    typer.echo(f"Estado editable: {summary.state_sha256}")
+    typer.echo(f"Base documental: {summary.foundation_sha256}")
+    typer.echo(f"Paquete: {summary.output_path}")
+    typer.echo(f"SHA-256 del manifiesto: {summary.manifest_sha256}")
+    typer.echo(f"SHA-256 del ZIP: {summary.package_sha256}")
+    typer.echo("No se modificó el corpus ni se activó una base común.")
+
+
+@app.command("exchange-state-adoption-preview")
+def exchange_state_adoption_preview_command(
+    project_root: Path = typer.Argument(..., help="Raíz de la copia destinataria"),
+    package: Path = typer.Argument(..., help="ZIP completo de estado"),
+) -> None:
+    """Previsualiza el impacto de una adopción sin escribir en la base."""
+    _require_current_database(project_root)
+    engine = create_sqlite_engine(database_path(project_root))
+    try:
+        with session_scope(engine) as session:
+            preview = preview_state_adoption(session, package_path=package)
+    except (ValueError, OSError) as exc:
+        raise typer.BadParameter(str(exc)) from exc
+    finally:
+        engine.dispose()
+    typer.echo(f"Adopción: {preview.adoption_id}")
+    typer.echo(
+        f"Origen: {preview.source_workspace_name} | {preview.source_workspace_id} | "
+        f"secuencia {preview.source_sequence}"
+    )
+    typer.echo(f"Estado local: {preview.local_state_sha256}")
+    typer.echo(f"Estado recibido: {preview.incoming_state_sha256}")
+    typer.echo(
+        f"Impacto total: agregar {preview.total_added} | quitar {preview.total_removed} | "
+        f"cambiar {preview.total_changed}"
+    )
+    for row in preview.sections:
+        if row.added or row.removed or row.changed:
+            typer.echo(
+                f"    {row.section}: local {row.local_count} | recibido {row.incoming_count} | "
+                f"+{row.added} -{row.removed} ~{row.changed}"
+            )
+    typer.echo("Vista previa de solo lectura: no se escribió ningún dato.")
+
+
+@app.command("exchange-state-adopt")
+def exchange_state_adopt_command(
+    project_root: Path = typer.Argument(..., help="Raíz de la copia destinataria"),
+    package: Path = typer.Argument(..., help="ZIP completo de estado"),
+    applied_by: str = typer.Option(..., "--applied-by"),
+    reason: str = typer.Option(..., "--reason"),
+    confirm_adoption: bool = typer.Option(
+        False,
+        "--confirm-adoption",
+        help="Confirma backup y reemplazo transaccional del estado editable",
+    ),
+) -> None:
+    """Adopta transaccionalmente el estado recibido después de crear un backup."""
+    _require_current_database(project_root)
+    engine = create_sqlite_engine(database_path(project_root))
+    try:
+        with session_scope(engine) as session:
+            summary = apply_state_adoption(
+                session,
+                project_root=project_root.resolve(),
+                package_path=package,
+                applied_by=applied_by,
+                application_reason=reason,
+                adoption_confirmed=confirm_adoption,
+                source="cli",
+            )
+    except (ValueError, OSError) as exc:
+        raise typer.BadParameter(str(exc)) from exc
+    finally:
+        engine.dispose()
+    typer.echo(f"OK: estado divergente adoptado {summary.adoption_id}")
+    typer.echo(f"Estado anterior: {summary.previous_state_sha256}")
+    typer.echo(f"Estado adoptado: {summary.adopted_state_sha256}")
+    typer.echo(f"Backup previo: {summary.backup_path}")
+    typer.echo(f"SHA-256 del backup: {summary.backup_sha256}")
+    typer.echo(f"Simulaciones anteriores invalidadas: {summary.stale_dry_run_count}")
+    typer.echo(
+        "La aplicación fue transaccional. La base común todavía debe registrarse "
+        "bilateralmente después de comprobar hashes idénticos."
+    )
+
+
+@app.command("exchange-state-adoptions")
+def exchange_state_adoptions_command(
+    project_root: Path = typer.Argument(..., help="Raíz del proyecto"),
+) -> None:
+    """Lista adopciones de estado y rollbacks registrados en la copia."""
+    _require_current_database(project_root)
+    engine = create_sqlite_engine(database_path(project_root))
+    try:
+        with session_scope(engine) as session:
+            rows = state_adoption_rows(session)
+    finally:
+        engine.dispose()
+    for row in rows:
+        status = "revertida" if row.rolled_back else "activa"
+        typer.echo(
+            f"{row.adoption_id} | {status} | origen={row.source_workspace_name} "
+            f"sec={row.source_sequence} | {row.source} | {row.applied_by} | "
+            f"{row.applied_at.isoformat()}"
+        )
+        typer.echo(f"    fundamento: {row.application_reason}")
+        typer.echo(
+            f"    estado: {row.previous_state_sha256} -> {row.adopted_state_sha256}"
+        )
+        typer.echo(f"    backup: {row.backup_path}")
+        if row.rolled_back:
+            typer.echo(
+                f"    rollback: {row.rolled_back_by} | {row.rolled_back_at.isoformat() if row.rolled_back_at else '-'}"
+            )
+            typer.echo(f"    fundamento rollback: {row.rollback_reason}")
+    typer.echo(f"Total: {len(rows)} adopciones")
+
+
+@app.command("exchange-state-adoption-rollback")
+def exchange_state_adoption_rollback_command(
+    project_root: Path = typer.Argument(..., help="Raíz de la copia destinataria"),
+    adoption: str = typer.Argument(..., help="ID de adopción o de registro"),
+    rolled_back_by: str = typer.Option(..., "--rolled-back-by"),
+    reason: str = typer.Option(..., "--reason"),
+    confirm_rollback: bool = typer.Option(
+        False,
+        "--confirm-rollback",
+        help="Confirma la restauración del backup previo y la creación de un backup de seguridad",
+    ),
+) -> None:
+    """Restaura el estado previo y conserva evidencia append-only del rollback."""
+    try:
+        summary = rollback_state_adoption(
+            project_root=project_root.resolve(),
+            adoption_ref=adoption,
+            rolled_back_by=rolled_back_by,
+            rollback_reason=reason,
+            rollback_confirmed=confirm_rollback,
+            source="cli",
+        )
+    except (ValueError, OSError) as exc:
+        raise typer.BadParameter(str(exc)) from exc
+    typer.echo(f"OK: adopción revertida {summary.adoption_id}")
+    typer.echo(f"Estado restaurado: {summary.restored_state_sha256}")
+    typer.echo(f"Backup restaurado: {summary.restored_backup}")
+    typer.echo(f"Backup de seguridad posterior: {summary.safety_backup}")
+    typer.echo(f"SHA-256 del backup de seguridad: {summary.safety_backup_sha256}")
+    typer.echo(f"Simulaciones invalidadas: {summary.stale_dry_run_count}")
+
+
 @app.command("exchange-fork-copy")
 def exchange_fork_copy_command(
     project_root: Path = typer.Argument(..., help="Raíz de la copia duplicada"),
@@ -1755,7 +2441,7 @@ def exchange_fork_copy_command(
             "Use --confirm-copy únicamente después de duplicar físicamente el proyecto"
         )
     initialize_project(project_root)
-    upgrade_database(project_root)
+    _require_current_database(project_root)
     engine = create_sqlite_engine(database_path(project_root))
     try:
         with session_scope(engine) as session:
@@ -1791,7 +2477,7 @@ def exchange_dry_run_command(
     ),
 ) -> None:
     """Clasifica un bundle recibido sin aplicar cambios al estado editable."""
-    upgrade_database(project_root)
+    _require_current_database(project_root)
     engine = create_sqlite_engine(database_path(project_root))
     try:
         with session_scope(engine) as session:
@@ -1813,7 +2499,8 @@ def exchange_dry_run_command(
     )
     typer.echo(
         f"Base común: {summary.common_checkpoint_label or '-'} | "
-        f"{summary.base_match_status} | estado {summary.overall_status}"
+        f"{summary.base_match_status} | método {summary.base_match_method} | "
+        f"estado {summary.overall_status}"
     )
     typer.echo(
         "Eventos: "
@@ -1832,7 +2519,7 @@ def exchange_incoming_command(
     project_root: Path = typer.Argument(..., help="Raíz del proyecto operativo"),
 ) -> None:
     """Lista bundles recibidos y su última evaluación dry-run."""
-    upgrade_database(project_root)
+    _require_current_database(project_root)
     engine = create_sqlite_engine(database_path(project_root))
     try:
         with session_scope(engine) as session:
@@ -1860,7 +2547,7 @@ def exchange_conflicts_command(
     bundle: str = typer.Argument(..., help="ID del bundle o ruta al ZIP evaluado"),
 ) -> None:
     """Muestra base, valor local, valor recibido y resolución de cada conflicto."""
-    upgrade_database(project_root)
+    _require_current_database(project_root)
     engine = create_sqlite_engine(database_path(project_root))
     try:
         with session_scope(engine) as session:
@@ -1925,7 +2612,7 @@ def exchange_resolve_field_command(
                 custom_value = json.loads(value_file.read_text(encoding="utf-8"))
         except json.JSONDecodeError as exc:
             raise typer.BadParameter(f"JSON inválido: {exc}") from exc
-    upgrade_database(project_root)
+    _require_current_database(project_root)
     engine = create_sqlite_engine(database_path(project_root))
     try:
         with session_scope(engine) as session:
@@ -1959,7 +2646,7 @@ def exchange_resolve_event_command(
     note: str | None = typer.Option(None, "--note"),
 ) -> None:
     """Resuelve todos los campos pendientes de un evento con una misma elección."""
-    upgrade_database(project_root)
+    _require_current_database(project_root)
     engine = create_sqlite_engine(database_path(project_root))
     try:
         with session_scope(engine) as session:
@@ -1994,7 +2681,7 @@ def exchange_resolve_all_command(
     """Resuelve todos los campos pendientes del bundle con una misma elección."""
     if not confirm_all:
         raise typer.BadParameter("Use --confirm-all para resolver todo el bundle")
-    upgrade_database(project_root)
+    _require_current_database(project_root)
     engine = create_sqlite_engine(database_path(project_root))
     try:
         with session_scope(engine) as session:
@@ -2028,7 +2715,7 @@ def exchange_skip_event_command(
     """Descarta explícitamente un evento recibido conservando el estado local."""
     if not confirm_skip:
         raise typer.BadParameter("Use --confirm-skip para descartar el evento recibido")
-    upgrade_database(project_root)
+    _require_current_database(project_root)
     engine = create_sqlite_engine(database_path(project_root))
     try:
         with session_scope(engine) as session:
@@ -2052,7 +2739,7 @@ def exchange_resolution_status_command(
     bundle: str = typer.Argument(..., help="ID del bundle o ruta al ZIP evaluado"),
 ) -> None:
     """Resume el avance de la resolución humana de un bundle."""
-    upgrade_database(project_root)
+    _require_current_database(project_root)
     engine = create_sqlite_engine(database_path(project_root))
     try:
         with session_scope(engine) as session:
@@ -2082,7 +2769,7 @@ def exchange_finalize_resolutions_command(
         raise typer.BadParameter(
             "Use --confirm-resolutions después de revisar todas las decisiones"
         )
-    upgrade_database(project_root)
+    _require_current_database(project_root)
     engine = create_sqlite_engine(database_path(project_root))
     try:
         with session_scope(engine) as session:
@@ -2138,7 +2825,7 @@ def authority_list_command(
     """Lista entidades canónicas, alias y cantidad de menciones."""
     if entity_type is not None and entity_type not in AUTHORITY_TYPES:
         raise typer.BadParameter("Tipo inválido: " + entity_type)
-    upgrade_database(project_root)
+    _require_current_database(project_root)
     engine = create_sqlite_engine(database_path(project_root))
     try:
         with session_scope(engine) as session:
@@ -2182,7 +2869,7 @@ def authority_create_command(
     """Crea una entidad canónica versionada."""
     if entity_type not in AUTHORITY_TYPES:
         raise typer.BadParameter("Tipo inválido: " + entity_type)
-    upgrade_database(project_root)
+    _require_current_database(project_root)
     engine = create_sqlite_engine(database_path(project_root))
     try:
         with session_scope(engine) as session:
@@ -2217,7 +2904,7 @@ def authority_add_alias_command(
     """Agrega un alias y crea una nueva revisión de la entidad."""
     if alias_type not in ALIAS_TYPES:
         raise typer.BadParameter("Tipo de alias inválido: " + alias_type)
-    upgrade_database(project_root)
+    _require_current_database(project_root)
     engine = create_sqlite_engine(database_path(project_root))
     try:
         with session_scope(engine) as session:
@@ -2242,15 +2929,36 @@ def authority_add_alias_command(
 def mention_scan_object_command(
     project_root: Path = typer.Argument(..., help="Raíz del proyecto operativo"),
     object_id: str = typer.Argument(..., help="UUID del objeto textual editable, no de la entidad"),
+    page_status: list[str] | None = typer.Option(None, "--page-status"),
+    confirm_broader_quality_scope: bool = typer.Option(
+        False, "--confirm-broader-quality-scope"
+    ),
+    quality_reason: str | None = typer.Option(None, "--quality-reason"),
     created_by: str = typer.Option("local_user", "--created-by"),
 ) -> None:
     """Busca entidades conocidas dentro de un objeto textual editable."""
-    upgrade_database(project_root)
+    invalid = set(page_status or ()) - set(PAGE_REVIEW_STATUSES)
+    if invalid:
+        raise typer.BadParameter(
+            "Estados de página inválidos: " + ", ".join(sorted(invalid))
+        )
+    selected_page_statuses = tuple(
+        page_status
+        if page_status is not None
+        else DEFAULT_AUTOMATIC_PAGE_REVIEW_STATUSES
+    )
+    _require_current_database(project_root)
     engine = create_sqlite_engine(database_path(project_root))
     try:
         with session_scope(engine) as session:
             summary = suggest_dictionary_mentions(
-                session, object_id=object_id, created_by=created_by
+                session,
+                object_id=object_id,
+                created_by=created_by,
+                page_review_statuses=selected_page_statuses,
+                broader_quality_scope_confirmed=confirm_broader_quality_scope,
+                quality_scope_reason=quality_reason,
+                quality_scope_source="cli",
             )
             rows = mention_rows(session, object_id=object_id, statuses=("pending",))
     except ValueError as exc:
@@ -2274,10 +2982,25 @@ def mention_scan_all_command(
     source_key: list[str] | None = typer.Option(
         None, "--source-key", help="Limita el escaneo a uno o más documentos"
     ),
+    page_status: list[str] | None = typer.Option(None, "--page-status"),
+    confirm_broader_quality_scope: bool = typer.Option(
+        False, "--confirm-broader-quality-scope"
+    ),
+    quality_reason: str | None = typer.Option(None, "--quality-reason"),
     created_by: str = typer.Option("local_user", "--created-by"),
 ) -> None:
     """Busca nombres y alias de entidades en todos los objetos textuales activos."""
-    upgrade_database(project_root)
+    invalid = set(page_status or ()) - set(PAGE_REVIEW_STATUSES)
+    if invalid:
+        raise typer.BadParameter(
+            "Estados de página inválidos: " + ", ".join(sorted(invalid))
+        )
+    selected_page_statuses = tuple(
+        page_status
+        if page_status is not None
+        else DEFAULT_AUTOMATIC_PAGE_REVIEW_STATUSES
+    )
+    _require_current_database(project_root)
     decisions = load_decisions(project_root / "config" / "decisions.yaml")
     engine = create_sqlite_engine(database_path(project_root))
     try:
@@ -2286,6 +3009,10 @@ def mention_scan_all_command(
                 session,
                 project_id=decisions.project_id,
                 source_keys=source_key or (),
+                page_review_statuses=selected_page_statuses,
+                broader_quality_scope_confirmed=confirm_broader_quality_scope,
+                quality_scope_reason=quality_reason,
+                quality_scope_source="cli",
                 created_by=created_by,
             )
     except ValueError as exc:
@@ -2306,20 +3033,55 @@ def mention_find_entity_command(
     source_key: list[str] | None = typer.Option(
         None, "--source-key", help="Limita la búsqueda a uno o más documentos"
     ),
+    page_status: list[str] | None = typer.Option(None, "--page-status"),
+    confirm_broader_quality_scope: bool = typer.Option(
+        False, "--confirm-broader-quality-scope"
+    ),
+    quality_reason: str | None = typer.Option(None, "--quality-reason"),
+    run_by: str = typer.Option("local_user", "--run-by"),
     include_existing: bool = typer.Option(
         False, "--include-existing", help="Muestra también menciones ya incorporadas"
     ),
 ) -> None:
     """Previsualiza coincidencias del nombre preferido y los alias sin modificar la base."""
-    upgrade_database(project_root)
+    invalid = set(page_status or ()) - set(PAGE_REVIEW_STATUSES)
+    if invalid:
+        raise typer.BadParameter(
+            "Estados de página inválidos: " + ", ".join(sorted(invalid))
+        )
+    selected_page_statuses = tuple(
+        page_status
+        if page_status is not None
+        else DEFAULT_AUTOMATIC_PAGE_REVIEW_STATUSES
+    )
+    _require_current_database(project_root)
     engine = create_sqlite_engine(database_path(project_root))
     try:
         with session_scope(engine) as session:
+            record_mention_suggestion_authorization(
+                session,
+                project_id=_single_project_id(session),
+                page_review_statuses=selected_page_statuses,
+                broader_quality_scope_confirmed=confirm_broader_quality_scope,
+                quality_scope_reason=quality_reason,
+                actor=run_by,
+                source="cli",
+                target_type="authority",
+                target_id=entity_id,
+                parameters={
+                    "mode": "authority_candidates",
+                    "source_keys": list(source_key or ()),
+                    "include_existing": include_existing,
+                },
+            )
             rows = authority_mention_candidates(
                 session,
                 authority_id=entity_id,
                 source_keys=source_key or (),
                 include_existing=include_existing,
+                page_review_statuses=selected_page_statuses,
+                broader_quality_scope_confirmed=confirm_broader_quality_scope,
+                quality_scope_reason=quality_reason,
             )
     except ValueError as exc:
         raise typer.BadParameter(str(exc)) from exc
@@ -2354,6 +3116,11 @@ def mention_include_entity_command(
         None, "--source-key", help="Limita la búsqueda a uno o más documentos"
     ),
     status: str = typer.Option("pending", "--status", help="pending o accepted"),
+    page_status: list[str] | None = typer.Option(None, "--page-status"),
+    confirm_broader_quality_scope: bool = typer.Option(
+        False, "--confirm-broader-quality-scope"
+    ),
+    quality_reason: str | None = typer.Option(None, "--quality-reason"),
     created_by: str = typer.Option("local_user", "--created-by"),
     confirm_all: bool = typer.Option(
         False, "--confirm-all", help="Confirma la incorporación de todas las coincidencias nuevas"
@@ -2362,15 +3129,44 @@ def mention_include_entity_command(
     """Incorpora en lote todas las coincidencias nuevas de una entidad."""
     if not confirm_all:
         raise typer.BadParameter("Use --confirm-all después de revisar mention-find-entity")
-    upgrade_database(project_root)
+    invalid = set(page_status or ()) - set(PAGE_REVIEW_STATUSES)
+    if invalid:
+        raise typer.BadParameter(
+            "Estados de página inválidos: " + ", ".join(sorted(invalid))
+        )
+    selected_page_statuses = tuple(
+        page_status
+        if page_status is not None
+        else DEFAULT_AUTOMATIC_PAGE_REVIEW_STATUSES
+    )
+    _require_current_database(project_root)
     engine = create_sqlite_engine(database_path(project_root))
     try:
         with session_scope(engine) as session:
+            record_mention_suggestion_authorization(
+                session,
+                project_id=_single_project_id(session),
+                page_review_statuses=selected_page_statuses,
+                broader_quality_scope_confirmed=confirm_broader_quality_scope,
+                quality_scope_reason=quality_reason,
+                actor=created_by,
+                source="cli",
+                target_type="authority",
+                target_id=entity_id,
+                parameters={
+                    "mode": "authority_include_all",
+                    "source_keys": list(source_key or ()),
+                    "status": status,
+                },
+            )
             rows = authority_mention_candidates(
                 session,
                 authority_id=entity_id,
                 source_keys=source_key or (),
                 include_existing=False,
+                page_review_statuses=selected_page_statuses,
+                broader_quality_scope_confirmed=confirm_broader_quality_scope,
+                quality_scope_reason=quality_reason,
             )
             summary = include_authority_mention_candidates(
                 session,
@@ -2379,6 +3175,9 @@ def mention_include_entity_command(
                 source_keys=source_key or (),
                 status=status,
                 created_by=created_by,
+                page_review_statuses=selected_page_statuses,
+                broader_quality_scope_confirmed=confirm_broader_quality_scope,
+                quality_scope_reason=quality_reason,
             )
     except ValueError as exc:
         raise typer.BadParameter(str(exc)) from exc
@@ -2400,7 +3199,7 @@ def entity_relation_list_command(
     include_inactive: bool = typer.Option(False, "--include-inactive"),
 ) -> None:
     """Lista relaciones explícitas entre entidades, unidades y partes documentales."""
-    upgrade_database(project_root)
+    _require_current_database(project_root)
     engine = create_sqlite_engine(database_path(project_root))
     try:
         with session_scope(engine) as session:
@@ -2445,7 +3244,7 @@ def entity_relation_create_command(
         raise typer.BadParameter("Tipo de destino inválido: " + target_kind)
     if review_status not in RELATION_REVIEW_STATUSES:
         raise typer.BadParameter("Estado de revisión inválido: " + review_status)
-    upgrade_database(project_root)
+    _require_current_database(project_root)
     engine = create_sqlite_engine(database_path(project_root))
     try:
         with session_scope(engine) as session:
@@ -2476,7 +3275,7 @@ def graph_check_command(
     include_info: bool = typer.Option(False, "--include-info"),
 ) -> None:
     """Controla duplicados, relaciones sin evidencia y menciones desactualizadas."""
-    upgrade_database(project_root)
+    _require_current_database(project_root)
     engine = create_sqlite_engine(database_path(project_root))
     try:
         with session_scope(engine) as session:
@@ -2514,7 +3313,7 @@ def graph_export_command(
 ) -> None:
     """Exporta el grafo derivado a JSON, CSV y GraphML."""
     project_root = project_root.expanduser().resolve()
-    upgrade_database(project_root)
+    _require_current_database(project_root)
     edge_types = ["explicit"]
     if include_mentions:
         edge_types.append("mention")
@@ -2557,12 +3356,47 @@ def graph_export_command(
         typer.echo(str(path))
 
 
+@app.command("analysis-quality-audit")
+def analysis_quality_audit_command(
+    project_root: Path = typer.Argument(..., help="Raíz del proyecto operativo"),
+    limit: int = typer.Option(50, "--limit", min=1, max=500),
+) -> None:
+    """Lista autorizaciones registradas para análisis automáticos."""
+    _require_current_database(project_root)
+    engine = create_sqlite_engine(database_path(project_root))
+    try:
+        with session_scope(engine) as session:
+            rows = automatic_analysis_authorization_rows(
+                session,
+                project_id=_single_project_id(session),
+                limit=limit,
+            )
+    finally:
+        engine.dispose()
+    for row in rows:
+        statuses = ",".join(row.page_review_statuses) or "todos"
+        typer.echo(
+            f"{row.authorization_id} | {row.analysis_kind} | {row.scope_key} | "
+            f"páginas={statuses} | {row.source} | {row.confirmed_by} | "
+            f"{row.created_at.isoformat(timespec='seconds')}"
+        )
+        if row.confirmation_reason:
+            typer.echo(f"    fundamento: {row.confirmation_reason}")
+        if row.target_type or row.target_id:
+            typer.echo(
+                f"    destino: {row.target_type or '-'} | {row.target_id or '-'}"
+            )
+        if row.parameters_sha256:
+            typer.echo(f"    parámetros: {row.parameters_sha256}")
+    typer.echo(f"Total mostrado: {len(rows)} autorizaciones")
+
+
 @app.command("export-profile-list")
 def export_profile_list_command(
     project_root: Path = typer.Argument(..., help="Raíz del proyecto operativo"),
 ) -> None:
     """Lista los perfiles reproducibles de exportación."""
-    upgrade_database(project_root)
+    _require_current_database(project_root)
     engine = create_sqlite_engine(database_path(project_root))
     try:
         with session_scope(engine) as session:
@@ -2589,6 +3423,10 @@ def export_profile_save_command(
     object_type: list[str] | None = typer.Option(None, "--object-type"),
     object_review_status: list[str] | None = typer.Option(None, "--object-review-status"),
     page_review_status: list[str] | None = typer.Option(None, "--page-review-status"),
+    confirm_broader_quality_scope: bool = typer.Option(
+        False, "--confirm-broader-quality-scope"
+    ),
+    quality_reason: str | None = typer.Option(None, "--quality-reason"),
     temporal_start: str | None = typer.Option(None, "--temporal-start"),
     temporal_end: str | None = typer.Option(None, "--temporal-end"),
     temporal_include_undated: bool = typer.Option(False, "--temporal-include-undated"),
@@ -2607,7 +3445,12 @@ def export_profile_save_command(
     invalid -= set(EXPORT_REVIEW_STATUSES)
     if invalid:
         raise typer.BadParameter("Estados de revisión inválidos: " + ", ".join(sorted(invalid)))
-    upgrade_database(project_root)
+    selected_page_statuses = tuple(
+        page_review_status
+        if page_review_status is not None
+        else DEFAULT_AUTOMATIC_PAGE_REVIEW_STATUSES
+    )
+    _require_current_database(project_root)
     engine = create_sqlite_engine(database_path(project_root))
     try:
         with session_scope(engine) as session:
@@ -2623,13 +3466,16 @@ def export_profile_save_command(
                     output_format=output_format,
                     include_object_types=tuple(object_type or []),
                     include_review_statuses=tuple(object_review_status or []),
-                    include_page_review_statuses=tuple(page_review_status or []),
+                    include_page_review_statuses=selected_page_statuses,
                     temporal_start=_parse_temporal_cli_date(temporal_start, "--temporal-start"),
                     temporal_end=_parse_temporal_cli_date(temporal_end, "--temporal-end"),
                     temporal_include_undated=temporal_include_undated,
                     include_page_markers=page_markers,
                 ),
                 changed_by=changed_by,
+                broader_quality_scope_confirmed=confirm_broader_quality_scope,
+                quality_scope_reason=quality_reason,
+                quality_scope_source="cli",
             )
             result_id = profile.id
             revision = profile.revision
@@ -2647,7 +3493,7 @@ def corpus_export_preview_command(
     limit: int = typer.Option(5, "--limit", min=0, max=100),
 ) -> None:
     """Muestra el tamaño y los primeros registros de una exportación sin escribir archivos."""
-    upgrade_database(project_root)
+    _require_current_database(project_root)
     engine = create_sqlite_engine(database_path(project_root))
     try:
         with session_scope(engine) as session:
@@ -2676,7 +3522,7 @@ def corpus_export_command(
     if output_format is not None and output_format not in OUTPUT_FORMATS:
         raise typer.BadParameter("Formato inválido: " + output_format)
     project_root = project_root.expanduser().resolve()
-    upgrade_database(project_root)
+    _require_current_database(project_root)
     engine = create_sqlite_engine(database_path(project_root))
     try:
         with session_scope(engine) as session:
@@ -2709,7 +3555,7 @@ def corpus_export_history_command(
     project_root: Path = typer.Argument(..., help="Raíz del proyecto operativo"),
 ) -> None:
     """Lista exportaciones materializadas y sus hashes reproducibles."""
-    upgrade_database(project_root)
+    _require_current_database(project_root)
     engine = create_sqlite_engine(database_path(project_root))
     try:
         with session_scope(engine) as session:
@@ -2730,7 +3576,7 @@ def semantic_profile_list_command(
     project_root: Path = typer.Argument(..., help="Raíz del proyecto operativo"),
 ) -> None:
     """Lista perfiles de búsqueda semántica y el estado de sus índices."""
-    upgrade_database(project_root)
+    _require_current_database(project_root)
     engine = create_sqlite_engine(database_path(project_root))
     try:
         with session_scope(engine) as session:
@@ -2761,6 +3607,584 @@ def semantic_profile_list_command(
     typer.echo(f"Total: {len(rows)} perfiles")
 
 
+
+@app.command("discovery-profile-save")
+def discovery_profile_save_command(
+    project_root: Path = typer.Argument(..., help="Raíz del proyecto operativo"),
+    name: str = typer.Option(..., "--name", help="Nombre estable del perfil"),
+    profile_ref: str | None = typer.Option(None, "--profile", help="ID o nombre para actualizar"),
+    description: str | None = typer.Option(None, "--description"),
+    family: list[str] | None = typer.Option(None, "--family"),
+    object_type: list[str] | None = typer.Option(None, "--object-type"),
+    object_status: list[str] | None = typer.Option(None, "--object-status"),
+    page_status: list[str] | None = typer.Option(None, "--page-status"),
+    minimum_confidence: float = typer.Option(0.75, "--minimum-confidence", min=0.0, max=1.0),
+    confirm_broader_quality_scope: bool = typer.Option(
+        False, "--confirm-broader-quality-scope"
+    ),
+    quality_reason: str | None = typer.Option(None, "--quality-reason"),
+    changed_by: str = typer.Option("local_user", "--changed-by"),
+) -> None:
+    """Crea o actualiza un perfil reproducible de descubrimiento abierto."""
+    selected_families = tuple(family or DISCOVERY_FAMILIES[:-1])
+    invalid_families = set(selected_families) - set(DISCOVERY_FAMILIES)
+    if invalid_families:
+        raise typer.BadParameter(
+            "Familias inválidas: " + ", ".join(sorted(invalid_families))
+        )
+    invalid_pages = set(page_status or ()) - set(PAGE_REVIEW_STATUSES)
+    if invalid_pages:
+        raise typer.BadParameter(
+            "Estados de página inválidos: " + ", ".join(sorted(invalid_pages))
+        )
+    selected_pages = tuple(
+        page_status
+        if page_status is not None
+        else DEFAULT_AUTOMATIC_PAGE_REVIEW_STATUSES
+    )
+    _require_current_database(project_root)
+    engine = create_sqlite_engine(database_path(project_root))
+    try:
+        with session_scope(engine) as session:
+            project_id = _single_project_id(session)
+            profile_id = None
+            if profile_ref:
+                profile_id = resolve_discovery_profile(
+                    session, project_id=project_id, profile_ref=profile_ref
+                ).id
+            profile = save_discovery_profile(
+                session,
+                project_id=project_id,
+                profile_id=profile_id,
+                values=DiscoveryProfileValues(
+                    name=name,
+                    description=description,
+                    families=selected_families,
+                    include_object_types=tuple(object_type or ()),
+                    include_object_review_statuses=tuple(object_status or ()),
+                    include_page_review_statuses=selected_pages,
+                    minimum_confidence=minimum_confidence,
+                ),
+                changed_by=changed_by,
+                broader_quality_scope_confirmed=confirm_broader_quality_scope,
+                quality_scope_reason=quality_reason,
+                quality_scope_source="cli",
+            )
+    except ValueError as exc:
+        raise typer.BadParameter(str(exc)) from exc
+    finally:
+        engine.dispose()
+    typer.echo(
+        f"OK: perfil {profile.id} | {profile.name} | revisión {profile.revision}"
+    )
+    typer.echo(
+        "Familias: " + ", ".join(profile.families_json or [])
+        + " | páginas=" + ",".join(profile.include_page_review_statuses_json or [])
+    )
+
+
+@app.command("discovery-profiles")
+def discovery_profiles_command(
+    project_root: Path = typer.Argument(..., help="Raíz del proyecto operativo"),
+) -> None:
+    """Lista perfiles activos de descubrimiento abierto."""
+    _require_current_database(project_root)
+    engine = create_sqlite_engine(database_path(project_root))
+    try:
+        with session_scope(engine) as session:
+            rows = discovery_profile_rows(
+                session, project_id=_single_project_id(session)
+            )
+    finally:
+        engine.dispose()
+    for row in rows:
+        typer.echo(
+            f"{row.id} | {row.name} | v{row.revision} | "
+            f"{row.provider_key}@{row.provider_version} | "
+            f"familias={','.join(row.families_json or [])} | "
+            f"páginas={','.join(row.include_page_review_statuses_json or []) or 'todas'}"
+        )
+    typer.echo(f"Total: {len(rows)} perfiles")
+
+
+@app.command("discovery-run")
+def discovery_run_command(
+    project_root: Path = typer.Argument(..., help="Raíz del proyecto operativo"),
+    profile_ref: str = typer.Argument(..., help="ID o nombre del perfil"),
+    created_by: str = typer.Option("local_user", "--created-by"),
+) -> None:
+    """Ejecuta el proveedor local y persiste candidatos auditables."""
+    _require_current_database(project_root)
+    engine = create_sqlite_engine(database_path(project_root))
+    try:
+        with session_scope(engine) as session:
+            project_id = _single_project_id(session)
+            profile = resolve_discovery_profile(
+                session, project_id=project_id, profile_ref=profile_ref
+            )
+            summary = run_open_discovery(
+                session,
+                project_id=project_id,
+                profile=profile,
+                created_by=created_by,
+            )
+    except (ValueError, RuntimeError, OSError) as exc:
+        raise typer.BadParameter(str(exc)) from exc
+    finally:
+        engine.dispose()
+    typer.echo(
+        f"OK: corrida {summary.run_id} | perfil {summary.profile_name} | "
+        f"objetos {summary.object_count} | candidatos {summary.candidate_count}"
+    )
+    typer.echo(
+        "Familias: "
+        + (", ".join(f"{key}={value}" for key, value in summary.family_counts.items()) or "ninguna")
+    )
+    typer.echo(f"Estado del corpus: {summary.corpus_state_sha256}")
+    typer.echo(f"Parámetros: {summary.parameters_sha256}")
+
+
+@app.command("discovery-runs")
+def discovery_runs_command(
+    project_root: Path = typer.Argument(..., help="Raíz del proyecto operativo"),
+    limit: int = typer.Option(50, "--limit", min=1, max=500),
+) -> None:
+    """Lista corridas persistidas de descubrimiento abierto."""
+    _require_current_database(project_root)
+    engine = create_sqlite_engine(database_path(project_root))
+    try:
+        with session_scope(engine) as session:
+            rows = discovery_run_rows(
+                session, project_id=_single_project_id(session), limit=limit
+            )
+    finally:
+        engine.dispose()
+    for row in rows:
+        typer.echo(
+            f"{row.run_id} | {row.status} | {row.profile_name} | "
+            f"objetos={row.object_count} candidatos={row.candidate_count} | "
+            f"{row.provider_key}@{row.provider_version} | {row.created_by} | "
+            f"{row.started_at.isoformat()}"
+        )
+        typer.echo(
+            "    familias: "
+            + (", ".join(f"{key}={value}" for key, value in row.family_counts.items()) or "ninguna")
+        )
+        typer.echo(f"    parámetros: {row.parameters_sha256}")
+    typer.echo(f"Total: {len(rows)} corridas")
+
+
+@app.command("discovery-candidates")
+def discovery_candidates_command(
+    project_root: Path = typer.Argument(..., help="Raíz del proyecto operativo"),
+    run_id: str | None = typer.Option(None, "--run-id"),
+    family: list[str] | None = typer.Option(None, "--family"),
+    limit: int = typer.Option(200, "--limit", min=1, max=10000),
+) -> None:
+    """Lista candidatos y su anclaje textual exacto."""
+    _require_current_database(project_root)
+    engine = create_sqlite_engine(database_path(project_root))
+    try:
+        with session_scope(engine) as session:
+            rows = discovery_candidate_rows(
+                session,
+                project_id=_single_project_id(session),
+                run_id=run_id,
+                families=tuple(family or ()),
+                limit=limit,
+            )
+    except ValueError as exc:
+        raise typer.BadParameter(str(exc)) from exc
+    finally:
+        engine.dispose()
+    for row in rows:
+        stale = " | obsoleto" if row.is_stale else ""
+        confidence = "-" if row.confidence is None else f"{row.confidence:.2f}"
+        typer.echo(
+            f"{row.candidate_id} | {row.semantic_family}/{row.suggested_subtype} | "
+            f"estado={row.status} decisiones={row.decision_count} | "
+            f"confianza={confidence}{stale} | {row.source_key or row.original_filename} "
+            f"p.{row.page_number} objeto={row.editable_object_id} "
+            f"offsets={row.start_offset}:{row.end_offset} revisión={row.object_revision_number}"
+        )
+        typer.echo(f"    texto: {row.exact_text}")
+        typer.echo(f"    explicación: {row.explanation}")
+        typer.echo(
+            f"    proveedor: {row.provider_key}@{row.provider_version} | "
+            f"método={row.method} | parámetros={row.parameters_sha256}"
+        )
+    typer.echo(f"Total: {len(rows)} candidatos")
+
+
+@app.command("discovery-decide")
+def discovery_decide_command(
+    project_root: Path = typer.Argument(..., help="Raíz del proyecto operativo"),
+    candidate_id: str = typer.Argument(..., help="Identificador del candidato"),
+    decision: str = typer.Option(..., "--decision", help="accept, reject, modify o defer"),
+    decided_by: str = typer.Option(..., "--decided-by"),
+    reason: str | None = typer.Option(None, "--reason"),
+    reviewed_text: str | None = typer.Option(None, "--reviewed-text"),
+    family: str | None = typer.Option(None, "--family"),
+    subtype: str | None = typer.Option(None, "--subtype"),
+    acceptance_mode: str | None = typer.Option(None, "--acceptance-mode"),
+    authority_id: str | None = typer.Option(None, "--authority-id"),
+    new_authority_name: str | None = typer.Option(None, "--new-authority-name"),
+    description: str | None = typer.Option(None, "--description"),
+    temporal_expression: str | None = typer.Option(None, "--temporal-expression"),
+    confirm_new_authority: bool = typer.Option(False, "--confirm-new-authority"),
+) -> None:
+    """Registra una decisión humana append-only sobre un candidato."""
+    if decision not in DISCOVERY_DECISION_TYPES:
+        raise typer.BadParameter(
+            "Decisión inválida: " + decision + ". Usá " + ", ".join(DISCOVERY_DECISION_TYPES)
+        )
+    if family is not None and family not in DISCOVERY_FAMILIES:
+        raise typer.BadParameter("Familia inválida: " + family)
+    if acceptance_mode is not None and acceptance_mode not in DISCOVERY_ACCEPTANCE_MODES:
+        raise typer.BadParameter("Destino de aceptación inválido: " + acceptance_mode)
+    _require_current_database(project_root)
+    engine = create_sqlite_engine(database_path(project_root))
+    try:
+        with session_scope(engine) as session:
+            summary = review_discovery_candidate(
+                session,
+                project_id=_single_project_id(session),
+                candidate_id=candidate_id,
+                decision_type=decision,
+                decided_by=decided_by,
+                reason=reason,
+                reviewed_text=reviewed_text,
+                semantic_family=family,
+                reviewed_subtype=subtype,
+                acceptance_mode=acceptance_mode,
+                authority_id=authority_id,
+                new_authority_name=new_authority_name,
+                description=description,
+                temporal_expression=temporal_expression,
+                confirm_new_authority=confirm_new_authority,
+                source="cli",
+            )
+    except ValueError as exc:
+        raise typer.BadParameter(str(exc)) from exc
+    finally:
+        engine.dispose()
+    typer.echo(
+        f"OK: decisión {summary.decision_id} | candidato {summary.candidate_id} | "
+        f"número {summary.decision_number} | {summary.decision_type} | "
+        f"estado {summary.candidate_status}"
+    )
+    if summary.target_authority_id:
+        typer.echo(f"Autoridad: {summary.target_authority_id}")
+    if summary.created_mention_id:
+        typer.echo(f"Mención: {summary.created_mention_id}")
+    if summary.context_record_id:
+        typer.echo(f"Registro propio: {summary.context_record_id}")
+
+
+@app.command("discovery-decisions")
+def discovery_decisions_command(
+    project_root: Path = typer.Argument(..., help="Raíz del proyecto operativo"),
+    candidate_id: str | None = typer.Option(None, "--candidate-id"),
+    limit: int = typer.Option(1000, "--limit", min=1, max=10000),
+) -> None:
+    """Lista el historial append-only de decisiones de descubrimiento."""
+    _require_current_database(project_root)
+    engine = create_sqlite_engine(database_path(project_root))
+    try:
+        with session_scope(engine) as session:
+            rows = discovery_decision_rows(
+                session,
+                project_id=_single_project_id(session),
+                candidate_id=candidate_id,
+                limit=limit,
+            )
+    finally:
+        engine.dispose()
+    for row in rows:
+        typer.echo(
+            f"{row.decision_id} | candidato={row.candidate_id} | "
+            f"número={row.decision_number} | {row.decision_type} | "
+            f"{row.semantic_family}/{row.reviewed_subtype} | {row.decided_by} | "
+            f"{row.decided_at.isoformat()}"
+        )
+        typer.echo(f"    texto: {row.reviewed_text}")
+        if row.acceptance_mode:
+            typer.echo(f"    destino: {row.acceptance_mode}")
+        if row.target_authority_id:
+            typer.echo(
+                f"    autoridad: {row.target_authority_name or '-'} | {row.target_authority_id}"
+            )
+        if row.created_mention_id:
+            typer.echo(f"    mención: {row.created_mention_id}")
+        if row.reason:
+            typer.echo(f"    fundamento: {row.reason}")
+        typer.echo(f"    candidato SHA-256: {row.candidate_state_sha256}")
+    typer.echo(f"Total: {len(rows)} decisiones")
+
+
+@app.command("discovery-context-records")
+def discovery_context_records_command(
+    project_root: Path = typer.Argument(..., help="Raíz del proyecto operativo"),
+) -> None:
+    """Lista tiempos, acontecimientos y procesos aceptados con datos propios."""
+    _require_current_database(project_root)
+    engine = create_sqlite_engine(database_path(project_root))
+    try:
+        with session_scope(engine) as session:
+            rows = discovery_context_record_rows(
+                session, project_id=_single_project_id(session)
+            )
+    finally:
+        engine.dispose()
+    for row in rows:
+        typer.echo(
+            f"{row.record_id} | candidato={row.candidate_id} | "
+            f"{row.semantic_family}/{row.subtype} | {row.label} | {row.created_by} | "
+            f"{row.created_at.isoformat()}"
+        )
+        if row.temporal_expression:
+            typer.echo(f"    temporalidad: {row.temporal_expression}")
+        if row.target_authority_id:
+            typer.echo(f"    autoridad vinculada: {row.target_authority_id}")
+    typer.echo(f"Total: {len(rows)} registros propios")
+
+
+
+@app.command("discovery-groups-rebuild")
+def discovery_groups_rebuild_command(
+    project_root: Path = typer.Argument(..., help="Raíz del proyecto operativo"),
+    created_by: str = typer.Option("local_user", "--created-by"),
+) -> None:
+    """Crea o actualiza grupos propuestos por coincidencia exacta o normalizada."""
+    _require_current_database(project_root)
+    engine = create_sqlite_engine(database_path(project_root))
+    try:
+        with session_scope(engine) as session:
+            summary = rebuild_discovery_groups(
+                session,
+                project_id=_single_project_id(session),
+                created_by=created_by,
+                source="cli",
+            )
+    except ValueError as exc:
+        raise typer.BadParameter(str(exc)) from exc
+    finally:
+        engine.dispose()
+    typer.echo(
+        f"OK: grupos nuevos {summary.groups_created} | "
+        f"pertenencias nuevas {summary.memberships_created} | "
+        f"candidatos duplicados {summary.duplicate_candidates}"
+    )
+
+
+@app.command("discovery-groups")
+def discovery_groups_command(
+    project_root: Path = typer.Argument(..., help="Raíz del proyecto operativo"),
+    include_removed: bool = typer.Option(False, "--include-removed"),
+) -> None:
+    """Lista grupos y todas sus procedencias candidatas."""
+    _require_current_database(project_root)
+    engine = create_sqlite_engine(database_path(project_root))
+    try:
+        with session_scope(engine) as session:
+            rows = discovery_group_rows(
+                session,
+                project_id=_single_project_id(session),
+                include_removed=include_removed,
+            )
+    finally:
+        engine.dispose()
+    for row in rows:
+        typer.echo(
+            f"{row.group_id} | {row.grouping_method} | {row.semantic_family} | "
+            f"{row.preferred_label} | miembros={row.active_member_count} | "
+            f"corridas={row.run_count} | obsoletos={row.stale_member_count}"
+        )
+        for member in row.members:
+            typer.echo(
+                f"    {member.membership_status} | candidato={member.candidate_id} | "
+                f"corrida={member.run_id} | {member.original_filename} "
+                f"p.{member.page_number} | rev.{member.object_revision_number} | "
+                f"offsets={member.start_offset}:{member.end_offset} | "
+                f"{'obsoleto' if member.is_stale else 'vigente'}"
+            )
+    typer.echo(f"Total: {len(rows)} grupos")
+
+
+@app.command("discovery-group-create")
+def discovery_group_create_command(
+    project_root: Path = typer.Argument(..., help="Raíz del proyecto operativo"),
+    candidate_id: list[str] = typer.Option(..., "--candidate-id"),
+    label: str = typer.Option(..., "--label"),
+    family: str = typer.Option(..., "--family"),
+    created_by: str = typer.Option("local_user", "--created-by"),
+    reason: str = typer.Option(..., "--reason"),
+) -> None:
+    """Crea un grupo manual sin fusionar candidatos ni procedencias."""
+    _require_current_database(project_root)
+    engine = create_sqlite_engine(database_path(project_root))
+    try:
+        with session_scope(engine) as session:
+            group = create_manual_group(
+                session,
+                project_id=_single_project_id(session),
+                candidate_ids=candidate_id,
+                preferred_label=label,
+                semantic_family=family,
+                created_by=created_by,
+                reason=reason,
+                source="cli",
+            )
+    except ValueError as exc:
+        raise typer.BadParameter(str(exc)) from exc
+    finally:
+        engine.dispose()
+    typer.echo(f"OK: grupo manual {group.id} | {group.preferred_label}")
+
+
+@app.command("discovery-group-member-add")
+def discovery_group_member_add_command(
+    project_root: Path = typer.Argument(..., help="Raíz del proyecto operativo"),
+    group_id: str = typer.Argument(...),
+    candidate_id: str = typer.Argument(...),
+    changed_by: str = typer.Option("local_user", "--changed-by"),
+    reason: str = typer.Option(..., "--reason"),
+) -> None:
+    """Agrega o restaura manualmente una pertenencia."""
+    _require_current_database(project_root)
+    engine = create_sqlite_engine(database_path(project_root))
+    try:
+        with session_scope(engine) as session:
+            changed = add_candidate_to_group(
+                session,
+                project_id=_single_project_id(session),
+                group_id=group_id,
+                candidate_id=candidate_id,
+                changed_by=changed_by,
+                reason=reason,
+                source="cli",
+            )
+    except ValueError as exc:
+        raise typer.BadParameter(str(exc)) from exc
+    finally:
+        engine.dispose()
+    typer.echo("OK: pertenencia agregada" if changed else "Sin cambios: ya era miembro activo")
+
+
+@app.command("discovery-group-member-remove")
+def discovery_group_member_remove_command(
+    project_root: Path = typer.Argument(..., help="Raíz del proyecto operativo"),
+    group_id: str = typer.Argument(...),
+    candidate_id: str = typer.Argument(...),
+    changed_by: str = typer.Option("local_user", "--changed-by"),
+    reason: str = typer.Option(..., "--reason"),
+) -> None:
+    """Separa manualmente un candidato y conserva el historial del grupo."""
+    _require_current_database(project_root)
+    engine = create_sqlite_engine(database_path(project_root))
+    try:
+        with session_scope(engine) as session:
+            remove_candidate_from_group(
+                session,
+                project_id=_single_project_id(session),
+                group_id=group_id,
+                candidate_id=candidate_id,
+                changed_by=changed_by,
+                reason=reason,
+                source="cli",
+            )
+    except ValueError as exc:
+        raise typer.BadParameter(str(exc)) from exc
+    finally:
+        engine.dispose()
+    typer.echo("OK: candidato separado; la procedencia histórica se conservó")
+
+
+@app.command("discovery-candidate-project")
+def discovery_candidate_project_command(
+    project_root: Path = typer.Argument(..., help="Raíz del proyecto operativo"),
+    candidate_id: str = typer.Argument(...),
+    method: str = typer.Option("exact_projection", "--method"),
+    created_by: str = typer.Option("local_user", "--created-by"),
+) -> None:
+    """Proyecta o vuelve a detectar un candidato obsoleto sobre la revisión vigente."""
+    if method not in CONTINUITY_METHODS:
+        raise typer.BadParameter("Método inválido: " + method)
+    _require_current_database(project_root)
+    engine = create_sqlite_engine(database_path(project_root))
+    try:
+        with session_scope(engine) as session:
+            summary = project_discovery_candidate(
+                session,
+                project_id=_single_project_id(session),
+                candidate_id=candidate_id,
+                method=method,
+                created_by=created_by,
+            )
+    except ValueError as exc:
+        raise typer.BadParameter(str(exc)) from exc
+    finally:
+        engine.dispose()
+    typer.echo(
+        f"OK: continuidad {summary.continuity_id} | {summary.method} | "
+        f"origen={summary.source_candidate_id} | nuevo={summary.target_candidate_id} | "
+        f"revisión={summary.target_revision} | "
+        f"offsets={summary.target_start_offset}:{summary.target_end_offset}"
+    )
+
+
+@app.command("discovery-continuities")
+def discovery_continuities_command(
+    project_root: Path = typer.Argument(..., help="Raíz del proyecto operativo"),
+) -> None:
+    """Lista vínculos de continuidad sin ocultar candidatos obsoletos."""
+    _require_current_database(project_root)
+    engine = create_sqlite_engine(database_path(project_root))
+    try:
+        with session_scope(engine) as session:
+            rows = discovery_continuity_rows(
+                session, project_id=_single_project_id(session)
+            )
+    finally:
+        engine.dispose()
+    for row in rows:
+        typer.echo(
+            f"{row.continuity_id} | {row.method} | "
+            f"origen={row.source_candidate_id} rev.{row.source_revision} "
+            f"{row.source_offsets[0]}:{row.source_offsets[1]} | "
+            f"nuevo={row.target_candidate_id} rev.{row.target_revision} "
+            f"{row.target_offsets[0]}:{row.target_offsets[1]} | {row.created_by}"
+        )
+        typer.echo(f"    evidencia: {row.evidence_sha256}")
+    typer.echo(f"Total: {len(rows)} continuidades")
+
+@app.command("discovery-audit")
+def discovery_audit_command(
+    project_root: Path = typer.Argument(..., help="Raíz del proyecto operativo"),
+    run_id: str = typer.Argument(..., help="Identificador de la corrida"),
+    output: Path | None = typer.Option(None, "--output", help="Archivo JSON opcional"),
+) -> None:
+    """Emite el snapshot completo de una corrida y sus candidatos."""
+    _require_current_database(project_root)
+    engine = create_sqlite_engine(database_path(project_root))
+    try:
+        with session_scope(engine) as session:
+            payload = discovery_audit_payload(
+                session, project_id=_single_project_id(session), run_id=run_id
+            )
+    except ValueError as exc:
+        raise typer.BadParameter(str(exc)) from exc
+    finally:
+        engine.dispose()
+    rendered = json.dumps(payload, ensure_ascii=False, indent=2, sort_keys=True)
+    if output is not None:
+        output.parent.mkdir(parents=True, exist_ok=True)
+        output.write_text(rendered + "\n", encoding="utf-8")
+        typer.echo(f"OK: auditoría escrita en {output.resolve()}")
+    else:
+        typer.echo(rendered)
+
+
 @app.command("semantic-profile-save")
 def semantic_profile_save_command(
     project_root: Path = typer.Argument(..., help="Raíz del proyecto operativo"),
@@ -2774,6 +4198,10 @@ def semantic_profile_save_command(
     object_type: list[str] | None = typer.Option(None, "--object-type"),
     object_status: list[str] | None = typer.Option(None, "--object-status"),
     page_status: list[str] | None = typer.Option(None, "--page-status"),
+    confirm_broader_quality_scope: bool = typer.Option(
+        False, "--confirm-broader-quality-scope"
+    ),
+    quality_reason: str | None = typer.Option(None, "--quality-reason"),
     query_prefix: str = typer.Option("query: ", "--query-prefix"),
     document_prefix: str = typer.Option("passage: ", "--document-prefix"),
     changed_by: str = typer.Option("local_user", "--changed-by"),
@@ -2783,7 +4211,17 @@ def semantic_profile_save_command(
         raise typer.BadParameter(
             f"--aggregation debe ser: {', '.join(SEMANTIC_AGGREGATION_LEVELS)}"
         )
-    upgrade_database(project_root)
+    invalid = set(page_status or ()) - set(PAGE_REVIEW_STATUSES)
+    if invalid:
+        raise typer.BadParameter(
+            "Estados de página inválidos: " + ", ".join(sorted(invalid))
+        )
+    selected_page_statuses = tuple(
+        page_status
+        if page_status is not None
+        else DEFAULT_AUTOMATIC_PAGE_REVIEW_STATUSES
+    )
+    _require_current_database(project_root)
     engine = create_sqlite_engine(database_path(project_root))
     try:
         with session_scope(engine) as session:
@@ -2804,13 +4242,16 @@ def semantic_profile_save_command(
                     aggregation_level=aggregation,
                     include_object_types=tuple(object_type or ()),
                     include_review_statuses=tuple(object_status or ()),
-                    include_page_review_statuses=tuple(page_status or ()),
+                    include_page_review_statuses=selected_page_statuses,
                     chunk_size=chunk_size,
                     chunk_overlap=chunk_overlap,
                     query_prefix=query_prefix,
                     document_prefix=document_prefix,
                 ),
                 changed_by=changed_by,
+                broader_quality_scope_confirmed=confirm_broader_quality_scope,
+                quality_scope_reason=quality_reason,
+                quality_scope_source="cli",
             )
     except ValueError as exc:
         raise typer.BadParameter(str(exc)) from exc
@@ -2826,7 +4267,7 @@ def semantic_profile_default_command(
     changed_by: str = typer.Option("local_user", "--changed-by"),
 ) -> None:
     """Crea el perfil inicial multilingüe si todavía no existe."""
-    upgrade_database(project_root)
+    _require_current_database(project_root)
     engine = create_sqlite_engine(database_path(project_root))
     try:
         with session_scope(engine) as session:
@@ -2844,7 +4285,7 @@ def semantic_index_status_command(
     profile_ref: str = typer.Argument(..., help="ID o nombre del perfil"),
 ) -> None:
     """Comprueba si el índice coincide con el perfil y el corpus actuales."""
-    upgrade_database(project_root)
+    _require_current_database(project_root)
     engine = create_sqlite_engine(database_path(project_root))
     try:
         with session_scope(engine) as session:
@@ -2882,7 +4323,7 @@ def semantic_index_build_command(
     """Descarga/carga el modelo y construye el índice semántico local."""
     if device not in {"auto", "cpu", "cuda"}:
         raise typer.BadParameter("--device debe ser auto, cpu o cuda")
-    upgrade_database(project_root)
+    _require_current_database(project_root)
     engine = create_sqlite_engine(database_path(project_root))
     try:
         with session_scope(engine) as session:
@@ -2925,7 +4366,7 @@ def semantic_search_command(
     device: str = typer.Option("auto", "--device"),
 ) -> None:
     """Busca fragmentos próximos en el espacio vectorial del perfil."""
-    upgrade_database(project_root)
+    _require_current_database(project_root)
     engine = create_sqlite_engine(database_path(project_root))
     try:
         with session_scope(engine) as session:
@@ -2962,7 +4403,7 @@ def processing_status_command(
     project_root: Path = typer.Argument(..., help="Raíz del proyecto operativo"),
 ) -> None:
     """Muestra el estado coordinado de incorporación y revisión de cada documento."""
-    upgrade_database(project_root)
+    _require_current_database(project_root)
     decisions = load_decisions(project_root / "config" / "decisions.yaml")
     engine = create_sqlite_engine(database_path(project_root))
     try:
@@ -2992,7 +4433,7 @@ def processing_jobs_command(
     show_items: bool = typer.Option(False, "--items"),
 ) -> None:
     """Lista trabajos persistentes iniciados desde la vista Procesamiento."""
-    upgrade_database(project_root)
+    _require_current_database(project_root)
     decisions = load_decisions(project_root / "config" / "decisions.yaml")
     engine = create_sqlite_engine(database_path(project_root))
     try:
@@ -3049,7 +4490,7 @@ def work_assignment_create_command(
         raise typer.BadParameter("--kind debe ser processing o primary_review")
     if priority not in ASSIGNMENT_PRIORITIES:
         raise typer.BadParameter(f"Prioridad inválida: {priority}")
-    upgrade_database(project_root)
+    _require_current_database(project_root)
     decisions = load_decisions(project_root / "config" / "decisions.yaml")
     engine = create_sqlite_engine(database_path(project_root))
     try:
@@ -3097,7 +4538,7 @@ def work_cross_review_create_command(
     """Crea una revisión cruzada sobre una revisión primaria enviada."""
     if priority is not None and priority not in ASSIGNMENT_PRIORITIES:
         raise typer.BadParameter(f"Prioridad inválida: {priority}")
-    upgrade_database(project_root)
+    _require_current_database(project_root)
     engine = create_sqlite_engine(database_path(project_root))
     try:
         with session_scope(engine) as session:
@@ -3137,7 +4578,7 @@ def work_assignment_update_command(
         raise typer.BadParameter(f"Prioridad inválida: {priority}")
     if outcome is not None and outcome not in CROSS_REVIEW_OUTCOMES:
         raise typer.BadParameter(f"Resultado inválido: {outcome}")
-    upgrade_database(project_root)
+    _require_current_database(project_root)
     engine = create_sqlite_engine(database_path(project_root))
     try:
         with session_scope(engine) as session:
@@ -3175,7 +4616,7 @@ def work_assignments_command(
     include_cancelled: bool = typer.Option(False, "--include-cancelled"),
 ) -> None:
     """Lista asignaciones de trabajo del equipo."""
-    upgrade_database(project_root)
+    _require_current_database(project_root)
     decisions = load_decisions(project_root / "config" / "decisions.yaml")
     engine = create_sqlite_engine(database_path(project_root))
     try:
@@ -3211,7 +4652,7 @@ def work_summary_command(
     project_root: Path = typer.Argument(..., help="Raíz del proyecto operativo"),
 ) -> None:
     """Resume la carga de trabajo por responsable."""
-    upgrade_database(project_root)
+    _require_current_database(project_root)
     decisions = load_decisions(project_root / "config" / "decisions.yaml")
     engine = create_sqlite_engine(database_path(project_root))
     try:
@@ -3251,7 +4692,7 @@ def review_app_command(
         raise typer.BadParameter(
             f"No se encontró la configuración del proyecto: {decisions_path}"
         )
-    upgrade_database(project_root)
+    _require_current_database(project_root)
     script = Path(__file__).with_name("review_app.py")
     command = [
         sys.executable,
@@ -3294,7 +4735,7 @@ def exchange_apply_bundle_command(
         raise typer.BadParameter(
             "Use --confirm-apply después de revisar el reporte dry-run"
         )
-    upgrade_database(project_root)
+    _require_current_database(project_root)
     engine = create_sqlite_engine(database_path(project_root))
     try:
         with session_scope(engine) as session:
@@ -3329,7 +4770,7 @@ def exchange_applications_command(
     project_root: Path = typer.Argument(..., help="Raíz del proyecto operativo"),
 ) -> None:
     """Lista bundles aplicados, backups y checkpoints posteriores."""
-    upgrade_database(project_root)
+    _require_current_database(project_root)
     engine = create_sqlite_engine(database_path(project_root))
     try:
         with session_scope(engine) as session:
@@ -3357,7 +4798,7 @@ def project_readiness_command(
     project_root: Path = typer.Argument(..., help="Raíz del proyecto operativo"),
 ) -> None:
     """Resume el estado operativo y las próximas acciones del proyecto."""
-    upgrade_database(project_root)
+    _require_current_database(project_root)
     engine = create_sqlite_engine(database_path(project_root))
     try:
         with session_scope(engine) as session:
@@ -3385,7 +4826,7 @@ def project_backup_test_command(
     note: str | None = typer.Option(None, "--note"),
 ) -> None:
     """Prueba en una carpeta temporal que el backup pueda migrarse y abrirse."""
-    upgrade_database(project_root)
+    _require_current_database(project_root)
     engine = create_sqlite_engine(database_path(project_root))
     try:
         with session_scope(engine) as session:
@@ -3415,7 +4856,7 @@ def project_recovery_history_command(
     limit: int = typer.Option(20, "--limit", min=1, max=500),
 ) -> None:
     """Lista las pruebas de recuperación registradas."""
-    upgrade_database(project_root)
+    _require_current_database(project_root)
     engine = create_sqlite_engine(database_path(project_root))
     try:
         with session_scope(engine) as session:
@@ -3437,7 +4878,7 @@ def project_check_command(
     project_root: Path = typer.Argument(..., help="Raíz del proyecto operativo"),
 ) -> None:
     """Ejecuta controles globales de SQLite, archivos, menciones, grafo y exportaciones."""
-    upgrade_database(project_root)
+    _require_current_database(project_root)
     engine = create_sqlite_engine(database_path(project_root))
     try:
         with session_scope(engine) as session:
@@ -3464,7 +4905,8 @@ def project_backup_create_command(
     out: Path | None = typer.Option(None, "--out", help="ZIP de salida opcional"),
 ) -> None:
     """Crea un backup verificable de SQLite y config, sin copiar PDF/TIFF."""
-    upgrade_database(project_root)
+    # Un backup debe capturar el estado existente. Migrar antes de copiar haría
+    # imposible obtener un respaldo real de la revisión anterior.
     try:
         info = create_project_backup(
             project_root=project_root.resolve(),

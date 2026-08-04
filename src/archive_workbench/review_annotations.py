@@ -15,6 +15,7 @@ from archive_workbench.db.models import (
     utc_now,
 )
 from archive_workbench.identity import new_id
+from archive_workbench.editing import _append_page_revision
 
 REVIEW_STATUSES = ("unreviewed", "needs_review", "reviewed", "approved")
 TAG_KINDS = ("thematic", "conceptual", "workflow", "unclassified")
@@ -205,9 +206,23 @@ def set_page_review_status(
     page = session.get(EditablePage, editable_page_id)
     if page is None:
         raise ValueError(f"Página editable inexistente: {editable_page_id}")
+    clean_note = note.strip() if note and note.strip() else None
+    if page.review_status == status and page.review_note == clean_note:
+        return page
+    base = page.revision_number
     page.review_status = status
-    page.review_note = note.strip() if note and note.strip() else None
+    page.review_note = clean_note
     page.reviewed_by = changed_by
     page.reviewed_at = utc_now()
     page.updated_at = utc_now()
+    page.revision_number += 1
+    _append_page_revision(
+        session,
+        page,
+        operation="review_status",
+        created_by=changed_by,
+        note=clean_note,
+        details={"review_status": status},
+        base_revision_number=base,
+    )
     return page

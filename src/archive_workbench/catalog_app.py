@@ -2,7 +2,10 @@ from __future__ import annotations
 
 from collections import defaultdict
 from pathlib import Path
+
 from typing import Callable
+
+from archive_workbench.ui_navigation import rerun_app, rerun_view, request_app_view, tracked_tabs
 
 from archive_workbench.catalog import ensure_project, scan_file_instances
 from archive_workbench.catalog_management import (
@@ -96,7 +99,7 @@ def _run_catalog_action(st, *, db_path: Path, callback: Callable, unit_id: str |
         st.session_state["catalog_pending_unit_id"] = str(target_unit_id)
     if message:
         st.session_state["catalog_flash"] = str(message)
-    st.rerun()
+    rerun_view(st)
 
 
 def _unit_label(row, level_labels: dict[str, str]) -> str:
@@ -116,10 +119,10 @@ def _field_payload(existing_by_key: dict[str, list], field_def, values: str, sta
 
 
 def render_catalog_view(st, *, project_root: Path, db_path: Path, decisions, actor: str) -> None:
-    st.header("Catálogo archivístico")
+    st.header("Catálogo documental")
     st.caption(
-        "La unidad archivística es la entidad descriptiva. Los archivos locales pueden faltar, "
-        "moverse o repetirse sin perder el registro del catálogo."
+        "Organizá la estructura documental, describí cada unidad y vinculá sus archivos sin "
+        "alterar los originales."
     )
     flash = st.session_state.pop("catalog_flash", None)
     if flash:
@@ -134,13 +137,14 @@ def render_catalog_view(st, *, project_root: Path, db_path: Path, decisions, act
     finally:
         engine.dispose()
 
-    metrics = st.columns(6)
-    metrics[0].metric("Unidades", summary.units)
-    metrics[1].metric("Incompletas", summary.incomplete_units)
-    metrics[2].metric("Objetos digitales", summary.digital_objects)
-    metrics[3].metric("Instancias locales", summary.file_instances)
-    metrics[4].metric("Disponibles", summary.present_files)
-    metrics[5].metric("Ausentes", summary.missing_files)
+    with st.expander("Resumen del catálogo", expanded=not all_rows):
+        metrics = st.columns(6)
+        metrics[0].metric("Unidades", summary.units)
+        metrics[1].metric("Incompletas", summary.incomplete_units)
+        metrics[2].metric("Objetos digitales", summary.digital_objects)
+        metrics[3].metric("Copias locales", summary.file_instances)
+        metrics[4].metric("Disponibles", summary.present_files)
+        metrics[5].metric("Ausentes", summary.missing_files)
 
     level_defs = sorted(
         [item for item in decisions.archival_levels if item.enabled],
@@ -150,7 +154,7 @@ def render_catalog_view(st, *, project_root: Path, db_path: Path, decisions, act
     level_map = {item.key: item for item in level_defs}
 
     root_levels = [item.key for item in level_defs if not item.parent_keys]
-    with st.expander("Crear el nivel inicial del catálogo", expanded=not all_rows):
+    with st.expander("Crear la primera unidad del catálogo", expanded=not all_rows):
         st.caption(
             "Este formulario crea una unidad en la raíz. Para agregar una Caja, Legajo o Documento "
             "dentro de otra unidad, primero seleccionala en el índice y usá ‘Agregar una unidad hija’."
@@ -158,7 +162,7 @@ def render_catalog_view(st, *, project_root: Path, db_path: Path, decisions, act
         if not root_levels:
             st.info("La configuración no habilita niveles en la raíz del catálogo.")
         else:
-            with st.form("catalog_create_root_unit"):
+            with st.form("catalog_create_root_unit", enter_to_submit=False):
                 level_key = st.selectbox(
                     "Nivel inicial",
                     options=root_levels,
@@ -185,27 +189,27 @@ def render_catalog_view(st, *, project_root: Path, db_path: Path, decisions, act
 
                 _run_catalog_action(st, db_path=db_path, callback=callback)
 
-    filter_cols = st.columns([2.4, 1, 1])
-    with filter_cols[0]:
-        query = st.text_input(
-            "Buscar",
-            placeholder="Título, código, descripción o nombre de archivo",
-            key="catalog_query",
-        )
-    with filter_cols[1]:
-        level_filter = st.selectbox(
-            "Nivel",
-            options=[""] + [item.key for item in level_defs],
-            format_func=lambda value: "Todos" if not value else level_labels[value],
-            key="catalog_level_filter",
-        )
-    with filter_cols[2]:
-        status_filter = st.selectbox(
-            "Estado",
-            options=[""] + list(REGISTRATION_STATUSES),
-            format_func=lambda value: "Todos" if not value else _STATUS_LABELS[value],
-            key="catalog_status_filter",
-        )
+    query = st.text_input(
+        "Buscar en el catálogo",
+        placeholder="Título, código, descripción o nombre de archivo",
+        key="catalog_query",
+    )
+    with st.expander("Filtros del catálogo", expanded=False):
+        filter_cols = st.columns(2)
+        with filter_cols[0]:
+            level_filter = st.selectbox(
+                "Nivel documental",
+                options=[""] + [item.key for item in level_defs],
+                format_func=lambda value: "Todos" if not value else level_labels[value],
+                key="catalog_level_filter",
+            )
+        with filter_cols[1]:
+            status_filter = st.selectbox(
+                "Estado de descripción",
+                options=[""] + list(REGISTRATION_STATUSES),
+                format_func=lambda value: "Todos" if not value else _STATUS_LABELS[value],
+                key="catalog_status_filter",
+            )
 
     engine = create_sqlite_engine(db_path)
     try:
@@ -236,7 +240,7 @@ def render_catalog_view(st, *, project_root: Path, db_path: Path, decisions, act
 
     tree_col, detail_col = st.columns([0.85, 2.15], gap="large")
     with tree_col:
-        st.subheader("Índice")
+        st.subheader("Unidades del catálogo")
         selected_id = st.selectbox(
             "Unidad",
             options=[row.id for row in visible_rows],
@@ -248,10 +252,11 @@ def render_catalog_view(st, *, project_root: Path, db_path: Path, decisions, act
         st.caption(selected_row.path)
         if selected_row.reference_code:
             st.code(selected_row.reference_code)
-        st.write(
-            f"Hijas: **{selected_row.child_count}** · objetos digitales: "
-            f"**{selected_row.digital_object_count}** · revisión: **{selected_row.revision}**"
-        )
+        with st.expander("Datos de la unidad", expanded=False):
+            st.write(
+                f"Unidades hijas: **{selected_row.child_count}** · objetos digitales: "
+                f"**{selected_row.digital_object_count}** · revisión interna: **{selected_row.revision}**"
+            )
         child_levels = [
             item.key for item in level_defs if selected_row.level_key in item.parent_keys
         ]
@@ -261,7 +266,7 @@ def render_catalog_view(st, *, project_root: Path, db_path: Path, decisions, act
                     f"La nueva unidad quedará dentro de: {selected_row.path}. "
                     "Por ejemplo, al elegir Documento dentro de una Caja, el Documento aparecerá como hijo de esa Caja."
                 )
-                with st.form(f"catalog_create_child_{selected_row.id}", clear_on_submit=True):
+                with st.form(f"catalog_create_child_{selected_row.id}", clear_on_submit=True, enter_to_submit=False):
                     child_level = st.selectbox(
                         "Nivel de la unidad hija",
                         options=child_levels,
@@ -308,8 +313,10 @@ def render_catalog_view(st, *, project_root: Path, db_path: Path, decisions, act
 
     with detail_col:
         st.subheader(f"{level_labels.get(unit.level_key, unit.level_key)} · {unit.title}")
-        description_tab, files_tab, structure_tab, history_tab = st.tabs(
-            ["Descripción", "Objetos y archivos", "Estructura", "Historial"]
+        description_tab, files_tab, structure_tab, history_tab = tracked_tabs(
+            st,
+            ["Descripción", "Objetos y archivos", "Estructura", "Historial"],
+            key="catalog_detail_tabs",
         )
 
         with description_tab:
@@ -320,7 +327,7 @@ def render_catalog_view(st, *, project_root: Path, db_path: Path, decisions, act
                 and item.key != "reference_code"
                 and ("all" in item.applies_to_levels or unit.level_key in item.applies_to_levels)
             ]
-            with st.form(f"catalog_description_{unit.id}"):
+            with st.form(f"catalog_description_{unit.id}", enter_to_submit=False):
                 title = st.text_input("Título", value=unit.title)
                 reference_code = st.text_input(
                     "Código de referencia", value=unit.reference_code or ""
@@ -513,27 +520,29 @@ def render_catalog_view(st, *, project_root: Path, db_path: Path, decisions, act
                         if item.source_key and st.button(
                             "Abrir en Revisión", key=f"catalog_open_review_{item.link_id}"
                         ):
-                            st.session_state["review_pending_navigation"] = {
-                                "source_key": item.source_key,
-                                "page": 1,
-                                "object_id": None,
-                            }
-                            st.rerun()
+                            request_app_view(
+                                st, mode="review", source_key=item.source_key, page=1
+                            )
+                            rerun_app(st)
 
                     with st.popover("Quitar asociación con esta unidad"):
                         st.warning(
                             f"Se quitará el vínculo entre {item.original_filename} y {unit.title}. "
                             "El archivo y el objeto digital se conservarán."
                         )
-                        unlink_confirm = st.checkbox(
-                            "Confirmo que quiero quitar solamente esta asociación",
-                            key=f"catalog_unlink_confirm_{item.link_id}",
-                        )
-                        if st.button(
-                            "Quitar asociación",
-                            disabled=not unlink_confirm,
-                            key=f"catalog_unlink_{item.link_id}",
+                        with st.form(
+                            f"catalog_unlink_commit_{item.link_id}",
+                            enter_to_submit=False,
                         ):
+                            unlink_confirm = st.checkbox(
+                                "Confirmo que quiero quitar solamente esta asociación",
+                                key=f"catalog_unlink_confirm_{item.link_id}",
+                            )
+                            unlink_submitted = st.form_submit_button(
+                                "Quitar asociación",
+                                disabled=not unlink_confirm,
+                            )
+                        if unlink_submitted:
                             def unlink_callback(session, link_id=item.link_id):
                                 result = unlink_digital_object_from_unit(
                                     session, link_id=link_id, removed_by=actor or "local_user"
@@ -552,7 +561,7 @@ def render_catalog_view(st, *, project_root: Path, db_path: Path, decisions, act
                     "El selector abre el diálogo de archivos del sistema. Archive Workbench copia el "
                     "archivo dentro de project_data y registra únicamente su ruta relativa."
                 )
-                with st.form(f"catalog_upload_file_{unit.id}"):
+                with st.form(f"catalog_upload_file_{unit.id}", enter_to_submit=False):
                     uploaded_file = st.file_uploader(
                         "Archivo",
                         type=["pdf", "tif", "tiff", "png", "jpg", "jpeg", "webp"],
@@ -617,7 +626,7 @@ def render_catalog_view(st, *, project_root: Path, db_path: Path, decisions, act
                 st.caption(
                     "Usá esta opción cuando el archivo ya se encuentra físicamente dentro de project_data."
                 )
-                with st.form(f"catalog_attach_file_{unit.id}"):
+                with st.form(f"catalog_attach_file_{unit.id}", enter_to_submit=False):
                     relative_path = st.text_input(
                         "Ruta relativa",
                         placeholder="corpus/caja/documento.pdf",
@@ -714,7 +723,7 @@ def render_catalog_view(st, *, project_root: Path, db_path: Path, decisions, act
                 "también se desplaza toda su rama de unidades hijas, sin cambiar identidades, archivos ni historial."
             )
             if parent_options:
-                with st.form(f"catalog_move_{unit.id}"):
+                with st.form(f"catalog_move_{unit.id}", enter_to_submit=False):
                     default_index = (
                         parent_options.index(current_parent)
                         if current_parent in parent_options

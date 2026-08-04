@@ -23,6 +23,8 @@ from archive_workbench.db.models import (
     EditableObjectComment,
     EditableObjectTag,
     EditablePage,
+    EditablePageAction,
+    EditablePageRevision,
     EntityMention,
     EntityMentionRevision,
     EntityRelation,
@@ -36,8 +38,11 @@ from archive_workbench.db.models import (
     AuthorityRevision,
     DigitalObject,
     DigitalObjectUnitLink,
+    ExtractedObject,
     ExtractionPage,
     ExtractionPageSelection,
+    ExtractionPageSelectionRevision,
+    ExtractionRun,
     SourceRegistration,
     WorkAssignment,
     WorkAssignmentRevision,
@@ -45,7 +50,9 @@ from archive_workbench.db.models import (
     ExchangeBundleRecord,
     ExchangeChangeEvent,
     ExchangeCheckpoint,
+    ExchangeCommonBaseAgreement,
     ExchangeConflictResolution,
+    ExchangeLineageDecision,
     ExchangeWorkspace,
     Project,
     utc_now,
@@ -176,6 +183,15 @@ def _editable_state_payload(session: Session, project_id: str) -> dict[str, Any]
         .where(DigitalObject.project_id == project_id)
         .order_by(EditablePage.digital_object_id, EditablePage.page_number)
     ).all()
+    selections = session.scalars(
+        select(ExtractionPageSelection)
+        .join(DigitalObject, DigitalObject.id == ExtractionPageSelection.digital_object_id)
+        .where(DigitalObject.project_id == project_id)
+        .order_by(
+            ExtractionPageSelection.digital_object_id,
+            ExtractionPageSelection.page_number,
+        )
+    ).all()
     objects = session.scalars(
         select(EditableObject)
         .join(DigitalObject, DigitalObject.id == EditableObject.digital_object_id)
@@ -200,6 +216,17 @@ def _editable_state_payload(session: Session, project_id: str) -> dict[str, Any]
             EditableObjectTag.tag_kind,
             EditableObjectTag.normalized_tag,
             EditableObjectTag.id,
+        )
+    ).all()
+    page_actions = session.scalars(
+        select(EditablePageAction)
+        .join(EditablePage, EditablePage.id == EditablePageAction.editable_page_id)
+        .join(DigitalObject, DigitalObject.id == EditablePage.digital_object_id)
+        .where(DigitalObject.project_id == project_id)
+        .order_by(
+            EditablePageAction.editable_page_id,
+            EditablePageAction.sequence_number,
+            EditablePageAction.id,
         )
     ).all()
     units = session.scalars(
@@ -270,12 +297,26 @@ def _editable_state_payload(session: Session, project_id: str) -> dict[str, Any]
     ).all()
     return {
         "project_id": project_id,
+        "selections": [
+            {
+                "id": row.id,
+                "digital_object_id": row.digital_object_id,
+                "page_number": row.page_number,
+                "extraction_run_id": row.extraction_run_id,
+                "extraction_page_id": row.extraction_page_id,
+            }
+            for row in selections
+        ],
         "pages": [
             {
                 "id": row.id,
                 "digital_object_id": row.digital_object_id,
                 "page_number": row.page_number,
+                "source_extraction_run_id": row.source_extraction_run_id,
+                "source_extraction_page_id": row.source_extraction_page_id,
+                "source_selection_id": row.source_selection_id,
                 "status": row.status,
+                "revision_number": row.revision_number,
                 "review_status": row.review_status,
                 "review_note": row.review_note,
             }
@@ -321,6 +362,26 @@ def _editable_state_payload(session: Session, project_id: str) -> dict[str, Any]
                 "created_at": row.created_at.isoformat(),
             }
             for row in tags
+        ],
+        "page_actions": [
+            {
+                "id": row.id,
+                "editable_page_id": row.editable_page_id,
+                "sequence_number": row.sequence_number,
+                "action_type": row.action_type,
+                "status": row.status,
+                "before_snapshot": row.before_snapshot_json,
+                "after_snapshot": row.after_snapshot_json,
+                "selected_object_id": row.selected_object_id,
+                "note": row.note,
+                "created_by": row.created_by,
+                "created_at": _iso_utc(row.created_at),
+                "undone_by": row.undone_by,
+                "undone_at": _iso_utc(row.undone_at),
+                "redone_by": row.redone_by,
+                "redone_at": _iso_utc(row.redone_at),
+            }
+            for row in page_actions
         ],
         "authorities": [
             {
@@ -597,6 +658,100 @@ def _event_contract(row: ExchangeChangeEvent) -> ChangeEvent:
     )
 
 
+def _closest_revision_by_time(rows: list[Any], timestamp: datetime) -> Any | None:
+    if not rows:
+        return None
+
+    def normalized(value: datetime) -> datetime:
+        if value.tzinfo is None:
+            return value.replace(tzinfo=timezone.utc)
+        return value.astimezone(timezone.utc)
+
+    target = normalized(timestamp)
+    return min(rows, key=lambda row: abs((normalized(row.created_at) - target).total_seconds()))
+
+
+def _enrich_candidate_exchange_event(session: Session, event: ChangeEvent) -> ChangeEvent:
+    """Agrega al bundle la decisión humana que originó un evento OCR.
+
+    Los triggers de 0029 registran las referencias mínimas necesarias para
+    detectar un cambio de base. Durante la exportación se completa ese evento
+    con la operación, la nota y los detalles append-only ya almacenados. Esto
+    también enriquece eventos creados antes de instalar esta versión.
+    """
+    changed = dict(event.changed_fields)
+    if event.entity_type == "extraction_selection_baseline":
+        run_id = _new_value(changed, "extraction_run_id")
+        page_id = _new_value(changed, "extraction_page_id")
+        revisions = session.scalars(
+            select(ExtractionPageSelectionRevision).where(
+                ExtractionPageSelectionRevision.selection_id == event.entity_id,
+                ExtractionPageSelectionRevision.extraction_run_id == run_id,
+                ExtractionPageSelectionRevision.extraction_page_id == page_id,
+            )
+        ).all()
+        revision = _closest_revision_by_time(revisions, event.timestamp)
+        if revision is not None:
+            changed.update(
+                {
+                    "selection_operation": [None, revision.operation],
+                    "selection_revision_number": [None, revision.revision_number],
+                    "note": [None, revision.note],
+                }
+            )
+    elif event.entity_type == "editable_page_baseline":
+        run_id = _new_value(changed, "source_extraction_run_id")
+        page_id = _new_value(changed, "source_extraction_page_id")
+        revisions = session.scalars(
+            select(EditablePageRevision).where(
+                EditablePageRevision.editable_page_id == event.entity_id,
+                EditablePageRevision.source_extraction_run_id == run_id,
+                EditablePageRevision.source_extraction_page_id == page_id,
+                EditablePageRevision.operation.in_(
+                    ["candidate_adopted", "manual_keep_edits", "rebase"]
+                ),
+            )
+        ).all()
+        revision = _closest_revision_by_time(revisions, event.timestamp)
+        if revision is not None:
+            changed.update(
+                {
+                    "page_operation": [None, revision.operation],
+                    "page_revision_number": [None, revision.revision_number],
+                    "source_selection_id": [None, revision.source_selection_id],
+                    "status": [None, revision.status],
+                    "review_status": [None, revision.review_status],
+                    "review_note": [None, revision.review_note],
+                    "details": [None, revision.details_json or {}],
+                    "note": [None, revision.note],
+                }
+            )
+    elif event.entity_type == "editable_object" and event.new_revision is not None:
+        revision = session.scalar(
+            select(EditableObjectRevision).where(
+                EditableObjectRevision.editable_object_id == event.entity_id,
+                EditableObjectRevision.revision_number == event.new_revision,
+            )
+        )
+        if revision is not None:
+            # 0.34.0–0.34.3 podían registrar ``source_replaced`` con todos los
+            # valores anteriores en NULL. La operación solo retira el objeto.
+            if revision.operation == "source_replaced":
+                changed = {"lifecycle_status": ["active", "deleted"]}
+            changed.update(
+                {
+                    "revision_operation": [None, revision.operation],
+                    "revision_note": [None, revision.note],
+                    "revision_created_by": [None, revision.created_by],
+                    "revision_created_at": [None, _iso_utc(revision.created_at)],
+                    "revision_base_number": [None, revision.base_revision_number],
+                }
+            )
+    if changed == event.changed_fields:
+        return event
+    return event.model_copy(update={"changed_fields": changed})
+
+
 def _write_zip(path: Path, entries: dict[str, bytes]) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
     temp = path.with_suffix(path.suffix + ".tmp")
@@ -630,33 +785,13 @@ def export_change_bundle(
         )
         .order_by(ExchangeChangeEvent.sequence_number)
     ).all()
-    events = [_event_contract(row) for row in rows]
-    imported_objects: list[ChangeEvent] = []
-    imported_pages: set[tuple[str, int]] = set()
-    imported_documents: set[str] = set()
-    for event in events:
-        if (
-            event.entity_type == "editable_object"
-            and event.operation.value == "create"
-            and _new_value(event.changed_fields, "source_extracted_object_id") is not None
-        ):
-            imported_objects.append(event)
-            digital_object_id = _new_value(event.changed_fields, "digital_object_id")
-            page_number = _new_value(event.changed_fields, "page_number")
-            if isinstance(digital_object_id, str):
-                imported_documents.add(digital_object_id)
-                if isinstance(page_number, int):
-                    imported_pages.add((digital_object_id, page_number))
-    if imported_objects:
-        raise ValueError(
-            "El rango solicitado contiene "
-            f"{len(imported_objects)} objetos OCR inicializados después del checkpoint, "
-            f"distribuidos en {len(imported_pages)} páginas de "
-            f"{len(imported_documents)} documentos. Los bundles de cambios no transportan "
-            "corridas, páginas ni selecciones de extracción. Creá una nueva copia física del "
-            "proyecto después de inicializar la capa editable, ejecutá exchange-fork-copy en "
-            "la receptora y establecé un nuevo checkpoint común antes de intercambiar ediciones."
-        )
+    events = [
+        _enrich_candidate_exchange_event(session, _event_contract(row)) for row in rows
+    ]
+    # Las decisiones sobre la selección OCR y la base editable viajan como
+    # eventos normales. El receptor verifica durante el dry-run que las
+    # corridas, páginas y objetos OCR referenciados existan localmente antes
+    # de habilitar la aplicación.
     changes_bytes = _jsonl_bytes(
         event.model_dump(mode="json", exclude_none=True) for event in events
     )
@@ -832,6 +967,7 @@ class BundleDryRunSummary:
     common_checkpoint_id: str | None
     common_checkpoint_label: str | None
     base_match_status: str
+    base_match_method: str
     overall_status: str
     counts: dict[str, int]
     report_json_path: Path
@@ -847,10 +983,44 @@ class IncomingBundleRow:
     event_count: int
     status: str
     base_match_status: str
+    base_match_method: str
     counts: dict[str, int]
     assessed_by: str
     assessed_at: datetime
     report_markdown_path: str | None
+    lifecycle_status: str
+    archived_by: str | None
+    archived_at: datetime | None
+    archive_note: str | None
+
+
+@dataclass(slots=True)
+class StaleLocalEventRow:
+    sequence_number: int
+    entity_type: str
+    entity_id: str
+    operation: str
+    actor: str
+    occurred_at: datetime
+    changed_fields: dict[str, Any]
+
+
+@dataclass(slots=True)
+class IncomingBundleDiagnostics:
+    bundle_id: str
+    assessed_state_sha256: str | None
+    current_state_sha256: str
+    assessed_sequence_number: int | None
+    current_sequence_number: int
+    state_changed: bool
+    sequence_changed: bool
+    local_events_after_assessment: list[StaleLocalEventRow]
+
+
+@dataclass(slots=True)
+class IncomingBundleCleanupPlan:
+    bundle_id: str
+    relative_paths: list[str]
 
 
 def _load_bundle_events(
@@ -896,6 +1066,28 @@ def _matching_checkpoint(
             ExchangeCheckpoint.sequence_number.desc(), ExchangeCheckpoint.created_at.desc()
         )
     )
+
+
+def _common_base_agreement_for_checkpoint(
+    session: Session,
+    *,
+    checkpoint_id: str,
+    source_workspace_id: str,
+    state_sha256: str,
+) -> ExchangeCommonBaseAgreement | None:
+    rows = session.scalars(
+        select(ExchangeCommonBaseAgreement).where(
+            ExchangeCommonBaseAgreement.local_checkpoint_id == checkpoint_id,
+            ExchangeCommonBaseAgreement.counterpart_workspace_id == source_workspace_id,
+            ExchangeCommonBaseAgreement.state_sha256 == state_sha256,
+            ExchangeCommonBaseAgreement.result == "active",
+        )
+    ).all()
+    if len(rows) > 1:
+        raise ValueError(
+            "Existe más de un acuerdo activo para el mismo punto de control"
+        )
+    return rows[0] if rows else None
 
 
 def _lineage_checkpoint_from_applied_bundle(
@@ -945,6 +1137,38 @@ def _lineage_checkpoint_from_applied_bundle(
     if checkpoint is None or checkpoint.workspace_id != workspace_id:
         return None
     return checkpoint
+
+
+def _recovered_lineage_decision(
+    session: Session,
+    *,
+    workspace_id: str,
+    manifest: ChangeBundleManifest,
+    bundle_sha256: str,
+) -> ExchangeLineageDecision | None:
+    rows = session.scalars(
+        select(ExchangeLineageDecision).where(
+            ExchangeLineageDecision.workspace_id == workspace_id,
+            ExchangeLineageDecision.operation == "recover_lineage",
+            ExchangeLineageDecision.result == "recovered",
+            ExchangeLineageDecision.target_bundle_id == manifest.bundle_id,
+            ExchangeLineageDecision.target_bundle_sha256 == bundle_sha256,
+            ExchangeLineageDecision.source_workspace_id == manifest.source_workspace_id,
+            ExchangeLineageDecision.target_base_checkpoint_id
+            == manifest.base_checkpoint_id,
+            ExchangeLineageDecision.target_base_state_sha256
+            == manifest.base_checkpoint_state_sha256,
+            ExchangeLineageDecision.target_base_sequence == manifest.base_sequence,
+            ExchangeLineageDecision.remote_workspace_id
+            == manifest.source_workspace_id,
+            ExchangeLineageDecision.remote_sequence == manifest.base_sequence,
+        )
+    ).all()
+    if len(rows) > 1:
+        raise ValueError(
+            "Existe más de una decisión de recuperación para el mismo paquete"
+        )
+    return rows[0] if rows else None
 
 
 def _entity_exists(session: Session, entity_type: str, entity_id: str) -> bool:
@@ -1183,6 +1407,51 @@ def _normalize_incoming_event(event: ChangeEvent) -> tuple[ChangeEvent, str | No
     )
 
 
+
+_CANDIDATE_EVENT_METADATA_FIELDS = {
+    "selection_operation",
+    "selection_revision_number",
+    "page_operation",
+    "page_revision_number",
+    "source_selection_id",
+    "status",
+    "review_status",
+    "review_note",
+    "details",
+    "note",
+}
+
+_OBJECT_EVENT_METADATA_FIELDS = {
+    "revision_operation",
+    "revision_note",
+    "revision_created_by",
+    "revision_created_at",
+    "revision_base_number",
+}
+
+
+
+def _non_state_event_fields(event: ChangeEvent) -> set[str]:
+    if event.entity_type in {
+        "extraction_selection_baseline",
+        "editable_page_baseline",
+    }:
+        return _CANDIDATE_EVENT_METADATA_FIELDS
+    if event.entity_type == "editable_object":
+        return _OBJECT_EVENT_METADATA_FIELDS
+    return set()
+
+
+def _state_only_event(event: ChangeEvent) -> ChangeEvent:
+    metadata = _non_state_event_fields(event)
+    if not metadata:
+        return event
+    changed = {
+        field: value for field, value in event.changed_fields.items()
+        if field not in metadata
+    }
+    return event.model_copy(update={"changed_fields": changed})
+
 def _assess_prior_incoming_state(
     event: ChangeEvent,
     incoming_state: dict[tuple[str, str], dict[str, Any]],
@@ -1203,19 +1472,20 @@ def _assess_prior_incoming_state(
 
     pairs: list[tuple[str, Any, Any, Any]] = []
     for field in event.changed_fields:
+        if field in _non_state_event_fields(event):
+            continue
         pair = _changed_pair(event, field)
         if pair is None:
             continue
         old, new = pair
         if field not in current_state:
-            if old is not None:
-                return (
-                    MergeDisposition.REVIEW.value,
-                    "El evento depende de una creación previa del mismo bundle, pero "
-                    f"el campo {field} no está presente en el estado simulado.",
-                    [field],
-                )
-            current_state[field] = None
+            # Un campo nuevo con base NULL puede incorporarse a la simulación.
+            # Si declara una base concreta que la cadena previa no conoce, se
+            # evalúa contra el estado canónico local.
+            if old is None:
+                current_state[field] = None
+            else:
+                return None
         pairs.append((field, current_state[field], old, new))
 
     if not pairs:
@@ -1263,13 +1533,21 @@ def _advance_incoming_state(
         return
     if event.operation.value == "create":
         incoming_state[key] = {
-            field: _new_value(event.changed_fields, field) for field in event.changed_fields
+            field: _new_value(event.changed_fields, field)
+            for field in event.changed_fields
+            if field not in _non_state_event_fields(event)
         }
         return
     state = incoming_state.get(key)
     if state is None:
-        return
+        # El primer update de una entidad existente también inicia una cadena
+        # simulada. Esto permite aplicar secuencias legítimas como
+        # editar → deshacer → rehacer dentro de un mismo bundle.
+        state = {}
+        incoming_state[key] = state
     for field in event.changed_fields:
+        if field in _non_state_event_fields(event):
+            continue
         pair = _changed_pair(event, field)
         if pair is not None:
             state[field] = pair[1]
@@ -1349,6 +1627,93 @@ def _assess_current_state(
             pair = _changed_pair(event, field)
             if pair is not None:
                 pairs.append((field, getattr(page, attribute), pair[0], pair[1]))
+    elif event.entity_type == "extraction_selection_baseline":
+        selection = session.get(ExtractionPageSelection, event.entity_id)
+        if selection is None:
+            old_run = _changed_pair(event, "extraction_run_id")
+            old_page = _changed_pair(event, "extraction_page_id")
+            if old_run and old_page and old_run[0] is None and old_page[0] is None:
+                return MergeDisposition.APPLY.value, "La selección OCR todavía no existe localmente.", []
+            return MergeDisposition.REVIEW.value, "La selección OCR no existe localmente.", []
+        pairs = []
+        for field, attribute in (
+            ("digital_object_id", "digital_object_id"),
+            ("page_number", "page_number"),
+            ("extraction_run_id", "extraction_run_id"),
+            ("extraction_page_id", "extraction_page_id"),
+        ):
+            pair = _changed_pair(event, field)
+            if pair is not None:
+                pairs.append((field, getattr(selection, attribute), pair[0], pair[1]))
+    elif event.entity_type == "editable_page_baseline":
+        page = session.get(EditablePage, event.entity_id)
+        if page is None:
+            return MergeDisposition.REVIEW.value, "La página editable no existe localmente.", []
+        pairs = []
+        for field, attribute in (
+            ("digital_object_id", "digital_object_id"),
+            ("page_number", "page_number"),
+            ("source_extraction_run_id", "source_extraction_run_id"),
+            ("source_extraction_page_id", "source_extraction_page_id"),
+        ):
+            pair = _changed_pair(event, field)
+            if pair is not None:
+                pairs.append((field, getattr(page, attribute), pair[0], pair[1]))
+    elif event.entity_type == "editable_page_action":
+        action = session.get(EditablePageAction, event.entity_id)
+        fields = (
+            "editable_page_id", "sequence_number", "action_type", "status",
+            "before_snapshot", "after_snapshot", "selected_object_id", "note",
+            "created_by", "created_at", "undone_by", "undone_at",
+            "redone_by", "redone_at",
+        )
+        mapping = {
+            "editable_page_id": "editable_page_id",
+            "sequence_number": "sequence_number",
+            "action_type": "action_type",
+            "status": "status",
+            "before_snapshot": "before_snapshot_json",
+            "after_snapshot": "after_snapshot_json",
+            "selected_object_id": "selected_object_id",
+            "note": "note",
+            "created_by": "created_by",
+            "created_at": "created_at",
+            "undone_by": "undone_by",
+            "undone_at": "undone_at",
+            "redone_by": "redone_by",
+            "redone_at": "redone_at",
+        }
+        if event.operation.value == "create":
+            if action is None:
+                return MergeDisposition.APPLY.value, "La acción de página no existe localmente.", []
+            comparable = []
+            for field in fields:
+                if field not in event.changed_fields:
+                    continue
+                current = getattr(action, mapping[field])
+                expected = _new_value(event.changed_fields, field)
+                if field.endswith("_at") or field == "created_at":
+                    expected = _coerce_datetime(expected)
+                comparable.append((field, current, expected))
+            if comparable and all(_exchange_values_equal(current, expected) for _field, current, expected in comparable):
+                return MergeDisposition.DUPLICATE.value, "La acción ya está representada localmente.", []
+            return MergeDisposition.REVIEW.value, "El ID de acción ya existe con otro estado.", [
+                field for field, current, expected in comparable
+                if not _exchange_values_equal(current, expected)
+            ]
+        if action is None:
+            return MergeDisposition.REVIEW.value, "La acción de página no existe localmente.", []
+        pairs = []
+        for field in fields:
+            pair = _changed_pair(event, field)
+            if pair is None:
+                continue
+            current = getattr(action, mapping[field])
+            old, new = pair
+            if field.endswith("_at") or field == "created_at":
+                old = _coerce_datetime(old)
+                new = _coerce_datetime(new)
+            pairs.append((field, current, old, new))
     elif event.entity_type == "editable_object_comment":
         comment = session.get(EditableObjectComment, event.entity_id)
         if event.operation.value != "create":
@@ -1630,10 +1995,47 @@ def _assess_current_state(
     return MergeDisposition.CONFLICT.value, "Las precondiciones no coinciden con el estado local actual.", mismatches
 
 
+def _ocr_page_dependency_problem(session: Session, event: ChangeEvent) -> str | None:
+    digital_object_id = _new_value(event.changed_fields, "digital_object_id")
+    page_number = _new_value(event.changed_fields, "page_number")
+    run_id = _new_value(event.changed_fields, "extraction_run_id")
+    if run_id is None:
+        run_id = _new_value(event.changed_fields, "source_extraction_run_id")
+    extraction_page_id = _new_value(event.changed_fields, "extraction_page_id")
+    if extraction_page_id is None:
+        extraction_page_id = _new_value(event.changed_fields, "source_extraction_page_id")
+    if not isinstance(digital_object_id, str) or not isinstance(page_number, int):
+        return "La decisión OCR no incluye documento y página verificables."
+    if not isinstance(run_id, str) or not isinstance(extraction_page_id, str):
+        return "La decisión OCR no incluye la corrida y la página de extracción requeridas."
+    run = session.get(ExtractionRun, run_id)
+    extraction_page = session.get(ExtractionPage, extraction_page_id)
+    if run is None or extraction_page is None:
+        return (
+            "La copia receptora no contiene la corrida o la página OCR referenciada. "
+            "Debe compartir primero una copia física que incluya esa extracción."
+        )
+    if run.digital_object_id != digital_object_id:
+        return "La corrida OCR referenciada pertenece a otro documento."
+    if (
+        extraction_page.extraction_run_id != run.id
+        or extraction_page.page_number != page_number
+    ):
+        return "La página OCR referenciada no coincide con la corrida, el documento y la página."
+    return None
+
+
 def _parent_reference_problem(
     session: Session, event: ChangeEvent, incoming_creations: set[tuple[str, str]] | None = None
 ) -> str | None:
     incoming_creations = incoming_creations or set()
+    if event.entity_type in {"extraction_selection_baseline", "editable_page_baseline"}:
+        return _ocr_page_dependency_problem(session, event)
+    if event.entity_type == "editable_page_action" and event.operation.value == "create":
+        page_id = _new_value(event.changed_fields, "editable_page_id")
+        if not isinstance(page_id, str) or session.get(EditablePage, page_id) is None:
+            return "La acción recibida referencia una página editable inexistente."
+        return None
     if event.operation != "create":
         return None
     if event.entity_type == "editable_object":
@@ -1644,6 +2046,19 @@ def _parent_reference_problem(
                 "La creación del objeto no incluye contexto de página suficiente; "
                 "requiere revisión humana."
             )
+        source_object_id = _new_value(event.changed_fields, "source_extracted_object_id")
+        if source_object_id is not None:
+            source_object = session.get(ExtractedObject, source_object_id)
+            if source_object is None:
+                return (
+                    "La copia receptora no contiene el objeto OCR de origen. "
+                    "Debe compartir primero una copia física que incluya esa extracción."
+                )
+            if (
+                source_object.digital_object_id != values["digital_object_id"]
+                or source_object.page_number != values["page_number"]
+            ):
+                return "El objeto OCR de origen no coincide con la página editable recibida."
         page = session.get(EditablePage, values["editable_page_id"])
         if page is None:
             natural_page = session.scalar(
@@ -1906,7 +2321,17 @@ def dry_run_change_bundle(
         workspace_id=workspace.id,
         state_sha256=manifest.base_checkpoint_state_sha256,
     )
-    lineage_match = False
+    recovered_decision = None
+    base_match_method = "exact_checkpoint" if common is not None else "unmatched"
+    if common is not None:
+        agreement = _common_base_agreement_for_checkpoint(
+            session,
+            checkpoint_id=common.id,
+            source_workspace_id=manifest.source_workspace_id,
+            state_sha256=manifest.base_checkpoint_state_sha256,
+        )
+        if agreement is not None:
+            base_match_method = "common_base_agreement"
     if common is None:
         common = _lineage_checkpoint_from_applied_bundle(
             session,
@@ -1915,12 +2340,52 @@ def dry_run_change_bundle(
             base_checkpoint_label=manifest.base_checkpoint_label,
             base_sequence=manifest.base_sequence,
         )
-        lineage_match = common is not None
+        if common is not None:
+            base_match_method = "applied_bundle"
+    if common is None:
+        recovered_decision = _recovered_lineage_decision(
+            session,
+            workspace_id=workspace.id,
+            manifest=manifest,
+            bundle_sha256=inspection.bundle_sha256,
+        )
+        if recovered_decision is not None:
+            base_match_method = "recovered_lineage"
+
+    common_checkpoint_id = common.id if common is not None else None
+    common_checkpoint_label = common.label if common is not None else None
+    common_checkpoint_sequence = common.sequence_number if common is not None else None
+    if recovered_decision is not None:
+        recovered_checkpoint = (
+            session.get(ExchangeCheckpoint, recovered_decision.local_checkpoint_id)
+            if recovered_decision.local_checkpoint_id
+            else None
+        )
+        if recovered_checkpoint is not None and recovered_checkpoint.workspace_id != workspace.id:
+            raise ValueError(
+                "La decisión de recuperación refiere a un punto de otra copia local"
+            )
+        common_checkpoint_id = (
+            recovered_checkpoint.id if recovered_checkpoint is not None else None
+        )
+        common_checkpoint_label = recovered_decision.local_checkpoint_label
+        common_checkpoint_sequence = recovered_decision.local_checkpoint_sequence
+
     warnings = list(inspection.warnings) + normalization_warnings
-    if lineage_match:
+    if base_match_method == "common_base_agreement":
+        warnings.append(
+            "La base común se reconoció mediante un acuerdo bilateral append-only "
+            "registrado en ambas copias."
+        )
+    elif base_match_method == "applied_bundle":
         warnings.append(
             "La base común se reconoció por un bundle previamente aplicado; "
             "el estado local puede diferir por resoluciones conservadas."
+        )
+    elif base_match_method == "recovered_lineage":
+        warnings.append(
+            "La base común se reconoció mediante una decisión append-only de recuperación "
+            "de linaje. La simulación anterior fue invalidada y esta evaluación es nueva."
         )
     force_review_reason: str | None = None
     if manifest.database_revision not in _known_database_revisions():
@@ -1928,18 +2393,18 @@ def dry_run_change_bundle(
             f"La revisión de base de origen {manifest.database_revision} no es conocida por esta versión."
         )
         warnings.append(force_review_reason)
-    if common is None:
+    if common_checkpoint_sequence is None:
         warnings.append(
-            "No se encontró un checkpoint local con el mismo hash de estado que la base del bundle."
+            "No se encontró un punto local verificable para la base del paquete."
         )
 
     local_events: list[ExchangeChangeEvent] = []
-    if common is not None:
+    if common_checkpoint_sequence is not None:
         local_events = session.scalars(
             select(ExchangeChangeEvent)
             .where(
                 ExchangeChangeEvent.workspace_id == workspace.id,
-                ExchangeChangeEvent.sequence_number > common.sequence_number,
+                ExchangeChangeEvent.sequence_number > common_checkpoint_sequence,
             )
             .order_by(ExchangeChangeEvent.sequence_number)
         ).all()
@@ -1961,7 +2426,7 @@ def dry_run_change_bundle(
         if force_review_reason:
             disposition = MergeDisposition.REVIEW.value
             reason = force_review_reason
-        elif common is None:
+        elif common_checkpoint_sequence is None:
             disposition = MergeDisposition.REVIEW.value
             reason = "No existe una base común verificable para comparar el evento."
         else:
@@ -1973,7 +2438,14 @@ def dry_run_change_bundle(
                 disposition, reason, overlaps = chain_assessment
             elif local_candidates:
                 merge_rules = ProjectDecisions.model_validate(project.decisions_json).merge
-                pairs = [assess_pair(local, incoming, merge_rules) for local in local_candidates]
+                pairs = [
+                    assess_pair(
+                        _state_only_event(local),
+                        _state_only_event(incoming),
+                        merge_rules,
+                    )
+                    for local in local_candidates
+                ]
                 disposition, reason, local_ids, overlaps = _combine_pair_assessments(incoming, pairs)
                 if disposition == MergeDisposition.APPLY.value:
                     state_disposition, state_reason, state_overlaps = _assess_current_state(
@@ -2010,7 +2482,9 @@ def dry_run_change_bundle(
         overall = "needs_review"
     else:
         overall = "ready_to_apply"
-    base_status = "matched" if common is not None else "unmatched"
+    base_status = (
+        "matched" if common_checkpoint_sequence is not None else "unmatched"
+    )
     assessed_state_sha256 = current_editable_state_sha256(session, project.id)
     assessed_sequence_number = _current_sequence(session, workspace.id)
 
@@ -2023,9 +2497,9 @@ def dry_run_change_bundle(
         source_workspace_id=manifest.source_workspace_id,
         source_workspace_name=manifest.source_workspace_name,
         base_checkpoint_state_sha256=manifest.base_checkpoint_state_sha256,
-        common_checkpoint_id=common.id if common else None,
-        common_checkpoint_label=common.label if common else None,
-        common_checkpoint_sequence=common.sequence_number if common else None,
+        common_checkpoint_id=common_checkpoint_id,
+        common_checkpoint_label=common_checkpoint_label,
+        common_checkpoint_sequence=common_checkpoint_sequence,
         base_match_status=base_status,
         overall_status=overall,
         counts=counts,
@@ -2076,10 +2550,11 @@ def dry_run_change_bundle(
             bundle_id=manifest.bundle_id,
             source_workspace_id=manifest.source_workspace_id,
             source_workspace_name=manifest.source_workspace_name,
-            common_checkpoint_id=common.id if common else None,
-            common_checkpoint_label=common.label if common else None,
-            common_checkpoint_sequence=common.sequence_number if common else None,
+            common_checkpoint_id=common_checkpoint_id,
+            common_checkpoint_label=common_checkpoint_label,
+            common_checkpoint_sequence=common_checkpoint_sequence,
             base_match_status=base_status,
+            base_match_method=base_match_method,
             overall_status=overall,
             counts_json=counts,
             warnings_json=warnings,
@@ -2089,6 +2564,7 @@ def dry_run_change_bundle(
             assessed_sequence_number=assessed_sequence_number,
             assessed_by=assessed_by,
             assessed_at=utc_now(),
+            lifecycle_status="active",
         )
         session.add(dry)
         session.flush()
@@ -2103,10 +2579,11 @@ def dry_run_change_bundle(
         dry.bundle_record_id = existing_record.id
         dry.source_workspace_id = manifest.source_workspace_id
         dry.source_workspace_name = manifest.source_workspace_name
-        dry.common_checkpoint_id = common.id if common else None
-        dry.common_checkpoint_label = common.label if common else None
-        dry.common_checkpoint_sequence = common.sequence_number if common else None
+        dry.common_checkpoint_id = common_checkpoint_id
+        dry.common_checkpoint_label = common_checkpoint_label
+        dry.common_checkpoint_sequence = common_checkpoint_sequence
         dry.base_match_status = base_status
+        dry.base_match_method = base_match_method
         dry.overall_status = overall
         dry.counts_json = counts
         dry.warnings_json = warnings
@@ -2116,6 +2593,10 @@ def dry_run_change_bundle(
         dry.assessed_sequence_number = assessed_sequence_number
         dry.assessed_by = assessed_by
         dry.assessed_at = utc_now()
+        dry.lifecycle_status = "active"
+        dry.archived_by = None
+        dry.archived_at = None
+        dry.archive_note = None
         session.flush()
 
     for row in assessment_contracts:
@@ -2144,9 +2625,10 @@ def dry_run_change_bundle(
         bundle_sha256=inspection.bundle_sha256,
         source_workspace_id=manifest.source_workspace_id,
         source_workspace_name=manifest.source_workspace_name,
-        common_checkpoint_id=common.id if common else None,
-        common_checkpoint_label=common.label if common else None,
+        common_checkpoint_id=common_checkpoint_id,
+        common_checkpoint_label=common_checkpoint_label,
         base_match_status=base_status,
+        base_match_method=base_match_method,
         overall_status=overall,
         counts=counts,
         report_json_path=report_json,
@@ -2155,11 +2637,18 @@ def dry_run_change_bundle(
     )
 
 
-def incoming_bundle_rows(session: Session) -> list[IncomingBundleRow]:
+def incoming_bundle_rows(
+    session: Session,
+    *,
+    include_archived: bool = False,
+) -> list[IncomingBundleRow]:
     from archive_workbench.db.models import ExchangeDryRun
 
+    query = select(ExchangeDryRun)
+    if not include_archived:
+        query = query.where(ExchangeDryRun.lifecycle_status == "active")
     rows = session.scalars(
-        select(ExchangeDryRun).order_by(ExchangeDryRun.assessed_at.desc(), ExchangeDryRun.id)
+        query.order_by(ExchangeDryRun.assessed_at.desc(), ExchangeDryRun.id)
     ).all()
     workspace = ensure_exchange_workspace(session)
     project = _project(session)
@@ -2183,13 +2672,123 @@ def incoming_bundle_rows(session: Session) -> list[IncomingBundleRow]:
                 event_count=sum(int(value) for value in (row.counts_json or {}).values()),
                 status=status,
                 base_match_status=row.base_match_status,
+                base_match_method=row.base_match_method,
                 counts=row.counts_json or {},
                 assessed_by=row.assessed_by,
                 assessed_at=row.assessed_at,
                 report_markdown_path=row.report_markdown_path,
+                lifecycle_status=row.lifecycle_status,
+                archived_by=row.archived_by,
+                archived_at=row.archived_at,
+                archive_note=row.archive_note,
             )
         )
     return result
+
+
+def incoming_bundle_diagnostics(
+    session: Session,
+    *,
+    bundle_ref: str,
+) -> IncomingBundleDiagnostics:
+    dry = _dry_run_for_bundle(session, bundle_ref)
+    workspace = ensure_exchange_workspace(session)
+    project = _project(session)
+    current_state = current_editable_state_sha256(session, project.id)
+    current_sequence = _current_sequence(session, workspace.id)
+    local_events: list[StaleLocalEventRow] = []
+    if dry.assessed_sequence_number is not None:
+        rows = session.scalars(
+            select(ExchangeChangeEvent)
+            .where(
+                ExchangeChangeEvent.workspace_id == workspace.id,
+                ExchangeChangeEvent.sequence_number > dry.assessed_sequence_number,
+            )
+            .order_by(ExchangeChangeEvent.sequence_number)
+        ).all()
+        local_events = [
+            StaleLocalEventRow(
+                sequence_number=row.sequence_number,
+                entity_type=row.entity_type,
+                entity_id=row.entity_id,
+                operation=row.operation,
+                actor=row.actor,
+                occurred_at=row.occurred_at,
+                changed_fields=dict(row.changed_fields_json or {}),
+            )
+            for row in rows
+        ]
+    return IncomingBundleDiagnostics(
+        bundle_id=dry.bundle_id,
+        assessed_state_sha256=dry.assessed_state_sha256,
+        current_state_sha256=current_state,
+        assessed_sequence_number=dry.assessed_sequence_number,
+        current_sequence_number=current_sequence,
+        state_changed=(
+            dry.assessed_state_sha256 is None
+            or dry.assessed_state_sha256 != current_state
+        ),
+        sequence_changed=(
+            dry.assessed_sequence_number is None
+            or dry.assessed_sequence_number != current_sequence
+        ),
+        local_events_after_assessment=local_events,
+    )
+
+
+def set_incoming_bundle_archived(
+    session: Session,
+    *,
+    bundle_ref: str,
+    archived: bool,
+    changed_by: str,
+    note: str | None = None,
+):
+    dry = _dry_run_for_bundle(session, bundle_ref)
+    dry.lifecycle_status = "archived" if archived else "active"
+    dry.archived_by = changed_by if archived else None
+    dry.archived_at = utc_now() if archived else None
+    dry.archive_note = note.strip() if archived and note and note.strip() else None
+    session.flush()
+    return dry
+
+
+def purge_incoming_bundle(
+    session: Session,
+    *,
+    bundle_ref: str,
+) -> IncomingBundleCleanupPlan:
+    from archive_workbench.db.models import ExchangeBundleApplication
+
+    dry = _dry_run_for_bundle(session, bundle_ref)
+    application = session.scalar(
+        select(ExchangeBundleApplication).where(
+            ExchangeBundleApplication.bundle_id == dry.bundle_id
+        )
+    )
+    if application is not None:
+        raise ValueError(
+            "Un bundle aplicado no puede limpiarse: su dry-run forma parte de la auditoría"
+        )
+    if dry.lifecycle_status != "archived":
+        raise ValueError("Archivá el bundle antes de limpiar su entrada")
+    record = session.get(ExchangeBundleRecord, dry.bundle_record_id)
+    paths = [
+        value
+        for value in (
+            record.relative_path if record is not None else None,
+            dry.report_json_path,
+            dry.report_markdown_path,
+        )
+        if value
+    ]
+    bundle_id = dry.bundle_id
+    session.delete(dry)
+    session.flush()
+    if record is not None:
+        session.delete(record)
+        session.flush()
+    return IncomingBundleCleanupPlan(bundle_id=bundle_id, relative_paths=paths)
 
 
 @dataclass(slots=True)
@@ -2232,6 +2831,7 @@ def fork_exchange_workspace(
     session.execute(delete(ExchangeBundleApplication))
     session.execute(delete(ExchangeDryRun))
     session.execute(delete(ExchangeBundleRecord))
+    session.execute(delete(ExchangeCommonBaseAgreement))
     session.execute(delete(ExchangeCheckpoint))
     session.execute(delete(ExchangeChangeEvent))
     session.execute(delete(ExchangeWorkspace))
@@ -2325,7 +2925,9 @@ def _event_resolvable_fields(event: ChangeEvent) -> list[str]:
     return sorted(
         field
         for field, value in event.changed_fields.items()
-        if isinstance(value, list) and len(value) == 2
+        if field not in _non_state_event_fields(event)
+        and isinstance(value, list)
+        and len(value) == 2
     )
 
 
@@ -2358,6 +2960,52 @@ def _current_field_value(session: Session, event: ChangeEvent, field: str) -> An
         mapping = {"review_status": "review_status", "review_note": "review_note"}
         attribute = mapping.get(field)
         return getattr(page, attribute) if attribute else None
+    if event.entity_type == "extraction_selection_baseline":
+        row = session.get(ExtractionPageSelection, event.entity_id)
+        if row is None:
+            return None
+        mapping = {
+            "digital_object_id": "digital_object_id",
+            "page_number": "page_number",
+            "extraction_run_id": "extraction_run_id",
+            "extraction_page_id": "extraction_page_id",
+        }
+        attribute = mapping.get(field)
+        return getattr(row, attribute) if attribute else None
+    if event.entity_type == "editable_page_baseline":
+        row = session.get(EditablePage, event.entity_id)
+        if row is None:
+            return None
+        mapping = {
+            "digital_object_id": "digital_object_id",
+            "page_number": "page_number",
+            "source_extraction_run_id": "source_extraction_run_id",
+            "source_extraction_page_id": "source_extraction_page_id",
+        }
+        attribute = mapping.get(field)
+        return getattr(row, attribute) if attribute else None
+    if event.entity_type == "editable_page_action":
+        row = session.get(EditablePageAction, event.entity_id)
+        if row is None:
+            return None
+        mapping = {
+            "editable_page_id": "editable_page_id",
+            "sequence_number": "sequence_number",
+            "action_type": "action_type",
+            "status": "status",
+            "before_snapshot": "before_snapshot_json",
+            "after_snapshot": "after_snapshot_json",
+            "selected_object_id": "selected_object_id",
+            "note": "note",
+            "created_by": "created_by",
+            "created_at": "created_at",
+            "undone_by": "undone_by",
+            "undone_at": "undone_at",
+            "redone_by": "redone_by",
+            "redone_at": "redone_at",
+        }
+        attribute = mapping.get(field)
+        return getattr(row, attribute) if attribute else None
     if event.entity_type == "editable_object_comment":
         row = session.get(EditableObjectComment, event.entity_id)
         if row is None:
@@ -2504,6 +3152,8 @@ def save_conflict_resolution(
     from archive_workbench.db.models import ExchangeIncomingEventAssessment
 
     dry = _dry_run_for_bundle(session, bundle_ref)
+    if dry.lifecycle_status != "active":
+        raise ValueError("El bundle está archivado. Restauralo antes de resolverlo.")
     if dry.overall_status in {"applied", "stale"}:
         raise ValueError(f"El bundle no admite resoluciones en estado {dry.overall_status}")
     assessment = session.scalar(
@@ -2655,6 +3305,8 @@ def resolve_conflict_fields_bulk(
     if clean_choice not in {"local", "incoming"}:
         raise ValueError("La resolución masiva admite únicamente local o incoming")
     dry = _dry_run_for_bundle(session, bundle_ref)
+    if dry.lifecycle_status != "active":
+        raise ValueError("El bundle está archivado. Restauralo antes de resolverlo.")
     query = select(ExchangeIncomingEventAssessment).where(
         ExchangeIncomingEventAssessment.dry_run_id == dry.id,
         ExchangeIncomingEventAssessment.disposition.in_(["review", "conflict"]),
@@ -2775,6 +3427,8 @@ def finalize_bundle_resolutions(
     from archive_workbench.db.models import ExchangeIncomingEventAssessment
 
     dry = _dry_run_for_bundle(session, bundle_ref)
+    if dry.lifecycle_status != "active":
+        raise ValueError("El bundle está archivado. Restauralo antes de finalizarlo.")
     if dry.overall_status in {"ready_to_apply_resolved", "applied"}:
         result = resolution_status(session, dry.bundle_id)
         result.already_finalized = True
@@ -2871,6 +3525,9 @@ def _resolved_event(
             changed[field] = [current, row.resolved_value_json]
     if not changed:
         return None, "kept_local_resolution"
+    for field in _non_state_event_fields(event):
+        if field in event.changed_fields:
+            changed[field] = event.changed_fields[field]
     payload = event.model_dump(mode="python")
     payload["changed_fields"] = changed
     payload["base_revision"] = None
@@ -2968,7 +3625,14 @@ def _apply_object_event(
 ) -> None:
     from archive_workbench.editing import _append_revision
 
-    actor = f"{applied_by} [bundle de {source_workspace_name}]"
+    actor = _bundle_actor(
+        event, applied_by=applied_by, source_workspace_name=source_workspace_name
+    )
+    remote_operation = _new_value(event.changed_fields, "revision_operation")
+    remote_note = _new_value(event.changed_fields, "revision_note")
+    remote_created_at = _coerce_datetime(
+        _new_value(event.changed_fields, "revision_created_at")
+    ) or event.timestamp
     obj = session.get(EditableObject, event.entity_id)
     if event.operation.value == "create":
         if obj is not None:
@@ -3048,10 +3712,11 @@ def _apply_object_event(
         _append_revision(
             session,
             obj,
-            operation="create",
+            operation=(remote_operation if isinstance(remote_operation, str) else "create"),
             created_by=actor,
-            note=f"Aplicado desde evento remoto {event.event_id}",
+            note=(remote_note if isinstance(remote_note, str) else f"Aplicado desde evento remoto {event.event_id}"),
             base_revision_number=None,
+            created_at=remote_created_at,
         )
         return
 
@@ -3090,13 +3755,15 @@ def _apply_object_event(
             session,
             obj,
             operation=(
+                remote_operation if isinstance(remote_operation, str) else
                 "delete" if event.operation.value == "delete" else
                 "restore" if event.operation.value == "restore" else
                 "exchange_apply"
             ),
             created_by=actor,
-            note=f"Aplicado desde evento remoto {event.event_id}",
+            note=(remote_note if isinstance(remote_note, str) else f"Aplicado desde evento remoto {event.event_id}"),
             base_revision_number=base,
+            created_at=remote_created_at,
         )
     elif review_pair is not None:
         obj.updated_by = actor
@@ -3131,6 +3798,325 @@ def _apply_page_event(
     page.reviewed_by = actor
     page.reviewed_at = utc_now()
     page.updated_at = utc_now()
+
+
+def _bundle_actor(event: ChangeEvent, *, applied_by: str, source_workspace_name: str) -> str:
+    return f"{event.actor} [bundle de {source_workspace_name}; aplicado por {applied_by}]"
+
+
+def _apply_selection_baseline_event(
+    session: Session,
+    *,
+    event: ChangeEvent,
+    applied_by: str,
+    source_workspace_name: str,
+) -> None:
+    from archive_workbench.editing import _set_page_status
+    from archive_workbench.extraction import _append_selection_revision
+
+    problem = _ocr_page_dependency_problem(session, event)
+    if problem is not None:
+        raise ValueError(problem)
+    digital_object_id = _new_value(event.changed_fields, "digital_object_id")
+    page_number = _new_value(event.changed_fields, "page_number")
+    run_id = _new_value(event.changed_fields, "extraction_run_id")
+    extraction_page_id = _new_value(event.changed_fields, "extraction_page_id")
+    assert isinstance(digital_object_id, str)
+    assert isinstance(page_number, int)
+    assert isinstance(run_id, str)
+    assert isinstance(extraction_page_id, str)
+    actor = _bundle_actor(
+        event, applied_by=applied_by, source_workspace_name=source_workspace_name
+    )
+    note = _new_value(event.changed_fields, "note")
+    if not isinstance(note, str) or not note.strip():
+        note = f"Selección OCR aplicada desde el evento remoto {event.event_id}."
+
+    selection = session.get(ExtractionPageSelection, event.entity_id)
+    natural = session.scalar(
+        select(ExtractionPageSelection).where(
+            ExtractionPageSelection.digital_object_id == digital_object_id,
+            ExtractionPageSelection.page_number == page_number,
+        )
+    )
+    if selection is None and natural is not None:
+        raise ValueError(
+            "La página ya tiene una selección OCR local con otro identificador; "
+            "no puede remapearse implícitamente."
+        )
+    previous_run_id: str | None = None
+    previous_page_id: str | None = None
+    if selection is None:
+        run_pair = _changed_pair(event, "extraction_run_id")
+        page_pair = _changed_pair(event, "extraction_page_id")
+        if not run_pair or not page_pair or run_pair[0] is not None or page_pair[0] is not None:
+            raise ValueError("La selección OCR recibida no existe localmente y no es una creación válida.")
+        selection = ExtractionPageSelection(
+            id=event.entity_id,
+            digital_object_id=digital_object_id,
+            page_number=page_number,
+            extraction_run_id=run_id,
+            extraction_page_id=extraction_page_id,
+            selected_by=actor,
+            note=note,
+            selected_at=event.timestamp,
+        )
+        session.add(selection)
+        session.flush()
+        operation = "select"
+    else:
+        for field, current in (
+            ("digital_object_id", selection.digital_object_id),
+            ("page_number", selection.page_number),
+            ("extraction_run_id", selection.extraction_run_id),
+            ("extraction_page_id", selection.extraction_page_id),
+        ):
+            pair = _changed_pair(event, field)
+            if pair is not None:
+                _assert_expected(current, pair[0], event=event, field=field)
+        previous_run_id = selection.extraction_run_id
+        previous_page_id = selection.extraction_page_id
+        selection.extraction_run_id = run_id
+        selection.extraction_page_id = extraction_page_id
+        selection.selected_by = actor
+        selection.note = note
+        selection.selected_at = event.timestamp
+        operation = "replace"
+
+    _append_selection_revision(
+        session,
+        selection,
+        operation=operation,
+        selected_by=actor,
+        note=note,
+        previous_extraction_run_id=previous_run_id,
+        previous_extraction_page_id=previous_page_id,
+        created_at=event.timestamp,
+    )
+    editable_page = session.scalar(
+        select(EditablePage).where(
+            EditablePage.digital_object_id == digital_object_id,
+            EditablePage.page_number == page_number,
+        )
+    )
+    if editable_page is not None and editable_page.source_extraction_page_id != extraction_page_id:
+        _set_page_status(
+            session,
+            editable_page,
+            status="stale",
+            changed_by=actor,
+            operation="mark_stale",
+            note="La selección canónica cambió mediante un bundle; la edición existente se conservó.",
+            details={
+                "selected_extraction_run_id": run_id,
+                "selected_extraction_page_id": extraction_page_id,
+                "source_event_id": event.event_id,
+            },
+        )
+    session.flush()
+
+
+def _infer_remote_page_baseline_operation(
+    session: Session, *, page: EditablePage, run_id: str
+) -> str:
+    active_source_count = int(
+        session.scalar(
+            select(func.count())
+            .select_from(EditableObject)
+            .join(
+                ExtractedObject,
+                ExtractedObject.id == EditableObject.source_extracted_object_id,
+            )
+            .where(
+                EditableObject.editable_page_id == page.id,
+                EditableObject.lifecycle_status == "active",
+                ExtractedObject.extraction_run_id == run_id,
+            )
+        )
+        or 0
+    )
+    active_count = int(
+        session.scalar(
+            select(func.count())
+            .select_from(EditableObject)
+            .where(
+                EditableObject.editable_page_id == page.id,
+                EditableObject.lifecycle_status == "active",
+            )
+        )
+        or 0
+    )
+    return "candidate_adopted" if active_count and active_source_count == active_count else "manual_keep_edits"
+
+
+def _apply_editable_page_baseline_event(
+    session: Session,
+    *,
+    event: ChangeEvent,
+    applied_by: str,
+    source_workspace_name: str,
+) -> None:
+    from archive_workbench.editing import _append_page_revision
+
+    problem = _ocr_page_dependency_problem(session, event)
+    if problem is not None:
+        raise ValueError(problem)
+    page = session.get(EditablePage, event.entity_id)
+    if page is None:
+        raise ValueError(f"Página editable inexistente: {event.entity_id}")
+    digital_object_id = _new_value(event.changed_fields, "digital_object_id")
+    page_number = _new_value(event.changed_fields, "page_number")
+    run_id = _new_value(event.changed_fields, "source_extraction_run_id")
+    extraction_page_id = _new_value(event.changed_fields, "source_extraction_page_id")
+    assert isinstance(digital_object_id, str)
+    assert isinstance(page_number, int)
+    assert isinstance(run_id, str)
+    assert isinstance(extraction_page_id, str)
+    for field, current in (
+        ("digital_object_id", page.digital_object_id),
+        ("page_number", page.page_number),
+        ("source_extraction_run_id", page.source_extraction_run_id),
+        ("source_extraction_page_id", page.source_extraction_page_id),
+    ):
+        pair = _changed_pair(event, field)
+        if pair is not None:
+            _assert_expected(current, pair[0], event=event, field=field)
+    selection = session.scalar(
+        select(ExtractionPageSelection).where(
+            ExtractionPageSelection.digital_object_id == digital_object_id,
+            ExtractionPageSelection.page_number == page_number,
+        )
+    )
+    if selection is None or (
+        selection.extraction_run_id != run_id
+        or selection.extraction_page_id != extraction_page_id
+    ):
+        raise ValueError(
+            "La base editable recibida no coincide con la selección OCR local. "
+            "El evento de selección debe aplicarse antes."
+        )
+    actor = _bundle_actor(
+        event, applied_by=applied_by, source_workspace_name=source_workspace_name
+    )
+    operation = _new_value(event.changed_fields, "page_operation")
+    if operation not in {"candidate_adopted", "manual_keep_edits", "rebase"}:
+        operation = _infer_remote_page_baseline_operation(session, page=page, run_id=run_id)
+    note = _new_value(event.changed_fields, "note")
+    if not isinstance(note, str) or not note.strip():
+        note = f"Base editable aplicada desde el evento remoto {event.event_id}."
+    previous_run_id = page.source_extraction_run_id
+    previous_page_id = page.source_extraction_page_id
+    base_revision = page.revision_number
+    page.source_extraction_run_id = run_id
+    page.source_extraction_page_id = extraction_page_id
+    page.source_selection_id = selection.id
+    page.status = "active"
+    page.revision_number += 1
+    page.updated_at = utc_now()
+    remote_details = _new_value(event.changed_fields, "details")
+    details = dict(remote_details) if isinstance(remote_details, dict) else {}
+    details.setdefault("previous_extraction_run_id", previous_run_id)
+    details.setdefault("previous_extraction_page_id", previous_page_id)
+    details.setdefault(
+        "strategy",
+        (
+            "replace_with_candidate_objects"
+            if operation == "candidate_adopted"
+            else (
+                "three_way_text_rebase"
+                if operation == "rebase"
+                else "keep_existing_editable_objects"
+            )
+        ),
+    )
+    details["source_event_id"] = event.event_id
+    _append_page_revision(
+        session,
+        page,
+        operation=operation,
+        created_by=actor,
+        note=note,
+        details=details,
+        base_revision_number=base_revision,
+    )
+    session.flush()
+
+
+def _apply_page_action_event(
+    session: Session,
+    *,
+    event: ChangeEvent,
+    applied_by: str,
+    source_workspace_name: str,
+) -> None:
+    actor = _bundle_actor(
+        event, applied_by=applied_by, source_workspace_name=source_workspace_name
+    )
+    action = session.get(EditablePageAction, event.entity_id)
+    datetime_fields = {"created_at", "undone_at", "redone_at"}
+    mapping = {
+        "editable_page_id": "editable_page_id",
+        "sequence_number": "sequence_number",
+        "action_type": "action_type",
+        "status": "status",
+        "before_snapshot": "before_snapshot_json",
+        "after_snapshot": "after_snapshot_json",
+        "selected_object_id": "selected_object_id",
+        "note": "note",
+        "created_by": "created_by",
+        "created_at": "created_at",
+        "undone_by": "undone_by",
+        "undone_at": "undone_at",
+        "redone_by": "redone_by",
+        "redone_at": "redone_at",
+    }
+    if event.operation.value == "create":
+        if action is not None:
+            raise ValueError(f"La acción de página ya existe: {event.entity_id}")
+        values = {field: _new_value(event.changed_fields, field) for field in mapping}
+        page_id = values["editable_page_id"]
+        if not isinstance(page_id, str) or session.get(EditablePage, page_id) is None:
+            raise ValueError("La acción recibida referencia una página editable inexistente")
+        action = EditablePageAction(
+            id=event.entity_id,
+            editable_page_id=page_id,
+            sequence_number=int(values["sequence_number"]),
+            action_type=str(values["action_type"]),
+            status=str(values["status"] or "active"),
+            before_snapshot_json=values["before_snapshot"] or {},
+            after_snapshot_json=values["after_snapshot"] or {},
+            selected_object_id=values["selected_object_id"],
+            note=values["note"],
+            created_by=actor,
+            created_at=_coerce_datetime(values["created_at"]) or event.timestamp,
+            undone_by=(actor if values["undone_by"] is not None else None),
+            undone_at=_coerce_datetime(values["undone_at"]),
+            redone_by=(actor if values["redone_by"] is not None else None),
+            redone_at=_coerce_datetime(values["redone_at"]),
+        )
+        session.add(action)
+        session.flush()
+        return
+    if action is None:
+        raise ValueError(f"Acción de página inexistente: {event.entity_id}")
+    applied = False
+    for field, attribute in mapping.items():
+        pair = _changed_pair(event, field)
+        if pair is None:
+            continue
+        old, new = pair
+        if field in datetime_fields:
+            old = _coerce_datetime(old)
+            new = _coerce_datetime(new)
+        current = getattr(action, attribute)
+        _assert_expected(current, old, event=event, field=field)
+        if field in {"created_by", "undone_by", "redone_by"} and new is not None:
+            new = actor
+        setattr(action, attribute, new)
+        applied = True
+    if not applied:
+        raise ValueError(f"El evento {event.event_id} no contiene campos aplicables")
+    session.flush()
 
 
 def _apply_comment_event(
@@ -4221,6 +5207,27 @@ def _apply_incoming_event(
             applied_by=applied_by,
             source_workspace_name=source_workspace_name,
         )
+    elif event.entity_type == "extraction_selection_baseline":
+        _apply_selection_baseline_event(
+            session,
+            event=event,
+            applied_by=applied_by,
+            source_workspace_name=source_workspace_name,
+        )
+    elif event.entity_type == "editable_page_baseline":
+        _apply_editable_page_baseline_event(
+            session,
+            event=event,
+            applied_by=applied_by,
+            source_workspace_name=source_workspace_name,
+        )
+    elif event.entity_type == "editable_page_action":
+        _apply_page_action_event(
+            session,
+            event=event,
+            applied_by=applied_by,
+            source_workspace_name=source_workspace_name,
+        )
     elif event.entity_type == "editable_object_comment":
         _apply_comment_event(
             session,
@@ -4310,6 +5317,8 @@ def apply_change_bundle(
             raise ValueError(
                 "El bundle todavía no tiene un dry-run persistido. Ejecutá exchange-dry-run primero."
             )
+    if dry.lifecycle_status != "active":
+        raise ValueError("El bundle está archivado. Restauralo antes de aplicarlo.")
     existing = session.scalar(
         select(ExchangeBundleApplication).where(
             ExchangeBundleApplication.bundle_id == dry.bundle_id

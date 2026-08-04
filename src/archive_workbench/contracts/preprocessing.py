@@ -17,6 +17,12 @@ class DerivativeProfile(ContractModel):
     ocr_dpi: int = Field(default=300, ge=150, le=600)
     preview_format: Literal["webp", "jpeg", "png"] = "webp"
     ocr_format: Literal["png", "tiff"] = "png"
+    ocr_treatment: Literal[
+        "original",
+        "grayscale_autocontrast",
+        "otsu",
+        "denoise_autocontrast",
+    ] = "original"
     preview_quality: int = Field(default=82, ge=1, le=100)
     preview_max_long_edge_px: int = Field(default=2400, ge=512, le=10000)
     preserve_native_raster_for_ocr: bool = True

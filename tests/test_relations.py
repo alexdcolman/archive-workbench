@@ -188,6 +188,20 @@ def test_relation_can_target_catalog_unit(tmp_path: Path) -> None:
         engine.dispose()
 
 
+def test_authority_ui_defaults_candidate_search_to_approved_pages() -> None:
+    source = (
+        Path(__file__).parents[1]
+        / "src"
+        / "archive_workbench"
+        / "authority_app.py"
+    ).read_text(encoding="utf-8")
+
+    assert '"Estados de página incluidos"' in source
+    assert 'default=["approved"]' in source
+    assert "page_review_statuses=tuple(candidate_page_statuses)" in source
+    assert "Estado que se asignará a las nuevas menciones" in source
+
+
 def test_transversal_entity_candidates_show_alias_and_can_be_included(tmp_path: Path) -> None:
     from archive_workbench.authorities import (
         add_authority_alias,
@@ -220,7 +234,10 @@ def test_transversal_entity_candidates_show_alias_and_can_be_included(tmp_path: 
                 created_by="tests",
             )
             candidates = authority_mention_candidates(
-                session, authority_id=entity.id, include_existing=True
+                session,
+                authority_id=entity.id,
+                include_existing=True,
+                page_review_statuses=("approved",),
             )
             assert {row.match_kind for row in candidates} == {"preferred", "alias"}
             alias_candidate = next(row for row in candidates if row.match_kind == "alias")
@@ -230,11 +247,60 @@ def test_transversal_entity_candidates_show_alias_and_can_be_included(tmp_path: 
                 authority_id=entity.id,
                 candidate_keys=[row.candidate_key for row in candidates],
                 created_by="tests",
+                page_review_statuses=("approved",),
             )
             mentions = mention_rows(session, authority_id=entity.id)
         assert summary.created == 2
         assert len(mentions) == 2
         assert {row.mention_text for row in mentions} == {"DIPBA", "Dirección de Inteligencia"}
+    finally:
+        engine.dispose()
+
+
+def test_transversal_entity_candidates_default_to_approved_pages(tmp_path: Path) -> None:
+    from archive_workbench.authorities import authority_mention_candidates
+    from archive_workbench.db.models import EditableObject, EditablePage
+    from tests.test_search import _seed_search_project
+
+    root = tmp_path / "candidate_quality_project"
+    object_id, page_id = _seed_search_project(root)
+    engine = create_sqlite_engine(database_path(root))
+    try:
+        with session_scope(engine) as session:
+            obj = session.get(EditableObject, object_id)
+            page = session.get(EditablePage, page_id)
+            assert obj is not None
+            assert page is not None
+            obj.current_text = "Destino comun completamente distinto"
+            entity = create_authority(
+                session,
+                project_id="search_project",
+                entity_type="organization",
+                preferred_name="Destino comun",
+                created_by="tests",
+            )
+
+            page.review_status = "needs_review"
+            assert authority_mention_candidates(
+                session, authority_id=entity.id
+            ) == []
+            assert len(
+                authority_mention_candidates(
+                    session,
+                    authority_id=entity.id,
+                    page_review_statuses=("needs_review",),
+                    broader_quality_scope_confirmed=True,
+                    quality_scope_reason="Prueba explícita de alcance ampliado.",
+                )
+            ) == 1
+
+            page.review_status = "approved"
+            approved = authority_mention_candidates(
+                session, authority_id=entity.id
+            )
+
+        assert len(approved) == 1
+        assert approved[0].mention_text == "Destino comun"
     finally:
         engine.dispose()
 
@@ -336,7 +402,10 @@ def test_transversal_candidates_link_existing_unlinked_mention_without_duplicati
             )
 
             candidates = authority_mention_candidates(
-                session, authority_id=authority.id, include_existing=True
+                session,
+                authority_id=authority.id,
+                include_existing=True,
+                page_review_statuses=("approved",),
             )
             assert len(candidates) == 1
             assert candidates[0].can_link_existing
@@ -348,6 +417,7 @@ def test_transversal_candidates_link_existing_unlinked_mention_without_duplicati
                 candidate_keys=[candidates[0].candidate_key],
                 status="accepted",
                 created_by="tests",
+                page_review_statuses=("approved",),
             )
             mentions = mention_rows(session, object_id=object_id)
 
@@ -409,7 +479,10 @@ def test_transversal_candidates_report_conflict_with_another_authority(
             )
 
             candidates = authority_mention_candidates(
-                session, authority_id=target.id, include_existing=True
+                session,
+                authority_id=target.id,
+                include_existing=True,
+                page_review_statuses=("approved",),
             )
             assert len(candidates) == 1
             assert candidates[0].has_authority_conflict
@@ -421,10 +494,148 @@ def test_transversal_candidates_report_conflict_with_another_authority(
                     authority_id=target.id,
                     candidate_keys=[candidates[0].candidate_key],
                     created_by="tests",
+                    page_review_statuses=("approved",),
                 )
             mentions = mention_rows(session, object_id=object_id)
 
         assert len(mentions) == 1
         assert mentions[0].authority_id == other.id
+    finally:
+        engine.dispose()
+
+
+def test_transversal_candidates_detect_same_fragment_across_text_revisions(
+    tmp_path: Path,
+) -> None:
+    import pytest
+
+    from archive_workbench.authorities import (
+        add_authority_alias,
+        authority_mention_candidates,
+        create_mention,
+    )
+    from archive_workbench.db.models import EditableObject, EditableObjectRevision, EntityMention
+    from archive_workbench.graph import graph_consistency_issues
+    from archive_workbench.identity import new_id
+    from tests.test_search import _seed_search_project
+
+    root = tmp_path / "candidate_revision_project"
+    object_id, _page_id = _seed_search_project(root)
+    engine = create_sqlite_engine(database_path(root))
+    try:
+        with session_scope(engine) as session:
+            obj = session.get(EditableObject, object_id)
+            assert obj is not None
+            obj.current_text = "Destino comun completamente distinto"
+            session.add(
+                EditableObjectRevision(
+                    id=new_id(),
+                    editable_object_id=obj.id,
+                    revision_number=1,
+                    base_revision_number=None,
+                    operation="bootstrap",
+                    text=obj.current_text,
+                    object_type=obj.current_object_type,
+                    order_index=obj.current_order_index,
+                    geometry_json=obj.current_geometry_json,
+                    attributes_json=obj.current_attributes_json,
+                    lifecycle_status=obj.lifecycle_status,
+                    document_part_id=obj.document_part_id,
+                    created_by="tests",
+                )
+            )
+            original = create_authority(
+                session,
+                project_id="search_project",
+                entity_type="organization",
+                preferred_name="Destino comun",
+                created_by="tests",
+            )
+            alternative = create_authority(
+                session,
+                project_id="search_project",
+                entity_type="organization",
+                preferred_name="Destino alternativo",
+                created_by="tests",
+            )
+            add_authority_alias(
+                session,
+                authority_id=alternative.id,
+                alias="Destino comun",
+                alias_type="variant",
+                created_by="tests",
+            )
+            create_mention(
+                session,
+                object_id=obj.id,
+                mention_text="Destino comun",
+                authority_id=original.id,
+                status="accepted",
+                created_by="tests",
+            )
+
+            obj.current_text = "Texto agregado. Destino comun completamente distinto"
+            obj.revision_number = 2
+            session.add(
+                EditableObjectRevision(
+                    id=new_id(),
+                    editable_object_id=obj.id,
+                    revision_number=2,
+                    base_revision_number=1,
+                    operation="edit",
+                    text=obj.current_text,
+                    object_type=obj.current_object_type,
+                    order_index=obj.current_order_index,
+                    geometry_json=obj.current_geometry_json,
+                    attributes_json=obj.current_attributes_json,
+                    lifecycle_status=obj.lifecycle_status,
+                    document_part_id=obj.document_part_id,
+                    created_by="tests",
+                )
+            )
+            session.flush()
+
+            candidates = authority_mention_candidates(
+                session,
+                authority_id=alternative.id,
+                include_existing=True,
+                page_review_statuses=("approved",),
+            )
+            assert len(candidates) == 1
+            assert candidates[0].has_authority_conflict
+            assert candidates[0].existing_authority_name == "Destino comun"
+
+            with pytest.raises(ValueError, match="mención activa sobre el mismo fragmento"):
+                create_mention(
+                    session,
+                    object_id=obj.id,
+                    mention_text="Destino comun",
+                    authority_id=alternative.id,
+                    status="pending",
+                    created_by="tests",
+                )
+
+            # Simula un duplicado histórico ya existente para validar el diagnóstico.
+            duplicate = EntityMention(
+                id=new_id(),
+                editable_object_id=obj.id,
+                authority_id=alternative.id,
+                mention_text="Destino comun",
+                normalized_text="destino comun",
+                start_offset=16,
+                end_offset=29,
+                object_revision_number=2,
+                status="pending",
+                source="dictionary",
+                confidence=1.0,
+                note="Duplicado histórico de prueba",
+                created_by="tests",
+                updated_by="tests",
+                revision=1,
+            )
+            session.add(duplicate)
+            session.flush()
+            issues = graph_consistency_issues(session, project_id="search_project")
+            assert any(issue.code == "duplicate_mention" for issue in issues)
     finally:
         engine.dispose()

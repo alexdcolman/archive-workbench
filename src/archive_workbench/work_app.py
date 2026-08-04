@@ -3,6 +3,10 @@ from __future__ import annotations
 from datetime import datetime, time, timezone
 from pathlib import Path
 
+from archive_workbench.ui_navigation import rerun_view, tracked_tabs
+
+from archive_workbench.ui_navigation import rerun_app, request_app_view
+
 from archive_workbench.db import create_sqlite_engine, session_scope
 from archive_workbench.processing import processing_inventory_rows
 from archive_workbench.work import (
@@ -46,6 +50,14 @@ _OUTCOME_LABELS = {
 _ACTIVE_STATUSES = {"planned", "in_progress", "submitted", "blocked"}
 
 
+def _render_summary_card(st, label: str, value: object) -> None:
+    """Muestra un indicador legible también en paneles angostos."""
+
+    with st.container(border=True):
+        st.caption(label)
+        st.write(f"**{value}**")
+
+
 def _database_action(db_path: Path, callback):
     engine = create_sqlite_engine(db_path)
     try:
@@ -71,11 +83,8 @@ def _load_all(*, db_path: Path, project_root: Path, project_id: str):
 
 
 def _go_to_review(st, *, source_key: str, page: int | None) -> None:
-    st.session_state["review_pending_navigation"] = {
-        "source_key": source_key,
-        "page": page or 1,
-    }
-    st.rerun()
+    request_app_view(st, mode="review", source_key=source_key, page=page or 1)
+    rerun_app(st)
 
 
 def _due_datetime(enabled: bool, value) -> datetime | None:
@@ -118,11 +127,17 @@ def render_work_view(
     project_id: str,
     actor: str,
 ) -> None:
-    st.header("Trabajo del equipo")
+    st.header("Organizar trabajo")
     st.caption(
-        "Las asignaciones coordinan responsabilidades sin modificar automáticamente "
-        "el OCR, el texto editable ni sus estados de aprobación."
+        "Asigná responsabilidades, seguí el avance y coordiná revisiones sin modificar "
+        "automáticamente el OCR, el texto editable ni sus estados de aprobación."
     )
+    with st.expander("Cómo se organiza el trabajo", expanded=False):
+        st.write(
+            "Una asignación indica quién trabaja sobre un documento o un rango de páginas. "
+            "Mi trabajo reúne las tareas de la persona indicada en la barra lateral, y la "
+            "revisión cruzada permite que otra persona controle una revisión primaria."
+        )
     assignments, workload, candidates, inventory = _load_all(
         db_path=db_path,
         project_root=project_root,
@@ -130,8 +145,10 @@ def render_work_view(
     )
     inventory_map = {row.source_key: row for row in inventory}
     assignment_map = {row.assignment_id: row for row in assignments}
-    panel_tab, assignments_tab, mine_tab, cross_tab = st.tabs(
-        ["Panel", "Asignaciones", "Mi trabajo", "Revisión cruzada"]
+    panel_tab, assignments_tab, mine_tab, cross_tab = tracked_tabs(
+        st,
+        ["Resumen", "Asignar y administrar", "Mi trabajo", "Revisión cruzada"],
+        key="work_tabs",
     )
 
     with panel_tab:
@@ -147,67 +164,76 @@ def render_work_view(
             for row in assignments
             if row.assignment_kind == "cross_review" and row.status in _ACTIVE_STATUSES
         ]
-        cols = st.columns(4)
-        cols[0].metric("Asignaciones activas", len(active))
-        cols[1].metric("Vencidas", len(overdue))
-        cols[2].metric("Enviadas", len(submitted))
-        cols[3].metric("Revisiones cruzadas pendientes", len(cross_pending))
+        first_row = st.columns(2)
+        with first_row[0]:
+            _render_summary_card(st, "Asignaciones activas", len(active))
+        with first_row[1]:
+            _render_summary_card(st, "Vencidas", len(overdue))
+        second_row = st.columns(2)
+        with second_row[0]:
+            _render_summary_card(st, "Enviadas a revisión", len(submitted))
+        with second_row[1]:
+            _render_summary_card(
+                st,
+                "Revisiones cruzadas pendientes",
+                len(cross_pending),
+            )
 
-        st.subheader("Carga por responsable")
-        if workload:
+        with st.expander("Carga por responsable", expanded=False):
+            if workload:
+                st.dataframe(
+                    [
+                        {
+                            "Responsable": row.assignee,
+                            "Total": row.total,
+                            "Planificadas": row.planned,
+                            "En curso": row.in_progress,
+                            "Enviadas": row.submitted,
+                            "Bloqueadas": row.blocked,
+                            "Completadas": row.completed,
+                            "Vencidas": row.overdue,
+                            "Revisión primaria": row.primary_review,
+                            "Revisión cruzada": row.cross_review,
+                            "Procesamiento": row.processing,
+                        }
+                        for row in workload
+                    ],
+                    hide_index=True,
+                    use_container_width=True,
+                )
+            else:
+                st.info("Todavía no hay asignaciones de trabajo.")
+
+        with st.expander("Avance de los documentos", expanded=False):
             st.dataframe(
                 [
                     {
-                        "Responsable": row.assignee,
-                        "Total": row.total,
-                        "Planificadas": row.planned,
-                        "En curso": row.in_progress,
-                        "Enviadas": row.submitted,
-                        "Bloqueadas": row.blocked,
-                        "Completadas": row.completed,
-                        "Vencidas": row.overdue,
-                        "Revisión primaria": row.primary_review,
-                        "Revisión cruzada": row.cross_review,
-                        "Procesamiento": row.processing,
+                        "Documento": row.title,
+                        "source_key": row.source_key,
+                        "Procesamiento": row.status,
+                        "Páginas": row.page_count,
+                        "Seleccionadas": row.selected_pages,
+                        "Editables": row.editable_pages,
+                        "Revisadas": row.reviewed_pages,
+                        "Aprobadas": row.approved_pages,
+                        "Asignaciones activas": sum(
+                            item.source_key == row.source_key
+                            and item.status in _ACTIVE_STATUSES
+                            for item in assignments
+                        ),
                     }
-                    for row in workload
+                    for row in inventory
                 ],
                 hide_index=True,
                 use_container_width=True,
             )
-        else:
-            st.info("Todavía no hay asignaciones de trabajo.")
-
-        st.subheader("Avance documental")
-        st.dataframe(
-            [
-                {
-                    "Documento": row.title,
-                    "source_key": row.source_key,
-                    "Procesamiento": row.status,
-                    "Páginas": row.page_count,
-                    "Seleccionadas": row.selected_pages,
-                    "Editables": row.editable_pages,
-                    "Revisadas": row.reviewed_pages,
-                    "Aprobadas": row.approved_pages,
-                    "Asignaciones activas": sum(
-                        item.source_key == row.source_key
-                        and item.status in _ACTIVE_STATUSES
-                        for item in assignments
-                    ),
-                }
-                for row in inventory
-            ],
-            hide_index=True,
-            use_container_width=True,
-        )
 
     with assignments_tab:
         st.subheader("Crear asignación")
         if not inventory:
             st.info("No hay documentos procesables registrados en el catálogo.")
         else:
-            with st.form("create_work_assignment"):
+            with st.form("create_work_assignment", enter_to_submit=False):
                 source_key = st.selectbox(
                     "Documento",
                     options=list(inventory_map),
@@ -261,23 +287,24 @@ def render_work_view(
                     st.error(str(exc))
                 else:
                     st.success("Asignación creada.")
-                    st.rerun()
+                    rerun_view(st)
 
         st.divider()
         st.subheader("Asignaciones existentes")
-        filter_cols = st.columns(3)
         people = sorted({row.assignee for row in assignments}, key=str.casefold)
-        person_filter = filter_cols[0].multiselect("Responsable", people)
-        status_filter = filter_cols[1].multiselect(
-            "Estado",
-            list(ASSIGNMENT_STATUSES),
-            format_func=lambda value: _STATUS_LABELS[value],
-        )
-        kind_filter = filter_cols[2].multiselect(
-            "Tipo",
-            list(ASSIGNMENT_KINDS),
-            format_func=lambda value: _KIND_LABELS[value],
-        )
+        with st.expander("Filtros de asignaciones", expanded=False):
+            filter_cols = st.columns(3)
+            person_filter = filter_cols[0].multiselect("Responsable", people)
+            status_filter = filter_cols[1].multiselect(
+                "Estado",
+                list(ASSIGNMENT_STATUSES),
+                format_func=lambda value: _STATUS_LABELS[value],
+            )
+            kind_filter = filter_cols[2].multiselect(
+                "Tipo de tarea",
+                list(ASSIGNMENT_KINDS),
+                format_func=lambda value: _KIND_LABELS[value],
+            )
         filtered = [
             row
             for row in assignments
@@ -298,7 +325,7 @@ def render_work_view(
                     st.write(row.note)
                 if row.parent_assignee:
                     st.caption(f"Revisión primaria realizada por {row.parent_assignee}")
-                with st.form(f"update_assignment_{row.assignment_id}_{row.revision}"):
+                with st.form(f"update_assignment_{row.assignment_id}_{row.revision}", enter_to_submit=False):
                     new_assignee = st.text_input("Responsable", value=row.assignee)
                     new_status = st.selectbox(
                         "Estado",
@@ -359,7 +386,7 @@ def render_work_view(
                         st.error(str(exc))
                     else:
                         st.success("Asignación actualizada.")
-                        st.rerun()
+                        rerun_view(st)
                 if st.button(
                     "Abrir documento en Revisión",
                     key=f"assignment_open_{row.assignment_id}",
@@ -439,9 +466,9 @@ def render_work_view(
                         except ValueError as exc:
                             st.error(str(exc))
                         else:
-                            st.rerun()
+                            rerun_view(st)
                 if row.assignment_kind == "cross_review":
-                    with st.form(f"mine_cross_outcome_{row.assignment_id}_{row.revision}"):
+                    with st.form(f"mine_cross_outcome_{row.assignment_id}_{row.revision}", enter_to_submit=False):
                         selected_outcome = st.selectbox(
                             "Resultado de revisión cruzada",
                             options=list(CROSS_REVIEW_OUTCOMES),
@@ -477,7 +504,7 @@ def render_work_view(
                             st.error(str(exc))
                         else:
                             st.success("Revisión cruzada completada.")
-                            st.rerun()
+                            rerun_view(st)
 
     with cross_tab:
         st.subheader("Revisiones primarias enviadas")
@@ -509,7 +536,7 @@ def render_work_view(
                         source_key=candidate.source_key,
                         page=candidate.page_start,
                     )
-                with st.form(f"create_cross_{candidate.assignment_id}"):
+                with st.form(f"create_cross_{candidate.assignment_id}", enter_to_submit=False):
                     reviewer = st.text_input(
                         "Responsable de revisión cruzada",
                         value=(actor if actor.casefold() != candidate.assignee.casefold() else ""),
@@ -550,4 +577,4 @@ def render_work_view(
                         st.error(str(exc))
                     else:
                         st.success("Revisión cruzada asignada.")
-                        st.rerun()
+                        rerun_view(st)

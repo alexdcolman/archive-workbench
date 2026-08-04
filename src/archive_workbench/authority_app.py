@@ -3,6 +3,9 @@ from __future__ import annotations
 from datetime import date
 from pathlib import Path
 
+from archive_workbench.analysis_quality import analysis_quality_scope, quality_scope_caption
+from archive_workbench.ui_navigation import rerun_app, rerun_view, tracked_tabs, request_app_view
+
 from archive_workbench.authorities import (
     ALIAS_TYPES,
     AUTHORITY_LIFECYCLE_STATUSES,
@@ -15,10 +18,12 @@ from archive_workbench.authorities import (
     create_authority,
     include_authority_mention_candidates,
     mention_rows,
+    record_mention_suggestion_authorization,
     remove_authority_alias,
     update_authority,
 )
 from archive_workbench.db import create_sqlite_engine, session_scope
+from archive_workbench.discovery_app import render_open_discovery_section
 from archive_workbench.relations import (
     RELATION_LIFECYCLE_STATUSES,
     RELATION_REVIEW_STATUSES,
@@ -40,6 +45,7 @@ _TYPE_LABELS = {
 }
 _REVIEW_LABELS = {
     "unreviewed": "Sin revisar",
+    "needs_review": "Requiere revisión",
     "reviewed": "Revisado",
     "approved": "Aprobado",
 }
@@ -67,7 +73,31 @@ def _run(st, *, db_path: Path, callback, selection: str | None = None) -> None:
         engine.dispose()
     if selected:
         st.session_state["authority_pending_selection"] = str(selected)
-    st.rerun()
+    rerun_view(st)
+
+
+def _render_open_discovery_panel(
+    st,
+    *,
+    db_path: Path,
+    project_id: str,
+    actor: str,
+) -> None:
+    st.divider()
+    panel_open = st.toggle(
+        "Descubrimiento abierto",
+        value=False,
+        key="open_discovery_main_panel",
+        help="El panel permanece abierto mientras trabajás con sus controles.",
+    )
+    if panel_open:
+        with st.container(border=True):
+            render_open_discovery_section(
+                st,
+                db_path=db_path,
+                project_id=project_id,
+                actor=actor,
+            )
 
 
 def render_authorities_view(
@@ -77,16 +107,21 @@ def render_authorities_view(
     project_id: str,
     actor: str,
 ) -> None:
-    st.header("Entidades")
+    st.header("Entidades y menciones")
     st.caption(
-        "Una entidad es la ficha canónica de una persona, organismo, lugar u otro referente. "
-        "En archivística y bibliotecología también se la llama registro de autoridad: reúne bajo "
-        "una identidad estable el nombre preferido, sus variantes y las menciones documentales. "
-        "Las coincidencias automáticas siempre quedan pendientes de revisión humana."
+        "Reuní bajo una identidad estable los nombres, variantes, menciones y relaciones "
+        "que aparecen en los documentos."
     )
+    with st.expander("Qué es una entidad", expanded=False):
+        st.write(
+            "Una entidad es la ficha canónica de una persona, organismo, lugar u otro referente. "
+            "En archivística y bibliotecología también se la llama registro de autoridad: reúne "
+            "el nombre preferido, sus variantes y las menciones documentales. Las coincidencias "
+            "automáticas siempre quedan pendientes de revisión humana."
+        )
 
     with st.expander("Crear entidad", expanded=False):
-        with st.form("authority_create", clear_on_submit=True):
+        with st.form("authority_create", clear_on_submit=True, enter_to_submit=False):
             entity_type = st.selectbox(
                 "Tipo", options=list(AUTHORITY_TYPES), format_func=lambda value: _TYPE_LABELS[value]
             )
@@ -125,30 +160,31 @@ def render_authorities_view(
                 ),
             )
 
-    filter_left, filter_right = st.columns(2)
-    with filter_left:
-        query = st.text_input("Buscar nombre, alias o descripción", key="authority_query")
-        selected_types = st.multiselect(
-            "Tipos",
-            options=list(AUTHORITY_TYPES),
-            format_func=lambda value: _TYPE_LABELS[value],
-            key="authority_types",
-        )
-    with filter_right:
-        include_inactive = st.checkbox("Incluir entidades inactivas", value=False)
-        filter_temporal = st.checkbox("Filtrar por período de existencia", value=False)
-        temporal_cols = st.columns(2)
-        temporal_start = temporal_cols[0].date_input(
-            "Desde", value=date(1900, 1, 1), key="authority_temporal_start", disabled=not filter_temporal
-        )
-        temporal_end = temporal_cols[1].date_input(
-            "Hasta", value=date.today(), key="authority_temporal_end", disabled=not filter_temporal
-        )
-        include_undated = st.checkbox(
-            "Incluir entidades sin fecha",
-            value=False,
-            disabled=not filter_temporal,
-        )
+    query = st.text_input("Buscar nombre, nombre alternativo o descripción", key="authority_query")
+    with st.expander("Filtros de entidades", expanded=False):
+        filter_left, filter_right = st.columns(2)
+        with filter_left:
+            selected_types = st.multiselect(
+                "Tipos de entidad",
+                options=list(AUTHORITY_TYPES),
+                format_func=lambda value: _TYPE_LABELS[value],
+                key="authority_types",
+            )
+            include_inactive = st.checkbox("Incluir entidades dadas de baja", value=False)
+        with filter_right:
+            filter_temporal = st.checkbox("Filtrar por período de existencia", value=False)
+            temporal_cols = st.columns(2)
+            temporal_start = temporal_cols[0].date_input(
+                "Desde", value=date(1900, 1, 1), key="authority_temporal_start", disabled=not filter_temporal
+            )
+            temporal_end = temporal_cols[1].date_input(
+                "Hasta", value=date.today(), key="authority_temporal_end", disabled=not filter_temporal
+            )
+            include_undated = st.checkbox(
+                "Incluir entidades sin fecha",
+                value=False,
+                disabled=not filter_temporal,
+            )
 
     engine = create_sqlite_engine(db_path)
     try:
@@ -172,6 +208,12 @@ def render_authorities_view(
     st.caption(f"Entidades encontradas: {len(rows)}")
     if not rows:
         st.info("Todavía no hay entidades con esos filtros.")
+        _render_open_discovery_panel(
+            st,
+            db_path=db_path,
+            project_id=project_id,
+            actor=actor,
+        )
         return
 
     row_map = {row.authority_id: row for row in rows}
@@ -193,19 +235,29 @@ def render_authorities_view(
     )
     selected = row_map[selected_id]
 
-    summary_cols = st.columns(4)
-    summary_cols[0].metric("Tipo", _TYPE_LABELS[selected.entity_type])
-    summary_cols[1].metric("Revisión", selected.revision)
-    summary_cols[2].metric("Alias", selected.alias_count)
-    summary_cols[3].metric("Menciones", selected.mention_count)
-    if selected.temporal_expression:
-        st.caption(f"Período registrado: **{selected.temporal_expression}**")
+    with st.expander("Resumen de la entidad", expanded=False):
+        summary_cols = st.columns(4)
+        summary_cols[0].metric("Tipo", _TYPE_LABELS[selected.entity_type])
+        summary_cols[1].metric("Revisión", selected.revision)
+        summary_cols[2].metric("Nombres alternativos", selected.alias_count)
+        summary_cols[3].metric("Menciones", selected.mention_count)
+        if selected.temporal_expression:
+            st.caption(f"Período registrado: **{selected.temporal_expression}**")
 
-    detail_tab, alias_tab, mentions_tab, relations_tab, history_tab = st.tabs(
-        ["Descripción", "Alias", "Menciones", "Relaciones", "Historial"]
+    st.caption("Elegí qué aspecto de la entidad querés revisar o completar.")
+    detail_tab, alias_tab, mentions_tab, relations_tab, history_tab = tracked_tabs(
+        st,
+        [
+            "Datos de la entidad",
+            "Nombres alternativos",
+            "Menciones en documentos",
+            "Relaciones",
+            "Historial",
+        ],
+        key="authority_tabs",
     )
     with detail_tab:
-        with st.form(f"authority_edit_{selected.authority_id}_{selected.revision}"):
+        with st.form(f"authority_edit_{selected.authority_id}_{selected.revision}", enter_to_submit=False):
             entity_type_edit = st.selectbox(
                 "Tipo",
                 options=list(AUTHORITY_TYPES),
@@ -288,16 +340,16 @@ def render_authorities_view(
                         ),
                     )
         else:
-            st.caption("Sin alias registrados")
-        with st.form(f"authority_alias_add_{selected.authority_id}", clear_on_submit=True):
-            alias_value = st.text_input("Nuevo alias")
+            st.caption("Sin nombres alternativos registrados")
+        with st.form(f"authority_alias_add_{selected.authority_id}", clear_on_submit=True, enter_to_submit=False):
+            alias_value = st.text_input("Nuevo nombre alternativo")
             alias_type = st.selectbox(
-                "Tipo de alias",
+                "Tipo de nombre alternativo",
                 options=list(ALIAS_TYPES),
                 format_func=lambda value: _ALIAS_LABELS[value],
             )
             alias_note = st.text_input("Nota")
-            alias_submit = st.form_submit_button("Agregar alias")
+            alias_submit = st.form_submit_button("Agregar nombre alternativo")
         if alias_submit:
             _run(
                 st,
@@ -314,35 +366,118 @@ def render_authorities_view(
             )
 
     with mentions_tab:
-        st.subheader("Buscar nuevas menciones en todo el corpus")
+        st.subheader("Encontrar nuevas menciones en el corpus")
         surfaces = [selected.preferred_name] + [alias.alias for alias in selected.aliases]
         st.caption(
-            "Busca el nombre preferido y todos sus alias en los textos corregidos. "
+            "Busca el nombre preferido y todos sus nombres alternativos en los textos corregidos. "
             "No modifica nada hasta que selecciones qué coincidencias incorporar."
         )
         st.caption("Formas buscadas: " + " · ".join(f"`{item}`" for item in surfaces))
+        with st.expander("Opciones de búsqueda", expanded=False):
+            candidate_page_statuses = st.multiselect(
+                "Estados de página incluidos",
+                options=["unreviewed", "needs_review", "reviewed", "approved"],
+                default=["approved"],
+                format_func=lambda value: _REVIEW_LABELS[value],
+                key=f"authority_candidate_page_statuses_{selected.authority_id}",
+                help=(
+                    "Por seguridad, la búsqueda automática usa solamente páginas aprobadas. "
+                    "Dejá la selección vacía únicamente para buscar en todos los estados."
+                ),
+            )
+        candidate_quality_scope = analysis_quality_scope(candidate_page_statuses)
+        candidate_quality_reason = ""
+        if candidate_quality_scope.is_default:
+            st.caption(quality_scope_caption(candidate_page_statuses))
+            candidate_quality_confirmed = False
+        else:
+            st.warning(quality_scope_caption(candidate_page_statuses))
+            candidate_quality_confirmed = st.checkbox(
+                "Confirmo que deseo buscar menciones en páginas no aprobadas",
+                value=False,
+                key=f"authority_candidate_quality_confirm_{selected.authority_id}",
+            )
+            candidate_quality_reason = st.text_area(
+                "Fundamento del alcance ampliado",
+                value="",
+                placeholder=(
+                    "Explicá por qué esta búsqueda debe incluir páginas que todavía no están aprobadas."
+                ),
+                key=f"authority_candidate_quality_reason_{selected.authority_id}",
+                height=90,
+            )
         search_col, reset_col = st.columns([2, 1])
         if search_col.button(
             "Buscar coincidencias",
             type="primary",
             key=f"authority_candidate_search_{selected.authority_id}",
         ):
-            st.session_state["authority_candidate_entity"] = selected.authority_id
+            engine = create_sqlite_engine(db_path)
+            try:
+                with session_scope(engine) as session:
+                    record_mention_suggestion_authorization(
+                        session,
+                        project_id=project_id,
+                        page_review_statuses=tuple(candidate_page_statuses),
+                        broader_quality_scope_confirmed=candidate_quality_confirmed,
+                        quality_scope_reason=candidate_quality_reason or None,
+                        actor=actor or "local_user",
+                        source="ui",
+                        target_type="authority",
+                        target_id=selected.authority_id,
+                        parameters={
+                            "mode": "authority_candidates",
+                            "authority_id": selected.authority_id,
+                            "include_existing": True,
+                        },
+                    )
+            except (ValueError, RuntimeError, OSError) as exc:
+                st.error(str(exc))
+            else:
+                st.session_state["authority_candidate_entity"] = selected.authority_id
+                st.session_state["authority_candidate_search_config"] = {
+                    "authority_id": selected.authority_id,
+                    "page_review_statuses": list(candidate_page_statuses),
+                    "broader_quality_scope_confirmed": candidate_quality_confirmed,
+                    "quality_scope_reason": candidate_quality_reason or None,
+                }
+            finally:
+                engine.dispose()
         if reset_col.button(
             "Limpiar resultados", key=f"authority_candidate_clear_{selected.authority_id}"
         ):
             st.session_state.pop("authority_candidate_entity", None)
+            st.session_state.pop("authority_candidate_search_config", None)
             for key in list(st.session_state):
                 if str(key).startswith(f"authority_candidate_pick_{selected.authority_id}_"):
                     st.session_state.pop(key, None)
-            st.rerun()
+            rerun_view(st)
 
         if st.session_state.get("authority_candidate_entity") == selected.authority_id:
+            search_config = st.session_state.get("authority_candidate_search_config") or {}
+            searched_page_statuses = tuple(
+                search_config.get("page_review_statuses", candidate_page_statuses)
+            )
+            searched_quality_confirmed = bool(
+                search_config.get(
+                    "broader_quality_scope_confirmed",
+                    candidate_quality_confirmed,
+                )
+            )
+            searched_quality_reason = search_config.get(
+                "quality_scope_reason",
+                candidate_quality_reason or None,
+            )
             engine = create_sqlite_engine(db_path)
             try:
                 with session_scope(engine) as session:
                     candidates = authority_mention_candidates(
-                        session, authority_id=selected.authority_id, include_existing=True
+                        session,
+                        authority_id=selected.authority_id,
+                        include_existing=True,
+                        page_review_statuses=searched_page_statuses,
+                        broader_quality_scope_confirmed=searched_quality_confirmed,
+                        quality_scope_reason=searched_quality_reason,
                     )
             except (ValueError, RuntimeError, OSError) as exc:
                 st.error(str(exc))
@@ -374,11 +509,11 @@ def render_authorities_view(
                 st.info(
                     "No hay coincidencias pendientes de incorporación."
                     if candidates
-                    else "No se encontraron el nombre preferido ni sus alias en el corpus."
+                    else "No se encontraron el nombre preferido ni sus nombres alternativos en el corpus."
                 )
             else:
                 status_to_create = st.selectbox(
-                    "Estado de las menciones incorporadas",
+                    "Estado que se asignará a las nuevas menciones",
                     options=["pending", "accepted"],
                     format_func=lambda value: "Pendiente de revisión" if value == "pending" else "Aceptada",
                     key=f"authority_candidate_status_{selected.authority_id}",
@@ -389,7 +524,7 @@ def render_authorities_view(
                     alias_info = (
                         "nombre preferido"
                         if candidate.match_kind == "preferred"
-                        else f"alias · {_ALIAS_LABELS.get(candidate.alias_type or 'other', candidate.alias_type or 'otro')}"
+                        else f"nombre alternativo · {_ALIAS_LABELS.get(candidate.alias_type or 'other', candidate.alias_type or 'otro')}"
                     )
                     with st.container(border=True):
                         pick_col, body_col, open_col = st.columns([0.5, 6, 1])
@@ -439,13 +574,14 @@ def render_authorities_view(
                             key=f"authority_candidate_open_{candidate.candidate_key}",
                         ):
                             if candidate.source_key:
-                                st.session_state["review_pending_navigation"] = {
-                                    "source_key": candidate.source_key,
-                                    "page": candidate.page_number,
-                                    "object_id": candidate.object_id,
-                                }
-                                st.session_state["review_pending_app_mode"] = "review"
-                                st.rerun()
+                                request_app_view(
+                                    st,
+                                    mode="review",
+                                    source_key=candidate.source_key,
+                                    page=candidate.page_number,
+                                    object_id=candidate.object_id,
+                                )
+                                rerun_app(st)
                 action_left, action_right = st.columns(2)
                 if action_left.button(
                     f"Incorporar seleccionadas ({len(selected_keys)})",
@@ -462,6 +598,9 @@ def render_authorities_view(
                             candidate_keys=keys,
                             status=status_to_create,
                             created_by=actor or "local_user",
+                            page_review_statuses=searched_page_statuses,
+                            broader_quality_scope_confirmed=searched_quality_confirmed,
+                            quality_scope_reason=searched_quality_reason,
                         ),
                     )
                 if action_right.button(
@@ -481,11 +620,14 @@ def render_authorities_view(
                             candidate_keys=keys,
                             status=status_to_create,
                             created_by=actor or "local_user",
+                            page_review_statuses=searched_page_statuses,
+                            broader_quality_scope_confirmed=searched_quality_confirmed,
+                            quality_scope_reason=searched_quality_reason,
                         ),
                     )
 
         st.divider()
-        st.subheader("Menciones incorporadas")
+        st.subheader("Menciones ya vinculadas")
         engine = create_sqlite_engine(db_path)
         try:
             with session_scope(engine) as session:
@@ -510,13 +652,14 @@ def render_authorities_view(
                     )
                 if action.button("Abrir", key=f"authority_open_mention_{mention.mention_id}"):
                     if mention.source_key:
-                        st.session_state["review_pending_navigation"] = {
-                            "source_key": mention.source_key,
-                            "page": mention.page_number,
-                            "object_id": mention.object_id,
-                        }
-                        st.session_state["review_pending_app_mode"] = "review"
-                        st.rerun()
+                        request_app_view(
+                            st,
+                            mode="review",
+                            source_key=mention.source_key,
+                            page=mention.page_number,
+                            object_id=mention.object_id,
+                        )
+                        rerun_app(st)
 
     with relations_tab:
         st.caption(
@@ -819,3 +962,10 @@ def render_authorities_view(
                 if revision.note:
                     st.write(revision.note)
                 st.json(revision.snapshot_json)
+
+    _render_open_discovery_panel(
+        st,
+        db_path=db_path,
+        project_id=project_id,
+        actor=actor,
+    )

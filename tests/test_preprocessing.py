@@ -87,7 +87,7 @@ def test_pdf_derivatives_are_created_and_reused(tmp_path: Path) -> None:
     corpus = _corpus([_document("pdf_a", "corpus/caja/a.pdf", "pdf", "PDF A")])
 
     upgrade_database(root)
-    assert current_revision(root) == "0028_operational_readiness"
+    assert current_revision(root) == "0040_discovery_grouping_continuity"
     engine = create_sqlite_engine(database_path(root))
     try:
         with session_scope(engine) as session:
@@ -201,3 +201,151 @@ def test_modified_source_is_not_preprocessed_under_old_identity(tmp_path: Path) 
     assert summary.runs_created == 0
     assert runs == []
     assert "cambió desde su registro" in summary.warnings[0]
+
+
+def test_conservative_ocr_treatment_is_versioned_and_reusable(tmp_path: Path) -> None:
+    from archive_workbench.preprocessing import profile_for_ocr_treatment
+
+    root = tmp_path / "project"
+    source = root / "corpus/legajo/low_contrast.tiff"
+    source.parent.mkdir(parents=True, exist_ok=True)
+    image = Image.new("L", (600, 300), 190)
+    draw = ImageDraw.Draw(image)
+    draw.text((40, 60), "Texto de contraste moderado", fill=135)
+    image.save(source, format="TIFF", dpi=(300, 300), compression="tiff_deflate")
+
+    decisions = load_decisions(Path(__file__).parents[1] / "config/decisions.yaml")
+    decisions.tiff.use_pyvips_when_available = False
+    corpus = _corpus(
+        [_document("low_contrast", "corpus/legajo/low_contrast.tiff", "tiff", "Bajo contraste")]
+    )
+
+    upgrade_database(root)
+    engine = create_sqlite_engine(database_path(root))
+    try:
+        with session_scope(engine) as session:
+            register_test_corpus(
+                session,
+                project_root=root,
+                decisions=decisions,
+                corpus=corpus,
+            )
+        with session_scope(engine) as session:
+            original = prepare_derivatives(
+                session,
+                project_root=root,
+                decisions=decisions,
+                profile=profile_for_ocr_treatment(decisions, "original"),
+            )
+        with session_scope(engine) as session:
+            treated = prepare_derivatives(
+                session,
+                project_root=root,
+                decisions=decisions,
+                profile=profile_for_ocr_treatment(decisions, "grayscale_autocontrast"),
+            )
+        with session_scope(engine) as session:
+            runs = list(session.scalars(select(PreprocessingRun).order_by(PreprocessingRun.created_at)))
+            assets = list(session.scalars(select(DerivativeAsset)))
+            current = next(run for run in runs if run.is_current)
+            original_run = next(run for run in runs if run.profile_key == "default")
+            treated_run = next(
+                run for run in runs if run.profile_key == "ocr_grayscale_autocontrast"
+            )
+            original_assets = {
+                asset.kind: asset for asset in assets if asset.preprocessing_run_id == original_run.id
+            }
+            treated_assets = {
+                asset.kind: asset for asset in assets if asset.preprocessing_run_id == treated_run.id
+            }
+
+        assert original.runs_created == 1
+        assert treated.runs_created == 1
+        assert len(runs) == 2
+        assert current.id == treated_run.id
+        assert treated_run.options_json["ocr_treatment"] == "grayscale_autocontrast"
+        assert original_assets["preview"].sha256 == treated_assets["preview"].sha256
+        assert original_assets["ocr"].sha256 != treated_assets["ocr"].sha256
+
+        with session_scope(engine) as session:
+            reused = prepare_derivatives(
+                session,
+                project_root=root,
+                decisions=decisions,
+                profile=profile_for_ocr_treatment(decisions, "original"),
+            )
+        with session_scope(engine) as session:
+            current_after_reuse = session.scalar(
+                select(PreprocessingRun).where(PreprocessingRun.is_current.is_(True))
+            )
+    finally:
+        engine.dispose()
+
+    assert reused.runs_reused == 1
+    assert current_after_reuse is not None
+    assert current_after_reuse.profile_key == "default"
+
+
+def test_apply_ocr_treatment_keeps_dimensions_and_uses_conservative_modes() -> None:
+    from archive_workbench.preprocessing import apply_ocr_treatment
+
+    source = Image.new("RGB", (120, 80), (180, 180, 180))
+    draw = ImageDraw.Draw(source)
+    draw.rectangle((20, 20, 100, 60), fill=(110, 110, 110))
+
+    original = apply_ocr_treatment(source, "original")
+    autocontrast = apply_ocr_treatment(source, "grayscale_autocontrast")
+    otsu = apply_ocr_treatment(source, "otsu")
+    denoised = apply_ocr_treatment(source, "denoise_autocontrast")
+
+    assert original.size == autocontrast.size == otsu.size == denoised.size == source.size
+    assert original.mode == "RGB"
+    assert autocontrast.mode == "L"
+    assert otsu.mode == "1"
+    assert denoised.mode == "L"
+    assert otsu.getextrema() == (0, 255)
+
+
+def test_pre_036_original_profile_is_reused_without_duplicate_run(tmp_path: Path) -> None:
+    from archive_workbench.identity import sha256_json
+    from archive_workbench.preprocessing import profile_for_ocr_treatment
+
+    root = tmp_path / "project"
+    _write_pdf(root / "corpus/caja/legacy.pdf", pages=1)
+    decisions = load_decisions(Path(__file__).parents[1] / "config/decisions.yaml")
+    corpus = _corpus([_document("legacy", "corpus/caja/legacy.pdf", "pdf", "Legacy")])
+
+    upgrade_database(root)
+    engine = create_sqlite_engine(database_path(root))
+    try:
+        with session_scope(engine) as session:
+            register_test_corpus(
+                session,
+                project_root=root,
+                decisions=decisions,
+                corpus=corpus,
+            )
+        with session_scope(engine) as session:
+            prepare_derivatives(session, project_root=root, decisions=decisions)
+        with session_scope(engine) as session:
+            run = session.scalar(select(PreprocessingRun))
+            assert run is not None
+            legacy_options = dict(run.options_json)
+            legacy_options.pop("ocr_treatment")
+            run.options_json = legacy_options
+            run.options_hash = sha256_json(legacy_options)
+        with session_scope(engine) as session:
+            summary = prepare_derivatives(
+                session,
+                project_root=root,
+                decisions=decisions,
+                profile=profile_for_ocr_treatment(decisions, "original"),
+            )
+        with session_scope(engine) as session:
+            runs = list(session.scalars(select(PreprocessingRun)))
+    finally:
+        engine.dispose()
+
+    assert summary.runs_created == 0
+    assert summary.runs_reused == 1
+    assert len(runs) == 1

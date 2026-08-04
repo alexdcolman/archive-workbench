@@ -9,9 +9,18 @@ from datetime import date, datetime
 from pathlib import Path
 from typing import Any, Iterable
 
-from sqlalchemy import select
+from sqlalchemy import delete, select
 from sqlalchemy.orm import Session
 
+from archive_workbench.analysis_audit import (
+    record_automatic_analysis_authorization,
+    require_automatic_analysis_authorization,
+)
+from archive_workbench.analysis_quality import (
+    DEFAULT_AUTOMATIC_PAGE_REVIEW_STATUSES,
+    quality_scope_snapshot,
+    validate_automatic_quality_scope,
+)
 from archive_workbench.db.models import (
     ArchivalUnit,
     AuthorityRecord,
@@ -46,7 +55,7 @@ class ExportProfileValues:
     output_format: str = "jsonl"
     include_object_types: tuple[str, ...] = ()
     include_review_statuses: tuple[str, ...] = ()
-    include_page_review_statuses: tuple[str, ...] = ()
+    include_page_review_statuses: tuple[str, ...] = DEFAULT_AUTOMATIC_PAGE_REVIEW_STATUSES
     temporal_start: date | None = None
     temporal_end: date | None = None
     temporal_include_undated: bool = False
@@ -106,6 +115,7 @@ class ExportRunResult:
 @dataclass(slots=True)
 class ExportRunRow:
     run_id: str
+    profile_id: str | None
     profile_name: str
     output_format: str
     output_relative_path: str
@@ -151,7 +161,12 @@ def _clean_name(value: str) -> str:
     return clean
 
 
-def _validate(values: ExportProfileValues) -> ExportProfileValues:
+def _validate(
+    values: ExportProfileValues,
+    *,
+    broader_quality_scope_confirmed: bool = False,
+    quality_scope_reason: str | None = None,
+) -> ExportProfileValues:
     if values.aggregation_level not in AGGREGATION_LEVELS:
         raise ValueError("Nivel de agrupación inválido")
     if values.text_policy not in TEXT_POLICIES:
@@ -159,9 +174,13 @@ def _validate(values: ExportProfileValues) -> ExportProfileValues:
     if values.output_format not in OUTPUT_FORMATS:
         raise ValueError("Formato de salida inválido")
     invalid_review = set(values.include_review_statuses) - set(REVIEW_STATUSES)
-    invalid_page = set(values.include_page_review_statuses) - set(REVIEW_STATUSES)
-    if invalid_review or invalid_page:
-        raise ValueError("Hay estados de revisión inválidos en el perfil")
+    if invalid_review:
+        raise ValueError("Hay estados de revisión de objeto inválidos en el perfil")
+    page_scope = validate_automatic_quality_scope(
+        values.include_page_review_statuses,
+        broader_scope_confirmed=broader_quality_scope_confirmed,
+        confirmation_reason=quality_scope_reason,
+    )
     if len(values.object_separator) > 200 or len(values.page_separator) > 200:
         raise ValueError("Los separadores no pueden superar 200 caracteres")
     if values.temporal_start and values.temporal_end and values.temporal_start > values.temporal_end:
@@ -174,7 +193,7 @@ def _validate(values: ExportProfileValues) -> ExportProfileValues:
         output_format=values.output_format,
         include_object_types=tuple(sorted(set(values.include_object_types))),
         include_review_statuses=tuple(sorted(set(values.include_review_statuses))),
-        include_page_review_statuses=tuple(sorted(set(values.include_page_review_statuses))),
+        include_page_review_statuses=page_scope.page_review_statuses,
         temporal_start=values.temporal_start,
         temporal_end=values.temporal_end,
         temporal_include_undated=bool(values.temporal_include_undated),
@@ -203,14 +222,49 @@ def profile_values(profile: CorpusExportProfile) -> ExportProfileValues:
     )
 
 
-def profile_snapshot(profile: CorpusExportProfile) -> dict[str, Any]:
+def export_profile_authorization_parameters(
+    profile: CorpusExportProfile,
+) -> dict[str, Any]:
+    """Parámetros funcionales cuya autorización habilita la ejecución."""
+
     values = asdict(profile_values(profile))
-    values.update({"id": profile.id, "revision": profile.revision})
-    for key in ("include_object_types", "include_review_statuses", "include_page_review_statuses"):
+    for key in (
+        "include_object_types",
+        "include_review_statuses",
+        "include_page_review_statuses",
+    ):
         values[key] = list(values[key])
     for key in ("temporal_start", "temporal_end"):
         values[key] = values[key].isoformat() if values[key] else None
+    values["analysis_quality"] = quality_scope_snapshot(
+        analysis_kind="corpus_export",
+        page_review_statuses=profile.include_page_review_statuses_json or [],
+    )
     return values
+
+
+def profile_snapshot(profile: CorpusExportProfile) -> dict[str, Any]:
+    values = export_profile_authorization_parameters(profile)
+    values.update({"id": profile.id, "revision": profile.revision})
+    return values
+
+
+def _require_export_profile_authorization(
+    session: Session, *, project_id: str, profile: CorpusExportProfile
+) -> None:
+    require_automatic_analysis_authorization(
+        session,
+        project_id=project_id,
+        analysis_kind="corpus_export",
+        page_review_statuses=tuple(profile.include_page_review_statuses_json or ()),
+        target_type="corpus_export_profile",
+        target_id=profile.id,
+        parameters=export_profile_authorization_parameters(profile),
+        remediation=(
+            "Abrí Configurar perfil y guardalo nuevamente para registrar "
+            "su alcance de calidad."
+        ),
+    )
 
 
 def save_export_profile(
@@ -220,8 +274,15 @@ def save_export_profile(
     values: ExportProfileValues,
     changed_by: str,
     profile_id: str | None = None,
+    broader_quality_scope_confirmed: bool = False,
+    quality_scope_reason: str | None = None,
+    quality_scope_source: str = "api",
 ) -> CorpusExportProfile:
-    clean = _validate(values)
+    clean = _validate(
+        values,
+        broader_quality_scope_confirmed=broader_quality_scope_confirmed,
+        quality_scope_reason=quality_scope_reason,
+    )
     profile = session.get(CorpusExportProfile, profile_id) if profile_id else None
     if profile is None:
         profile = session.scalar(
@@ -230,6 +291,8 @@ def save_export_profile(
                 CorpusExportProfile.name == clean.name,
             )
         )
+    if profile is not None and profile.lifecycle_status != "active":
+        raise ValueError("El perfil está archivado. Restauralo antes de editarlo.")
     now = utc_now()
     if profile is None:
         profile = CorpusExportProfile(
@@ -249,6 +312,7 @@ def save_export_profile(
             object_separator=clean.object_separator,
             page_separator=clean.page_separator,
             include_page_markers=clean.include_page_markers,
+            lifecycle_status="active",
             created_by=changed_by,
             created_at=now,
             updated_by=changed_by,
@@ -286,15 +350,79 @@ def save_export_profile(
         profile.updated_at = now
         profile.revision += 1
     session.flush()
+    record_automatic_analysis_authorization(
+        session,
+        project_id=project_id,
+        analysis_kind="corpus_export",
+        page_review_statuses=clean.include_page_review_statuses,
+        broader_scope_confirmed=broader_quality_scope_confirmed,
+        confirmed_by=changed_by,
+        confirmation_reason=quality_scope_reason,
+        source=quality_scope_source,
+        target_type="corpus_export_profile",
+        target_id=profile.id,
+        parameters=export_profile_authorization_parameters(profile),
+    )
     return profile
 
 
-def export_profile_rows(session: Session, *, project_id: str) -> list[CorpusExportProfile]:
+def export_profile_rows(
+    session: Session,
+    *,
+    project_id: str,
+    include_archived: bool = False,
+) -> list[CorpusExportProfile]:
+    query = select(CorpusExportProfile).where(CorpusExportProfile.project_id == project_id)
+    if not include_archived:
+        query = query.where(CorpusExportProfile.lifecycle_status == "active")
     return session.scalars(
-        select(CorpusExportProfile)
-        .where(CorpusExportProfile.project_id == project_id)
-        .order_by(CorpusExportProfile.name, CorpusExportProfile.id)
+        query.order_by(
+            CorpusExportProfile.lifecycle_status,
+            CorpusExportProfile.name,
+            CorpusExportProfile.id,
+        )
     ).all()
+
+
+def set_export_profile_archived(
+    session: Session,
+    *,
+    project_id: str,
+    profile_id: str,
+    archived: bool,
+    changed_by: str,
+) -> CorpusExportProfile:
+    profile = session.get(CorpusExportProfile, profile_id)
+    if profile is None or profile.project_id != project_id:
+        raise ValueError("El perfil de exportación no existe en este proyecto")
+    target = "archived" if archived else "active"
+    if profile.lifecycle_status == target:
+        return profile
+    profile.lifecycle_status = target
+    profile.archived_by = changed_by if archived else None
+    profile.archived_at = utc_now() if archived else None
+    profile.updated_by = changed_by
+    profile.updated_at = utc_now()
+    profile.revision += 1
+    session.flush()
+    return profile
+
+
+def delete_export_profile(
+    session: Session,
+    *,
+    project_id: str,
+    profile_id: str,
+) -> str:
+    profile = session.get(CorpusExportProfile, profile_id)
+    if profile is None or profile.project_id != project_id:
+        raise ValueError("El perfil de exportación no existe en este proyecto")
+    if profile.lifecycle_status != "archived":
+        raise ValueError("Archivá el perfil antes de eliminarlo definitivamente")
+    name = profile.name
+    session.execute(delete(CorpusExportProfile).where(CorpusExportProfile.id == profile.id))
+    session.flush()
+    return name
 
 
 def resolve_export_profile(
@@ -308,6 +436,8 @@ def resolve_export_profile(
     )
     if profile is None:
         raise ValueError(f"Perfil de exportación inexistente: {profile_ref}")
+    if profile.lifecycle_status != "active":
+        raise ValueError(f"El perfil de exportación está archivado: {profile.name}")
     return profile
 
 
@@ -607,6 +737,9 @@ def build_export_rows(
 def preview_export(
     session: Session, *, project_id: str, profile: CorpusExportProfile, limit: int = 20
 ) -> ExportPreview:
+    _require_export_profile_authorization(
+        session, project_id=project_id, profile=profile
+    )
     rows = build_export_rows(session, project_id=project_id, profile=profile)
     return ExportPreview(
         total_records=len(rows),
@@ -668,6 +801,11 @@ def run_export(
     output_format: str | None = None,
     overwrite: bool = False,
 ) -> ExportRunResult:
+    if profile.lifecycle_status != "active":
+        raise ValueError("El perfil está archivado y no puede ejecutar exportaciones")
+    _require_export_profile_authorization(
+        session, project_id=project_id, profile=profile
+    )
     selected_format = output_format or profile.output_format
     if selected_format not in OUTPUT_FORMATS:
         raise ValueError("Formato de salida inválido")
@@ -727,6 +865,7 @@ def export_run_rows(session: Session, *, project_id: str) -> list[ExportRunRow]:
     return [
         ExportRunRow(
             run_id=row.id,
+            profile_id=row.profile_id,
             profile_name=row.profile_name,
             output_format=row.output_format,
             output_relative_path=row.output_relative_path,

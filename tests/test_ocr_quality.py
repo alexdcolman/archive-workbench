@@ -448,3 +448,125 @@ def test_restore_profile_pages_finds_separate_partial_runs(
             assert len({item.extraction_run_id for item in selections}) == 2
     finally:
         engine.dispose()
+
+
+def test_page_quality_assessment_is_explicit_and_versioned(tmp_path: Path, monkeypatch) -> None:
+    from archive_workbench.db.models import ExtractionPage, ExtractionPageQualityAssessment
+    from archive_workbench.page_quality import assess_extraction_page_quality
+
+    root = tmp_path / "project"
+    engine, decisions = _prepare_project(root)
+
+    def fake_run(image_path: Path, **kwargs):
+        return _result(image_path, kwargs["psm"], kwargs["image_variant"])
+
+    monkeypatch.setattr("archive_workbench.extraction.run_tesseract_page", fake_run)
+    monkeypatch.setattr("archive_workbench.extraction._tesseract_version", lambda _cmd: "5.test")
+    profile = ExtractionProfile(
+        profile_key="quality_test",
+        backend="tesseract_tsv",
+        psm=3,
+        image_variant="original",
+    )
+    try:
+        with session_scope(engine) as session:
+            extract_documents(
+                session,
+                project_root=root,
+                decisions=decisions,
+                profile=profile,
+                created_by="Alex",
+            )
+        with session_scope(engine) as session:
+            page = session.scalar(select(ExtractionPage))
+            assert page is not None
+            first = assess_extraction_page_quality(
+                session,
+                project_root=root,
+                extraction_page_id=page.id,
+                assessed_by="Alex",
+            )
+            second = assess_extraction_page_quality(
+                session,
+                project_root=root,
+                extraction_page_id=page.id,
+                assessed_by="Alex",
+            )
+            rows = session.scalars(
+                select(ExtractionPageQualityAssessment)
+                .where(ExtractionPageQualityAssessment.extraction_page_id == page.id)
+                .order_by(ExtractionPageQualityAssessment.assessed_at)
+            ).all()
+    finally:
+        engine.dispose()
+
+    assert first.metrics["character_count"] > 20
+    assert first.metrics["bbox_count"] == 2
+    assert first.algorithm_version == "page_quality_v2"
+    assert len(rows) == 3
+    assert sum(row.is_current for row in rows) == 1
+    assert any(row.assessed_by == "system:extraction" for row in rows)
+    assert next(row for row in rows if row.is_current).id == second.assessment_id
+
+
+def test_page_quality_flags_blank_page_without_approving_it(tmp_path: Path) -> None:
+    from PIL import Image
+    from archive_workbench.page_quality import evaluate_page_quality
+
+    image = tmp_path / "blank.png"
+    Image.new("L", (800, 1000), 255).save(image)
+
+    status, score, metrics, flags, suggestions = evaluate_page_quality(
+        image_path=image,
+        objects=[],
+        page_number=1,
+    )
+
+    assert status == "critical"
+    assert score < 0.5
+    assert "no_text" in flags
+    assert "washed_out" in flags
+    assert metrics["object_count"] == 0
+    assert suggestions
+
+
+def test_quality_assessment_failure_does_not_discard_extraction(tmp_path: Path, monkeypatch) -> None:
+    root = tmp_path / "project"
+    engine, decisions = _prepare_project(root)
+
+    monkeypatch.setattr(
+        "archive_workbench.extraction.run_tesseract_page",
+        lambda image_path, **kwargs: _result(
+            image_path, kwargs["psm"], kwargs["image_variant"]
+        ),
+    )
+    monkeypatch.setattr("archive_workbench.extraction._tesseract_version", lambda _cmd: "5.test")
+    monkeypatch.setattr(
+        "archive_workbench.extraction.assess_extraction_page_quality",
+        lambda *args, **kwargs: (_ for _ in ()).throw(ValueError("métrica no disponible")),
+    )
+    profile = ExtractionProfile(
+        profile_key="quality_failure_test",
+        backend="tesseract_tsv",
+        psm=3,
+        image_variant="original",
+    )
+    try:
+        with session_scope(engine) as session:
+            summary = extract_documents(
+                session,
+                project_root=root,
+                decisions=decisions,
+                profile=profile,
+                created_by="Alex",
+            )
+        with session_scope(engine) as session:
+            run = session.scalar(select(ExtractionRun))
+    finally:
+        engine.dispose()
+
+    assert summary.runs_created == 1
+    assert summary.failed == 0
+    assert any("no se pudo evaluar automáticamente" in item for item in summary.warnings)
+    assert run is not None
+    assert run.status == "completed_with_warnings"

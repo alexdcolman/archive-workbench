@@ -2,9 +2,9 @@
 
 ## Diseño técnico, decisiones pendientes y plan de implementación por iteraciones
 
-**Estado del documento:** diseño base y hoja de ruta inicial
-**Versión:** 0.1
-**Fecha:** 22 de julio de 2026
+**Estado del documento:** diseño base y hoja de ruta inicial  
+**Versión:** 0.1  
+**Fecha:** 22 de julio de 2026  
 **Nombre del proyecto:** provisional
 
 ---
@@ -593,8 +593,8 @@ La primera tarea con el corpus será inspeccionar uno de esos TIFF sin convertir
 
 ### 10.1 Paneles
 
-**Izquierda:** imagen, zoom, bboxes, miniaturas.
-**Centro:** original, corregido, tipo, pertenencia estructural.
+**Izquierda:** imagen, zoom, bboxes, miniaturas.  
+**Centro:** original, corregido, tipo, pertenencia estructural.  
 **Derecha:** comentarios, etiquetas, entidades, relaciones, historial.
 
 ### 10.2 Edición
@@ -1524,3 +1524,369 @@ Las invariantes reforzadas son:
 - un backup se ordena por su fecha verificable y un índice semántico se invalida solo por cambios dentro de su corpus.
 
 La suite automatizada alcanza 171 tests. La próxima fase vuelve a concentrarse en revisión y extracción: comparación de candidatas, historial integrado, calidad automática, preprocesamiento conservador y evaluación de Surya/CUDA.
+
+
+# 27. Estado de implementación al llegar a 0.34.0
+
+La versión 0.34.0 integra la comparación y adopción de extracciones candidatas dentro de **Procesamiento** y reúne la auditoría de página dentro de **Revisión**. No crea pantallas ni fuentes de verdad paralelas.
+
+El flujo visible queda reducido a cuatro situaciones comprensibles:
+
+```text
+página todavía no inicializada
+→ puede seleccionarse e inicializarse
+
+página inicializada sin trabajo humano
+→ puede adoptarse otra candidata de forma segura
+
+candidata ya usada por la edición
+→ no hace falta ninguna acción
+
+página con correcciones o anotaciones
+→ la aplicación conserva la edición y exige una decisión explícita
+```
+
+Seleccionar, adoptar y aprobar son operaciones distintas. Cambiar solamente la selección nunca reemplaza texto editable. Cuando existe trabajo humano, la resolución disponible conserva íntegramente textos, orden, geometrías, anotaciones, menciones y estados; vincula la nueva candidata como referencia y deja registrados los objetos editables retenidos y los objetos candidatos no importados.
+
+La migración `0029_extraction_candidate_history` incorpora historial append-only para la selección canónica y para el estado general de cada página editable. La cronología de Revisión compone esas fuentes con revisiones de objetos, comentarios, etiquetas, menciones, acciones estructurales, estados de revisión, deshacer y rehacer.
+
+Los checkpoints incluyen ahora la selección y la procedencia OCR de la capa editable. Como los bundles offline no transportan corridas ni páginas de extracción, cualquier cambio posterior de base OCR bloquea la exportación incremental y exige crear una nueva copia física compartida con un checkpoint común. Esta restricción evita paquetes técnicamente válidos pero imposibles de materializar en la copia receptora.
+
+La interfaz prioriza una única acción principal por situación, explica por qué una operación está bloqueada y mantiene los identificadores técnicos dentro de detalles secundarios. La próxima fase se concentra en calidad automática de imagen, preprocesamiento conservador, evaluación de Surya/CUDA y, posteriormente, sugerencias revisables de entidades.
+
+# 28. Cierre del intercambio de decisiones OCR en 0.34.3
+
+La versión 0.34.3 completa el criterio pendiente de 0.34.0: las decisiones sobre una candidata OCR pueden viajar mediante bundles offline sin convertir el paquete en un contenedor de corridas completas.
+
+El bundle transporta y aplica, en su orden original:
+
+```text
+cambio de selección canónica
+→ cambios de objetos producidos por una adopción segura
+→ cambio de la base editable
+→ correcciones, deshacer y rehacer posteriores
+→ resolución que conserva la edición humana
+```
+
+La copia receptora debe contener previamente las corridas, páginas y objetos OCR referenciados. Esta condición se cumple normalmente cuando ambas copias nacieron de una misma copia física del proyecto. El dry-run verifica cada dependencia antes de habilitar la aplicación. Si falta una extracción, no intenta reconstruirla ni aplicar parcialmente la decisión: deja los eventos en revisión e indica que debe compartirse primero una copia física completa.
+
+Las notas y el tipo de decisión se recuperan del historial append-only al exportar. Por eso también pueden transportarse decisiones ya registradas con 0.34.0, 0.34.1 o 0.34.2; no hace falta repetirlas después de actualizar.
+
+Varias decisiones sucesivas sobre la misma página se simulan de manera encadenada durante el dry-run. La segunda operación se evalúa contra el estado que produciría la primera, no contra el estado inicial de la copia receptora. Esto permite intercambiar en un solo bundle secuencias reales de trabajo sin generar conflictos artificiales.
+
+La revisión de base continúa siendo `0029_extraction_candidate_history`: el cambio pertenece a la lógica de exportación, evaluación y aplicación de bundles, no al esquema SQLite.
+
+# 29. Corrección de intercambio de objetos retirados en 0.34.4
+
+La validación real de 0.34.3 detectó seis conflictos artificiales al adoptar una candidata OCR. Las dos copias compartían el mismo checkpoint y no tenían cambios concurrentes: el problema estaba en los eventos `source_replaced` de objetos históricos sin revisión base.
+
+Esos eventos describían erróneamente todos los campos como cambios desde `NULL`, aunque la operación real solo había retirado el objeto de la base activa. La versión 0.34.4 fija una representación canónica:
+
+```text
+lifecycle_status: active → deleted
+```
+
+La migración `0030_source_replaced_exchange` realiza dos tareas conservadoras:
+
+1. reinstala el trigger de intercambio para que los nuevos `source_replaced` registren únicamente esa transición;
+2. completa revisiones base solo cuando el estado anterior puede reconstruirse sin inventar contenido: objetos intactos en revisión 1 y objetos cuya primera revisión fue precisamente `source_replaced`.
+
+El backfill no modifica el estado editable actual ni genera eventos nuevos. Agrega puntos de partida append-only a historiales incompletos.
+
+Los eventos defectuosos ya registrados con 0.34.0–0.34.3 se normalizan durante la exportación al correlacionarlos con su revisión `source_replaced`. Por eso las acciones ya realizadas pueden reexportarse desde el checkpoint anterior; no es necesario repetir adopciones, correcciones ni resoluciones manuales.
+
+El criterio de cierre se verifica de extremo a extremo: exportación desde el checkpoint común, dry-run con todos los eventos aplicables y cero conflictos, aplicación en la copia receptora y coincidencia de selección, base editable, objetos retirados, objetos nuevos e historial.
+
+# 30. Intercambio completo del historial editable en 0.34.5
+
+La validación de 0.34.4 confirmó que el estado final de una página podía llegar correctamente a otra copia, pero detectó una diferencia histórica: la receptora recreaba revisiones con operaciones genéricas (`create` y `exchange_apply`) y no recibía las filas de `editable_page_actions`. Por eso el texto, la selección y los objetos coincidían, aunque la cronología remota no podía reconstruir con precisión `edit`, `source_replaced`, `undo` y `redo`.
+
+La versión 0.34.5 transporta dos niveles complementarios:
+
+1. **Estado editable:** texto, tipo, orden, geometría, atributos, ciclo de vida y base OCR.
+2. **Historia operativa:** operación original, nota, autor, fecha, acción de página, snapshots y marcas de deshacer/rehacer.
+
+La migración `0031_page_action_exchange` instala eventos para la creación y actualización de acciones de página. También representa las acciones anteriores que ya existían al migrar. Si una acción histórica está presente en ambas copias, el dry-run la clasifica como duplicada; si solo existe en el origen, la aplica.
+
+Las revisiones de objetos se enriquecen al exportar con su operación append-only original. La aplicación receptora conserva esa operación y no la sustituye por una etiqueta genérica. Esto permite que la cronología integrada describa la misma secuencia metodológica en ambas copias.
+
+El hash del estado compartido incorpora ahora las acciones de página, porque la disponibilidad de deshacer o rehacer forma parte del estado operativo y no debe quedar fuera de los checkpoints.
+
+La versión también corrige `project-backup-create`: crear un backup ya no ejecuta `upgrade_database()`. Un respaldo captura la revisión que existe en ese momento y la informa explícitamente; la migración se realiza después mediante `db-upgrade`.
+
+El criterio de cierre exige coincidencia de selección, base editable, objetos activos y retirados, texto corregido, operaciones de revisión, acciones de página y cronología de undo/redo.
+
+# 31. Control automático de calidad y migraciones explícitas en 0.35.0
+
+La primera etapa posterior al cierre de candidatas OCR incorpora una evaluación automática por página, separada de cualquier decisión humana. El control mide características observables de la imagen y de la extracción: brillo, contraste, bordes débiles, ruido, volumen textual, fragmentación, objetos mínimos, símbolos sospechosos y solapamiento de bounding boxes.
+
+El resultado se registra en `extraction_page_quality_assessments` con versión del algoritmo, métricas, alertas, sugerencias, autor y fecha. Una nueva evaluación no sobrescribe la anterior: solamente pasa a ser la vigente. Los estados `clear`, `attention` y `critical` ordenan la revisión; no equivalen a aceptación, aprobación ni rechazo.
+
+Las sugerencias se limitan a operaciones conservadoras, como autocontraste, Otsu, comparación de PSM o revisión de layout. La evaluación no modifica imágenes, no ejecuta restauración generativa y no cambia la selección canónica ni la base editable.
+
+La interfaz integra el control en **Procesamiento → Selección canónica** mediante una única acción para las versiones visibles. Las extracciones nuevas reciben una evaluación inicial automáticamente; las corridas históricas se evalúan bajo demanda.
+
+Desde esta versión, la evolución del esquema también queda sometida a una regla global: únicamente `archive-workbench db-upgrade` puede ejecutar migraciones. Los demás comandos verifican la revisión y se detienen con una explicación si la base está desactualizada. `db-status` y la creación de backups siguen pudiendo leer o preservar una revisión anterior sin alterarla.
+
+La migración `0032_page_quality_assessments` crea la nueva tabla vacía y no modifica extracciones, selecciones, objetos editables, revisiones ni eventos de intercambio existentes.
+
+# 32. Transparencia del control y preprocesamiento conservador en 0.36.0
+
+La versión 0.36.0 corrige la presentación del control automático de calidad para evitar que un puntaje heurístico se interprete como exactitud OCR. La interfaz diferencia explícitamente el estado asignado por el equipo del diagnóstico automático, muestra los indicadores que sostienen cada alerta y aclara que la ausencia de alertas no prueba que el texto sea correcto.
+
+El primer flujo de preprocesamiento conservador se integra en **Procesamiento → Ejecutar → Preparar páginas**. La persona puede generar una nueva corrida de derivados para OCR con una de cuatro opciones reproducibles:
+
+```text
+sin cambios
+autocontraste en escala de grises
+binarización Otsu
+reducción de ruido mediana y autocontraste
+```
+
+Los tratamientos se aplican únicamente al derivado OCR. El original y la previsualización permanecen intactos; no se usa restauración generativa, deskew automático ni transformación que invente trazos. Cada preparación conserva su perfil y hash de opciones, puede reutilizarse y volver a activarse sin duplicar archivos.
+
+La preparación no ejecuta OCR ni cambia una selección canónica. Después debe correrse una extracción sobre el derivado vigente para obtener una candidata que pueda compararse con las anteriores mediante el flujo ya existente.
+
+En rasteres demasiado grandes para Pillow, los tratamientos conservadores se detienen con una explicación antes de cargar la imagen en memoria. La ruta `Sin cambios` mantiene el uso de pyvips cuando está disponible.
+
+La documentación técnica se reconstruye en un único archivo ASCII, `docs/DISENO_Y_PLAN_DE_IMPLEMENTACION.md`, con las secciones 1–32 completas y ordenadas. No hay migración nueva: la revisión de base continúa en `0032_page_quality_assessments`.
+
+# 33. Navegación persistente y procedencia visible del derivado en 0.36.1
+
+La versión 0.36.1 elimina una fuente repetida de confusión operativa: los reruns de Streamlit ya no devuelven a la primera pestaña de una sección. Todas las pestañas visibles quedan asociadas a una clave estable y registran la opción activa; cambiar un control, guardar o ejecutar una operación conserva la ubicación de la persona usuaria.
+
+La política se aplica transversalmente a Procesamiento, Trabajo, Revisión, Catálogo, Entidades, Grafo, Exportar, Búsqueda semántica y Administración. Las aperturas programáticas continúan usando una solicitud pendiente aplicada antes de crear el widget, para no modificar el estado de una pestaña ya instanciada.
+
+En el flujo OCR se explicitan dos capas que antes aparecían confundidas:
+
+```text
+tratamiento del derivado vigente
+→ transformación realizada al preparar las páginas
+
+image_variant del perfil
+→ transformación adicional aplicada durante la extracción
+```
+
+Por eso `image_variant: original` no implica volver al archivo fuente ni ignorar la preparación. Significa que el perfil utiliza el derivado vigente sin agregarle una segunda transformación. La pantalla de extracción muestra ambas decisiones por documento antes de ejecutar la corrida.
+
+La revisión de base continúa siendo `0032_page_quality_assessments`; el cambio pertenece a la interfaz y a la política de navegación.
+
+# 34. Backend experimental Surya y verificación explícita de aceleración en 0.37.0
+
+La versión 0.37.0 incorpora `surya_cli` como tercer backend de extracción, junto con `docling_cli` y `tesseract_tsv`. Surya se ejecuta como subproceso para que sus dependencias y su servidor de inferencia puedan mantenerse aislados del entorno principal de Archive Workbench.
+
+El perfil `config/extraction_surya_es.yaml` produce candidatas por página con OCR, clasificación de bloques y orden de lectura. La normalización conserva el HTML crudo, las etiquetas original y canónica, la confianza, los bounding boxes, el orden y los indicadores de bloques omitidos o fallidos. Las etiquetas se traducen a los tipos configurables de Archive Workbench sin crear estados nuevos.
+
+El campo `device` tiene una interpretación explícita para Surya:
+
+```text
+auto  → vLLM con NVIDIA/Docker si está disponible; de lo contrario llama.cpp
+cuda  → vLLM con NVIDIA/Docker
+cpu   → llama.cpp mediante llama-server
+```
+
+Si el intento acelerado falla y el perfil habilita fallback, se realiza un único reintento con llama.cpp en CPU. Ambos comandos, variables de entorno, stdout y stderr quedan en `raw/surya.log`; el manifiesto conserva la versión del paquete y todas las opciones reproducibles.
+
+`extraction-doctor` verifica por separado el ejecutable Surya y el backend requerido. Para CUDA comprueba NVIDIA, Docker y el runtime `nvidia`; para CPU comprueba `llama-server`; también puede validar un servidor OpenAI-compatible configurado mediante `surya_inference_url`. La prueba efectiva de uso real no se declara a partir del diagnóstico: se confirma ejecutando una corrida de una página con `--device cuda` o `--device cpu` y revisando su log y sus resultados.
+
+La interfaz integra el perfil en **Procesamiento → Ejecutar → Extraer texto** y explica qué backend se solicitará. Toda corrida sigue la política ya establecida: genera candidatos, no cambia automáticamente la selección canónica ni reemplaza una edición existente.
+
+No hay migración nueva. La revisión continúa en `0032_page_quality_assessments`. La evaluación comparativa de exactitud, layout y rendimiento sobre verdad terreno continúa pendiente y debe realizarse con las mismas páginas y derivados usados por Tesseract.
+
+# 35. Runtime aislado y compatibilidad reproducible de Surya en 0.37.1
+
+La instalación real de 0.37.0 mostró una incompatibilidad de dependencias: Archive Workbench exigía Pillow 11 o posterior, mientras `surya-ocr==0.22.1` exige Pillow 10.2 o posterior y menor que 11. La corrección amplía el rango compatible del paquete principal y fija exactamente la versión de Surya cuya CLI y esquema de salida fueron integrados.
+
+Surya continúa siendo un subproceso externo y se instala por defecto en `.venv-surya`, separado de `.venv`. Esta separación evita que su rama de Pillow, Torch y Transformers reemplace las bibliotecas usadas por Streamlit, Docling, preprocesamiento y búsqueda semántica en el entorno principal.
+
+El instalador `scripts/install_surya_runtime.sh` ofrece dos pasos explícitos:
+
+```text
+--dry-run → resolver dependencias sin instalarlas
+install   → instalar, ejecutar pip check e informar el ejecutable resultante
+```
+
+Los perfiles apuntan a `.venv-surya/bin/surya_ocr`. Las rutas relativas, absolutas y con `~` se normalizan antes del diagnóstico y de la ejecución; la versión se consulta mediante el Python del mismo runtime para no confundir paquetes instalados en entornos diferentes.
+
+No hay migración de base. La corrección pertenece al empaquetado y al aislamiento del backend experimental. La verificación empírica de CUDA, CPU, exactitud, layout y rendimiento continúa pendiente.
+
+# 36. Surya preferido, fallback automático y servidor persistente en 0.38.0
+
+La evaluación empírica documentada en `docs/EVALUACION_SURYA_OCR_0.38.0.md` mostró una mejora consistente de Surya sobre seis páginas reales con deterioro, mala orientación, manuscritos y estructura de formulario. La decisión de diseño deja de tratarlo como una alternativa experimental equivalente a las demás: pasa a ser el backend preferido cuando su runtime está disponible, sin convertirlo en dependencia obligatoria ni permitir que seleccione páginas automáticamente.
+
+El perfil principal `config/extraction.yaml` utiliza `surya_cli` y declara `config/extraction_docling_es.yaml` como fallback. La resolución ocurre antes de la corrida: si el ejecutable, el backend VLM o los modelos auxiliares no están listos, se elige el fallback y se informa el motivo. Si Surya supera el diagnóstico pero falla durante un documento, el intento fallido se conserva y el fallback procesa únicamente los documentos que no pudieron completarse. Esta recuperación no borra el error original y queda registrada como advertencia.
+
+La configuración validada en la RTX 3090 separa dos dispositivos:
+
+```text
+VLM de OCR, layout y orden de lectura
+→ vLLM en Docker con NVIDIA
+
+modelos auxiliares Torch
+→ CPU dentro de .venv-surya
+```
+
+El subproceso fija `TORCH_DEVICE=cpu` y elimina el `LD_LIBRARY_PATH` heredado cuando el perfil lo solicita. Esto evita mezclar la cuDNN del runtime de PyTorch con bibliotecas del sistema, sin modificar la instalación CUDA global ni la `.venv` principal.
+
+Para eliminar el costo dominante observado —carga, compilación y warmup de vLLM— el perfil usa `surya_keep_server: true`. El primer comando deja activo el contenedor `surya-vllm-*`; las corridas posteriores se conectan al mismo servidor. La persona usuaria puede inspeccionarlo o liberar la VRAM explícitamente:
+
+```bash
+archive-workbench surya-server-status
+archive-workbench surya-server-stop
+```
+
+`extraction-doctor` informa por separado el ejecutable Surya, el backend VLM y los modelos auxiliares. Cuando los auxiliares están configurados en CPU no realiza una convolución cuDNN irrelevante para decidir si la ruta VLM GPU está disponible.
+
+La interfaz muestra el carácter preferido del perfil, la configuración híbrida, la persistencia del servidor y el fallback. La selección canónica conserva la misma regla de seguridad: todo resultado es una candidata hasta que una persona la compara y la adopta.
+
+Los proyectos existentes no reciben una reescritura silenciosa de sus perfiles. La adopción del perfil preferido requiere una copia explícita de los perfiles estándar, con respaldo previo, para preservar cualquier personalización local.
+
+No hay migración nueva. La revisión de base continúa en `0032_page_quality_assessments`. Quedan pendientes una capa semántica para casilleros, alertas revisables para ordinales legales y un benchmark con verdad terreno.
+
+
+# 37. Resolución coherente del dispositivo auxiliar de Surya en 0.38.1
+
+El diagnóstico y la ejecución de Surya comparten una única regla para resolver `TORCH_DEVICE`. Cuando `surya_torch_device` permanece en `auto`, un perfil con `device: cpu` fuerza también los modelos auxiliares a CPU, uno con `device: cuda` los dirige a CUDA y uno con `device: auto` conserva la autodetección; una configuración auxiliar explícita sigue teniendo prioridad.
+
+Esto evita que un perfil CPU consulte o utilice accidentalmente CUDA/cuDNN del equipo anfitrión y convierte las pruebas del doctor en pruebas aisladas del hardware real. La política híbrida validada para el perfil preferido no cambia: `device: auto` para el VLM y `surya_torch_device: cpu` para los auxiliares.
+
+# 38. Control estructural revisable para ordinales y casilleros en 0.39.0
+
+La calidad OCR no puede evaluarse solamente con volumen textual, fragmentación o confianza. Las pruebas reales de Surya mostraron dos pérdidas semánticas específicas: ordinales legales convertidos en números de dos cifras y formularios cuyos rótulos se leen correctamente, pero cuyo estado marcado o no marcado no queda representado de forma segura en el texto plano.
+
+La versión 0.39.0 integra esas comprobaciones en el control automático ya existente. `page_quality_v2` conserva métricas de imagen y extracción y agrega detalles estructurales en el JSON de cada evaluación. No se crea una tabla nueva porque las evaluaciones ya admiten métricas, flags y sugerencias versionadas.
+
+La regla de ordinales exige una secuencia suficientemente fuerte antes de alertar. Presenta una lectura posible —por ejemplo `49` como posible `4º`—, pero nunca reescribe el objeto extraído. Una secuencia normal como `49`, `50`, `51` no activa la regla.
+
+La regla de casilleros identifica controles preservados en el HTML crudo de Surya, símbolos explícitos y marcas pequeñas próximas a rótulos. El resultado se conserva como candidato con estado, marca, etiqueta y método de asociación. Los casilleros vacíos que no produzcan un objeto OCR ni un control HTML permanecen indetectables y se señalan como límite de la técnica.
+
+La interfaz muestra ambos grupos dentro de **Ver indicadores del control automático** y aclara que requieren revisión visual. La selección canónica, la adopción de candidatas y la edición continúan siendo decisiones humanas separadas.
+
+No hay migración nueva. La revisión de base continúa en `0032_page_quality_assessments`; las evaluaciones anteriores conservan `page_quality_v1` y pueden recalcularse explícitamente para obtener los indicadores de `page_quality_v2`.
+
+# 39. Rebase seguro de edición y navegación persistente de raíz en 0.40.0
+
+La versión 0.40.0 incorpora el procedimiento que faltaba entre la comparación de candidatas y la sustitución segura de una base editable ya trabajada. El rebase compara la extracción que originó la edición, el estado humano vigente y la nueva candidata. La candidata aporta la estructura, el orden y la geometría; las modificaciones humanas se vuelven a aplicar únicamente cuando el alineamiento permite hacerlo sin ambigüedad.
+
+La vista previa es obligatoria y no escribe en la base. Informa bloques anteriores y nuevos, correcciones trasladadas, menciones, comentarios, etiquetas, estados y partes documentales. La aplicación queda bloqueada ante cambios superpuestos, menciones sin relocalización exacta, metadatos incompatibles o acciones estructurales previas. No existe modo forzado que silencie esos conflictos.
+
+Cuando el plan es seguro, la operación se ejecuta en una única transacción. Los nuevos objetos quedan anclados a la candidata; las menciones cambian de objeto y offsets mediante una revisión append-only; comentarios, etiquetas y partes se trasladan; los objetos anteriores pasan a retirados sin borrarse. La página registra una revisión `rebase` con todos los identificadores y conteos necesarios para auditar la decisión. Las relaciones canónicas entre autoridades permanecen intactas.
+
+El intercambio offline reconoce `rebase` como una operación explícita de cambio de base editable y conserva su estrategia `three_way_text_rebase` junto con las revisiones de objetos y menciones.
+
+La versión también corrige la causa del retorno a la primera pestaña después de una navegación programática. `tracked_tabs` ya no aplica la pestaña solicitada únicamente como `default` de un rerun: la persiste como estado activo antes de construir el widget. El estado sobrevive al rerun siguiente provocado por cualquier selectbox, botón o cambio de documento y la regla se aplica globalmente.
+
+No hay migración nueva. La revisión de base continúa en `0032_page_quality_assessments`.
+
+# 40. Resolución asistida de conflictos de menciones en el rebase 0.41.0
+
+La versión 0.41.0 completa el primer bloque de resolución manual asistida sobre el rebase incorporado en 0.40.0. La aplicación ya no se limita a informar que una mención desapareció o que dos menciones convergen en el mismo fragmento: presenta el contexto anterior, la autoridad vinculada y destinos concretos dentro de la nueva base.
+
+La búsqueda de anclajes se amplía a todos los bloques candidatos. Una coincidencia única exacta o normalizada se traslada automáticamente aunque el alineamiento estructural haya predicho otro bloque. Las coincidencias múltiples o aproximadas permanecen bloqueadas y se muestran como sugerencias revisables.
+
+La persona usuaria puede elegir una sugerencia, seleccionar manualmente un bloque y un fragmento exacto, o rechazar explícitamente una mención duplicada. El rechazo no elimina ni modifica la autoridad canónica ni sus relaciones: conserva la mención con estado `rejected`, su revisión append-only y el objeto anterior retirado.
+
+La vista previa se recalcula con las decisiones tomadas y el botón de aplicación continúa deshabilitado mientras quede cualquier conflicto. Las relocalizaciones manuales y los rechazos se registran como `rebase_relocate_manual` y `rebase_reject_conflict`; la revisión de página conserva los conteos y la estrategia de rebase.
+
+Los conflictos textuales superpuestos, acciones estructurales previas y metadatos incompatibles siguen sin modo forzado. No hay migración nueva y la revisión de base continúa en `0032_page_quality_assessments`.
+
+# 41. Conflictos textuales de rebase y aislamiento atómico de vistas en 0.42.0
+
+La versión 0.42.0 convierte las superposiciones entre correcciones humanas y cambios distintos de la candidata en conflictos estructurados y revisables. Cada caso conserva la base anterior, la corrección humana, la lectura candidata, el contexto y un identificador estable. La persona usuaria puede conservar la candidata, reaplicar la corrección humana o escribir el resultado exacto para ese tramo; ninguna decisión se infiere ni se aplica por defecto.
+
+Las resoluciones se revalidan contra los fragmentos que estaban visibles al decidir. Una vez incorporadas, la vista previa completa se recalcula y las menciones vuelven a proyectarse sobre el texto resultante. La revisión de página registra la cantidad y los métodos de las decisiones textuales. Los conflictos estructurales y de metadatos incompatibles continúan bloqueados.
+
+La versión también corrige en la raíz la permanencia de vistas anteriores oscurecidas e interactivas. Todas las navegaciones entre modos pasan por `request_app_view`, y el contenido principal se monta dentro de un único placeholder estable mediante `isolated_view`. Cada modo tiene una identidad de contenedor propia, por lo que Streamlit desmonta el árbol anterior completo antes de mostrar la nueva vista. La política se aplica a todas las secciones de la aplicación.
+
+No hay migración nueva y la revisión de base continúa en `0032_page_quality_assessments`.
+
+
+# 42. Rebase del estado estructural activo y resolución de metadatos en 0.43.0
+
+La versión 0.43.0 deja de tratar la mera existencia de acciones de división, unión, reordenamiento, deshacer o rehacer como un conflicto. El rebase toma como fuente de verdad el snapshot editable activo después de esas acciones y conserva el historial completo sin intentar reproducirlo mecánicamente sobre la candidata. Solo bloquea cuando la proyección del estado actual produce una incompatibilidad concreta.
+
+Los objetos activos se alinean con los bloques candidatos después del rebase textual. Las menciones mantienen su relocalización independiente; los comentarios convergentes se trasladan y las etiquetas idénticas se deduplican sin borrar la copia histórica asociada al objeto retirado.
+
+Cuando varios objetos convergen con partes documentales, estados de revisión o tipos de objeto incompatibles, la interfaz presenta una resolución explícita por bloque. La persona usuaria puede elegir una parte existente o ninguna, un estado de revisión resultante y la clasificación humana o candidata. Las decisiones se revalidan contra las opciones visibles y quedan registradas en la revisión append-only de página.
+
+La operación continúa siendo transaccional y no agrega un modo forzado. Las incompatibilidades textuales, de menciones, de proyección estructural o por cambios concurrentes siguen bloqueando toda escritura. No hay migración nueva y la revisión permanece en `0032_page_quality_assessments`.
+
+# 43. Continuidad de interacción y ámbitos de rerun en 0.44.0
+
+La versión 0.44.0 establece una frontera de ejecución entre la vista activa y la aplicación completa. Cada renderer principal se monta como fragmento dentro del contenedor atómico de su modo. Una interacción ordinaria —seleccionar un objeto, cambiar una opción o recalcular una vista previa— vuelve a ejecutar solamente ese fragmento; la barra lateral, el encabezado y los demás modos permanecen montados sin reconstrucción.
+
+Las navegaciones entre modos conservan un rerun completo deliberado. La diferencia queda centralizada mediante `rerun_view` y `rerun_app`, y una prueba de arquitectura impide llamadas directas a `st.rerun` desde los módulos `*_app.py`. Esta regla evita que nuevas pantallas reintroduzcan actualizaciones globales por accidente.
+
+Las confirmaciones finales o destructivas se agrupan en formularios para que marcar una casilla no produzca por sí solo un rerun. La casilla y la acción se envían juntas. El primer alcance comprende el rebase, la conservación íntegra de una edición, la desvinculación archivística y las decisiones masivas o aplicación de bundles. El panel de rebase permanece abierto mientras se resuelven sus conflictos.
+
+La versión también incorpora una resolución explícita para objetos anotados cuya proyección sobre la candidata sea débil o ambigua. La vista previa combina similitud textual y solapamiento posicional, presenta los destinos sugeridos y exige seleccionar un bloque antes de trasladar menciones, comentarios, etiquetas o metadatos. La decisión se invalida si cambia la lista de objetos candidatos y queda registrada como `manual_object_projection`.
+
+La aplicación continúa siendo reactiva: una interacción puede redibujar el fragmento que necesita recalcularse. La garantía de diseño es que no pierda la vista o pestaña activa, no reconstruya secciones ajenas y no cierre una confirmación antes de enviarla. No hay migración nueva y la revisión permanece en `0032_page_quality_assessments`.
+
+# 44. Confirmación enviable y atributos especializados en el rebase 0.45.0
+
+La versión 0.45.0 corrige la semántica de los formularios finales. Un widget incluido en un formulario no comunica su valor hasta el envío; por lo tanto, el propio botón de envío no puede depender del valor todavía no enviado. El rebase mantiene el botón disponible cuando la vista previa es aplicable y valida la confirmación dentro del evento de envío. Una confirmación ausente produce un mensaje y ninguna escritura.
+
+El rebase distingue los atributos de procedencia OCR, los indicadores estructurales transitorios y los atributos especializados humanos. La procedencia se reconstruye desde la candidata; los indicadores de división, unión, geometría pendiente o linaje quedan absorbidos por el historial; los atributos humanos nuevos o modificados se proyectan junto con el objeto editable.
+
+Un valor especializado único se conserva automáticamente. Los valores iguales se deduplican. Cuando difieren dos objetos humanos o cuando un valor humano contradice a la candidata, la interfaz exige elegir una opción existente, eliminar el atributo o escribir un JSON manual válido. Las decisiones se revalidan y quedan auditadas como `manual_attribute_selection` o `manual_attribute_json`.
+
+La versión incorpora un generador de proyecto descartable que produce de forma determinista dos proyecciones estructurales ambiguas y una convergencia de atributos incompatible. Este caso permite validar el flujo completo sin modificar los proyectos operativos. No hay migración nueva y la revisión permanece en `0032_page_quality_assessments`.
+
+# 45. Fragmentos autocontenidos, formularios explícitos y calidad de sugerencias en 0.46.0
+
+La versión 0.46.0 corrige la frontera entre navegación y reruns locales. La vista activa ya no escribe desde un fragmento dentro de un `st.empty` creado por la aplicación completa: el propio fragmento crea y administra su contenedor raíz. Así, cada rerun local limpia solamente su árbol y una navegación completa no conserva elementos oscurecidos de la vista anterior.
+
+La política de confirmación pasa a ser global. Todos los formularios usan `enter_to_submit=False`; pulsar `Enter` puede actualizar el valor local de un widget, pero nunca equivale a crear, guardar, aplicar, dar de baja o confirmar una operación. Una prueba de arquitectura recorre el código de la interfaz y bloquea cualquier formulario nuevo que omita esa opción.
+
+La capa editable deja de ocultar los atributos arbitrarios vigentes: Revisión incorpora una pestaña **Atributos** que presenta el `current_attributes_json` completo del objeto seleccionado, incluidos valores de procedencia, clasificación y metadatos conservados por un rebase.
+
+Las sugerencias automáticas de entidades y menciones aplican control de calidad antes de recorrer el corpus. El valor predeterminado incluye únicamente páginas `approved`; la interfaz de Entidades permite ampliar de forma explícita el conjunto de estados. La misma regla alcanza la búsqueda transversal, la incorporación posterior y el escaneo por diccionario, de modo que cambiar el estado de una página invalida también las coincidencias que ya no pertenecen al corpus autorizado.
+
+No hay migración nueva. La revisión de base continúa en `0032_page_quality_assessments`.
+
+# 46. Rebase repetible e identidad lógica de menciones en 0.47.0
+
+La versión 0.47.0 distingue el objeto OCR inmutable de sus representaciones editables históricas. Cuando una candidata ya utilizada vuelve a convertirse en base de la edición, el vínculo fuerte de la representación retirada se libera antes de crear la nueva representación; el identificador de procedencia se conserva en atributos auditables y las revisiones append-only permanecen intactas. Esto permite ciclos `A → B → A → B` sin relajar la unicidad vigente ni recrear tablas de SQLite.
+
+La deduplicación de menciones deja de depender exclusivamente de la tupla revisión + offsets. Una mención histórica se proyecta sobre el texto actual únicamente cuando su tramo pertenece a un bloque textual igual entre revisiones o cuando existe una sola aparición literal inequívoca. La búsqueda transversal, la creación de dominio y la validación administrativa usan esa identidad lógica para impedir vínculos contradictorios sobre el mismo fragmento vigente.
+
+La política de formularios se aplica también a formularios anidados en columnas y contenedores. El análisis AST ya no reconoce solamente `st.form`, sino cualquier llamada `.form`, por lo que pulsar `Enter` no puede guardar una modificación de mención ni reintroducirse accidentalmente en futuras vistas.
+
+No hay migración nueva y la revisión de base permanece en `0032_page_quality_assessments`. La calibración semántica continúa pendiente: el resultado no pertinente observado con similitud `0.830` se conserva como caso de evaluación, sin convertir una observación aislada en un umbral global.
+
+# 47. Resoluciones manuales explícitas y política visual de teclado en 0.48.0
+
+La versión 0.48.0 completa la política de acciones explícitas en los tres lugares del rebase que todavía dependían de entradas reactivas: el texto exacto de un conflicto textual, el fragmento manual de una mención y el valor JSON de un atributo especializado. Cada entrada vive ahora dentro de un formulario propio con `enter_to_submit=False` y un botón específico. Escribir, salir del campo o pulsar Enter no incorpora la decisión a la vista previa.
+
+La resolución confirmada se conserva en el estado de sesión mediante una clave estable por conflicto. En cada rerun se vuelve a validar contra la candidata y las opciones vigentes antes de recalcular la vista previa. Cambiar a una decisión no manual elimina el valor manual almacenado para evitar que una resolución anterior se reaplique de forma invisible.
+
+Streamlit muestra instrucciones automáticas como `Press Enter to submit form` o `Press Ctrl+Enter to apply` junto a campos de escritura. Como contradicen el contrato de la aplicación, la vista raíz oculta globalmente el elemento `InputInstructions`. Esta capa es únicamente de presentación: la garantía funcional sigue estando en los formularios no enviables por teclado y en los botones explícitos.
+
+Las pruebas de arquitectura inspeccionan todas las llamadas `.form(...)`, comprueban `enter_to_submit=False` y verifican que las tres entradas manuales y sus botones se encuentren dentro de formularios independientes. No hay migración nueva y la revisión de base permanece en `0032_page_quality_assessments`.
+
+# 48. Ciclo de vida operativo para exportaciones y bundles en 0.49.0
+
+La versión 0.49.0 incorpora un ciclo de vida explícito para dos objetos operativos que hasta ahora solo podían acumularse: perfiles de exportación y evaluaciones de bundles recibidos. Ambos pueden archivarse para salir de la vista normal y restaurarse después; la eliminación definitiva queda restringida a perfiles archivados y a bundles no aplicados. Las exportaciones ya materializadas y las aplicaciones de intercambio conservan sus snapshots, hashes y auditoría aunque desaparezca el objeto operativo que las originó.
+
+La confirmación de una exportación deja de depender de un mensaje efímero anterior al rerun. El resultado se conserva en el estado de la vista y presenta ruta, formato, cantidad de registros, caracteres, tamaño, SHA-256 y descarga directa hasta que la persona lo cierre expresamente. Antes de archivar o eliminar un perfil, la interfaz muestra las exportaciones históricas que todavía lo referencian.
+
+Los dry-runs `stale` exponen la secuencia evaluada, la secuencia actual y los eventos locales posteriores que explican la caducidad. Archivar no modifica el corpus ni borra reportes; limpiar una entrada archivada no aplicada elimina únicamente el ZIP recibido, el dry-run, sus decisiones y sus reportes internos. Un bundle ya aplicado no puede limpiarse porque su evaluación forma parte de la cadena de auditoría.
+
+La resolución de bundles sin base común inicializa correctamente el agrupamiento por evento y muestra todos los campos revisables. La pantalla explica que aceptar valores recibidos no reconstruye el parentesco y deshabilita decisiones masivas incompatibles con creaciones sin una base verificada. La recuperación asistida del linaje sigue siendo una operación futura e independiente.
+
+Estos cambios agregan la migración `0033_export_exchange_lifecycle`, que incorpora estado de ciclo de vida y datos de archivo a `corpus_export_profiles` y `exchange_dry_runs` sin reescribir sus registros anteriores.
+
+# 49. Corrección de confirmaciones operativas en 0.49.1
+
+Las casillas de confirmación incluidas dentro de un formulario no pueden controlar la propiedad `disabled` de su propio botón: Streamlit comunica el nuevo valor recién al enviar el formulario, lo que produce un bloqueo circular. La versión 0.49.1 mantiene el botón disponible cuando el estado operativo lo permite y valida la casilla al pulsarlo; sin confirmación muestra un error y no ejecuta ninguna escritura. Una prueba AST impide reintroducir este patrón en cualquier pantalla.
+
+También se precisa el alcance del análisis automático pendiente: no se limita a buscar nombres y alias conocidos, sino que debe recorrer el corpus para proponer actores, espacios, tiempos y acontecimientos nuevos como candidatos revisables y trazables, sin canonización automática.
+
+# 50. Estado operativo de pendientes y estrategia de pruebas en 0.49.2
+
+La versión 0.49.2 separa el registro histórico del listado operativo. `PENDIENTES_ACTIVOS.md` contiene únicamente trabajo abierto o parcial con identificadores estables; el documento consolidado conserva la evidencia de cada resolución y validación. La migración 0027 deja de figurar como bloqueante después de pasar la regresión con autoridades, alias, menciones aceptadas, relaciones, snapshots y claves foráneas desde 0026 hasta 0033.
+
+La recuperación asistida de linaje queda explicitada como una operación futura independiente: resolver campos de un bundle `unmatched` no crea parentesco. También se registra la desincronización visual del formulario de perfiles después de archivar, restaurar o eliminar, sin confundirla con una pérdida de datos.
+
+La política de pruebas distingue desde ahora pruebas afectadas, transversales, recopilación completa y suite monolítica local. Se conserva toda la cobertura; la clasificación futura en `fast`, `integration` y `slow` busca reducir tiempo por versión, no eliminar regresiones históricas. No hay migración ni cambio funcional.

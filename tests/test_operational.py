@@ -3,7 +3,16 @@ from __future__ import annotations
 from datetime import datetime, timezone
 from pathlib import Path
 
-from archive_workbench.db import create_sqlite_engine, database_path, session_scope, upgrade_database
+from typer.testing import CliRunner
+
+from archive_workbench.db import (
+    create_sqlite_engine,
+    current_revision,
+    database_path,
+    session_scope,
+    upgrade_database,
+)
+from archive_workbench.cli import app
 from archive_workbench.operational import (
     operational_readiness,
     recovery_check_rows,
@@ -112,7 +121,7 @@ def test_readiness_marks_recovery_until_latest_backup_is_tested(tmp_path: Path) 
                 tested_by="tests",
             )
             assert result.status == "completed"
-            assert result.upgraded_database_revision == "0028_operational_readiness"
+            assert result.upgraded_database_revision == "0040_discovery_grouping_continuity"
 
         with session_scope(engine) as session:
             report = operational_readiness(session, project_root=root)
@@ -159,3 +168,59 @@ def test_recovery_test_rejects_backup_from_another_project_without_touching_acti
             assert rows[0].status == "failed"
     finally:
         engine.dispose()
+
+
+def test_project_backup_create_does_not_upgrade_database(tmp_path: Path) -> None:
+    root = tmp_path / "project"
+    upgrade_database(root, revision="0030_source_replaced_exchange")
+    assert current_revision(root) == "0030_source_replaced_exchange"
+
+    result = CliRunner().invoke(
+        app,
+        [
+            "project-backup-create",
+            str(root),
+            "--created-by",
+            "tests",
+            "--note",
+            "Backup anterior a 0031",
+        ],
+    )
+
+    assert result.exit_code == 0, result.output
+    assert current_revision(root) == "0030_source_replaced_exchange"
+    assert "Revisión: 0030_source_replaced_exchange" in result.output
+
+
+def test_exchange_status_does_not_upgrade_outdated_database(tmp_path: Path) -> None:
+    root = tmp_path / "project"
+    upgrade_database(root, revision="0030_source_replaced_exchange")
+
+    result = CliRunner().invoke(app, ["exchange-status", str(root)])
+
+    assert result.exit_code != 0
+    assert "No se aplicó ninguna" in result.output
+    assert "migración." in result.output
+    assert "db-upgrade" in result.output
+    assert current_revision(root) == "0030_source_replaced_exchange"
+
+
+def test_only_db_upgrade_command_invokes_upgrade_database() -> None:
+    import ast
+    import inspect
+    import archive_workbench.cli as cli_module
+
+    tree = ast.parse(inspect.getsource(cli_module))
+    callers: set[str] = set()
+    for node in tree.body:
+        if not isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)):
+            continue
+        if any(
+            isinstance(item, ast.Call)
+            and isinstance(item.func, ast.Name)
+            and item.func.id == "upgrade_database"
+            for item in ast.walk(node)
+        ):
+            callers.add(node.name)
+
+    assert callers == {"db_upgrade"}

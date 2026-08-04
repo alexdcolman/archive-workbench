@@ -213,3 +213,139 @@ def test_export_filters_by_entity_period_and_includes_temporal_metadata(tmp_path
         assert outside == []
     finally:
         engine.dispose()
+
+
+def test_export_profile_archive_restore_and_delete_preserve_run_history(tmp_path: Path) -> None:
+    from archive_workbench.corpus_export import (
+        delete_export_profile,
+        export_profile_rows,
+        set_export_profile_archived,
+    )
+
+    root = tmp_path / "project"
+    _seed_search_project(root)
+    engine = create_sqlite_engine(database_path(root))
+    try:
+        with session_scope(engine) as session:
+            profile = _profile(session)
+            result = run_export(
+                session,
+                project_root=root,
+                project_id="search_project",
+                profile=profile,
+                output_relative_path="exports/lifecycle.jsonl",
+                created_by="tests",
+            )
+            profile_id = profile.id
+            set_export_profile_archived(
+                session,
+                project_id="search_project",
+                profile_id=profile_id,
+                archived=True,
+                changed_by="tests",
+            )
+            assert export_profile_rows(session, project_id="search_project") == []
+            archived = export_profile_rows(
+                session,
+                project_id="search_project",
+                include_archived=True,
+            )
+            assert archived[0].lifecycle_status == "archived"
+            try:
+                run_export(
+                    session,
+                    project_root=root,
+                    project_id="search_project",
+                    profile=archived[0],
+                    output_relative_path="exports/blocked.jsonl",
+                    created_by="tests",
+                )
+            except ValueError as exc:
+                assert "archivado" in str(exc)
+            else:
+                raise AssertionError("Un perfil archivado no debe ejecutar exportaciones")
+
+            set_export_profile_archived(
+                session,
+                project_id="search_project",
+                profile_id=profile_id,
+                archived=False,
+                changed_by="tests",
+            )
+            assert export_profile_rows(session, project_id="search_project")[0].id == profile_id
+            set_export_profile_archived(
+                session,
+                project_id="search_project",
+                profile_id=profile_id,
+                archived=True,
+                changed_by="tests",
+            )
+            deleted_name = delete_export_profile(
+                session,
+                project_id="search_project",
+                profile_id=profile_id,
+            )
+            assert deleted_name == "Perfil document"
+            history = export_run_rows(session, project_id="search_project")
+            assert history[0].run_id == result.run_id
+            assert history[0].profile_id is None
+            assert history[0].profile_name == "Perfil document"
+        assert (root / "exports/lifecycle.jsonl").is_file()
+    finally:
+        engine.dispose()
+
+
+def test_export_execution_requires_current_quality_authorization(tmp_path: Path) -> None:
+    import pytest
+
+    root = tmp_path / "authorized_export_project"
+    _seed_search_project(root)
+    engine = create_sqlite_engine(database_path(root))
+    try:
+        with session_scope(engine) as session:
+            profile = _profile(session)
+            assert preview_export(
+                session,
+                project_id="search_project",
+                profile=profile,
+                limit=1,
+            ).total_records == 1
+
+            profile.text_policy = "original_only"
+            session.flush()
+            with pytest.raises(ValueError, match="autorización vigente"):
+                preview_export(
+                    session,
+                    project_id="search_project",
+                    profile=profile,
+                    limit=1,
+                )
+            with pytest.raises(ValueError, match="autorización vigente"):
+                run_export(
+                    session,
+                    project_root=root,
+                    project_id="search_project",
+                    profile=profile,
+                    output_relative_path="exports/no_autorizada.jsonl",
+                    created_by="tests",
+                )
+
+            save_export_profile(
+                session,
+                project_id="search_project",
+                profile_id=profile.id,
+                values=ExportProfileValues(
+                    name=profile.name,
+                    text_policy="original_only",
+                ),
+                changed_by="tests",
+            )
+            preview = preview_export(
+                session,
+                project_id="search_project",
+                profile=profile,
+                limit=1,
+            )
+            assert preview.records[0].texto == "actividad subversiva"
+    finally:
+        engine.dispose()

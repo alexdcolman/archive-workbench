@@ -718,6 +718,55 @@ def graph_consistency_issues(session: Session, *, project_id: str) -> list[Graph
                 )
             )
 
+    from archive_workbench.authorities import project_mention_span_to_current
+
+    active_mention_rows = session.execute(
+        select(EntityMention, EditableObject)
+        .join(EditableObject, EditableObject.id == EntityMention.editable_object_id)
+        .join(DigitalObject, DigitalObject.id == EditableObject.digital_object_id)
+        .where(
+            DigitalObject.project_id == project_id,
+            EntityMention.status != "rejected",
+        )
+        .order_by(
+            EntityMention.editable_object_id,
+            EntityMention.object_revision_number,
+            EntityMention.id,
+        )
+    ).all()
+    logical_mention_groups: dict[
+        tuple[str, int, int, int], list[EntityMention]
+    ] = defaultdict(list)
+    for mention, editable in active_mention_rows:
+        projected = project_mention_span_to_current(
+            session, mention, editable_object=editable
+        )
+        if projected is None:
+            continue
+        logical_mention_groups[
+            (editable.id, editable.revision_number, projected[0], projected[1])
+        ].append(mention)
+    for group in logical_mention_groups.values():
+        if len(group) < 2:
+            continue
+        ids = ", ".join(item.id for item in group)
+        authorities = sorted(
+            {item.authority_id or "sin autoridad" for item in group}
+        )
+        issues.append(
+            GraphConsistencyIssue(
+                code="duplicate_mention",
+                severity="warning",
+                message=(
+                    f"Hay {len(group)} menciones activas que representan el mismo "
+                    "fragmento vigente, incluso entre revisiones textuales. "
+                    f"Menciones: {ids}. Autoridades: {', '.join(authorities)}."
+                ),
+                mention_id=group[0].id,
+                entity_id=group[0].authority_id,
+            )
+        )
+
     mention_rows = session.execute(
         select(EntityMention, EditableObject)
         .join(EditableObject, EditableObject.id == EntityMention.editable_object_id)
