@@ -23,7 +23,7 @@ Archive Workbench organiza, procesa, revisa, busca y exporta documentación arch
 
 ### Catálogo
 
-Describe fondos, colecciones, series, unidades, documentos, partes internas, objetos digitales, ubicaciones y metadatos configurables.
+Describe fondos, colecciones, series, unidades, documentos, partes internas, objetos digitales, ubicaciones y metadatos configurables. Las plantillas XLSX de catálogo transportan instrucciones, una estructura jerárquica restringida, unidades y listas controladas. Pueden ser más estrictas que la configuración del proyecto, pero no ampliar padres permitidos. La importación siempre simula el libro completo, informa errores por ubicación y aplica únicamente con confirmación explícita dentro de una sola transacción.
 
 ### Archivos y derivados
 
@@ -86,6 +86,7 @@ Los backups incluyen manifiesto, base y configuración. La restauración crea pr
 - Continuidad de candidato: vínculo entre un snapshot obsoleto y uno nuevo sobre la revisión vigente.
 - Corpus e informe de evaluación de descubrimiento: verdad terreno y comparación reproducible por proveedor, versión y parámetros.
 - Corpus e informe de calibración semántica: consultas verificadas, métricas por umbral y comparación reproducible por perfil, modelo, revisión de índice y parámetros.
+- Plantilla distribuible de catálogo: contrato XLSX versionado con estructura, unidades, campos, listas y procedencia, sin identidad canónica propia fuera de las unidades importadas.
 - Layout del grafo: proyección visual reconstruible sin identidad ni persistencia propias.
 
 ## Reglas de seguridad
@@ -113,6 +114,7 @@ Los backups incluyen manifiesto, base y configuración. La restauración crea pr
 - Adoptar un estado divergente exige paquete íntegro dirigido, backup previo, responsable, fundamento, confirmación e integridad válida.
 - Una adopción de estado no activa una base común; ambas copias deben registrar después el acuerdo bilateral.
 - El rollback de una adopción se bloquea si el estado cambió después o si un acuerdo bilateral ya depende del estado adoptado.
+- Una plantilla de catálogo no puede ampliar la jerarquía autorizada por el proyecto; la aplicación exige simulación válida y confirmación explícita.
 - No sobrescribir exportaciones salvo confirmación explícita.
 - No ejecutar escrituras mediante `Enter`.
 

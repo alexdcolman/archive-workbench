@@ -28,6 +28,11 @@ from archive_workbench.catalog_management import (
     unit_digital_objects,
     update_archival_unit,
 )
+from archive_workbench.catalog_templates import (
+    apply_catalog_template,
+    export_catalog_template_bytes,
+    validate_catalog_template,
+)
 from archive_workbench.db import create_sqlite_engine, session_scope
 from archive_workbench.db.models import ArchivalUnit
 
@@ -145,6 +150,136 @@ def render_catalog_view(st, *, project_root: Path, db_path: Path, decisions, act
         metrics[3].metric("Copias locales", summary.file_instances)
         metrics[4].metric("Disponibles", summary.present_files)
         metrics[5].metric("Ausentes", summary.missing_files)
+
+    with st.expander("Importar o exportar una plantilla XLSX", expanded=False):
+        st.caption(
+            "La plantilla incluye instrucciones, estructura permitida y campos descriptivos. "
+            "La hoja auxiliar LISTAS se incluye oculta para sostener los desplegables. "
+            "La importación siempre se simula antes de habilitar la aplicación."
+        )
+        include_catalog = st.checkbox(
+            "Incluir el catálogo actual en la plantilla exportada",
+            value=bool(all_rows),
+            key="catalog_template_include_current",
+        )
+        export_engine = create_sqlite_engine(db_path)
+        try:
+            with session_scope(export_engine) as session:
+                template_bytes = export_catalog_template_bytes(
+                    session,
+                    decisions=decisions,
+                    project_id=decisions.project_id,
+                    include_catalog=include_catalog,
+                    template_name=(
+                        "Catálogo actual de Archive Workbench"
+                        if include_catalog
+                        else "Plantilla vacía de catálogo"
+                    ),
+                )
+        finally:
+            export_engine.dispose()
+        st.download_button(
+            "Descargar plantilla XLSX",
+            data=template_bytes,
+            file_name=(
+                "catalogo_exportado.xlsx" if include_catalog else "plantilla_catalogo_vacia.xlsx"
+            ),
+            mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+            key="catalog_template_download",
+        )
+
+        uploaded_template = st.file_uploader(
+            "Seleccionar una plantilla para simular la importación",
+            type=["xlsx"],
+            key="catalog_template_upload",
+        )
+        if uploaded_template is not None:
+            template_content = uploaded_template.getvalue()
+            validation_engine = create_sqlite_engine(db_path)
+            try:
+                with session_scope(validation_engine) as session:
+                    report = validate_catalog_template(
+                        session,
+                        decisions=decisions,
+                        project_id=decisions.project_id,
+                        source=template_content,
+                    )
+            finally:
+                validation_engine.dispose()
+
+            report_metrics = st.columns(5)
+            report_metrics[0].metric("Filas", len(report.rows))
+            report_metrics[1].metric("Crear", report.create_count)
+            report_metrics[2].metric("Actualizar", report.update_count)
+            report_metrics[3].metric("Errores", report.error_count)
+            report_metrics[4].metric("Advertencias", report.warning_count)
+            if report.issues:
+                st.dataframe(
+                    [
+                        {
+                            "gravedad": item.severity,
+                            "hoja": item.sheet,
+                            "fila": item.row,
+                            "columna": item.column,
+                            "código": item.code,
+                            "mensaje": item.message,
+                        }
+                        for item in report.issues
+                    ],
+                    width="stretch",
+                    hide_index=True,
+                )
+            preview_rows = [
+                {
+                    "acción": row.action or ("actualizar" if row.unit_id else "crear"),
+                    "id_local": row.local_id,
+                    "padre": row.parent_local_id or row.parent_unit_id or "—",
+                    "nivel": row.level_key,
+                    "título": row.title,
+                }
+                for row in report.rows[:100]
+            ]
+            if preview_rows:
+                st.write("**Vista previa de unidades**")
+                st.dataframe(preview_rows, width="stretch", hide_index=True)
+            if report.valid:
+                st.success(
+                    "La simulación no encontró errores. La aplicación se realizará en una sola "
+                    "transacción y conservará revisiones de auditoría."
+                )
+                with st.form("catalog_template_apply_form", enter_to_submit=False):
+                    confirmation = st.text_input(
+                        "Escribí IMPORTAR para confirmar",
+                        key="catalog_template_apply_confirmation",
+                    )
+                    submitted = st.form_submit_button(
+                        "Aplicar plantilla",
+                        type="primary",
+                    )
+                if submitted and confirmation.strip() != "IMPORTAR":
+                    st.error("Para aplicar la plantilla, escribí exactamente IMPORTAR.")
+                elif submitted:
+                    def import_callback(session):
+                        result = apply_catalog_template(
+                            session,
+                            decisions=decisions,
+                            project_id=decisions.project_id,
+                            source=template_content,
+                            changed_by=actor or "local_user",
+                            note=f"Importación de {uploaded_template.name}",
+                        )
+                        return (
+                            "Plantilla aplicada: "
+                            f"{result.created} creadas, {result.updated} actualizadas, "
+                            f"{result.moved} movidas, {result.unchanged} sin cambios y "
+                            f"{result.skipped} omitidas."
+                        )
+
+                    _run_catalog_action(st, db_path=db_path, callback=import_callback)
+            else:
+                st.warning(
+                    "La plantilla no puede aplicarse hasta corregir todos los errores informados."
+                )
 
     level_defs = sorted(
         [item for item in decisions.archival_levels if item.enabled],

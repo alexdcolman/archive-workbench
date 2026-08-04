@@ -6,13 +6,14 @@ Está pensada especialmente para equipos de archivos, bibliotecas, ciencias soci
 
 Los documentos y la base de datos permanecen en la computadora del equipo: la aplicación no necesita subir el corpus a un servicio externo.
 
-**Versión actual:** 0.74.0 — calibración semántica reproducible y grafo con rutas separadas.
+**Versión actual:** 0.75.1 — corrección del flujo de confirmación y aclaraciones de las plantillas XLSX de catálogo.
 
 ## Qué permite hacer
 
 Archive Workbench reúne en una misma interfaz:
 
 - catálogo y descripción archivística jerárquica;
+- plantillas XLSX distribuibles con estructura configurable, simulación y aplicación transaccional;
 - registro de archivos originales sin modificarlos;
 - preparación versionada de derivados para OCR, con opciones conservadoras de autocontraste, Otsu y reducción de ruido;
 - extracción de texto y OCR versionados;
@@ -191,6 +192,21 @@ Dentro de la interfaz:
 
 Los originales se conservan sin modificaciones. Las extracciones, correcciones y decisiones quedan separadas y versionadas.
 
+### Plantillas distribuibles de catálogo
+
+Desde **Catálogo documental → Importar o exportar una plantilla XLSX** se puede descargar una plantilla vacía o el catálogo actual, simular una importación y aplicarla únicamente después de una confirmación explícita. La estructura configurada en la plantilla puede ser más estricta que el proyecto, pero nunca ampliar relaciones padre–hijo no autorizadas.
+
+También están disponibles los comandos:
+
+```bash
+archive-workbench catalog-template-export project_data plantilla.xlsx --empty
+archive-workbench catalog-template-validate project_data plantilla.xlsx --output informe.json
+archive-workbench catalog-template-import project_data plantilla.xlsx
+archive-workbench catalog-template-import project_data plantilla.xlsx --apply --confirm IMPORTAR --changed-by Alex
+```
+
+La primera plantilla pública de prueba se incluye en `examples/plantilla_catalogo_dippba.xlsx`. Conserva fuentes y advertencias sobre ramas parciales; no debe tratarse como descripción archivística definitiva.
+
 ## Documentación
 
 La raíz de [`docs/`](docs/) contiene un único mapa breve: [Historial de cambios y mapa documental](docs/HISTORIAL_DE_CAMBIOS.md).
@@ -215,7 +231,7 @@ pip install -e ".[dev,extraction,streamlit,semantic,tiff,discovery]"
 pytest
 ```
 
-La versión 0.74.0 incorpora pruebas automatizadas para calibración semántica, comparación de informes y geometría del grafo.
+La versión 0.75.1 incorpora pruebas automatizadas para exportación, validación, confirmación e importación transaccional de plantillas de catálogo.
 
 ## Licencia y cita
 
@@ -227,6 +243,6 @@ El desarrollo fue realizado por **Alex Colman** en el marco del **Grupo de Inves
 
 Cuando Archive Workbench sea utilizado en una investigación, publicación, informe, actividad docente o desarrollo derivado, solicitamos citar:
 
-> Colman, Alex, y Grupo de Investigación en Archivos de la Represión (GIAR). 2026. *Archive Workbench* (versión 0.74.0) [software]. https://github.com/alexdcolman/archive-workbench
+> Colman, Alex, y Grupo de Investigación en Archivos de la Represión (GIAR). 2026. *Archive Workbench* (versión 0.75.1) [software]. https://github.com/alexdcolman/archive-workbench
 
 El archivo [`CITATION.cff`](CITATION.cff) contiene los metadatos de cita reconocidos por GitHub y por distintos gestores bibliográficos.

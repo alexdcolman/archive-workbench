@@ -165,8 +165,8 @@ def test_version_docs_and_discovery_plan_are_packaged() -> None:
         / "0040_discovery_grouping_continuity.py"
     )
 
-    assert data["project"]["version"] == "0.74.0"
-    assert '__version__ = "0.74.0"' in version_source
+    assert data["project"]["version"] == "0.75.1"
+    assert '__version__ = "0.75.1"' in version_source
     assert migration.is_file()
     assert 'down_revision = "0039_discovery_decisions"' in migration.read_text(
         encoding="utf-8"
@@ -183,6 +183,15 @@ def test_version_docs_and_discovery_plan_are_packaged() -> None:
     assert (root / "config" / "discovery_evaluation_corpus.jsonl").is_file()
     assert (root / "src" / "archive_workbench" / "semantic_evaluation.py").is_file()
     assert (root / "config" / "semantic_evaluation_corpus.example.jsonl").is_file()
+    assert (root / "src" / "archive_workbench" / "catalog_templates.py").is_file()
+    assert (root / "config" / "catalog_templates" / "dippba_public_seed.json").is_file()
+    assert (root / "examples" / "plantilla_catalogo_dippba.xlsx").is_file()
+    catalog_validator = root / "scripts" / "create_catalog_template_validation_project.py"
+    assert catalog_validator.is_file()
+    catalog_validator_source = catalog_validator.read_text(encoding="utf-8")
+    assert "project_data no fue leído ni modificado" in catalog_validator_source
+    assert "plantilla_invalida_documento_bajo_fondo.xlsx" in catalog_validator_source
+    assert "openpyxl>=3.1,<4" in data["project"]["dependencies"]
     semantic_validator = root / "scripts" / "create_semantic_graph_validation_project.py"
     assert semantic_validator.is_file()
     semantic_validator_source = semantic_validator.read_text(encoding="utf-8")

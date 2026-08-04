@@ -1,6 +1,6 @@
 # Implementaciones realizadas — Archive Workbench
 
-**Estado verificado:** 2026-08-04 · **versión:** 0.74.0
+**Estado verificado:** 2026-08-04 · **versión:** 0.75.1
 
 Este documento registra capacidades ya implementadas y, cuando corresponde, validadas. No deben volver a aparecer en `PENDIENTES_ACTIVOS.md` salvo evidencia de regresión o ampliación explícita del alcance.
 
@@ -27,6 +27,23 @@ Este documento registra capacidades ya implementadas y, cuando corresponde, vali
 | Calibración semántica SEM-01 | Implementada y validada en 0.74.0 |
 | Grafo sin colisiones GRAPH-01 | Implementado y validado en 0.74.0 |
 | Duplicados OCR-02 | Cerrado por decisión de alcance en 0.74.0 |
+| Plantillas distribuibles CAT-01 | Implementadas en 0.75.0 y validadas en 0.75.1 |
+
+## Plantillas distribuibles de catálogo
+
+### CAT-01 — exportación, simulación e importación XLSX — 0.75.0
+
+**Corrección 0.75.1.** El formulario ya no deshabilita el botón según un campo escrito dentro del mismo `st.form`: el botón se envía habilitado y luego comprueba la confirmación exacta `IMPORTAR`. La hoja `LISTAS` continúa oculta porque funciona como soporte de los desplegables y no requiere edición ordinaria. El proyecto descartable usa ahora la identidad neutral `Proyecto de validación CAT-01`.
+
+Se incorporó un formato XLSX versionado con cuatro hojas: `INSTRUCCIONES` documenta el contrato y cada campo; `ESTRUCTURA` declara niveles y padres permitidos; `CATALOGO` contiene las unidades y sus valores descriptivos; y `LISTAS` alimenta controles de valores válidos. La plantilla puede exportarse vacía o con el catálogo vigente desde la interfaz y mediante `catalog-template-export`.
+
+La estructura transportada puede restringir los padres admitidos por el proyecto, pero nunca ampliarlos. La simulación mediante `catalog-template-validate` comprueba el esquema, IDs locales y persistentes, padres inexistentes, ciclos, niveles desconocidos, transiciones jerárquicas, campos aplicables, tipos, estados y confirmaciones de completitud. Los errores conservan hoja, fila, columna y código.
+
+La aplicación requiere `--apply --confirm IMPORTAR` en la CLI o la misma confirmación explícita en la interfaz. Primero valida el libro completo y después crea, actualiza, mueve u omite unidades dentro de una sola transacción. Las escrituras usan las operaciones canónicas del catálogo, conservan historial de revisiones y no generan una actualización nueva cuando una exportación se reimporta sin cambios. La URL y la nota de procedencia de cada fila quedan incorporadas a la revisión y, cuando corresponde, a la procedencia del campo descriptivo.
+
+Se incluye `examples/plantilla_catalogo_dippba.xlsx`, generada desde `config/catalog_templates/dippba_public_seed.json`. Contiene 155 filas trazables obtenidas de información pública de la Comisión Provincial por la Memoria. Las elipsis y los agrupamientos sin nivel rotulado se señalan expresamente como parciales o provisionales; la plantilla no inventa denominaciones ausentes ni debe tratarse como descripción archivística definitiva.
+
+**Validada manualmente en 0.75.1.** Se confirmó el rechazo de un documento directamente bajo un fondo, la identidad neutral del proyecto descartable, las tres hojas visibles y `LISTAS` oculta, la aplicación de las 155 filas después de escribir `IMPORTAR`, la jerarquía DIPPBA completa y la reimportación idéntica sin revisiones nuevas. `project_data` no fue leído ni modificado. No hay migración: continúa `0040_discovery_grouping_continuity`.
 
 ## Descubrimiento abierto
 

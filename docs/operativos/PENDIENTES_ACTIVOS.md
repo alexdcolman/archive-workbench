@@ -1,25 +1,24 @@
 # Pendientes activos — Archive Workbench
 
-**Estado verificado:** 2026-08-04 · **versión:** 0.74.0
+**Estado verificado:** 2026-08-04 · **versión:** 0.75.1
 
 Este archivo es la única fuente de verdad para trabajo abierto. Las capacidades cerradas se registran en `IMPLEMENTACIONES_REALIZADAS.md` y no deben reabrirse sin una regresión concreta o una ampliación explícita del alcance.
 
 ## Orden acordado
 
-`SEM-01` y `GRAPH-01` quedaron validados en 0.74.0 y ya no forman parte del trabajo abierto. El orden previsto antes de la candidata a v1.0 es:
+`CAT-01` quedó validado en 0.75.1 y ya no forma parte del trabajo abierto. El orden previsto antes de la candidata a v1.0 es:
 
-1. `CAT-01`, incluida la primera plantilla de prueba del fondo DIPPBA;
-2. `DISC-02`;
-3. `CAT-02` junto con `GRAPH-02`;
-4. `OCR-01`;
-5. `AV-01`;
-6. `AV-02`;
-7. `INT-01`;
-8. `PILOT-01`;
-9. `UX-02`;
-10. `QA-01` junto con `OPS-02`;
-11. `OPS-01`;
-12. `OPS-03` y candidata a v1.0.
+1. `DISC-02`;
+2. `CAT-02` junto con `GRAPH-02`;
+3. `OCR-01`;
+4. `AV-01`;
+5. `AV-02`;
+6. `INT-01`;
+7. `PILOT-01`;
+8. `UX-02`;
+9. `QA-01` junto con `OPS-02`;
+10. `OPS-01`;
+11. `OPS-03` y candidata a v1.0.
 
 `AI-01` y `AI-02` quedan expresamente para después del release inicial.
 
@@ -27,7 +26,6 @@ Este archivo es la única fuente de verdad para trabajo abierto. Las capacidades
 
 | ID | Prioridad | Estado | Tarea |
 |---|---|---|---|
-| CAT-01 | Media | Pendiente | Plantillas distribuibles de catálogo y estructura archivística |
 | DISC-02 | Media | Pendiente | Importación de diccionarios de autoridades y relaciones |
 | CAT-02 | Media | Pendiente | Entidades productoras y gestoras del catálogo |
 | GRAPH-02 | Media | Pendiente | Estructura archivística, documentos y partes en el grafo |
@@ -45,21 +43,6 @@ Este archivo es la única fuente de verdad para trabajo abierto. Las capacidades
 | AI-02 | Post-release | Pendiente | Sistema RAG trazable sobre corpus sistematizados |
 
 ## Mejora funcional
-
-### CAT-01 — Plantillas distribuibles de catálogo y estructura archivística — PENDIENTE
-
-Permitir que una persona sin conocimientos técnicos pueda exportar, completar e importar una plantilla tabular del catálogo. El formato principal será XLSX y deberá incluir, como mínimo:
-
-- una hoja `INSTRUCCIONES` con la descripción de cada campo vigente;
-- una hoja `ESTRUCTURA` con niveles archivísticos, padres permitidos y reglas configurables;
-- una hoja `CATALOGO` con identificadores locales, padre local, nivel, código de referencia, título y los demás campos descriptivos habilitados;
-- una hoja `LISTAS` para vocabularios controlados y desplegables.
-
-La estructura debe impedir combinaciones no autorizadas —por ejemplo, que un documento tenga como padre directo un archivo o un fondo cuando el perfil exige legajo, caja, carpeta u otro nivel intermedio— sin imponer una jerarquía universal a todos los proyectos.
-
-La importación deberá ejecutar primero una simulación completa, informar errores por hoja, fila y celda, detectar identificadores repetidos, padres inexistentes, ciclos y transiciones de nivel inválidas, y aplicar los cambios únicamente después de una confirmación explícita y dentro de una sola transacción. También deberá permitir exportar una plantilla vacía o un catálogo existente sin perder jerarquía ni campos configurados.
-
-La primera validación utilizará una plantilla del fondo DIPPBA construida a partir de su cuadro público de clasificación. Debe conservar denominaciones, códigos, jerarquía, descripciones, URL de procedencia y fecha de recuperación; los datos ausentes permanecerán vacíos y no se completarán por inferencia.
 
 ### DISC-02 — Importación de diccionarios de autoridades y relaciones — PENDIENTE
 

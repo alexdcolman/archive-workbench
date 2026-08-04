@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "archive-workbench"
-version = "0.74.0"
+version = "0.75.1"
 description = "Aplicación local para registro, extracción, edición y anotación de archivos desclasificados."
 readme = "README.md"
 requires-python = ">=3.11"
@@ -21,6 +21,7 @@ dependencies = [
   "PyMuPDF>=1.25,<2",
   "SQLAlchemy>=2.0,<3",
   "alembic>=1.14,<2",
+  "openpyxl>=3.1,<4",
 ]
 
 [project.optional-dependencies]

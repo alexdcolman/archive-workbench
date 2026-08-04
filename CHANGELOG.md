@@ -1,3 +1,20 @@
+## 0.75.1 — 2026-08-04
+
+- Corrige el botón **Aplicar plantilla**: la confirmación `IMPORTAR` se valida después del envío y ya no depende de un botón circularmente deshabilitado dentro del formulario.
+- Aclara en la interfaz y en el XLSX que `LISTAS` es una hoja auxiliar oculta utilizada por los desplegables.
+- Neutraliza la identidad del proyecto descartable de validación de `CAT-01` para que no herede el nombre del Archivo Provincial de la Memoria de Chubut.
+- Completa la validación manual de `CAT-01`: confirma la hoja auxiliar oculta, el control jerárquico negativo, la importación de 155 filas DIPPBA y la reimportación idéntica sin revisiones nuevas.
+- No agrega migraciones; la revisión continúa en `0040_discovery_grouping_continuity`.
+
+## 0.75.0 — 2026-08-04
+
+- Implementa `CAT-01` con plantillas XLSX de cuatro hojas (`INSTRUCCIONES`, `ESTRUCTURA`, `CATALOGO`, `LISTAS`), campos descriptivos configurables, listas controladas y exportación vacía o del catálogo vigente.
+- Agrega simulación completa con errores por hoja, fila y columna; detecta IDs repetidos, padres inexistentes, ciclos, niveles desconocidos, transiciones jerárquicas inválidas, estados incompatibles y valores descriptivos no aplicables.
+- La aplicación requiere confirmación explícita y se ejecuta en una única transacción, con creación, actualización, movimiento, omisión y preservación del historial de revisiones.
+- Incorpora los comandos `catalog-template-export`, `catalog-template-validate` y `catalog-template-import`, además del panel equivalente en la interfaz de Catálogo.
+- Incluye una primera plantilla de prueba del fondo DIPPBA con 155 filas trazables, estructura más restrictiva para documentos y advertencias explícitas donde la fuente pública recuperada presenta elipsis o niveles no rotulados.
+- No agrega migraciones; la revisión continúa en `0040_discovery_grouping_continuity`.
+
 ## 0.74.0 — 2026-08-04
 
 - Implementa y valida `SEM-01` con corpus JSONL de consultas positivas, negativas y ambiguas, barrido de umbrales, métricas por tipo de consulta, falsos positivos y negativos, huellas reproducibles y comparación de informes.

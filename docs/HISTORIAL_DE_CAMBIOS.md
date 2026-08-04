@@ -13,6 +13,17 @@ Este es el único documento en la raíz de `docs/`. Resume la evolución del pro
 
 ## Versiones recientes — más reciente primero
 
+### 0.75.1 — 2026-08-04
+- Corrige el flujo de confirmación de la importación XLSX para que `IMPORTAR` se compruebe después de pulsar un botón habilitado.
+- Documenta que `LISTAS` es una hoja auxiliar oculta y neutraliza el nombre del proyecto descartable de validación.
+- Completa la validación manual de la plantilla DIPPBA, la jerarquía, la confirmación de importación y la reimportación idéntica; `CAT-01` queda cerrado.
+- No agrega migraciones; continúa `0040_discovery_grouping_continuity`.
+
+### 0.75.0 — 2026-08-04
+- Implementa `CAT-01` con plantillas XLSX documentadas, estructura jerárquica distribuible, exportación vacía o del catálogo vigente, simulación detallada e importación transaccional con confirmación explícita.
+- Incorpora comandos de terminal, interfaz de Catálogo y una primera plantilla pública DIPPBA de 155 filas con fuentes y advertencias sobre ramas parciales.
+- No agrega migraciones; continúa `0040_discovery_grouping_continuity` y el bloque queda abierto únicamente para validación manual.
+
 ### 0.74.0 — 2026-08-04
 - Implementa y valida la calibración semántica reproducible y la comparación de informes por corpus, perfil, modelo, revisión de índice y umbrales.
 - Separa y valida relaciones paralelas e inversas en el grafo, conserva tooltips de procedencia y evita colisiones básicas de nodos y etiquetas.

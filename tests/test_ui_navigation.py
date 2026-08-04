@@ -275,6 +275,22 @@ def test_form_confirmation_does_not_circularly_disable_submit_button() -> None:
 
     assert offenders == []
 
+def test_catalog_template_confirmation_is_checked_after_submit() -> None:
+    source = (
+        Path(__file__).parents[1]
+        / "src"
+        / "archive_workbench"
+        / "catalog_app.py"
+    ).read_text(encoding="utf-8")
+    block = source.split('with st.form("catalog_template_apply_form"', 1)[1].split(
+        "level_defs = sorted", 1
+    )[0]
+
+    assert 'disabled=confirmation.strip() != "IMPORTAR"' not in block
+    assert 'if submitted and confirmation.strip() != "IMPORTAR":' in block
+    assert "Para aplicar la plantilla, escribí exactamente IMPORTAR." in block
+
+
 
 def test_rebase_manual_inputs_require_explicit_form_submission() -> None:
     source_path = (

@@ -48,6 +48,11 @@ from archive_workbench.catalog_management import (
     register_local_file,
     search_catalog_units,
 )
+from archive_workbench.catalog_templates import (
+    apply_catalog_template,
+    export_catalog_template_bytes,
+    validate_catalog_template,
+)
 from archive_workbench.db import (
     DatabaseRevisionError,
     create_sqlite_engine,
@@ -458,6 +463,148 @@ def catalog_tree_command(
     typer.echo(
         f"Total mostrado: {len(rows)} | catálogo {summary.units} unidades, "
         f"{summary.digital_objects} objetos digitales, {summary.missing_files} archivos ausentes"
+    )
+
+
+@app.command("catalog-template-export")
+def catalog_template_export_command(
+    project_root: Path = typer.Argument(..., help="Raíz del proyecto operativo"),
+    output: Path = typer.Argument(..., help="Archivo XLSX de salida"),
+    include_catalog: bool = typer.Option(
+        False,
+        "--include-catalog/--empty",
+        help="Incluye las unidades actuales o genera una plantilla vacía",
+    ),
+) -> None:
+    """Exporta una plantilla XLSX vacía o con el catálogo actual."""
+    decisions = load_decisions(project_root / "config" / "decisions.yaml")
+    _require_current_database(project_root)
+    engine = create_sqlite_engine(database_path(project_root))
+    try:
+        with session_scope(engine) as session:
+            content = export_catalog_template_bytes(
+                session,
+                decisions=decisions,
+                project_id=decisions.project_id,
+                include_catalog=include_catalog,
+                template_name=(
+                    "Catálogo actual de Archive Workbench"
+                    if include_catalog
+                    else "Plantilla vacía de catálogo"
+                ),
+            )
+    finally:
+        engine.dispose()
+    output.parent.mkdir(parents=True, exist_ok=True)
+    output.write_bytes(content)
+    typer.echo(f"OK: plantilla escrita en {output}")
+
+
+@app.command("catalog-template-validate")
+def catalog_template_validate_command(
+    project_root: Path = typer.Argument(..., help="Raíz del proyecto operativo"),
+    template: Path = typer.Argument(..., help="Plantilla XLSX"),
+    output: Path | None = typer.Option(
+        None, "--output", help="Informe JSON opcional de la simulación"
+    ),
+) -> None:
+    """Simula una importación de catálogo sin modificar la base."""
+    if not template.is_file():
+        raise typer.BadParameter(f"No existe la plantilla: {template}")
+    decisions = load_decisions(project_root / "config" / "decisions.yaml")
+    _require_current_database(project_root)
+    engine = create_sqlite_engine(database_path(project_root))
+    try:
+        with session_scope(engine) as session:
+            report = validate_catalog_template(
+                session,
+                decisions=decisions,
+                project_id=decisions.project_id,
+                source=template,
+            )
+    finally:
+        engine.dispose()
+    payload = report.as_dict()
+    if output is not None:
+        output.parent.mkdir(parents=True, exist_ok=True)
+        output.write_text(json.dumps(payload, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
+        typer.echo(f"Informe: {output}")
+    typer.echo(
+        f"Filas {len(report.rows)} | crear {report.create_count} | "
+        f"actualizar {report.update_count} | omitir {report.skip_count} | "
+        f"errores {report.error_count} | advertencias {report.warning_count}"
+    )
+    for issue in report.issues:
+        location = issue.sheet
+        if issue.row is not None:
+            location += f" fila {issue.row}"
+        if issue.column:
+            location += f" columna {issue.column}"
+        typer.echo(f"{issue.severity.upper()}: {location}: {issue.message}")
+    if not report.valid:
+        raise typer.Exit(code=1)
+    typer.echo("OK: la plantilla puede importarse")
+
+
+@app.command("catalog-template-import")
+def catalog_template_import_command(
+    project_root: Path = typer.Argument(..., help="Raíz del proyecto operativo"),
+    template: Path = typer.Argument(..., help="Plantilla XLSX"),
+    apply: bool = typer.Option(
+        False, "--apply", help="Aplica los cambios después de una simulación válida"
+    ),
+    confirm: str = typer.Option(
+        "", "--confirm", help="Para aplicar, escriba exactamente IMPORTAR"
+    ),
+    changed_by: str = typer.Option("local_user", "--changed-by"),
+) -> None:
+    """Valida una plantilla y, con doble confirmación, la aplica transaccionalmente."""
+    if not template.is_file():
+        raise typer.BadParameter(f"No existe la plantilla: {template}")
+    decisions = load_decisions(project_root / "config" / "decisions.yaml")
+    _require_current_database(project_root)
+    engine = create_sqlite_engine(database_path(project_root))
+    try:
+        with session_scope(engine) as session:
+            report = validate_catalog_template(
+                session,
+                decisions=decisions,
+                project_id=decisions.project_id,
+                source=template,
+            )
+            typer.echo(
+                f"Simulación: {len(report.rows)} filas | crear {report.create_count} | "
+                f"actualizar {report.update_count} | errores {report.error_count}"
+            )
+            if not report.valid:
+                for issue in report.issues:
+                    if issue.severity == "error":
+                        typer.echo(
+                            f"ERROR: {issue.sheet} fila {issue.row or '-'}: {issue.message}"
+                        )
+                raise typer.Exit(code=1)
+            if not apply:
+                typer.echo("OK: simulación válida; no se aplicaron cambios")
+                return
+            if confirm != "IMPORTAR":
+                raise typer.BadParameter(
+                    "Para aplicar la plantilla use --apply --confirm IMPORTAR"
+                )
+            result = apply_catalog_template(
+                session,
+                decisions=decisions,
+                project_id=decisions.project_id,
+                source=template,
+                changed_by=changed_by,
+                note=f"Importación de plantilla {template.name}",
+            )
+    finally:
+        engine.dispose()
+    typer.echo(
+        "OK: "
+        f"{result.created} creadas, {result.updated} actualizadas, "
+        f"{result.moved} movidas, {result.unchanged} sin cambios, "
+        f"{result.skipped} omitidas"
     )
 
 

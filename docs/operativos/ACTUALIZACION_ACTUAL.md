@@ -1,6 +1,6 @@
-# Actualización y prueba — Archive Workbench 0.74.0
+# Actualización y prueba — Archive Workbench 0.75.1
 
-Esta versión implementa la calibración reproducible de la búsqueda semántica (`SEM-01`) y mejora el canvas del grafo para separar relaciones paralelas y conservar su procedencia (`GRAPH-01`). También registra el cierre por alcance de `OCR-02`. No modifica el esquema de la base.
+Esta versión corrige la validación manual de `CAT-01`: elimina el bloqueo circular del botón **Aplicar plantilla**, aclara que `LISTAS` es una hoja auxiliar oculta y asigna una identidad neutral al proyecto descartable de validación. No modifica el esquema de la base.
 
 ## 1. Actualizar sin mover ni eliminar archivos locales
 
@@ -10,20 +10,19 @@ source .venv/bin/activate
 
 TMP_DIR="$(mktemp -d)"
 unzip -q \
-  ~/Downloads/archive_workbench_v0.74.0.zip \
+  ~/Downloads/archive_workbench_v0.75.1.zip \
   -d "$TMP_DIR"
 
 cp -a "$TMP_DIR"/. .
 
 python -m pip install \
   --no-build-isolation \
-  --no-deps \
   -e .
 
 python -c "import archive_workbench; print(archive_workbench.__version__)"
 ```
 
-Debe devolver `0.74.0`. La copia no mueve ni elimina archivos locales: `project_data`, `.dev`, `.assistant` y los demás contenidos existentes permanecen en su lugar.
+Debe devolver `0.75.1`. La copia no mueve ni elimina archivos locales: `project_data`, `.dev`, `.assistant` y los demás contenidos existentes permanecen en su lugar. La carpeta temporal debe conservarse hasta terminar la validación.
 
 ## 2. Base de datos
 
@@ -33,18 +32,17 @@ Debe devolver `0.74.0`. La copia no mueve ni elimina archivos locales: `project_
 
 ```bash
 pytest -q \
-  tests/test_semantic_evaluation.py \
-  tests/test_semantic_search.py \
-  tests/test_graph.py \
+  tests/test_catalog_templates.py \
+  tests/test_catalog_management.py \
   tests/test_ui_navigation.py \
   tests/test_documentation.py \
   tests/test_packaging.py && \
 pytest --collect-only -q
 ```
 
-No repetir `UX-03` ni `DISC-01A`, `DISC-01B`, `DISC-01C` o `DISC-01D`: esos bloques ya están validados.
+No repetir `UX-03`, `DISC-01A`, `DISC-01B`, `DISC-01C`, `DISC-01D`, `SEM-01` ni `GRAPH-01`: esos bloques ya están validados.
 
-## 4. Validación controlada de SEM-01 y GRAPH-01
+## 4. Validación controlada corregida de CAT-01
 
 La preparación crea una base descartable nueva en `~/Downloads`. No lee ni modifica `project_data`. No uses `--force`: si la ruta ya existe, el bloque se detiene sin reemplazarla.
 
@@ -52,59 +50,58 @@ La preparación crea una base descartable nueva en `~/Downloads`. No lee ni modi
 cd ~/projects/archive_app
 source .venv/bin/activate
 
-VALIDATION_ROOT="$HOME/Downloads/archive_workbench_sem_graph_validation_0740"
+VALIDATION_ROOT="$HOME/Downloads/archive_workbench_catalog_template_validation_0751"
 
 test ! -e "$VALIDATION_ROOT" && \
-python scripts/create_semantic_graph_validation_project.py \
+python scripts/create_catalog_template_validation_project.py \
   --destination "$VALIDATION_ROOT" && \
-archive-workbench semantic-evaluation-compare \
-  "$VALIDATION_ROOT/validation/semantic_evaluation.json" \
-  "$VALIDATION_ROOT/validation/semantic_evaluation_alt.json" \
-  --output "$VALIDATION_ROOT/validation/semantic_comparison.json"
+archive-workbench catalog-template-validate \
+  "$VALIDATION_ROOT" \
+  "$VALIDATION_ROOT/validation/plantilla_catalogo_dippba.xlsx" \
+  --output "$VALIDATION_ROOT/validation/dippba_validation.json"
 ```
 
-Resultado esperado en terminal:
+Resultado esperado:
 
 - revisión `0040_discovery_grouping_continuity`;
-- perfil `Control SEM-01`;
-- umbral recomendado `0.7` y F1 `0.8` en el informe principal;
-- tres relaciones paralelas controladas;
-- confirmación explícita de que `project_data` no fue leído ni modificado;
-- comparación creada porque ambos informes comparten la misma huella del corpus y el mismo tipo de fragmento.
+- proyecto neutral `Proyecto de validación CAT-01 (cat01_validation)`;
+- plantilla DIPPBA con 155 filas;
+- simulación válida con 155 unidades para crear y cero errores;
+- confirmación explícita de que `project_data` no fue leído ni modificado.
 
-El corpus controlado verifica el contrato y la comparación de umbrales. No establece un umbral universal ni declara un modelo superior fuera de ese corpus, perfil, revisión de índice y conjunto de parámetros.
-
-## 5. Revisión manual limitada al grafo nuevo
-
-Abrí la base descartable:
+## 5. Revisión manual limitada a la corrección
 
 ```bash
 cd ~/projects/archive_app
 source .venv/bin/activate
 
-VALIDATION_ROOT="$HOME/Downloads/archive_workbench_sem_graph_validation_0740"
+VALIDATION_ROOT="$HOME/Downloads/archive_workbench_catalog_template_validation_0751"
 archive-workbench review-app "$VALIDATION_ROOT"
 ```
 
-En **Mapa de relaciones**:
+En **Catálogo documental → Importar o exportar una plantilla XLSX**:
 
-1. Mostrá todos los tipos y estados de revisión.
-2. Confirmá que entre **Persona Investigada** y **Dirección de Inteligencia** aparecen tres relaciones curvas separadas, incluida una en sentido inverso.
-3. Pasá el cursor sobre nodos, aristas y etiquetas: el tooltip debe conservar tipo, dirección, procedencia y evidencia.
-4. Arrastrá uno de los nodos: las curvas y etiquetas deben recalcularse sin superponerse sobre el nodo.
-5. Cambiá los filtros de tipo y estado: el canvas debe corresponder exactamente con el resumen y la tabla visibles.
+1. Descargá una plantilla vacía. Debe mostrar el proyecto neutral de validación, no el Archivo Provincial de la Memoria de Chubut.
+2. Debe haber tres hojas visibles: `INSTRUCCIONES`, `ESTRUCTURA` y `CATALOGO`. `LISTAS` existe como hoja auxiliar oculta para sostener los desplegables; no hace falta editarla.
+3. Cargá `validation/plantilla_catalogo_dippba.xlsx`: debe mostrar 155 filas para crear y cero errores.
+4. Escribí `IMPORTAR`. El botón **Aplicar plantilla** debe permanecer habilitado; al pulsarlo debe aplicar las 155 filas.
+5. Confirmá la jerarquía Archivo → Fondo DIPPBA → secciones, subsecciones, series y subseries.
+6. Exportá el catálogo actual, volvé a cargar ese XLSX y aplicalo: debe indicar 155 unidades sin cambios y no crear revisiones nuevas.
 
-Detené Streamlit con `Ctrl+C` al terminar. La base descartable no se elimina automáticamente; cualquier limpieza posterior requiere indicar y autorizar su ruta exacta.
+Detené Streamlit con `Ctrl+C` al terminar. La base descartable no se elimina automáticamente.
 
 ## 6. Resultado de la validación
 
-`SEM-01` y `GRAPH-01` quedaron validados el 2026-08-04 sobre el proyecto descartable `archive_workbench_sem_graph_validation_0740`:
+`CAT-01` quedó validado el 2026-08-04 mediante los proyectos descartables `archive_workbench_catalog_template_validation_0750` y `archive_workbench_catalog_template_validation_0751`:
 
 - revisión `0040_discovery_grouping_continuity`;
-- umbral controlado recomendado `0.7` y F1 `0.8` en el informe principal;
-- comparación reproducible creada con el informe alternativo;
-- tres relaciones curvas separadas, incluida una en sentido inverso;
-- tooltips, arrastre de nodos y filtros coherentes con el resumen y la tabla;
+- rechazo correcto de un `documento` como hijo directo de un `fondo`;
+- proyecto neutral `Proyecto de validación CAT-01 (cat01_validation)`;
+- tres hojas visibles (`INSTRUCCIONES`, `ESTRUCTURA` y `CATALOGO`) y `LISTAS` como hoja auxiliar oculta;
+- simulación e importación correctas de las 155 filas de la plantilla DIPPBA;
+- botón **Aplicar plantilla** operativo después de escribir `IMPORTAR`;
+- jerarquía Archivo → Fondo DIPPBA → secciones → subsecciones → series → subseries conservada;
+- reexportación y reimportación idéntica con 155 unidades sin cambios y sin revisiones nuevas;
 - `project_data` no fue leído ni modificado.
 
-La base descartable y el temporal de instalación se conservan hasta recibir autorización expresa para eliminarlos.
+Las bases descartables y los temporales de instalación se conservan hasta recibir autorización expresa para eliminarlos.
