@@ -165,8 +165,8 @@ def test_version_docs_and_discovery_plan_are_packaged() -> None:
         / "0040_discovery_grouping_continuity.py"
     )
 
-    assert data["project"]["version"] == "0.75.1"
-    assert '__version__ = "0.75.1"' in version_source
+    assert data["project"]["version"] == "0.76.0"
+    assert '__version__ = "0.76.0"' in version_source
     assert migration.is_file()
     assert 'down_revision = "0039_discovery_decisions"' in migration.read_text(
         encoding="utf-8"
@@ -183,6 +183,17 @@ def test_version_docs_and_discovery_plan_are_packaged() -> None:
     assert (root / "config" / "discovery_evaluation_corpus.jsonl").is_file()
     assert (root / "src" / "archive_workbench" / "semantic_evaluation.py").is_file()
     assert (root / "config" / "semantic_evaluation_corpus.example.jsonl").is_file()
+    assert (root / "src" / "archive_workbench" / "authority_dictionary.py").is_file()
+    assert (
+        root / "config" / "authority_dictionaries" / "authority_dictionary.schema.json"
+    ).is_file()
+    assert (root / "examples" / "diccionario_autoridades_ejemplo.json").is_file()
+    dictionary_validator = root / "scripts" / "create_authority_dictionary_validation_project.py"
+    assert dictionary_validator.is_file()
+    dictionary_validator_source = dictionary_validator.read_text(encoding="utf-8")
+    assert "project_data no fue leído ni modificado" in dictionary_validator_source
+    assert "diccionario_conflicto_sin_resolver.json" in dictionary_validator_source
+    assert "diccionario_relacion_sin_evidencia.json" in dictionary_validator_source
     assert (root / "src" / "archive_workbench" / "catalog_templates.py").is_file()
     assert (root / "config" / "catalog_templates" / "dippba_public_seed.json").is_file()
     assert (root / "examples" / "plantilla_catalogo_dippba.xlsx").is_file()

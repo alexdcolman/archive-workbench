@@ -292,6 +292,20 @@ def test_catalog_template_confirmation_is_checked_after_submit() -> None:
 
 
 
+def test_authority_dictionary_confirmation_is_checked_after_submit() -> None:
+    source = (
+        Path(__file__).parents[1] / "src" / "archive_workbench" / "authority_app.py"
+    ).read_text(encoding="utf-8")
+    block = source.split('with st.form("authority_dictionary_apply"', 1)[1].split(
+        "def render_authorities_view", 1
+    )[0]
+
+    assert 'disabled=confirmation.strip() != "IMPORTAR"' not in block
+    assert 'if confirmation.strip() != "IMPORTAR":' in block
+    assert 'st.form_submit_button(\n            "Aplicar diccionario"' in block
+    assert "El diccionario tiene errores y no puede aplicarse." in block
+
+
 def test_rebase_manual_inputs_require_explicit_form_submission() -> None:
     source_path = (
         Path(__file__).parents[1] / "src" / "archive_workbench" / "processing_app.py"
@@ -784,11 +798,15 @@ def test_authorities_separate_search_filters_summary_and_tasks() -> None:
 
     assert 'st.header("Entidades y menciones")' in source
     assert 'st.expander("Qué es una entidad", expanded=False)' in source
-    assert '["Revisar entidades", "Crear entidad", "Descubrimiento abierto"]' in source
+    assert '"Revisar entidades"' in source
+    assert '"Crear entidad"' in source
+    assert '"Importar diccionario"' in source
+    assert '"Descubrimiento abierto"' in source
     assert 'key="authority_main_tasks"' in source
     assert 'default="Revisar entidades"' in source
     assert 'with entities_tab:' in source
     assert 'with create_tab:' in source
+    assert 'with dictionary_tab:' in source
     assert 'with discovery_tab:' in source
     assert '_render_open_discovery_panel' not in source
     assert '"Buscar nombre, nombre alternativo o descripción"' in source

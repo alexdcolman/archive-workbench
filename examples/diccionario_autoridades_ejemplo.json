@@ -1,0 +1,54 @@
+{
+  "schema_version": "1.0",
+  "dictionary_id": "ejemplo_autoridades_v1",
+  "dictionary_name": "Diccionario de autoridades de ejemplo",
+  "target_project_id": "*",
+  "source": {
+    "title": "Ejemplo distribuible de Archive Workbench",
+    "organization": "Equipo de investigación",
+    "url": "https://example.org/diccionario",
+    "created_by": "equipo_local",
+    "note": "Reemplazar estos registros por información verificada."
+  },
+  "authorities": [
+    {
+      "local_id": "org_dippba",
+      "entity_type": "organization",
+      "preferred_name": "Dirección de Inteligencia de la Policía de la Provincia de Buenos Aires",
+      "description": "Organismo productor de documentación de inteligencia.",
+      "temporal_expression": "1956 - 1998",
+      "review_status": "unreviewed",
+      "aliases": [
+        {
+          "value": "DIPPBA",
+          "alias_type": "acronym",
+          "note": "Sigla de uso extendido."
+        }
+      ]
+    },
+    {
+      "local_id": "obra_informe",
+      "entity_type": "work",
+      "preferred_name": "Informe de ejemplo",
+      "characteristics": {
+        "tipo_documental": "informe",
+        "idioma": "es"
+      },
+      "review_status": "unreviewed"
+    }
+  ],
+  "relations": [
+    {
+      "local_id": "rel_produjo",
+      "source_local_id": "org_dippba",
+      "relation_label": "produjo",
+      "target_kind": "authority",
+      "target_local_id": "obra_informe",
+      "evidence": {
+        "note": "Relación incluida únicamente como ejemplo de formato.",
+        "source_url": "https://example.org/diccionario"
+      },
+      "review_status": "unreviewed"
+    }
+  ]
+}

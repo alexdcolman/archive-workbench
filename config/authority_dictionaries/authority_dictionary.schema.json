@@ -1,0 +1,512 @@
+{
+  "$defs": {
+    "AuthorityResolution": {
+      "additionalProperties": false,
+      "properties": {
+        "action": {
+          "default": "auto",
+          "enum": [
+            "auto",
+            "use_existing",
+            "create_new",
+            "skip"
+          ],
+          "title": "Action",
+          "type": "string"
+        },
+        "authority_id": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Authority Id"
+        }
+      },
+      "title": "AuthorityResolution",
+      "type": "object"
+    },
+    "DictionaryAlias": {
+      "additionalProperties": false,
+      "properties": {
+        "alias_type": {
+          "default": "variant",
+          "enum": [
+            "variant",
+            "abbreviation",
+            "acronym",
+            "former_name",
+            "title",
+            "other"
+          ],
+          "title": "Alias Type",
+          "type": "string"
+        },
+        "allow_ambiguous": {
+          "default": false,
+          "title": "Allow Ambiguous",
+          "type": "boolean"
+        },
+        "note": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Note"
+        },
+        "value": {
+          "minLength": 1,
+          "title": "Value",
+          "type": "string"
+        }
+      },
+      "required": [
+        "value"
+      ],
+      "title": "DictionaryAlias",
+      "type": "object"
+    },
+    "DictionaryAuthority": {
+      "additionalProperties": false,
+      "properties": {
+        "aliases": {
+          "items": {
+            "$ref": "#/$defs/DictionaryAlias"
+          },
+          "title": "Aliases",
+          "type": "array"
+        },
+        "characteristics": {
+          "additionalProperties": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "integer"
+              },
+              {
+                "type": "number"
+              },
+              {
+                "type": "boolean"
+              },
+              {
+                "items": {
+                  "type": "string"
+                },
+                "type": "array"
+              }
+            ]
+          },
+          "title": "Characteristics",
+          "type": "object"
+        },
+        "description": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Description"
+        },
+        "entity_type": {
+          "enum": [
+            "person",
+            "organization",
+            "place",
+            "event",
+            "work",
+            "other"
+          ],
+          "title": "Entity Type",
+          "type": "string"
+        },
+        "local_id": {
+          "minLength": 1,
+          "title": "Local Id",
+          "type": "string"
+        },
+        "preferred_name": {
+          "minLength": 1,
+          "title": "Preferred Name",
+          "type": "string"
+        },
+        "resolution": {
+          "$ref": "#/$defs/AuthorityResolution"
+        },
+        "review_status": {
+          "default": "unreviewed",
+          "enum": [
+            "unreviewed",
+            "reviewed",
+            "approved"
+          ],
+          "title": "Review Status",
+          "type": "string"
+        },
+        "source_note": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Source Note"
+        },
+        "temporal_expression": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Temporal Expression"
+        },
+        "temporal_note": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Temporal Note"
+        }
+      },
+      "required": [
+        "local_id",
+        "entity_type",
+        "preferred_name"
+      ],
+      "title": "DictionaryAuthority",
+      "type": "object"
+    },
+    "DictionaryRelation": {
+      "additionalProperties": false,
+      "properties": {
+        "evidence": {
+          "$ref": "#/$defs/RelationEvidence"
+        },
+        "local_id": {
+          "minLength": 1,
+          "title": "Local Id",
+          "type": "string"
+        },
+        "relation_label": {
+          "minLength": 1,
+          "title": "Relation Label",
+          "type": "string"
+        },
+        "resolution": {
+          "$ref": "#/$defs/RelationResolution"
+        },
+        "review_status": {
+          "default": "unreviewed",
+          "enum": [
+            "unreviewed",
+            "reviewed",
+            "approved"
+          ],
+          "title": "Review Status",
+          "type": "string"
+        },
+        "source_local_id": {
+          "minLength": 1,
+          "title": "Source Local Id",
+          "type": "string"
+        },
+        "target_id": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Target Id"
+        },
+        "target_kind": {
+          "default": "authority",
+          "enum": [
+            "authority",
+            "archival_unit",
+            "document_part"
+          ],
+          "title": "Target Kind",
+          "type": "string"
+        },
+        "target_local_id": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Target Local Id"
+        },
+        "temporal_expression": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Temporal Expression"
+        },
+        "temporal_note": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Temporal Note"
+        }
+      },
+      "required": [
+        "local_id",
+        "source_local_id",
+        "relation_label",
+        "evidence"
+      ],
+      "title": "DictionaryRelation",
+      "type": "object"
+    },
+    "DictionarySource": {
+      "additionalProperties": false,
+      "properties": {
+        "created_at": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Created At"
+        },
+        "created_by": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Created By"
+        },
+        "note": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Note"
+        },
+        "organization": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Organization"
+        },
+        "reference": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Reference"
+        },
+        "title": {
+          "minLength": 1,
+          "title": "Title",
+          "type": "string"
+        },
+        "url": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Url"
+        }
+      },
+      "required": [
+        "title"
+      ],
+      "title": "DictionarySource",
+      "type": "object"
+    },
+    "RelationEvidence": {
+      "additionalProperties": false,
+      "properties": {
+        "note": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Note"
+        },
+        "source_reference": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Source Reference"
+        },
+        "source_url": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Source Url"
+        }
+      },
+      "title": "RelationEvidence",
+      "type": "object"
+    },
+    "RelationResolution": {
+      "additionalProperties": false,
+      "properties": {
+        "action": {
+          "default": "auto",
+          "enum": [
+            "auto",
+            "create_parallel",
+            "skip"
+          ],
+          "title": "Action",
+          "type": "string"
+        }
+      },
+      "title": "RelationResolution",
+      "type": "object"
+    }
+  },
+  "$id": "https://archive-workbench.local/schema/authority-dictionary-1.0.json",
+  "additionalProperties": false,
+  "properties": {
+    "authorities": {
+      "items": {
+        "$ref": "#/$defs/DictionaryAuthority"
+      },
+      "title": "Authorities",
+      "type": "array"
+    },
+    "dictionary_id": {
+      "minLength": 1,
+      "title": "Dictionary Id",
+      "type": "string"
+    },
+    "dictionary_name": {
+      "minLength": 1,
+      "title": "Dictionary Name",
+      "type": "string"
+    },
+    "relations": {
+      "items": {
+        "$ref": "#/$defs/DictionaryRelation"
+      },
+      "title": "Relations",
+      "type": "array"
+    },
+    "schema_version": {
+      "const": "1.0",
+      "default": "1.0",
+      "title": "Schema Version",
+      "type": "string"
+    },
+    "source": {
+      "$ref": "#/$defs/DictionarySource"
+    },
+    "target_project_id": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Target Project Id"
+    }
+  },
+  "required": [
+    "dictionary_id",
+    "dictionary_name",
+    "source"
+  ],
+  "title": "Archive Workbench authority dictionary 1.0",
+  "type": "object"
+}

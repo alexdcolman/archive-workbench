@@ -16,6 +16,11 @@ from archive_workbench.analysis_quality import (
     DEFAULT_AUTOMATIC_PAGE_REVIEW_STATUSES,
     PAGE_REVIEW_STATUSES,
 )
+from archive_workbench.authority_dictionary import (
+    apply_authority_dictionary,
+    authority_dictionary_schema_bytes,
+    validate_authority_dictionary,
+)
 from archive_workbench.authorities import (
     ALIAS_TYPES,
     AUTHORITY_TYPES,
@@ -2973,6 +2978,148 @@ def _single_project_id(session) -> str:
 
 
 @app.command("entity-list")
+def _echo_authority_dictionary_report(report) -> None:
+    typer.echo(
+        f"Entidades {len(report.authority_plans)} | crear {report.authority_create_count} | "
+        f"reutilizar {report.authority_reuse_count} | omitir {report.authority_skip_count} | "
+        f"alias +{report.alias_add_count}"
+    )
+    typer.echo(
+        f"Relaciones {len(report.relation_plans)} | crear {report.relation_create_count} | "
+        f"omitir {report.relation_skip_count} | errores {report.error_count} | "
+        f"advertencias {report.warning_count}"
+    )
+    for issue in report.issues:
+        location = issue.section
+        if issue.item_id:
+            location += f"/{issue.item_id}"
+        if issue.field:
+            location += f"/{issue.field}"
+        candidates = (
+            " | candidatos: " + ", ".join(issue.candidate_ids)
+            if issue.candidate_ids
+            else ""
+        )
+        typer.echo(
+            f"{issue.severity.upper()} | {issue.code} | {location} | "
+            f"{issue.message}{candidates}"
+        )
+
+
+@app.command("authority-dictionary-schema")
+def authority_dictionary_schema_command(
+    output: Path = typer.Argument(..., help="Archivo JSON Schema de salida"),
+) -> None:
+    """Escribe el esquema versionado del diccionario de autoridades."""
+    output.parent.mkdir(parents=True, exist_ok=True)
+    output.write_bytes(authority_dictionary_schema_bytes())
+    typer.echo(f"OK: esquema escrito en {output}")
+
+
+@app.command("authority-dictionary-validate")
+def authority_dictionary_validate_command(
+    project_root: Path = typer.Argument(..., help="Raíz del proyecto operativo"),
+    dictionary: Path = typer.Argument(..., help="Diccionario JSON"),
+    output: Path | None = typer.Option(
+        None, "--output", help="Informe JSON opcional de la simulación"
+    ),
+) -> None:
+    """Simula la importación de autoridades, alias y relaciones sin escribir."""
+    if not dictionary.is_file():
+        raise typer.BadParameter(f"No existe el diccionario: {dictionary}")
+    _require_current_database(project_root)
+    engine = create_sqlite_engine(database_path(project_root))
+    try:
+        with session_scope(engine) as session:
+            report = validate_authority_dictionary(
+                session,
+                project_id=_single_project_id(session),
+                source=dictionary,
+            )
+    except ValueError as exc:
+        raise typer.BadParameter(str(exc)) from exc
+    finally:
+        engine.dispose()
+    if output is not None:
+        output.parent.mkdir(parents=True, exist_ok=True)
+        output.write_text(
+            json.dumps(report.as_dict(), ensure_ascii=False, indent=2) + "\n",
+            encoding="utf-8",
+        )
+        typer.echo(f"Informe: {output}")
+    _echo_authority_dictionary_report(report)
+    if not report.valid:
+        raise typer.Exit(code=1)
+    typer.echo("OK: el diccionario puede importarse")
+
+
+@app.command("authority-dictionary-import")
+def authority_dictionary_import_command(
+    project_root: Path = typer.Argument(..., help="Raíz del proyecto operativo"),
+    dictionary: Path = typer.Argument(..., help="Diccionario JSON"),
+    apply: bool = typer.Option(
+        False, "--apply", help="Aplica el diccionario después de una simulación válida"
+    ),
+    confirm: str = typer.Option(
+        "", "--confirm", help="Para aplicar, escriba exactamente IMPORTAR"
+    ),
+    changed_by: str = typer.Option("local_user", "--changed-by"),
+    output: Path | None = typer.Option(
+        None, "--output", help="Informe JSON opcional de la simulación"
+    ),
+) -> None:
+    """Valida y, con doble confirmación, aplica un diccionario transaccionalmente."""
+    if not dictionary.is_file():
+        raise typer.BadParameter(f"No existe el diccionario: {dictionary}")
+    _require_current_database(project_root)
+    engine = create_sqlite_engine(database_path(project_root))
+    try:
+        with session_scope(engine) as session:
+            project_id = _single_project_id(session)
+            report = validate_authority_dictionary(
+                session, project_id=project_id, source=dictionary
+            )
+            if output is not None:
+                output.parent.mkdir(parents=True, exist_ok=True)
+                output.write_text(
+                    json.dumps(report.as_dict(), ensure_ascii=False, indent=2) + "\n",
+                    encoding="utf-8",
+                )
+            _echo_authority_dictionary_report(report)
+            if not report.valid:
+                raise typer.BadParameter(
+                    "El diccionario tiene errores; revisá el informe antes de aplicar"
+                )
+            if not apply:
+                typer.echo("Simulación válida. No se aplicaron cambios; use --apply.")
+                return
+            if confirm.strip() != "IMPORTAR":
+                raise typer.BadParameter(
+                    "Para aplicar use --apply --confirm IMPORTAR"
+                )
+            result = apply_authority_dictionary(
+                session,
+                project_id=project_id,
+                source=dictionary,
+                changed_by=changed_by,
+            )
+    except ValueError as exc:
+        raise typer.BadParameter(str(exc)) from exc
+    finally:
+        engine.dispose()
+    if output is not None:
+        typer.echo(f"Informe: {output}")
+    typer.echo(
+        "OK: "
+        f"entidades +{result.authorities_created}, "
+        f"reutilizadas {result.authorities_reused}, "
+        f"omitidas {result.authorities_skipped}, "
+        f"alias +{result.aliases_added}, "
+        f"relaciones +{result.relations_created}, "
+        f"relaciones omitidas {result.relations_skipped}"
+    )
+
+
 @app.command("authority-list")
 def authority_list_command(
     project_root: Path = typer.Argument(..., help="Raíz del proyecto operativo"),

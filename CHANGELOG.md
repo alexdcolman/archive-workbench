@@ -1,9 +1,18 @@
+## 0.76.0 — 2026-08-04
+
+- Implementa `DISC-02` con un diccionario JSON versionado para autoridades, alias y relaciones, acompañado por JSON Schema y ejemplo editable.
+- Agrega simulación con huella SHA-256, detección de duplicados por nombres y alias, candidatos visibles y resolución explícita mediante `auto`, `use_existing`, `create_new` o `skip`.
+- Las autoridades existentes nunca se sobrescriben: solo pueden reutilizarse y recibir alias nuevos; diferencias de descripción, características o temporalidad quedan como advertencias.
+- Exige evidencia en cada relación, detecta duplicados y conflictos con relaciones paralelas y aplica autoridades, alias y relaciones en una única transacción.
+- Incorpora los comandos `authority-dictionary-schema`, `authority-dictionary-validate` y `authority-dictionary-import`, además del panel equivalente en **Entidades y menciones**.
+- Completa la validación manual de `DISC-02`: confirma conflictos nominales explícitos, evidencia obligatoria, importación controlada, conservación de fichas existentes y reimportación idéntica sin nuevas escrituras.
+- No agrega migraciones; la revisión continúa en `0040_discovery_grouping_continuity`.
+
 ## 0.75.1 — 2026-08-04
 
 - Corrige el botón **Aplicar plantilla**: la confirmación `IMPORTAR` se valida después del envío y ya no depende de un botón circularmente deshabilitado dentro del formulario.
 - Aclara en la interfaz y en el XLSX que `LISTAS` es una hoja auxiliar oculta utilizada por los desplegables.
 - Neutraliza la identidad del proyecto descartable de validación de `CAT-01` para que no herede el nombre del Archivo Provincial de la Memoria de Chubut.
-- Completa la validación manual de `CAT-01`: confirma la hoja auxiliar oculta, el control jerárquico negativo, la importación de 155 filas DIPPBA y la reimportación idéntica sin revisiones nuevas.
 - No agrega migraciones; la revisión continúa en `0040_discovery_grouping_continuity`.
 
 ## 0.75.0 — 2026-08-04

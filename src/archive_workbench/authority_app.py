@@ -1,9 +1,16 @@
 from __future__ import annotations
 
 from datetime import date
+import json
 from pathlib import Path
 
 from archive_workbench.analysis_quality import analysis_quality_scope, quality_scope_caption
+from archive_workbench.authority_dictionary import (
+    apply_authority_dictionary,
+    authority_dictionary_example_bytes,
+    authority_dictionary_schema_bytes,
+    validate_authority_dictionary,
+)
 from archive_workbench.ui_navigation import rerun_app, rerun_view, tracked_tabs, request_app_view
 
 from archive_workbench.authorities import (
@@ -936,6 +943,162 @@ def _render_authority_workspace(
 
 
 
+def _render_dictionary_import(
+    st,
+    *,
+    db_path: Path,
+    project_id: str,
+    actor: str,
+) -> None:
+    st.subheader("Importar un diccionario de autoridades")
+    st.caption(
+        "Usá un JSON con esquema versionado. La simulación no escribe en la base, "
+        "no sobrescribe fichas existentes y exige evidencia para cada relación."
+    )
+    download_left, download_right = st.columns(2)
+    with download_left:
+        st.download_button(
+            "Descargar ejemplo JSON",
+            data=authority_dictionary_example_bytes(),
+            file_name="diccionario_autoridades_ejemplo.json",
+            mime="application/json",
+            use_container_width=True,
+        )
+    with download_right:
+        st.download_button(
+            "Descargar esquema JSON",
+            data=authority_dictionary_schema_bytes(),
+            file_name="authority_dictionary.schema.json",
+            mime="application/schema+json",
+            use_container_width=True,
+        )
+
+    uploaded = st.file_uploader(
+        "Diccionario JSON",
+        type=["json"],
+        key="authority_dictionary_upload",
+    )
+    if uploaded is None:
+        st.info(
+            "Primero simulá la importación. Si aparecen conflictos, editá el bloque "
+            "resolution del JSON y volvé a cargarlo."
+        )
+        return
+
+    content = uploaded.getvalue()
+    engine = create_sqlite_engine(db_path)
+    try:
+        with session_scope(engine) as session:
+            report = validate_authority_dictionary(
+                session, project_id=project_id, source=content
+            )
+    except (ValueError, RuntimeError, OSError) as exc:
+        st.error(str(exc))
+        return
+    finally:
+        engine.dispose()
+
+    st.write(f"**{report.dictionary_name}** · esquema {report.schema_version}")
+    metrics = st.columns(5)
+    metrics[0].metric("Entidades nuevas", report.authority_create_count)
+    metrics[1].metric("Entidades reutilizadas", report.authority_reuse_count)
+    metrics[2].metric("Alias por agregar", report.alias_add_count)
+    metrics[3].metric("Relaciones nuevas", report.relation_create_count)
+    metrics[4].metric("Errores", report.error_count)
+
+    st.download_button(
+        "Descargar informe de simulación",
+        data=(
+            json.dumps(report.as_dict(), ensure_ascii=False, indent=2) + "\n"
+        ).encode("utf-8"),
+        file_name=f"{report.dictionary_id}_simulation.json",
+        mime="application/json",
+    )
+
+    st.markdown("#### Entidades")
+    st.dataframe(
+        [
+            {
+                "ID local": plan.local_id,
+                "Nombre preferido": plan.preferred_name,
+                "Tipo": _TYPE_LABELS.get(plan.entity_type, plan.entity_type),
+                "Acción": plan.action,
+                "Autoridad existente": plan.existing_authority_id or "",
+                "Alias nuevos": ", ".join(alias.value for alias in plan.aliases_to_add),
+            }
+            for plan in report.authority_plans
+        ],
+        use_container_width=True,
+        hide_index=True,
+    )
+    st.markdown("#### Relaciones")
+    st.dataframe(
+        [
+            {
+                "ID local": plan.local_id,
+                "Relación": plan.relation_label,
+                "Origen": plan.source_local_id,
+                "Destino": plan.target_local_id or plan.target_id or "",
+                "Acción": plan.action,
+            }
+            for plan in report.relation_plans
+        ],
+        use_container_width=True,
+        hide_index=True,
+    )
+
+    if report.issues:
+        st.markdown("#### Errores y advertencias")
+        for issue in report.issues:
+            location = issue.section
+            if issue.item_id:
+                location += f" · {issue.item_id}"
+            if issue.field:
+                location += f" · {issue.field}"
+            message = f"{location}: {issue.message}"
+            if issue.severity == "error":
+                st.error(message)
+            else:
+                st.warning(message)
+
+    with st.form("authority_dictionary_apply", enter_to_submit=False):
+        confirmation = st.text_input(
+            "Para aplicar, escribí IMPORTAR",
+            key="authority_dictionary_confirmation",
+        )
+        submit = st.form_submit_button(
+            "Aplicar diccionario",
+            type="primary",
+        )
+    if submit:
+        if confirmation.strip() != "IMPORTAR":
+            st.error("La confirmación debe ser exactamente IMPORTAR.")
+        elif not report.valid:
+            st.error("El diccionario tiene errores y no puede aplicarse.")
+        else:
+            engine = create_sqlite_engine(db_path)
+            try:
+                with session_scope(engine) as session:
+                    result = apply_authority_dictionary(
+                        session,
+                        project_id=project_id,
+                        source=content,
+                        changed_by=actor or "local_user",
+                    )
+            except (ValueError, RuntimeError, OSError) as exc:
+                st.error(str(exc))
+            else:
+                st.success(
+                    "Diccionario aplicado: "
+                    f"{result.authorities_created} entidades creadas, "
+                    f"{result.authorities_reused} reutilizadas, "
+                    f"{result.aliases_added} alias y "
+                    f"{result.relations_created} relaciones nuevas."
+                )
+            finally:
+                engine.dispose()
+
+
 def render_authorities_view(
     st,
     *,
@@ -945,8 +1108,8 @@ def render_authorities_view(
 ) -> None:
     st.header("Entidades y menciones")
     st.caption(
-        "Elegí una tarea: revisar fichas y menciones existentes, crear una entidad "
-        "o descubrir referencias nuevas en el corpus."
+        "Elegí una tarea: revisar fichas y menciones, crear una entidad, importar un "
+        "diccionario verificado o descubrir referencias nuevas en el corpus."
     )
     with st.expander("Qué es una entidad", expanded=False):
         st.write(
@@ -956,9 +1119,14 @@ def render_authorities_view(
             "automáticas siempre quedan pendientes de revisión humana."
         )
 
-    entities_tab, create_tab, discovery_tab = tracked_tabs(
+    entities_tab, create_tab, dictionary_tab, discovery_tab = tracked_tabs(
         st,
-        ["Revisar entidades", "Crear entidad", "Descubrimiento abierto"],
+        [
+            "Revisar entidades",
+            "Crear entidad",
+            "Importar diccionario",
+            "Descubrimiento abierto",
+        ],
         key="authority_main_tasks",
         default="Revisar entidades",
     )
@@ -973,6 +1141,14 @@ def render_authorities_view(
 
     with create_tab:
         _render_authority_creation(
+            st,
+            db_path=db_path,
+            project_id=project_id,
+            actor=actor,
+        )
+
+    with dictionary_tab:
+        _render_dictionary_import(
             st,
             db_path=db_path,
             project_id=project_id,

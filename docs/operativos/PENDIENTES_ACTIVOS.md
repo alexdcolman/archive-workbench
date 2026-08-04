@@ -1,24 +1,23 @@
 # Pendientes activos — Archive Workbench
 
-**Estado verificado:** 2026-08-04 · **versión:** 0.75.1
+**Estado verificado:** 2026-08-04 · **versión:** 0.76.0
 
 Este archivo es la única fuente de verdad para trabajo abierto. Las capacidades cerradas se registran en `IMPLEMENTACIONES_REALIZADAS.md` y no deben reabrirse sin una regresión concreta o una ampliación explícita del alcance.
 
 ## Orden acordado
 
-`CAT-01` quedó validado en 0.75.1 y ya no forma parte del trabajo abierto. El orden previsto antes de la candidata a v1.0 es:
+`DISC-02` quedó validado en 0.76.0 y ya no forma parte del trabajo abierto. El orden previsto antes de la candidata a v1.0 es:
 
-1. `DISC-02`;
-2. `CAT-02` junto con `GRAPH-02`;
-3. `OCR-01`;
-4. `AV-01`;
-5. `AV-02`;
-6. `INT-01`;
-7. `PILOT-01`;
-8. `UX-02`;
-9. `QA-01` junto con `OPS-02`;
-10. `OPS-01`;
-11. `OPS-03` y candidata a v1.0.
+1. `CAT-02` junto con `GRAPH-02`;
+2. `OCR-01`;
+3. `AV-01`;
+4. `AV-02`;
+5. `INT-01`;
+6. `PILOT-01`;
+7. `UX-02`;
+8. `QA-01` junto con `OPS-02`;
+9. `OPS-01`;
+10. `OPS-03` y candidata a v1.0.
 
 `AI-01` y `AI-02` quedan expresamente para después del release inicial.
 
@@ -26,7 +25,6 @@ Este archivo es la única fuente de verdad para trabajo abierto. Las capacidades
 
 | ID | Prioridad | Estado | Tarea |
 |---|---|---|---|
-| DISC-02 | Media | Pendiente | Importación de diccionarios de autoridades y relaciones |
 | CAT-02 | Media | Pendiente | Entidades productoras y gestoras del catálogo |
 | GRAPH-02 | Media | Pendiente | Estructura archivística, documentos y partes en el grafo |
 | OCR-01 | Media | Parcial | Preprocesamiento, layout y clasificación documental |
@@ -43,22 +41,6 @@ Este archivo es la única fuente de verdad para trabajo abierto. Las capacidades
 | AI-02 | Post-release | Pendiente | Sistema RAG trazable sobre corpus sistematizados |
 
 ## Mejora funcional
-
-### DISC-02 — Importación de diccionarios de autoridades y relaciones — PENDIENTE
-
-Permitir importar un diccionario externo creado por un equipo o por una herramienta asistida, con:
-
-- autoridades y nombres preferidos;
-- alias;
-- tipos y características configurables;
-- temporalidad;
-- relaciones entre autoridades;
-- evidencia y procedencia;
-- investigadores, publicaciones u otros objetos de conocimiento cuando el modelo lo permita sin confundir clases.
-
-La importación debe incluir formato documentado, validación, vista previa, simulación, detección de duplicados, resolución de conflictos y aplicación transaccional. No debe sobrescribir registros existentes ni aceptar relaciones sin evidencia de manera silenciosa.
-
-La implementación deberá publicar una guía única de formato —JSON/JSONL o equivalente— con ejemplos, esquema versionado y reglas para identificadores, alias, temporalidad y relaciones.
 
 ### CAT-02 — Entidades productoras y gestoras del catálogo — PENDIENTE
 

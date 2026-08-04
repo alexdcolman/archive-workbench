@@ -6,7 +6,7 @@ Está pensada especialmente para equipos de archivos, bibliotecas, ciencias soci
 
 Los documentos y la base de datos permanecen en la computadora del equipo: la aplicación no necesita subir el corpus a un servicio externo.
 
-**Versión actual:** 0.75.1 — corrección del flujo de confirmación y aclaraciones de las plantillas XLSX de catálogo.
+**Versión actual:** 0.76.0 — importación versionada de diccionarios de autoridades, alias y relaciones.
 
 ## Qué permite hacer
 
@@ -25,7 +25,7 @@ Archive Workbench reúne en una misma interfaz:
 - revisión del texto junto con la imagen y sus regiones;
 - edición, anotaciones y cronología integrada por página;
 - búsqueda literal y búsqueda semántica opcional;
-- entidades, alias, menciones y relaciones;
+- entidades, alias, menciones y relaciones, con importación JSON simulable;
 - descubrimiento abierto reproducible con candidatos, decisiones humanas append-only y evaluación por familia;
 - grafo documental;
 - exportaciones reproducibles en CSV y JSONL;
@@ -207,6 +207,19 @@ archive-workbench catalog-template-import project_data plantilla.xlsx --apply --
 
 La primera plantilla pública de prueba se incluye en `examples/plantilla_catalogo_dippba.xlsx`. Conserva fuentes y advertencias sobre ramas parciales; no debe tratarse como descripción archivística definitiva.
 
+### Diccionarios de autoridades y relaciones
+
+Desde **Entidades y menciones → Importar diccionario** se puede descargar un ejemplo y el esquema JSON `1.0`, simular un diccionario externo y aplicarlo con confirmación explícita. La importación detecta coincidencias por nombres y alias, no sobrescribe fichas existentes y exige evidencia para cada relación.
+
+```bash
+archive-workbench authority-dictionary-schema authority_dictionary.schema.json
+archive-workbench authority-dictionary-validate project_data diccionario.json --output informe.json
+archive-workbench authority-dictionary-import project_data diccionario.json
+archive-workbench authority-dictionary-import project_data diccionario.json --apply --confirm IMPORTAR --changed-by Alex
+```
+
+El formato completo está documentado en [`docs/referencia/IMPORTACION_DICCIONARIOS_DISC_02.md`](docs/referencia/IMPORTACION_DICCIONARIOS_DISC_02.md). Se incluyen `config/authority_dictionaries/authority_dictionary.schema.json` y `examples/diccionario_autoridades_ejemplo.json`.
+
 ## Documentación
 
 La raíz de [`docs/`](docs/) contiene un único mapa breve: [Historial de cambios y mapa documental](docs/HISTORIAL_DE_CAMBIOS.md).
@@ -231,7 +244,7 @@ pip install -e ".[dev,extraction,streamlit,semantic,tiff,discovery]"
 pytest
 ```
 
-La versión 0.75.1 incorpora pruebas automatizadas para exportación, validación, confirmación e importación transaccional de plantillas de catálogo.
+La versión 0.76.0 incorpora pruebas automatizadas para esquema, simulación, resolución de duplicados, idempotencia y aplicación transaccional de diccionarios de autoridades y relaciones.
 
 ## Licencia y cita
 
@@ -243,6 +256,6 @@ El desarrollo fue realizado por **Alex Colman** en el marco del **Grupo de Inves
 
 Cuando Archive Workbench sea utilizado en una investigación, publicación, informe, actividad docente o desarrollo derivado, solicitamos citar:
 
-> Colman, Alex, y Grupo de Investigación en Archivos de la Represión (GIAR). 2026. *Archive Workbench* (versión 0.75.1) [software]. https://github.com/alexdcolman/archive-workbench
+> Colman, Alex, y Grupo de Investigación en Archivos de la Represión (GIAR). 2026. *Archive Workbench* (versión 0.76.0) [software]. https://github.com/alexdcolman/archive-workbench
 
 El archivo [`CITATION.cff`](CITATION.cff) contiene los metadatos de cita reconocidos por GitHub y por distintos gestores bibliográficos.

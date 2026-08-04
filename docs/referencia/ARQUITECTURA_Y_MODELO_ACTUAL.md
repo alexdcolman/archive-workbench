@@ -45,6 +45,8 @@ La búsqueda literal usa índices reconstruibles. La búsqueda semántica utiliz
 
 Separa autoridad canónica, alias y menciones contextuales. Una grafía coincidente no implica identidad automática. Las relaciones explícitas requieren evidencia y revisión. El canvas del grafo es una proyección de lectura: separa de forma determinista relaciones paralelas o inversas, recalcula rutas y etiquetas al mover nodos y conserva tooltips de tipo, dirección, procedencia y evidencia. Cambiar el layout visual no escribe relaciones ni altera el modelo canónico.
 
+Los diccionarios externos usan un contrato JSON versionado. La simulación resuelve cada autoridad como creación, reutilización, omisión o conflicto; compara nombres y alias normalizados y nunca actualiza silenciosamente una ficha existente. Las características externas se conservan como descripción estructurada solo al crear una autoridad nueva. Los alias ambiguos requieren autorización expresa. Cada relación importada exige evidencia y puede apuntar a una autoridad, unidad archivística o parte documental existente. Autoridades, alias y relaciones se aplican dentro de una sola transacción. El formato vigente está en [`IMPORTACION_DICCIONARIOS_DISC_02.md`](IMPORTACION_DICCIONARIOS_DISC_02.md).
+
 ### Exportación
 
 Los perfiles seleccionan contenido, agrupación, filtros y formato. Cada materialización registra ruta, tamaño, hash y estado del corpus.
@@ -87,6 +89,7 @@ Los backups incluyen manifiesto, base y configuración. La restauración crea pr
 - Corpus e informe de evaluación de descubrimiento: verdad terreno y comparación reproducible por proveedor, versión y parámetros.
 - Corpus e informe de calibración semántica: consultas verificadas, métricas por umbral y comparación reproducible por perfil, modelo, revisión de índice y parámetros.
 - Plantilla distribuible de catálogo: contrato XLSX versionado con estructura, unidades, campos, listas y procedencia, sin identidad canónica propia fuera de las unidades importadas.
+- Diccionario distribuible de autoridades: contrato JSON versionado con identidad de fuente, autoridades locales, alias, resoluciones y relaciones; no es una autoridad canónica por sí mismo.
 - Layout del grafo: proyección visual reconstruible sin identidad ni persistencia propias.
 
 ## Reglas de seguridad
@@ -115,6 +118,7 @@ Los backups incluyen manifiesto, base y configuración. La restauración crea pr
 - Una adopción de estado no activa una base común; ambas copias deben registrar después el acuerdo bilateral.
 - El rollback de una adopción se bloquea si el estado cambió después o si un acuerdo bilateral ya depende del estado adoptado.
 - Una plantilla de catálogo no puede ampliar la jerarquía autorizada por el proyecto; la aplicación exige simulación válida y confirmación explícita.
+- Un diccionario externo no puede sobrescribir autoridades existentes ni crear relaciones sin evidencia; los conflictos exigen resolución explícita y toda aplicación es transaccional.
 - No sobrescribir exportaciones salvo confirmación explícita.
 - No ejecutar escrituras mediante `Enter`.
 
@@ -124,6 +128,6 @@ Los estados de página controlan qué contenido puede alimentar búsquedas, expo
 
 ## Extensiones previstas
 
-Las extensiones abiertas se describen únicamente en `../operativos/PENDIENTES_ACTIVOS.md`. El diseño vigente de descubrimiento abierto está en `DESCUBRIMIENTO_ABIERTO_DISC_01.md`; entre las demás extensiones se encuentran importación de diccionarios, audiovisual, herramientas LLM, RAG, Docker y transporte mediante Drive.
+Las extensiones abiertas se describen únicamente en `../operativos/PENDIENTES_ACTIVOS.md`. El diseño vigente de descubrimiento abierto está en `DESCUBRIMIENTO_ABIERTO_DISC_01.md`; entre las extensiones restantes se encuentran audiovisual, herramientas LLM, RAG, Docker y transporte mediante Drive.
 
 Cada extensión debe respetar los mismos contratos de identidad, procedencia, calidad, revisión y auditoría.

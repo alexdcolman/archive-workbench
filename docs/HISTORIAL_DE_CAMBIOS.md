@@ -10,14 +10,20 @@ Este es el único documento en la raíz de `docs/`. Resume la evolución del pro
 - [Arquitectura y modelo actual](referencia/ARQUITECTURA_Y_MODELO_ACTUAL.md).
 - [Plan de recuperación de linaje EX-01](referencia/RECUPERACION_LINAJE_EX_01.md).
 - [Plan de descubrimiento abierto DISC-01](referencia/DESCUBRIMIENTO_ABIERTO_DISC_01.md).
+- [Formato de importación DISC-02](referencia/IMPORTACION_DICCIONARIOS_DISC_02.md).
 
 ## Versiones recientes — más reciente primero
+
+### 0.76.0 — 2026-08-04
+- Implementa `DISC-02`: formato JSON versionado, esquema, ejemplo, simulación, resolución de duplicados, evidencia obligatoria y aplicación transaccional de autoridades, alias y relaciones.
+- Valida manualmente el conflicto nominal sin resolver, el rechazo de relaciones sin evidencia, la conservación de una ficha reutilizada y la reimportación idéntica sin nuevas escrituras; `DISC-02` queda cerrado.
+- Agrega la guía vigente [`IMPORTACION_DICCIONARIOS_DISC_02.md`](referencia/IMPORTACION_DICCIONARIOS_DISC_02.md).
+- No agrega migración; continúa `0040_discovery_grouping_continuity`.
 
 ### 0.75.1 — 2026-08-04
 - Corrige el flujo de confirmación de la importación XLSX para que `IMPORTAR` se compruebe después de pulsar un botón habilitado.
 - Documenta que `LISTAS` es una hoja auxiliar oculta y neutraliza el nombre del proyecto descartable de validación.
-- Completa la validación manual de la plantilla DIPPBA, la jerarquía, la confirmación de importación y la reimportación idéntica; `CAT-01` queda cerrado.
-- No agrega migraciones; continúa `0040_discovery_grouping_continuity`.
+- No agrega migraciones; continúa `0040_discovery_grouping_continuity` y `CAT-01` permanece abierto solo para repetir los pasos afectados.
 
 ### 0.75.0 — 2026-08-04
 - Implementa `CAT-01` con plantillas XLSX documentadas, estructura jerárquica distribuible, exportación vacía o del catálogo vigente, simulación detallada e importación transaccional con confirmación explícita.

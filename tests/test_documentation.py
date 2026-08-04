@@ -62,7 +62,6 @@ def test_active_pending_ledger_has_index_and_recovers_all_major_lines() -> None:
     text = (OPERATIVE / "PENDIENTES_ACTIVOS.md").read_text(encoding="utf-8")
     assert "## Índice" in text
     for item in (
-        "DISC-02 — Importación de diccionarios",
         "CAT-02 — Entidades productoras y gestoras",
         "GRAPH-02 — Estructura archivística, documentos y partes",
         "AV-01 — Registro audiovisual local y transcripción",
@@ -83,6 +82,7 @@ def test_active_pending_ledger_has_index_and_recovers_all_major_lines() -> None:
     assert "DATA-01 — Reparación asistida" not in text
     assert "DATA-02 — Control de calidad antes de todo análisis automático" not in text
     assert "CAT-01 — Plantillas distribuibles de catálogo" not in text
+    assert "DISC-02 — Importación de diccionarios" not in text
     assert "EX-01 — Recuperación asistida de linaje" not in text
     assert "DISC-01 — Descubrimiento abierto" not in text
     assert "DISC-01D" not in text
@@ -131,9 +131,14 @@ def test_implemented_ledger_separates_closed_work_from_active_pending() -> None:
     assert "Decisión de alcance sobre duplicados y copias — OCR-02, 0.74.0" in text
     assert "CAT-01 — exportación, simulación e importación XLSX — 0.75.0" in text
     assert "Corrección 0.75.1" in text
-    assert "Plantillas distribuibles CAT-01 | Implementadas en 0.75.0 y validadas en 0.75.1" in text
     assert "Validada manualmente en 0.75.1" in text
+    assert "CAT-01` queda cerrado" in text
     assert "155 filas trazables" in text
+    assert "DISC-02 — esquema, simulación e importación transaccional — 0.76.0" in text
+    assert "Diccionarios de autoridades DISC-02 | Implementados y validados en 0.76.0" in text
+    assert "Validado manualmente en 0.76.0" in text
+    assert "DISC-02` queda cerrado" in text
+    assert "authority-dictionary-validate" in text
 
 
 def test_streamlit_form_policy_prevents_circular_disabled_buttons() -> None:
@@ -186,8 +191,9 @@ def test_interface_policy_requires_persistent_interactive_panels() -> None:
 def test_history_map_is_concise_and_references_historical_detail() -> None:
     text = (DOCS / "HISTORIAL_DE_CAMBIOS.md").read_text(encoding="utf-8")
     assert "## Documentación vigente" in text
+    assert "### 0.76.0" in text
+    assert "`DISC-02` queda cerrado" in text
     assert "### 0.75.1" in text
-    assert "`CAT-01` queda cerrado" in text
     assert "### 0.75.0" in text
     assert "### 0.74.0" in text
     assert "### 0.73.0" in text
@@ -226,12 +232,13 @@ def test_history_map_is_concise_and_references_historical_detail() -> None:
     assert "historico/actualizaciones" in text
     assert "historico/decisiones_tecnicas" in text
     assert "CHANGELOG.md" in text
+    assert text.index("### 0.76.0") < text.index("### 0.75.1")
     assert text.index("### 0.75.1") < text.index("### 0.75.0")
     assert text.index("### 0.75.0") < text.index("### 0.74.0")
     assert text.index("### 0.74.0") < text.index("### 0.73.0")
     assert text.index("### 0.73.0") < text.index("### 0.72.0")
     assert text.index("### 0.72.0") < text.index("### 0.71.2")
-    assert len(text.splitlines()) < 250
+    assert len(text.splitlines()) < 265
 
 
 def test_current_architecture_is_separate_from_historical_design() -> None:
@@ -387,6 +394,7 @@ def test_historical_update_guides_046_to_0630_are_preserved() -> None:
         "ACTUALIZACION_Y_PRUEBA_0.73.0.md",
         "ACTUALIZACION_Y_PRUEBA_0.74.0.md",
         "ACTUALIZACION_Y_PRUEBA_0.75.0.md",
+        "ACTUALIZACION_Y_PRUEBA_0.75.1.md",
     ]
     assert sorted(path.name for path in HISTORICAL_UPDATES.glob("*.md")) == expected
     text_047 = (HISTORICAL_UPDATES / expected[1]).read_text(encoding="utf-8")
@@ -466,24 +474,44 @@ def test_automatic_analysis_quality_decision_is_preserved_and_auditable() -> Non
     assert "st.form" in text
 
 
-def test_current_update_guide_is_stable_named_and_validates_cat01() -> None:
+def test_current_update_guide_is_stable_named_and_validates_disc02() -> None:
     text = (OPERATIVE / "ACTUALIZACION_ACTUAL.md").read_text(encoding="utf-8")
-    assert "Archive Workbench 0.75.1" in text
+    assert "Archive Workbench 0.76.0" in text
     assert "0040_discovery_grouping_continuity" in text
     assert "No hay migración" in text
     assert "project_data" in text
     assert "no mueve ni elimina" in text.lower()
-    assert "create_catalog_template_validation_project.py" in text
-    assert "catalog-template-validate" in text
-    assert "Proyecto de validación CAT-01" in text
+    assert "create_authority_dictionary_validation_project.py" in text
+    assert "authority-dictionary-validate" in text
+    assert "Proyecto de validación DISC-02" in text
+    assert "diccionario_conflicto_sin_resolver.json" in text
+    assert "diccionario_relacion_sin_evidencia.json" in text
+    assert "cero autoridades, cero alias y cero relaciones" in text
     assert "## 6. Resultado de la validación" in text
-    assert "reimportación idéntica con 155 unidades sin cambios" in text
+    assert "dos relaciones duplicadas omitidas" in text
     assert "project_data` no fue leído ni modificado" in text
-    assert "LISTAS" in text and "oculta" in text
-    assert "Aplicar plantilla" in text
-    assert "155 unidades sin cambios" in text
     assert "pytest --collect-only -q" in text
-    assert "DISC-01D" in text and "No repetir" in text
+    assert "CAT-01" in text and "No repetir" in text
+
+
+def test_authority_dictionary_format_is_versioned_and_conservative() -> None:
+    text = (
+        DOCS / "referencia" / "IMPORTACION_DICCIONARIOS_DISC_02.md"
+    ).read_text(encoding="utf-8")
+    for item in (
+        "Versión del esquema",
+        "authority_dictionary.schema.json",
+        "diccionario_autoridades_ejemplo.json",
+        "use_existing",
+        "create_new",
+        "allow_ambiguous",
+        "create_parallel",
+        "evidencia",
+        "una sola transacción",
+    ):
+        assert item in text
+    assert "nunca sobrescribe campos de una autoridad existente" in text
+    assert "Una relación sin evidencia" in text
 
 
 def test_ex01_lineage_recovery_plan_is_complete_and_conservative() -> None:
@@ -540,10 +568,12 @@ def test_pilot_guide_delegates_future_work_to_single_pending_ledger() -> None:
 def test_readme_points_only_to_current_documentation_map() -> None:
     text = (ROOT / "README.md").read_text(encoding="utf-8")
     citation = (ROOT / "CITATION.cff").read_text(encoding="utf-8")
-    assert "**Versión actual:** 0.75.1" in text
-    assert "La versión 0.75.1 incorpora pruebas automatizadas" in text
-    assert "(versión 0.75.1)" in text
-    assert 'version: "0.75.1"' in citation
+    assert "**Versión actual:** 0.76.0" in text
+    assert "La versión 0.76.0 incorpora pruebas automatizadas" in text
+    assert "(versión 0.76.0)" in text
+    assert 'version: "0.76.0"' in citation
+    assert "authority-dictionary-validate" in text
+    assert "IMPORTACION_DICCIONARIOS_DISC_02.md" in text
     assert "docs/HISTORIAL_DE_CAMBIOS.md" in text
     assert "docs/operativos/PENDIENTES_ACTIVOS.md" in text
     assert "docs/operativos/IMPLEMENTACIONES_REALIZADAS.md" in text

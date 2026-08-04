@@ -1,6 +1,6 @@
 # Implementaciones realizadas — Archive Workbench
 
-**Estado verificado:** 2026-08-04 · **versión:** 0.75.1
+**Estado verificado:** 2026-08-04 · **versión:** 0.76.0
 
 Este documento registra capacidades ya implementadas y, cuando corresponde, validadas. No deben volver a aparecer en `PENDIENTES_ACTIVOS.md` salvo evidencia de regresión o ampliación explícita del alcance.
 
@@ -27,7 +27,8 @@ Este documento registra capacidades ya implementadas y, cuando corresponde, vali
 | Calibración semántica SEM-01 | Implementada y validada en 0.74.0 |
 | Grafo sin colisiones GRAPH-01 | Implementado y validado en 0.74.0 |
 | Duplicados OCR-02 | Cerrado por decisión de alcance en 0.74.0 |
-| Plantillas distribuibles CAT-01 | Implementadas en 0.75.0 y validadas en 0.75.1 |
+| Plantillas distribuibles CAT-01 | Implementadas y validadas en 0.75.1 |
+| Diccionarios de autoridades DISC-02 | Implementados y validados en 0.76.0 |
 
 ## Plantillas distribuibles de catálogo
 
@@ -43,7 +44,21 @@ La aplicación requiere `--apply --confirm IMPORTAR` en la CLI o la misma confir
 
 Se incluye `examples/plantilla_catalogo_dippba.xlsx`, generada desde `config/catalog_templates/dippba_public_seed.json`. Contiene 155 filas trazables obtenidas de información pública de la Comisión Provincial por la Memoria. Las elipsis y los agrupamientos sin nivel rotulado se señalan expresamente como parciales o provisionales; la plantilla no inventa denominaciones ausentes ni debe tratarse como descripción archivística definitiva.
 
-**Validada manualmente en 0.75.1.** Se confirmó el rechazo de un documento directamente bajo un fondo, la identidad neutral del proyecto descartable, las tres hojas visibles y `LISTAS` oculta, la aplicación de las 155 filas después de escribir `IMPORTAR`, la jerarquía DIPPBA completa y la reimportación idéntica sin revisiones nuevas. `project_data` no fue leído ni modificado. No hay migración: continúa `0040_discovery_grouping_continuity`.
+**Validada manualmente en 0.75.1.** Se confirmó el rechazo de un documento directamente bajo un fondo, la importación de las 155 filas DIPPBA, la jerarquía completa, la exportación del catálogo y la reimportación idéntica sin revisiones nuevas. `CAT-01` queda cerrado. No hay migración: continúa `0040_discovery_grouping_continuity`.
+
+## Diccionarios distribuibles de autoridades
+
+### DISC-02 — esquema, simulación e importación transaccional — 0.76.0
+
+Se incorporó un formato JSON `1.0` con esquema y ejemplo versionados. Cada diccionario registra identidad, fuente y proyecto de destino; describe autoridades, alias, temporalidad, características y relaciones; y conserva una huella SHA-256 reproducible en el informe de simulación.
+
+La detección de duplicados compara nombres preferidos y alias normalizados. El modo `auto` crea registros nuevos solo cuando no hay coincidencias y reutiliza únicamente una coincidencia exacta de nombre y tipo. Los casos ambiguos exigen `use_existing`, `create_new` o `skip`. Una autoridad existente nunca es sobrescrita: puede recibir alias nuevos, mientras las diferencias de descripción, características o temporalidad se muestran como advertencias.
+
+Las relaciones pueden dirigirse a otra autoridad, una unidad archivística o una parte documental. Cada una requiere evidencia en el propio JSON. Las relaciones idénticas se omiten en reimportaciones; una relación paralela con evidencia o temporalidad distinta exige `create_parallel` o `skip`.
+
+La CLI ofrece `authority-dictionary-schema`, `authority-dictionary-validate` y `authority-dictionary-import`; la interfaz agrega **Importar diccionario** dentro de **Entidades y menciones**. La aplicación requiere la confirmación `IMPORTAR` y ejecuta autoridades, alias y relaciones dentro de una sola transacción. La guía canónica está en `docs/referencia/IMPORTACION_DICCIONARIOS_DISC_02.md`.
+
+**Validado manualmente en 0.76.0.** Se confirmó que una coincidencia nominal ambigua exige resolución explícita, que una relación sin evidencia es rechazada y que el diccionario controlado crea dos autoridades, reutiliza una ficha sin sobrescribirla, agrega dos alias y crea dos relaciones. La reimportación idéntica produjo cero autoridades, cero alias y cero relaciones nuevas y omitió las dos relaciones duplicadas. `project_data` no fue leído ni modificado. `DISC-02` queda cerrado. No hay migración: continúa `0040_discovery_grouping_continuity`.
 
 ## Descubrimiento abierto
 
