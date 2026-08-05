@@ -1,6 +1,6 @@
 # Implementaciones realizadas — Archive Workbench
 
-**Estado verificado:** 2026-08-05 · **versión:** 0.77.0
+**Estado verificado:** 2026-08-05 · **versión:** 0.78.0
 
 Este documento registra capacidades ya implementadas y, cuando corresponde, validadas. No deben volver a aparecer en `PENDIENTES_ACTIVOS.md` salvo evidencia de regresión o ampliación explícita del alcance.
 
@@ -11,7 +11,7 @@ Este documento registra capacidades ya implementadas y, cuando corresponde, vali
 | Catálogo, originales y estructura archivística | Implementado |
 | Extracciones versionadas y selección canónica | Implementado y validado |
 | Revisión, historial y rebase | Implementado y validado |
-| Calidad de página y derivados OCR | Implementación parcial operativa |
+| Calidad de página y derivados OCR | Implementación parcial; OCR-01A implementada y validada en 0.78.0 |
 | Búsqueda literal y semántica | Implementado; calibración reproducible cerrada en 0.74.0 |
 | Autoridades, menciones y relaciones | Núcleo implementado y validado |
 | Exportaciones reproducibles | Implementado y validado |
@@ -31,6 +31,18 @@ Este documento registra capacidades ya implementadas y, cuando corresponde, vali
 | Diccionarios de autoridades DISC-02 | Implementados y validados en 0.76.0 |
 | Productores y gestores CAT-02 | Implementados y validados en 0.77.0 |
 | Capas archivísticas GRAPH-02 | Implementadas y validadas en 0.77.0 |
+
+## Preprocesamiento geométrico para OCR
+
+### OCR-01A — orientación, deskew y líneas controladas — 0.78.0
+
+La preparación de páginas incorpora un modo geométrico conservador que detecta orientaciones de `0°`, `90°`, `180°` y `270°`, aplica deskew dentro de un rango acotado y elimina únicamente líneas o marcos largos que superan los controles de longitud, espesor e intersección con texto. Una confianza insuficiente no modifica la página: la omisión queda registrada como advertencia y transformación no aplicada.
+
+El original y la previsualización permanecen intactos. El tratamiento produce un derivado OCR separado, una máscara diagnóstica de los píxeles eliminados y metadatos estructurados por página con orientación, confianzas, rotación, ángulo de deskew, líneas detectadas, líneas eliminadas y transformaciones aplicadas u omitidas. La interfaz compara en paralelo la previsualización sin cambios, el derivado OCR y la máscara.
+
+La migración aditiva `0042_preprocessing_geometry_trace` agrega `analysis_json` y `transformations_json` a `derivative_assets`. No reconstruye la tabla ni altera derivados anteriores; los registros existentes reciben objetos vacíos. El script `create_preprocessing_geometry_validation_project.py` crea fuera del repositorio cinco casos controlados: orientación a 90°, inclinación de 3°, marco y líneas largas, línea que cruza texto y página de baja confianza.
+
+**Validada manualmente en 0.78.0.** Se confirmaron la rotación controlada de `90°`, el deskew de `-3°`, la eliminación exclusiva de cuatro líneas de marco, la conservación de una línea que cruza texto, la omisión por baja confianza y la presencia de candidato, confianza, umbral y motivo en cada transformación. Los cinco originales conservaron sus SHA-256, ninguna extracción fue adoptada automáticamente como canónica y `project_data` no fue leído ni modificado durante la prueba. `OCR-01A` queda cerrada; `OCR-01` continúa parcial por los alcances restantes.
 
 ## Productores, gestores y estructura documental en el grafo
 

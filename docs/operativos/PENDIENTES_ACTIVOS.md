@@ -1,6 +1,6 @@
 # Pendientes activos — Archive Workbench
 
-**Estado verificado:** 2026-08-05 · **versión:** 0.77.0
+**Estado verificado:** 2026-08-05 · **versión:** 0.78.0
 
 Este archivo es la única fuente de verdad para trabajo abierto. Las capacidades cerradas se registran en `IMPLEMENTACIONES_REALIZADAS.md` y no deben reabrirse sin una regresión concreta o una ampliación explícita del alcance.
 
@@ -41,10 +41,11 @@ Este archivo es la única fuente de verdad para trabajo abierto. Las capacidades
 
 ### OCR-01 — Preprocesamiento, layout y clasificación documental — PARCIAL
 
-Completar y evaluar:
+La fase `OCR-01A` quedó implementada y validada en 0.78.0: orientación conservadora, deskew acotado, eliminación controlada de líneas y marcos, máscaras diagnósticas y trazabilidad estructurada por página. Los originales y las previsualizaciones permanecieron intactos en los cinco casos controlados.
 
-- deskew, dewarp y orientación;
-- eliminación controlada de líneas y marcos;
+Queda por completar y evaluar dentro de `OCR-01`:
+
+- dewarp;
 - OCR regional;
 - párrafos, columnas y orden de lectura;
 - reducción de fragmentación línea por línea y duplicaciones;

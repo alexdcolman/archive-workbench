@@ -11,6 +11,7 @@ from sqlalchemy.orm import Session
 from archive_workbench.db.models import (
     ArchivalUnit,
     DigitalObject,
+    DerivativeAsset,
     EditablePage,
     ExtractionPage,
     ExtractionPageSelection,
@@ -62,6 +63,7 @@ class ProcessingInventoryRow:
     preprocessing_status: str | None
     preprocessing_profile: str | None
     preprocessing_ocr_treatment: str | None
+    preprocessing_geometry_mode: str | None
     extraction_status: str | None
     extraction_profile: str | None
     extracted_pages: int
@@ -71,6 +73,26 @@ class ProcessingInventoryRow:
     approved_pages: int
     failed_pages: list[int]
     last_error: str | None
+
+
+@dataclass(slots=True)
+class PreprocessingGeometryRow:
+    source_key: str
+    title: str
+    page: int
+    orientation_detected: int | None
+    orientation_confidence: float | None
+    rotation_applied: int
+    deskew_detected_angle: float | None
+    deskew_angle: float | None
+    deskew_confidence: float | None
+    lines_detected: int
+    lines_removed: int
+    removed_pixels: int
+    preview_relative_path: str | None
+    ocr_relative_path: str
+    mask_relative_path: str | None
+    transformations: dict[str, Any]
 
 
 @dataclass(slots=True)
@@ -370,6 +392,11 @@ def processing_inventory_rows(
                     if preprocessing
                     else None
                 ),
+                preprocessing_geometry_mode=(
+                    str((preprocessing.options_json or {}).get("geometry_mode", "none"))
+                    if preprocessing
+                    else None
+                ),
                 extraction_status=extraction.status if extraction else None,
                 extraction_profile=extraction.profile_key if extraction else None,
                 extracted_pages=len(extracted_pages),
@@ -608,3 +635,91 @@ def processing_job_item_rows(
         )
         for item in items
     ]
+
+
+def processing_geometry_rows(
+    session: Session,
+    *,
+    source_keys: set[str] | None = None,
+) -> list[PreprocessingGeometryRow]:
+    statement = (
+        select(SourceRegistration, DigitalObject)
+        .join(DigitalObject, DigitalObject.id == SourceRegistration.digital_object_id)
+        .order_by(SourceRegistration.source_key)
+    )
+    if source_keys:
+        statement = statement.where(SourceRegistration.source_key.in_(source_keys))
+    rows: list[PreprocessingGeometryRow] = []
+    for registration, digital in session.execute(statement):
+        run = session.scalar(
+            select(PreprocessingRun)
+            .where(
+                PreprocessingRun.digital_object_id == digital.id,
+                PreprocessingRun.is_current.is_(True),
+            )
+            .order_by(PreprocessingRun.created_at.desc())
+        )
+        if run is None:
+            continue
+        assets = list(
+            session.scalars(
+                select(DerivativeAsset)
+                .where(DerivativeAsset.preprocessing_run_id == run.id)
+                .order_by(DerivativeAsset.page_number, DerivativeAsset.kind)
+            )
+        )
+        by_page: dict[int, dict[str, DerivativeAsset]] = {}
+        for asset in assets:
+            by_page.setdefault(asset.page_number, {})[asset.kind] = asset
+        title = str(
+            (registration.source_payload_json or {}).get("short_description")
+            or registration.source_key
+        )
+        for page, page_assets in sorted(by_page.items()):
+            preview = page_assets.get("preview")
+            ocr = page_assets.get("ocr")
+            if ocr is None or not (ocr.analysis_json or ocr.transformations_json):
+                continue
+            analysis = dict(ocr.analysis_json or {})
+            mask = page_assets.get("diagnostic_mask")
+            rows.append(
+                PreprocessingGeometryRow(
+                    source_key=str(registration.source_key),
+                    title=title,
+                    page=page,
+                    orientation_detected=(
+                        int(analysis["orientation_detected"])
+                        if analysis.get("orientation_detected") is not None
+                        else None
+                    ),
+                    orientation_confidence=(
+                        float(analysis["orientation_confidence"])
+                        if analysis.get("orientation_confidence") is not None
+                        else None
+                    ),
+                    rotation_applied=int(ocr.rotation_applied or 0),
+                    deskew_detected_angle=(
+                        float(analysis["deskew_detected_angle"])
+                        if analysis.get("deskew_detected_angle") is not None
+                        else None
+                    ),
+                    deskew_angle=(
+                        float(analysis["deskew_angle"])
+                        if analysis.get("deskew_angle") is not None
+                        else None
+                    ),
+                    deskew_confidence=(
+                        float(analysis["deskew_confidence"])
+                        if analysis.get("deskew_confidence") is not None
+                        else None
+                    ),
+                    lines_detected=int(analysis.get("lines_detected") or 0),
+                    lines_removed=int(analysis.get("lines_removed") or 0),
+                    removed_pixels=int(analysis.get("removed_pixels") or 0),
+                    preview_relative_path=preview.relative_path if preview else None,
+                    ocr_relative_path=ocr.relative_path,
+                    mask_relative_path=mask.relative_path if mask else None,
+                    transformations=dict(ocr.transformations_json or {}),
+                )
+            )
+    return rows

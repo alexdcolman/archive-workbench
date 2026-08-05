@@ -348,7 +348,7 @@ def test_exchange_migration_upgrades_existing_0012_database(tmp_path: Path) -> N
     upgrade_database(root, revision="0012_editable_search_fts")
     assert current_revision(root) == "0012_editable_search_fts"
     upgrade_database(root)
-    assert current_revision(root) == "0041_catalog_authority_roles_graph_layers"
+    assert current_revision(root) == "0042_preprocessing_geometry_trace"
     engine = create_sqlite_engine(database_path(root))
     try:
         tables = set(inspect(engine).get_table_names())
@@ -377,7 +377,7 @@ def test_dry_run_migration_upgrades_populated_0013_database(tmp_path: Path) -> N
         engine.dispose()
     assert current_revision(root) == "0013_offline_exchange_log"
     upgrade_database(root)
-    assert current_revision(root) == "0041_catalog_authority_roles_graph_layers"
+    assert current_revision(root) == "0042_preprocessing_geometry_trace"
     engine = create_sqlite_engine(database_path(root))
     try:
         tables = set(inspect(engine).get_table_names())
@@ -1024,7 +1024,7 @@ def test_transactional_apply_migration_upgrades_populated_0014_database(tmp_path
         engine.dispose()
     assert current_revision(root) == "0014_exchange_dry_run"
     upgrade_database(root)
-    assert current_revision(root) == "0041_catalog_authority_roles_graph_layers"
+    assert current_revision(root) == "0042_preprocessing_geometry_trace"
     engine = create_sqlite_engine(database_path(root))
     try:
         tables = set(inspect(engine).get_table_names())
@@ -1602,7 +1602,7 @@ def test_delete_precondition_migration_upgrades_populated_0015_database(tmp_path
         engine.dispose()
     assert current_revision(root) == "0015_exchange_transactional_apply"
     upgrade_database(root)
-    assert current_revision(root) == "0041_catalog_authority_roles_graph_layers"
+    assert current_revision(root) == "0042_preprocessing_geometry_trace"
     engine = create_sqlite_engine(database_path(root))
     try:
         columns = {
@@ -1623,7 +1623,7 @@ def test_conflict_resolution_migration_upgrades_populated_0016_database(tmp_path
     engine.dispose()
     assert current_revision(root) == "0016_exchange_delete_preconditions"
     upgrade_database(root)
-    assert current_revision(root) == "0041_catalog_authority_roles_graph_layers"
+    assert current_revision(root) == "0042_preprocessing_geometry_trace"
     engine = create_sqlite_engine(database_path(root))
     try:
         tables = set(inspect(engine).get_table_names())
@@ -2030,7 +2030,7 @@ def test_resolution_usability_migration_upgrades_populated_0017_database(tmp_pat
         engine.dispose()
     assert current_revision(root) == "0017_exchange_conflict_resolutions"
     upgrade_database(root)
-    assert current_revision(root) == "0041_catalog_authority_roles_graph_layers"
+    assert current_revision(root) == "0042_preprocessing_geometry_trace"
     engine = create_sqlite_engine(database_path(root))
     try:
         columns = {
@@ -3562,8 +3562,8 @@ def test_0030_repairs_legacy_source_replaced_bundle_end_to_end(
     # generar nuevos eventos y la exportación corrige el evento ya existente.
     upgrade_database(source_root)
     upgrade_database(receiver_root)
-    assert current_revision(source_root) == "0041_catalog_authority_roles_graph_layers"
-    assert current_revision(receiver_root) == "0041_catalog_authority_roles_graph_layers"
+    assert current_revision(source_root) == "0042_preprocessing_geometry_trace"
+    assert current_revision(receiver_root) == "0042_preprocessing_geometry_trace"
     source_engine = create_sqlite_engine(database_path(source_root))
     receiver_engine = create_sqlite_engine(database_path(receiver_root))
     try:
@@ -3818,8 +3818,8 @@ def test_0031_backfills_legacy_page_action_and_preserves_history_end_to_end(
 
     upgrade_database(source_root)
     upgrade_database(receiver_root)
-    assert current_revision(source_root) == "0041_catalog_authority_roles_graph_layers"
-    assert current_revision(receiver_root) == "0041_catalog_authority_roles_graph_layers"
+    assert current_revision(source_root) == "0042_preprocessing_geometry_trace"
+    assert current_revision(receiver_root) == "0042_preprocessing_geometry_trace"
 
     source_engine = create_sqlite_engine(database_path(source_root))
     receiver_engine = create_sqlite_engine(database_path(receiver_root))
@@ -4747,7 +4747,7 @@ def test_lineage_validation_script_creates_recoverable_discardable_pair(
         receiver,
         force=False,
     )
-    assert result["revision"] == "0041_catalog_authority_roles_graph_layers"
+    assert result["revision"] == "0042_preprocessing_geometry_trace"
 
     engine = create_sqlite_engine(database_path(receiver))
     try:
@@ -5384,7 +5384,7 @@ def test_common_base_validation_script_creates_distinct_identical_copies(
         tmp_path / "common_base_b",
         force=False,
     )
-    assert result["revision"] == "0041_catalog_authority_roles_graph_layers"
+    assert result["revision"] == "0042_preprocessing_geometry_trace"
     assert result["initiator_workspace_id"] != result["counterpart_workspace_id"]
     assert len(str(result["state_sha256"])) == 64
     assert Path(result["validation_path"]).is_file()
@@ -5669,7 +5669,7 @@ def test_state_adoption_validation_script_creates_divergent_copies_and_package(
         tmp_path / "state_adoption_target",
         force=False,
     )
-    assert result["revision"] == "0041_catalog_authority_roles_graph_layers"
+    assert result["revision"] == "0042_preprocessing_geometry_trace"
     assert result["source_workspace_id"] != result["target_workspace_id"]
     assert result["source_state_sha256"] != result["target_state_sha256"]
     assert Path(result["package_path"]).is_file()

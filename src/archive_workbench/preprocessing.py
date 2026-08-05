@@ -30,6 +30,10 @@ from archive_workbench.db.models import (
 from archive_workbench.domain.enums import FilePresence, MediaType
 from archive_workbench.identity import new_id, sha256_file, sha256_json
 from archive_workbench.inspection import inspect_input
+from archive_workbench.preprocessing_geometry import (
+    GEOMETRY_MODE_LABELS,
+    apply_conservative_geometry,
+)
 from archive_workbench.tesseract_engine import otsu_threshold
 
 
@@ -42,18 +46,34 @@ OCR_TREATMENT_LABELS = {
 }
 
 
-def profile_for_ocr_treatment(
-    decisions: ProjectDecisions, treatment: str
+def profile_for_preprocessing(
+    decisions: ProjectDecisions,
+    treatment: str,
+    geometry_mode: str = "none",
 ) -> DerivativeProfile:
     if treatment not in OCR_TREATMENT_LABELS:
         raise ValueError(f"Tratamiento OCR desconocido: {treatment}")
+    if geometry_mode not in GEOMETRY_MODE_LABELS:
+        raise ValueError(f"Modo geométrico desconocido: {geometry_mode}")
     base = profile_from_decisions(decisions)
+    parts: list[str] = []
+    if treatment != "original":
+        parts.append(f"ocr_{treatment}")
+    if geometry_mode != "none":
+        parts.append(f"geometry_{geometry_mode}")
     return base.model_copy(
         update={
-            "profile_key": ("default" if treatment == "original" else f"ocr_{treatment}"),
+            "profile_key": "_".join(parts) if parts else "default",
             "ocr_treatment": treatment,
+            "geometry_mode": geometry_mode,
         }
     )
+
+
+def profile_for_ocr_treatment(
+    decisions: ProjectDecisions, treatment: str
+) -> DerivativeProfile:
+    return profile_for_preprocessing(decisions, treatment, "none")
 
 
 def apply_ocr_treatment(image: Image.Image, treatment: str) -> Image.Image:
@@ -90,6 +110,7 @@ class PreprocessingStatusRow:
     run_status: str | None
     profile_key: str | None
     ocr_treatment: str | None
+    geometry_mode: str | None
     assets: int
     output_root: str | None
 
@@ -216,6 +237,9 @@ def _asset_record(
     source_height: float,
     source_dpi: float | None,
     backend: str,
+    rotation_applied: int = 0,
+    analysis_json: dict[str, object] | None = None,
+    transformations_json: dict[str, object] | None = None,
 ) -> DerivativeAssetRecord:
     return DerivativeAssetRecord(
         asset_id=new_id(),
@@ -233,10 +257,44 @@ def _asset_record(
         source_width=source_width,
         source_height=source_height,
         source_dpi=source_dpi,
-        rotation_applied=0,
+        rotation_applied=rotation_applied,
+        analysis_json=analysis_json or {},
+        transformations_json=transformations_json or {},
         backend=backend,
     )
 
+
+def _prepare_ocr_page(
+    image: Image.Image,
+    *,
+    profile: DerivativeProfile,
+) -> tuple[
+    Image.Image,
+    Image.Image | None,
+    dict[str, object],
+    dict[str, object],
+    int,
+    list[str],
+]:
+    if profile.geometry_mode == "none":
+        return apply_ocr_treatment(image, profile.ocr_treatment), None, {}, {}, 0, []
+    result = apply_conservative_geometry(
+        image,
+        orientation_min_confidence=profile.orientation_min_confidence,
+        deskew_max_degrees=profile.deskew_max_degrees,
+        deskew_min_confidence=profile.deskew_min_confidence,
+        line_min_length_ratio=profile.line_min_length_ratio,
+        line_max_thickness_px=profile.line_max_thickness_px,
+    )
+    treated = apply_ocr_treatment(result.image, profile.ocr_treatment)
+    return (
+        treated,
+        result.mask,
+        result.analysis,
+        result.transformations,
+        result.orientation_applied,
+        result.warnings,
+    )
 
 def _render_pdf(
     source: Path,
@@ -248,6 +306,7 @@ def _render_pdf(
     profile: DerivativeProfile,
 ) -> tuple[list[DerivativeAssetRecord], list[str], str, str | None]:
     assets: list[DerivativeAssetRecord] = []
+    warnings_out: list[str] = []
     preview_fmt = profile.preview_format
     ocr_fmt = profile.ocr_format
     with fitz.open(source) as document:
@@ -256,7 +315,17 @@ def _render_pdf(
 
             ocr_pix = page.get_pixmap(dpi=profile.ocr_dpi, colorspace=fitz.csRGB, alpha=False)
             rendered_ocr = Image.frombytes("RGB", (ocr_pix.width, ocr_pix.height), ocr_pix.samples)
-            ocr_image = apply_ocr_treatment(rendered_ocr, profile.ocr_treatment)
+            (
+                ocr_image,
+                diagnostic_mask,
+                analysis_json,
+                transformations_json,
+                rotation_applied,
+                geometry_warnings,
+            ) = _prepare_ocr_page(rendered_ocr, profile=profile)
+            warnings_out.extend(
+                f"Página {page_number}: {warning}" for warning in geometry_warnings
+            )
             ocr_path = output_dir / "ocr" / f"page_{page_number:04d}.{_extension(ocr_fmt)}"
             _save_pillow(
                 ocr_image,
@@ -280,9 +349,42 @@ def _render_pdf(
                     source_width=source_rect.width,
                     source_height=source_rect.height,
                     source_dpi=72.0,
-                    backend="pymupdf",
+                    backend="pymupdf+pillow" if profile.geometry_mode != "none" else "pymupdf",
+                    rotation_applied=rotation_applied,
+                    analysis_json=analysis_json,
+                    transformations_json=transformations_json,
                 )
             )
+            if diagnostic_mask is not None:
+                mask_path = output_dir / "diagnostic" / f"page_{page_number:04d}_line_mask.png"
+                _save_pillow(
+                    diagnostic_mask,
+                    mask_path,
+                    "png",
+                    quality=profile.preview_quality,
+                    dpi=profile.ocr_dpi,
+                )
+                assets.append(
+                    _asset_record(
+                        run_id=run_id,
+                        digital_object_id=digital_object_id,
+                        page=page_number,
+                        kind="diagnostic_mask",
+                        path=mask_path,
+                        project_root=project_root,
+                        fmt="png",
+                        width=diagnostic_mask.width,
+                        height=diagnostic_mask.height,
+                        dpi=profile.ocr_dpi,
+                        source_width=source_rect.width,
+                        source_height=source_rect.height,
+                        source_dpi=72.0,
+                        backend="pillow",
+                        rotation_applied=rotation_applied,
+                        analysis_json=analysis_json,
+                        transformations_json=transformations_json,
+                    )
+                )
 
             preview_pix = page.get_pixmap(
                 dpi=profile.preview_dpi, colorspace=fitz.csRGB, alpha=False
@@ -318,7 +420,8 @@ def _render_pdf(
                     backend="pymupdf",
                 )
             )
-    return assets, [], "pymupdf", _package_version("PyMuPDF")
+    backend = "pymupdf+pillow" if profile.geometry_mode != "none" else "pymupdf"
+    return assets, warnings_out, backend, _package_version("PyMuPDF")
 
 
 def _render_raster_pillow(
@@ -336,12 +439,16 @@ def _render_raster_pillow(
         default=0.0,
     )
     if max_megapixels > profile.pillow_megapixel_guard:
-        if profile.ocr_treatment != "original":
+        if profile.ocr_treatment != "original" or profile.geometry_mode != "none":
+            requested = []
+            if profile.ocr_treatment != "original":
+                requested.append(OCR_TREATMENT_LABELS[profile.ocr_treatment])
+            if profile.geometry_mode != "none":
+                requested.append(GEOMETRY_MODE_LABELS[profile.geometry_mode])
             raise RuntimeError(
                 f"La imagen alcanza {max_megapixels:.1f} MP. El tratamiento "
-                f"{OCR_TREATMENT_LABELS[profile.ocr_treatment]!r} requiere cargarla con "
-                "Pillow y supera el límite de memoria configurado. Use 'Sin cambios' o "
-                "procese una copia más pequeña; el original no fue modificado."
+                f"{' + '.join(requested)!r} requiere cargarla con Pillow y supera el límite "
+                "de memoria configurado. El original no fue modificado."
             )
         raise RuntimeError(
             f"La imagen alcanza {max_megapixels:.1f} MP y supera el límite seguro de Pillow "
@@ -354,13 +461,27 @@ def _render_raster_pillow(
         frame_count = getattr(opened, "n_frames", 1)
         for frame in range(frame_count):
             opened.seek(frame)
+            page_number = frame + 1
             source_dpi = _source_dpi_from_pillow(opened)
             image = _normalized_pillow_image(opened)
             source_width, source_height = image.size
 
-            # Para rasteres no se inventan píxeles: el derivado OCR conserva resolución nativa.
-            ocr_image = apply_ocr_treatment(image, profile.ocr_treatment)
-            ocr_path = output_dir / "ocr" / f"page_{frame + 1:04d}.{_extension(profile.ocr_format)}"
+            (
+                ocr_image,
+                diagnostic_mask,
+                analysis_json,
+                transformations_json,
+                rotation_applied,
+                geometry_warnings,
+            ) = _prepare_ocr_page(image, profile=profile)
+            warnings_out.extend(
+                f"Página {page_number}: {warning}" for warning in geometry_warnings
+            )
+            ocr_path = (
+                output_dir
+                / "ocr"
+                / f"page_{page_number:04d}.{_extension(profile.ocr_format)}"
+            )
             _save_pillow(
                 ocr_image,
                 ocr_path,
@@ -372,7 +493,7 @@ def _render_raster_pillow(
                 _asset_record(
                     run_id=run_id,
                     digital_object_id=digital_object_id,
-                    page=frame + 1,
+                    page=page_number,
                     kind="ocr",
                     path=ocr_path,
                     project_root=project_root,
@@ -384,8 +505,41 @@ def _render_raster_pillow(
                     source_height=source_height,
                     source_dpi=source_dpi,
                     backend="pillow",
+                    rotation_applied=rotation_applied,
+                    analysis_json=analysis_json,
+                    transformations_json=transformations_json,
                 )
             )
+            if diagnostic_mask is not None:
+                mask_path = output_dir / "diagnostic" / f"page_{page_number:04d}_line_mask.png"
+                _save_pillow(
+                    diagnostic_mask,
+                    mask_path,
+                    "png",
+                    quality=profile.preview_quality,
+                    dpi=source_dpi,
+                )
+                assets.append(
+                    _asset_record(
+                        run_id=run_id,
+                        digital_object_id=digital_object_id,
+                        page=page_number,
+                        kind="diagnostic_mask",
+                        path=mask_path,
+                        project_root=project_root,
+                        fmt="png",
+                        width=diagnostic_mask.width,
+                        height=diagnostic_mask.height,
+                        dpi=round(source_dpi) if source_dpi else None,
+                        source_width=source_width,
+                        source_height=source_height,
+                        source_dpi=source_dpi,
+                        backend="pillow",
+                        rotation_applied=rotation_applied,
+                        analysis_json=analysis_json,
+                        transformations_json=transformations_json,
+                    )
+                )
 
             preview_width, preview_height = _preview_size(
                 source_width,
@@ -402,7 +556,7 @@ def _render_raster_pillow(
             preview_path = (
                 output_dir
                 / "preview"
-                / f"page_{frame + 1:04d}.{_extension(profile.preview_format)}"
+                / f"page_{page_number:04d}.{_extension(profile.preview_format)}"
             )
             _save_pillow(
                 preview_image,
@@ -415,7 +569,7 @@ def _render_raster_pillow(
                 _asset_record(
                     run_id=run_id,
                     digital_object_id=digital_object_id,
-                    page=frame + 1,
+                    page=page_number,
                     kind="preview",
                     path=preview_path,
                     project_root=project_root,
@@ -435,7 +589,8 @@ def _render_raster_pillow(
             )
             if source_dpi is None:
                 warnings_out.append(
-                    f"Página {frame + 1}: el raster no declara DPI; se conservaron los píxeles nativos."
+                    f"Página {page_number}: el raster no declara DPI; "
+                    "se conservaron los píxeles nativos."
                 )
     return assets, warnings_out, "pillow", _package_version("Pillow")
 
@@ -582,6 +737,12 @@ def _reusable_run(
         # Las corridas anteriores a 0.36.0 no declaraban este campo; su valor era
         # materialmente equivalente a "original".
         stored_options.setdefault("ocr_treatment", "original")
+        stored_options.setdefault("geometry_mode", "none")
+        stored_options.setdefault("orientation_min_confidence", 0.12)
+        stored_options.setdefault("deskew_max_degrees", 5.0)
+        stored_options.setdefault("deskew_min_confidence", 0.08)
+        stored_options.setdefault("line_min_length_ratio", 0.65)
+        stored_options.setdefault("line_max_thickness_px", 8)
         if stored_options != options:
             continue
         if not run.manifest_path:
@@ -619,6 +780,8 @@ def _insert_assets(session: Session, records: list[DerivativeAssetRecord]) -> No
                 source_height=record.source_height,
                 source_dpi=record.source_dpi,
                 rotation_applied=record.rotation_applied,
+                analysis_json=record.analysis_json,
+                transformations_json=record.transformations_json,
                 backend=record.backend,
             )
         )
@@ -733,12 +896,17 @@ def prepare_derivatives(
             elif media_type in {MediaType.TIFF, MediaType.IMAGE}:
                 inspection = inspect_input(source)
                 pyvips = _pyvips_module() if profile.use_pyvips_when_available else None
-                use_pyvips = pyvips is not None and profile.ocr_treatment == "original" and (
+                use_pyvips = (
+                    pyvips is not None
+                    and profile.ocr_treatment == "original"
+                    and profile.geometry_mode == "none"
+                    and (
                     media_type == MediaType.TIFF
                     or any(
                         (float(page.width) * float(page.height)) / 1_000_000
                         > profile.pillow_megapixel_guard
                         for page in inspection.pages
+                    )
                     )
                 )
                 if use_pyvips:
@@ -881,6 +1049,11 @@ def preprocessing_status_rows(session: Session) -> list[PreprocessingStatusRow]:
                 profile_key=current.profile_key if current else None,
                 ocr_treatment=(
                     str((current.options_json or {}).get("ocr_treatment", "original"))
+                    if current
+                    else None
+                ),
+                geometry_mode=(
+                    str((current.options_json or {}).get("geometry_mode", "none"))
                     if current
                     else None
                 ),

@@ -27,6 +27,12 @@ class DerivativeProfile(ContractModel):
     preview_max_long_edge_px: int = Field(default=2400, ge=512, le=10000)
     preserve_native_raster_for_ocr: bool = True
     auto_rotate: bool = False
+    geometry_mode: Literal["none", "conservative"] = "none"
+    orientation_min_confidence: float = Field(default=0.12, ge=0.0, le=1.0)
+    deskew_max_degrees: float = Field(default=5.0, ge=0.0, le=15.0)
+    deskew_min_confidence: float = Field(default=0.08, ge=0.0, le=1.0)
+    line_min_length_ratio: float = Field(default=0.65, ge=0.3, le=1.0)
+    line_max_thickness_px: int = Field(default=8, ge=1, le=40)
     pillow_megapixel_guard: float = Field(default=100.0, ge=10, le=1000)
     use_pyvips_when_available: bool = True
 
@@ -37,7 +43,7 @@ class DerivativeAssetRecord(ContractModel):
     preprocessing_run_id: str
     digital_object_id: str
     page: int = Field(ge=1)
-    kind: Literal["preview", "ocr"]
+    kind: Literal["preview", "ocr", "diagnostic_mask"]
     relative_path: str
     mime_type: str
     sha256: Sha256
@@ -49,6 +55,8 @@ class DerivativeAssetRecord(ContractModel):
     source_height: float | None = Field(default=None, gt=0)
     source_dpi: float | None = Field(default=None, gt=0)
     rotation_applied: int = 0
+    analysis_json: dict[str, object] = Field(default_factory=dict)
+    transformations_json: dict[str, object] = Field(default_factory=dict)
     backend: str
     created_at: datetime = Field(default_factory=utc_now)
 

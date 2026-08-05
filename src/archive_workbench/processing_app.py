@@ -31,9 +31,10 @@ from archive_workbench.extraction import (
     resolve_extraction_profile,
 )
 from archive_workbench.preprocessing import (
+    GEOMETRY_MODE_LABELS,
     OCR_TREATMENT_LABELS,
     prepare_derivatives,
-    profile_for_ocr_treatment,
+    profile_for_preprocessing,
 )
 from archive_workbench.ui_navigation import rerun_app, rerun_view, request_app_view, request_tab, tracked_tabs
 from archive_workbench.page_quality import (
@@ -46,6 +47,7 @@ from archive_workbench.processing import (
     extraction_candidate_runs,
     failed_extraction_pages,
     finish_processing_job,
+    processing_geometry_rows,
     processing_inventory_rows,
     processing_job_item_rows,
     processing_job_rows,
@@ -366,15 +368,19 @@ def _execute_batch(
     source_keys: list[str],
     profile_path: Path | None,
     ocr_treatment: str,
+    geometry_mode: str,
     force: bool,
 ) -> None:
     profile = None
     derivative_profile = None
     parameters: dict = {"force": force}
     if operation == "prepare":
-        derivative_profile = profile_for_ocr_treatment(decisions, ocr_treatment)
+        derivative_profile = profile_for_preprocessing(
+            decisions, ocr_treatment, geometry_mode
+        )
         parameters.update(
             ocr_treatment=ocr_treatment,
+            geometry_mode=geometry_mode,
             preprocessing_profile=derivative_profile.profile_key,
         )
     if operation in {"extract", "retry_failed"}:
@@ -511,6 +517,107 @@ def _open_review(st, *, source_key: str, page: int) -> None:
     rerun_app(st)
 
 
+
+def _render_geometry_diagnostics(
+    st,
+    *,
+    project_root: Path,
+    db_path: Path,
+    source_keys: list[str],
+) -> None:
+    if not source_keys:
+        return
+    engine = create_sqlite_engine(db_path)
+    try:
+        with session_scope(engine) as session:
+            rows = processing_geometry_rows(session, source_keys=set(source_keys))
+    finally:
+        engine.dispose()
+    if not rows:
+        return
+    panel_open = st.toggle(
+        "Mostrar diagnóstico geométrico vigente",
+        value=False,
+        key="processing_geometry_diagnostic_panel",
+        help="El panel permanece abierto mientras cambiás la página diagnóstica.",
+    )
+    if not panel_open:
+        return
+    with st.container(border=True):
+        st.caption(
+            "Muestra qué detectó y qué aplicó la preparación por página. "
+            "Una confianza insuficiente conserva la geometría original."
+        )
+        st.dataframe(
+            [
+                {
+                    "Documento": row.title,
+                    "Página": row.page,
+                    "Orientación detectada": (
+                        f"{row.orientation_detected}°"
+                        if row.orientation_detected is not None
+                        else "—"
+                    ),
+                    "Confianza orientación": (
+                        f"{row.orientation_confidence:.3f}"
+                        if row.orientation_confidence is not None
+                        else "—"
+                    ),
+                    "Rotación aplicada": f"{row.rotation_applied}°",
+                    "Deskew detectado": (
+                        f"{row.deskew_detected_angle:.1f}°"
+                        if row.deskew_detected_angle is not None
+                        else "—"
+                    ),
+                    "Deskew aplicado": (
+                        f"{row.deskew_angle:.1f}°"
+                        if row.deskew_angle is not None
+                        else "—"
+                    ),
+                    "Confianza deskew": (
+                        f"{row.deskew_confidence:.3f}"
+                        if row.deskew_confidence is not None
+                        else "—"
+                    ),
+                    "Líneas detectadas": row.lines_detected,
+                    "Líneas eliminadas": row.lines_removed,
+                }
+                for row in rows
+            ],
+            hide_index=True,
+            use_container_width=True,
+        )
+        options = list(range(len(rows)))
+        selected = st.selectbox(
+            "Página diagnóstica",
+            options=options,
+            format_func=lambda index: (
+                f"{rows[index].title} · página {rows[index].page}"
+            ),
+            key="processing_geometry_diagnostic_page",
+        )
+        row = rows[selected]
+        preview_col, image_col, mask_col = st.columns(3)
+        with preview_col:
+            st.write("**Previsualización sin cambios**")
+            if row.preview_relative_path:
+                st.image(
+                    str(project_root / row.preview_relative_path),
+                    use_container_width=True,
+                )
+            else:
+                st.caption("No hay una previsualización disponible para esta página.")
+        with image_col:
+            st.write("**Derivado OCR**")
+            st.image(str(project_root / row.ocr_relative_path), use_container_width=True)
+        with mask_col:
+            st.write("**Máscara de líneas eliminadas**")
+            if row.mask_relative_path:
+                st.image(str(project_root / row.mask_relative_path), use_container_width=True)
+            else:
+                st.caption("Esta preparación no generó una máscara diagnóstica.")
+        st.json(row.transformations, expanded=False)
+
 def render_processing_view(
     st,
     *,
@@ -644,6 +751,7 @@ def render_processing_view(
             profile_path = None
             selected_extraction_profile = None
             ocr_treatment = "original"
+            geometry_mode = "none"
             if operation == "prepare":
                 ocr_treatment = st.selectbox(
                     "Tratamiento del derivado para OCR",
@@ -655,9 +763,26 @@ def render_processing_view(
                         "previsualización permanecen intactos."
                     ),
                 )
+                geometry_mode = st.selectbox(
+                    "Corrección geométrica",
+                    options=list(GEOMETRY_MODE_LABELS),
+                    format_func=lambda value: GEOMETRY_MODE_LABELS[value],
+                    key="processing_geometry_mode",
+                    help=(
+                        "Analiza orientación, inclinación y líneas largas sobre el "
+                        "derivado OCR. Solo aplica cambios cuando la confianza supera "
+                        "los umbrales conservadores."
+                    ),
+                )
                 st.caption(
-                    "La preparación crea una versión reproducible. Después debe ejecutar "
-                    "una extracción para obtener una nueva candidata y compararla."
+                    "La preparación crea una versión reproducible. El original, la "
+                    "previsualización y las selecciones canónicas permanecen intactos."
+                )
+                _render_geometry_diagnostics(
+                    st,
+                    project_root=project_root,
+                    db_path=db_path,
+                    source_keys=source_keys,
                 )
             if operation in {"extract", "retry_failed"}:
                 if not profile_rows:
@@ -716,11 +841,14 @@ def render_processing_view(
                         for row in selected_inventory:
                             treatment = row.preprocessing_ocr_treatment or "original"
                             treatment_label = OCR_TREATMENT_LABELS.get(treatment, treatment)
+                            geometry = row.preprocessing_geometry_mode or "none"
+                            geometry_label = GEOMETRY_MODE_LABELS.get(geometry, geometry)
                             profile_variant = selected_extraction_profile.image_variant
                             image_rows.append(
                                 {
                                     "Documento": row.title,
                                     "Tratamiento del derivado vigente": treatment_label,
+                                    "Corrección geométrica vigente": geometry_label,
                                     "Transformación adicional del perfil": (
                                         "Ninguna (`original`)"
                                         if profile_variant == "original"
@@ -799,6 +927,7 @@ def render_processing_view(
                     source_keys=source_keys,
                     profile_path=profile_path,
                     ocr_treatment=ocr_treatment,
+                    geometry_mode=geometry_mode,
                     force=force,
                 )
 

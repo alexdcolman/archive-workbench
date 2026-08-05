@@ -447,6 +447,8 @@ class DerivativeAsset(Base):
     source_height: Mapped[float | None] = mapped_column(nullable=True)
     source_dpi: Mapped[float | None] = mapped_column(nullable=True)
     rotation_applied: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    analysis_json: Mapped[dict[str, Any]] = mapped_column(JSON, nullable=False, default=dict)
+    transformations_json: Mapped[dict[str, Any]] = mapped_column(JSON, nullable=False, default=dict)
     backend: Mapped[str] = mapped_column(String(100), nullable=False)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utc_now, nullable=False)
 

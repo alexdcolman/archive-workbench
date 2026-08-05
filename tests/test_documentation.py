@@ -144,6 +144,10 @@ def test_implemented_ledger_separates_closed_work_from_active_pending() -> None:
     assert "Capas archivísticas GRAPH-02 | Implementadas y validadas en 0.77.0" in text
     assert "0041_catalog_authority_roles_graph_layers" in text
     assert "`CAT-02` y `GRAPH-02` quedan cerrados" in text
+    assert "OCR-01A — orientación, deskew y líneas controladas — 0.78.0" in text
+    assert "0042_preprocessing_geometry_trace" in text
+    assert "Validada manualmente en 0.78.0" in text
+    assert "`OCR-01A` queda cerrada" in text
 
 
 def test_streamlit_form_policy_prevents_circular_disabled_buttons() -> None:
@@ -196,6 +200,8 @@ def test_interface_policy_requires_persistent_interactive_panels() -> None:
 def test_history_map_is_concise_and_references_historical_detail() -> None:
     text = (DOCS / "HISTORIAL_DE_CAMBIOS.md").read_text(encoding="utf-8")
     assert "## Documentación vigente" in text
+    assert "### 0.78.0" in text
+    assert "0042_preprocessing_geometry_trace" in text
     assert "### 0.77.0" in text
     assert "0041_catalog_authority_roles_graph_layers" in text
     assert "### 0.76.0" in text
@@ -239,6 +245,7 @@ def test_history_map_is_concise_and_references_historical_detail() -> None:
     assert "historico/actualizaciones" in text
     assert "historico/decisiones_tecnicas" in text
     assert "CHANGELOG.md" in text
+    assert text.index("### 0.78.0") < text.index("### 0.77.0")
     assert text.index("### 0.77.0") < text.index("### 0.76.0")
     assert text.index("### 0.76.0") < text.index("### 0.75.1")
     assert text.index("### 0.75.1") < text.index("### 0.75.0")
@@ -261,6 +268,8 @@ def test_current_architecture_is_separate_from_historical_design() -> None:
     )
     historical = historical_path.read_text(encoding="utf-8")
     assert "Originales inmutables" in current
+    assert "máscara diagnóstica" in current
+    assert "Una confianza insuficiente produce una omisión explicable" in current
     assert "plantillas XLSX de catálogo" in current
     assert "roles controlados" in current
     assert "objetos digitales y partes documentales" in current
@@ -485,23 +494,34 @@ def test_automatic_analysis_quality_decision_is_preserved_and_auditable() -> Non
     assert "st.form" in text
 
 
-def test_current_update_guide_is_stable_named_and_validates_cat02_graph02() -> None:
+def test_current_update_guide_is_stable_named_and_validates_ocr01a() -> None:
     text = (OPERATIVE / "ACTUALIZACION_ACTUAL.md").read_text(encoding="utf-8")
-    assert "Archive Workbench 0.77.0" in text
-    assert "0041_catalog_authority_roles_graph_layers" in text
-    assert "migración aditiva" in text.lower()
+    assert "Archive Workbench 0.78.0" in text
+    assert "0042_preprocessing_geometry_trace" in text
+    assert "migración" in text.lower() and "aditiva" in text.lower()
     assert "project_data" in text
+    assert "backup verificado" in text.lower()
+    assert "db-upgrade" in text
     assert "no mueve ni elimina" in text.lower()
-    assert "create_catalog_graph_validation_project.py" in text
-    assert "Proyecto de validación CAT-02 y GRAPH-02" in text
+    assert "create_preprocessing_geometry_validation_project.py" in text
     assert "project_data_touched: false" in text
-    assert "Productores y gestión" in text
-    assert "Mapa de relaciones" in text
-    assert "Migración autorizada de project_data" in text
-    assert "`CAT-02` y `GRAPH-02` quedan cerrados" in text
-    assert "backup" in text.lower()
-    assert "pytest --collect-only -q" in text
-    for closed in ("UX-03", "DISC-01A/B/C/D", "SEM-01", "GRAPH-01", "OCR-02", "CAT-01", "DISC-02"):
+    assert "Mostrar diagnóstico geométrico vigente" in text
+    assert "Previsualización sin cambios" in text or "previsualización sin cambios" in text
+    assert "Página rotada 90°" in text
+    assert "Línea que cruza texto" in text
+    assert "pytest --collect-only" in text
+    assert "El push se entregará siempre como un paso separado" in text
+    for closed in (
+        "UX-03",
+        "DISC-01A/B/C/D",
+        "SEM-01",
+        "GRAPH-01",
+        "OCR-02",
+        "CAT-01",
+        "DISC-02",
+        "CAT-02",
+        "GRAPH-02",
+    ):
         assert closed in text
 
 
@@ -564,7 +584,7 @@ def test_ex01_lineage_recovery_plan_is_complete_and_conservative() -> None:
 
 def test_testing_strategy_is_explicit_and_does_not_discard_slow_tests() -> None:
     text = (OPERATIVE / "ESTRATEGIA_DE_PRUEBAS.md").read_text(encoding="utf-8")
-    assert "pytest --collect-only -q" in text
+    assert "pytest --collect-only" in text
     assert "No eliminar pruebas por ser lentas" in text
     assert "fast" in text and "integration" in text and "slow" in text
     assert "no atribuir a la suite completa" in text
@@ -581,10 +601,11 @@ def test_pilot_guide_delegates_future_work_to_single_pending_ledger() -> None:
 def test_readme_points_only_to_current_documentation_map() -> None:
     text = (ROOT / "README.md").read_text(encoding="utf-8")
     citation = (ROOT / "CITATION.cff").read_text(encoding="utf-8")
-    assert "**Versión actual:** 0.77.0" in text
-    assert "La versión 0.77.0 incorpora pruebas automatizadas" in text
-    assert "(versión 0.77.0)" in text
-    assert 'version: "0.77.0"' in citation
+    assert "**Versión actual:** 0.78.0" in text
+    assert "La versión 0.78.0 incorpora pruebas automatizadas" in text
+    assert "(versión 0.78.0)" in text
+    assert 'version: "0.78.0"' in citation
+    assert "orientación, deskew y eliminación controlada de líneas" in text
     assert "Productores y gestión" in text
     assert "0041_catalog_authority_roles_graph_layers" in text
     assert "authority-dictionary-validate" in text

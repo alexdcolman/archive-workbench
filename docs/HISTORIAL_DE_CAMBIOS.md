@@ -14,6 +14,12 @@ Este es el único documento en la raíz de `docs/`. Resume la evolución del pro
 
 ## Versiones recientes — más reciente primero
 
+### 0.78.0 — 2026-08-05
+- Implementa `OCR-01A`: orientación conservadora, deskew acotado y eliminación controlada de líneas o marcos sobre derivados OCR.
+- Conserva originales y previsualizaciones sin cambios y agrega comparación visual con el derivado OCR y la máscara diagnóstica.
+- Registra análisis y transformaciones por página mediante la migración aditiva `0042_preprocessing_geometry_trace`.
+- Incorpora y valida manualmente una base descartable con cinco casos geométricos controlados: rotación de 90°, deskew de -3°, marco removible, línea que cruza texto y baja confianza. Los originales permanecen intactos y `OCR-01A` queda cerrada.
+
 ### 0.77.0 — 2026-08-05
 - Implementa conjuntamente `CAT-02` y `GRAPH-02`: roles productores y gestores controlados, historial, períodos, evidencia, procedencia y capas archivísticas o documentales separadas.
 - Agrega foco sobre autoridades, unidades, documentos o partes; filtros de niveles, profundidad y límite de nodos; y exportación explicable en JSON, CSV y GraphML.

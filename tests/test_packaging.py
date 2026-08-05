@@ -162,15 +162,22 @@ def test_version_docs_and_discovery_plan_are_packaged() -> None:
         / "archive_workbench"
         / "migrations"
         / "versions"
-        / "0041_catalog_authority_roles_graph_layers.py"
+        / "0042_preprocessing_geometry_trace.py"
     )
 
-    assert data["project"]["version"] == "0.77.0"
-    assert '__version__ = "0.77.0"' in version_source
+    assert data["project"]["version"] == "0.78.0"
+    assert '__version__ = "0.78.0"' in version_source
     assert migration.is_file()
-    assert 'down_revision = "0040_discovery_grouping_continuity"' in migration.read_text(
+    assert 'down_revision = "0041_catalog_authority_roles_graph_layers"' in migration.read_text(
         encoding="utf-8"
     )
+    assert (root / "src" / "archive_workbench" / "preprocessing_geometry.py").is_file()
+    processing_app = (root / "src" / "archive_workbench" / "processing_app.py").read_text(
+        encoding="utf-8"
+    )
+    assert "Mostrar diagnóstico geométrico vigente" in processing_app
+    assert 'st.expander("Diagnóstico geométrico vigente"' not in processing_app
+    assert "Previsualización sin cambios" in processing_app
     assert (root / "src" / "archive_workbench" / "lineage_recovery.py").is_file()
     assert (root / "src" / "archive_workbench" / "common_base.py").is_file()
     assert (root / "src" / "archive_workbench" / "state_adoption.py").is_file()
@@ -215,6 +222,13 @@ def test_version_docs_and_discovery_plan_are_packaged() -> None:
     assert "CAT-02/GRAPH-02" in catalog_graph_source
     assert "project_data_touched" in catalog_graph_source
     assert "0041_catalog_authority_roles_graph_layers" not in catalog_graph_source
+    geometry_validator = root / "scripts" / "create_preprocessing_geometry_validation_project.py"
+    assert geometry_validator.is_file()
+    geometry_source = geometry_validator.read_text(encoding="utf-8")
+    assert "el script no elimina ni reemplaza proyectos" in geometry_source
+    assert "project_data_touched" in geometry_source
+    assert "orientation_rotation" in geometry_source
+    assert "crossing_line_removed" in geometry_source
     assert data["project"]["optional-dependencies"]["discovery"] == [
         "spacy>=3.8,<4"
     ]

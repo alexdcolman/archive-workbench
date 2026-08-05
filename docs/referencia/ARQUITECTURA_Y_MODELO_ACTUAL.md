@@ -29,6 +29,8 @@ Describe fondos, colecciones, series, unidades, documentos, partes internas, obj
 
 Registra originales, checksums, copias locales y derivados de preparación. Cada transformación conserva procedencia, parámetros y archivo de origen.
 
+El preprocesamiento geométrico trabaja únicamente sobre el derivado destinado a OCR. La previsualización de consulta y el original no reciben rotaciones, deskew ni limpieza. Por página se conservan un análisis estructurado, la secuencia exacta de transformaciones y, cuando corresponde, una máscara diagnóstica de los píxeles retirados. La orientación se limita a cuartos de giro; el deskew está acotado; y la eliminación de líneas exige controles conservadores para no borrar trazos que atraviesan texto. Una confianza insuficiente produce una omisión explicable, no una corrección silenciosa.
+
 ### Procesamiento
 
 Ejecuta corridas por página mediante perfiles y backends. Las corridas se conservan, se evalúan y pueden seleccionarse por página sin borrar alternativas.
@@ -72,6 +74,7 @@ Los backups incluyen manifiesto, base y configuración. La restauración crea pr
 - Unidad archivística: identidad estable independiente de ruta o título.
 - Objeto digital: archivo intelectual registrado.
 - Instancia local: copia física concreta.
+- Derivado de preparación: previsualización intacta, imagen OCR tratada o máscara diagnóstica, vinculada a una corrida y página.
 - Corrida de extracción: ejecución versionada.
 - Página extraída y objeto extraído: candidatos automáticos.
 - Página editable y objeto editable: estado humano activo e historial.

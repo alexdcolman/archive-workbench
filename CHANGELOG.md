@@ -1,3 +1,12 @@
+## 0.78.0 — 2026-08-05
+
+- Incorpora el modo de preprocesamiento geométrico conservador `OCR-01A` para orientación en cuartos de giro, deskew acotado y eliminación controlada de líneas y marcos.
+- Mantiene inmutables los originales y las previsualizaciones; las transformaciones se aplican solo al derivado OCR.
+- Agrega máscaras diagnósticas y metadatos estructurados por página con detecciones, confianzas, acciones aplicadas y omisiones.
+- Añade la migración aditiva `0042_preprocessing_geometry_trace`, con `analysis_json` y `transformations_json` en `derivative_assets`.
+- Agrega `create_preprocessing_geometry_validation_project.py` con cinco casos controlados y comprobación de hashes de originales.
+- Completa la validación manual local con cinco casos controlados: rotación de 90°, deskew de -3°, cuatro líneas de marco eliminadas, línea que cruza texto conservada y transformación omitida por baja confianza. Los originales permanecen intactos, no hay adopción canónica automática y `OCR-01A` queda cerrada.
+
 ## 0.77.0 — 2026-08-05
 
 - Implementa `CAT-02` con relaciones controladas `producer` y `manager` entre autoridades canónicas y unidades archivísticas.

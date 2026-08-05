@@ -87,7 +87,7 @@ def test_pdf_derivatives_are_created_and_reused(tmp_path: Path) -> None:
     corpus = _corpus([_document("pdf_a", "corpus/caja/a.pdf", "pdf", "PDF A")])
 
     upgrade_database(root)
-    assert current_revision(root) == "0041_catalog_authority_roles_graph_layers"
+    assert current_revision(root) == "0042_preprocessing_geometry_trace"
     engine = create_sqlite_engine(database_path(root))
     try:
         with session_scope(engine) as session:
@@ -331,7 +331,16 @@ def test_pre_036_original_profile_is_reused_without_duplicate_run(tmp_path: Path
             run = session.scalar(select(PreprocessingRun))
             assert run is not None
             legacy_options = dict(run.options_json)
-            legacy_options.pop("ocr_treatment")
+            for key in (
+                "ocr_treatment",
+                "geometry_mode",
+                "orientation_min_confidence",
+                "deskew_max_degrees",
+                "deskew_min_confidence",
+                "line_min_length_ratio",
+                "line_max_thickness_px",
+            ):
+                legacy_options.pop(key, None)
             run.options_json = legacy_options
             run.options_hash = sha256_json(legacy_options)
         with session_scope(engine) as session:
@@ -349,3 +358,171 @@ def test_pre_036_original_profile_is_reused_without_duplicate_run(tmp_path: Path
     assert summary.runs_created == 0
     assert summary.runs_reused == 1
     assert len(runs) == 1
+
+
+def _synthetic_text_page(*, frame: bool = False) -> Image.Image:
+    image = Image.new("RGB", (900, 1200), "white")
+    draw = ImageDraw.Draw(image)
+    for row in range(12):
+        y = 80 + row * 65
+        x = 70
+        for word, width in enumerate((120, 85, 160, 95, 130)):
+            draw.rectangle((x, y, x + width, y + 18), fill="black")
+            # Huecos internos simulan letras sin depender de fuentes del sistema.
+            for offset in range(12, width, 22):
+                draw.rectangle((x + offset, y + 4, x + offset + 6, y + 18), fill="white")
+            x += width + 24 + (word % 2) * 8
+    if frame:
+        draw.rectangle((20, 20, 880, 1180), outline="black", width=3)
+    return image
+
+
+def test_conservative_geometry_detects_orientation_deskew_and_safe_lines() -> None:
+    from archive_workbench.preprocessing_geometry import (
+        apply_conservative_geometry,
+        detect_orientation,
+    )
+
+    base = _synthetic_text_page(frame=True)
+    for expected in (0, 90, 180, 270):
+        candidate = base.rotate(-expected, expand=True, fillcolor="white")
+        detected, confidence, _scores = detect_orientation(candidate)
+        assert detected == expected
+        assert confidence >= 0.12
+
+    source = base.rotate(-90, expand=True, fillcolor="white")
+    result = apply_conservative_geometry(
+        source,
+        orientation_min_confidence=0.12,
+        deskew_max_degrees=5.0,
+        deskew_min_confidence=0.08,
+        line_min_length_ratio=0.65,
+        line_max_thickness_px=8,
+    )
+
+    assert result.orientation_detected == 90
+    assert result.orientation_applied == 90
+    assert result.orientation_confidence >= 0.12
+    assert result.image.height > result.image.width
+    assert result.lines_detected >= 4
+    assert result.lines_removed >= 4
+    assert result.removed_pixels > 0
+    assert result.mask.getextrema() == (0, 255)
+    assert result.transformations["orientation"]["applied"] is True
+    assert result.transformations["orientation"]["reason"] == "confidence_above_threshold"
+    assert result.transformations["line_removal"]["applied"] is True
+
+    skewed = _synthetic_text_page().rotate(3.0, expand=True, fillcolor="white")
+    deskewed = apply_conservative_geometry(
+        skewed,
+        orientation_min_confidence=0.12,
+        deskew_max_degrees=5.0,
+        deskew_min_confidence=0.08,
+        line_min_length_ratio=0.65,
+        line_max_thickness_px=8,
+    )
+    assert deskewed.deskew_angle == -3.0
+    assert deskewed.deskew_confidence >= 0.08
+    assert deskewed.transformations["deskew"]["applied"] is True
+
+
+def test_line_crossing_text_is_not_removed_and_blank_page_stays_unchanged() -> None:
+    from archive_workbench.preprocessing_geometry import (
+        apply_conservative_geometry,
+        remove_long_lines,
+    )
+
+    image = _synthetic_text_page()
+    draw = ImageDraw.Draw(image)
+    draw.line((20, 90, 880, 90), fill="black", width=2)
+    _cleaned, mask, detected, removed, removed_pixels = remove_long_lines(
+        image,
+        min_length_ratio=0.65,
+        max_thickness_px=8,
+    )
+    assert detected >= 1
+    assert removed == 0
+    assert removed_pixels == 0
+    assert mask.getextrema() == (255, 255)
+
+    blank = Image.new("RGB", (600, 800), "white")
+    result = apply_conservative_geometry(
+        blank,
+        orientation_min_confidence=0.12,
+        deskew_max_degrees=5.0,
+        deskew_min_confidence=0.08,
+        line_min_length_ratio=0.65,
+        line_max_thickness_px=8,
+    )
+    assert result.orientation_applied == 0
+    assert result.transformations["orientation"]["reason"] == "no_rotation_candidate"
+    assert result.deskew_angle == 0.0
+    assert result.transformations["deskew"]["reason"] == "confidence_below_threshold"
+    assert result.warnings
+    assert result.lines_removed == 0
+    assert result.image.size == blank.size
+
+
+def test_geometry_profile_is_versioned_traced_and_reusable(tmp_path: Path) -> None:
+    from archive_workbench.preprocessing import profile_for_preprocessing
+
+    root = tmp_path / "project"
+    source = root / "corpus/legajo/rotated.tiff"
+    source.parent.mkdir(parents=True, exist_ok=True)
+    _synthetic_text_page(frame=True).rotate(-90, expand=True, fillcolor="white").save(
+        source,
+        format="TIFF",
+        dpi=(300, 300),
+        compression="tiff_deflate",
+    )
+    decisions = load_decisions(Path(__file__).parents[1] / "config/decisions.yaml")
+    decisions.tiff.use_pyvips_when_available = False
+    corpus = _corpus(
+        [_document("rotated", "corpus/legajo/rotated.tiff", "tiff", "Rotada")]
+    )
+
+    upgrade_database(root)
+    engine = create_sqlite_engine(database_path(root))
+    try:
+        with session_scope(engine) as session:
+            register_test_corpus(
+                session,
+                project_root=root,
+                decisions=decisions,
+                corpus=corpus,
+            )
+        profile = profile_for_preprocessing(decisions, "original", "conservative")
+        with session_scope(engine) as session:
+            first = prepare_derivatives(
+                session,
+                project_root=root,
+                decisions=decisions,
+                profile=profile,
+            )
+        with session_scope(engine) as session:
+            second = prepare_derivatives(
+                session,
+                project_root=root,
+                decisions=decisions,
+                profile=profile,
+            )
+        with session_scope(engine) as session:
+            run = session.scalar(select(PreprocessingRun))
+            assets = list(session.scalars(select(DerivativeAsset)))
+    finally:
+        engine.dispose()
+
+    assert first.runs_created == 1
+    assert first.assets_created == 3
+    assert second.runs_reused == 1
+    assert run is not None
+    assert run.profile_key == "geometry_conservative"
+    assert run.options_json["geometry_mode"] == "conservative"
+    by_kind = {asset.kind: asset for asset in assets}
+    assert set(by_kind) == {"ocr", "preview", "diagnostic_mask"}
+    assert by_kind["preview"].analysis_json == {}
+    assert by_kind["ocr"].rotation_applied == 90
+    assert by_kind["ocr"].analysis_json["orientation_detected"] == 90
+    assert by_kind["ocr"].transformations_json["orientation"]["applied"] is True
+    assert by_kind["diagnostic_mask"].analysis_json == by_kind["ocr"].analysis_json
+    assert all((root / asset.relative_path).is_file() for asset in assets)

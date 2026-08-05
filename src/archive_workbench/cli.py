@@ -129,10 +129,11 @@ from archive_workbench.ocr_benchmark import (
 )
 from archive_workbench.page_quality import assess_source_page_quality
 from archive_workbench.preprocessing import (
+    GEOMETRY_MODE_LABELS,
     OCR_TREATMENT_LABELS,
     prepare_derivatives,
     preprocessing_status_rows,
-    profile_for_ocr_treatment,
+    profile_for_preprocessing,
 )
 from archive_workbench.work import (
     ASSIGNMENT_KINDS,
@@ -691,6 +692,11 @@ def prepare_derivatives_command(
             "otsu o denoise_autocontrast"
         ),
     ),
+    geometry_mode: str = typer.Option(
+        "none",
+        "--geometry-mode",
+        help="Corrección geométrica: none o conservative",
+    ),
 ) -> None:
     """Genera PNG para OCR y previsualizaciones WebP/JPEG/PNG por página."""
     if ocr_treatment not in OCR_TREATMENT_LABELS:
@@ -698,13 +704,19 @@ def prepare_derivatives_command(
             "--ocr-treatment debe ser uno de: "
             + ", ".join(OCR_TREATMENT_LABELS)
         )
+    if geometry_mode not in GEOMETRY_MODE_LABELS:
+        raise typer.BadParameter(
+            "--geometry-mode debe ser uno de: " + ", ".join(GEOMETRY_MODE_LABELS)
+        )
     decisions_path = project_root / "config" / "decisions.yaml"
     decisions = load_decisions(decisions_path)
     _require_current_database(project_root)
     engine = create_sqlite_engine(database_path(project_root))
     try:
         with session_scope(engine) as session:
-            profile = profile_for_ocr_treatment(decisions, ocr_treatment)
+            profile = profile_for_preprocessing(
+                decisions, ocr_treatment, geometry_mode
+            )
             summary = prepare_derivatives(
                 session,
                 project_root=project_root,
@@ -745,7 +757,10 @@ def preprocessing_status_command(
         typer.echo(
             f"{row.source_key} | {row.run_status or 'sin_derivados'} | "
             f"{row.media_type} {pages} pág. | assets {row.assets} | "
-            f"tratamiento {OCR_TREATMENT_LABELS.get(row.ocr_treatment or '', row.ocr_treatment or '-')} | "
+            "tratamiento "
+            f"{OCR_TREATMENT_LABELS.get(row.ocr_treatment or '', row.ocr_treatment or '-')} | "
+            "geometría "
+            f"{GEOMETRY_MODE_LABELS.get(row.geometry_mode or '', row.geometry_mode or '-')} | "
             f"{row.output_root or '-'} | {row.title}"
         )
     typer.echo(f"Total: {len(rows)} documentos")

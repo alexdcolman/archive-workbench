@@ -220,7 +220,7 @@ def test_team_workflow_migration_upgrades_existing_030_database(tmp_path: Path) 
     upgrade_database(root, revision="0025_processing_dashboard")
     assert current_revision(root) == "0025_processing_dashboard"
     upgrade_database(root)
-    assert current_revision(root) == "0041_catalog_authority_roles_graph_layers"
+    assert current_revision(root) == "0042_preprocessing_geometry_trace"
     engine = create_sqlite_engine(database_path(root))
     try:
         tables = set(inspect(engine).get_table_names())

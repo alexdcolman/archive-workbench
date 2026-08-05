@@ -6,7 +6,7 @@ Está pensada especialmente para equipos de archivos, bibliotecas, ciencias soci
 
 Los documentos y la base de datos permanecen en la computadora del equipo: la aplicación no necesita subir el corpus a un servicio externo.
 
-**Versión actual:** 0.77.0 — productores y gestores controlados en el catálogo y capas archivísticas explicables en el grafo.
+**Versión actual:** 0.78.0 — corrección geométrica conservadora y trazable para derivados OCR.
 
 ## Qué permite hacer
 
@@ -15,7 +15,7 @@ Archive Workbench reúne en una misma interfaz:
 - catálogo y descripción archivística jerárquica;
 - plantillas XLSX distribuibles con estructura configurable, simulación y aplicación transaccional;
 - registro de archivos originales sin modificarlos;
-- preparación versionada de derivados para OCR, con opciones conservadoras de autocontraste, Otsu y reducción de ruido;
+- preparación versionada de derivados para OCR, con opciones conservadoras de autocontraste, Otsu, reducción de ruido, orientación, deskew y eliminación controlada de líneas;
 - extracción de texto y OCR versionados;
 - Surya como backend OCR/layout preferido cuando está disponible, siempre como candidato revisable;
 - fallback automático a Docling/Tesseract si Surya no está instalado o una corrida falla;
@@ -253,7 +253,7 @@ pip install -e ".[dev,extraction,streamlit,semantic,tiff,discovery]"
 pytest
 ```
 
-La versión 0.77.0 incorpora pruebas automatizadas para roles productores y gestores, historial, migración aditiva, capas archivísticas y documentales, foco, filtros y exportación explicable del grafo.
+La versión 0.78.0 incorpora pruebas automatizadas para orientación, deskew, eliminación controlada de líneas, máscaras diagnósticas, trazabilidad por página, reutilización de derivados y conservación de originales y previsualizaciones.
 
 ## Licencia y cita
 
@@ -265,6 +265,6 @@ El desarrollo fue realizado por **Alex Colman** en el marco del **Grupo de Inves
 
 Cuando Archive Workbench sea utilizado en una investigación, publicación, informe, actividad docente o desarrollo derivado, solicitamos citar:
 
-> Colman, Alex, y Grupo de Investigación en Archivos de la Represión (GIAR). 2026. *Archive Workbench* (versión 0.77.0) [software]. https://github.com/alexdcolman/archive-workbench
+> Colman, Alex, y Grupo de Investigación en Archivos de la Represión (GIAR). 2026. *Archive Workbench* (versión 0.78.0) [software]. https://github.com/alexdcolman/archive-workbench
 
 El archivo [`CITATION.cff`](CITATION.cff) contiene los metadatos de cita reconocidos por GitHub y por distintos gestores bibliográficos.
