@@ -348,7 +348,7 @@ def test_exchange_migration_upgrades_existing_0012_database(tmp_path: Path) -> N
     upgrade_database(root, revision="0012_editable_search_fts")
     assert current_revision(root) == "0012_editable_search_fts"
     upgrade_database(root)
-    assert current_revision(root) == "0040_discovery_grouping_continuity"
+    assert current_revision(root) == "0041_catalog_authority_roles_graph_layers"
     engine = create_sqlite_engine(database_path(root))
     try:
         tables = set(inspect(engine).get_table_names())
@@ -377,7 +377,7 @@ def test_dry_run_migration_upgrades_populated_0013_database(tmp_path: Path) -> N
         engine.dispose()
     assert current_revision(root) == "0013_offline_exchange_log"
     upgrade_database(root)
-    assert current_revision(root) == "0040_discovery_grouping_continuity"
+    assert current_revision(root) == "0041_catalog_authority_roles_graph_layers"
     engine = create_sqlite_engine(database_path(root))
     try:
         tables = set(inspect(engine).get_table_names())
@@ -1024,7 +1024,7 @@ def test_transactional_apply_migration_upgrades_populated_0014_database(tmp_path
         engine.dispose()
     assert current_revision(root) == "0014_exchange_dry_run"
     upgrade_database(root)
-    assert current_revision(root) == "0040_discovery_grouping_continuity"
+    assert current_revision(root) == "0041_catalog_authority_roles_graph_layers"
     engine = create_sqlite_engine(database_path(root))
     try:
         tables = set(inspect(engine).get_table_names())
@@ -1602,7 +1602,7 @@ def test_delete_precondition_migration_upgrades_populated_0015_database(tmp_path
         engine.dispose()
     assert current_revision(root) == "0015_exchange_transactional_apply"
     upgrade_database(root)
-    assert current_revision(root) == "0040_discovery_grouping_continuity"
+    assert current_revision(root) == "0041_catalog_authority_roles_graph_layers"
     engine = create_sqlite_engine(database_path(root))
     try:
         columns = {
@@ -1623,7 +1623,7 @@ def test_conflict_resolution_migration_upgrades_populated_0016_database(tmp_path
     engine.dispose()
     assert current_revision(root) == "0016_exchange_delete_preconditions"
     upgrade_database(root)
-    assert current_revision(root) == "0040_discovery_grouping_continuity"
+    assert current_revision(root) == "0041_catalog_authority_roles_graph_layers"
     engine = create_sqlite_engine(database_path(root))
     try:
         tables = set(inspect(engine).get_table_names())
@@ -2030,7 +2030,7 @@ def test_resolution_usability_migration_upgrades_populated_0017_database(tmp_pat
         engine.dispose()
     assert current_revision(root) == "0017_exchange_conflict_resolutions"
     upgrade_database(root)
-    assert current_revision(root) == "0040_discovery_grouping_continuity"
+    assert current_revision(root) == "0041_catalog_authority_roles_graph_layers"
     engine = create_sqlite_engine(database_path(root))
     try:
         columns = {
@@ -2544,12 +2544,102 @@ def test_explicit_entity_relations_travel_in_bundle(tmp_path: Path) -> None:
         with session_scope(receiver_engine) as session:
             relation = session.get(EntityRelation, relation_id)
             assert relation is not None
+            assert relation.relation_kind == "analytical"
             assert relation.relation_label == "integró"
             assert relation.evidence_note == "Según el informe revisado."
+            assert relation.provenance_note is None
             assert relation.temporal_expression == "03/1974 - 03/1976"
             assert relation.temporal_start.isoformat() == "1974-03-01"
             assert relation.temporal_end.isoformat() == "1976-03-31"
             assert relation.temporal_note == "Vigencia documentada"
+            assert relation.revision == 1
+    finally:
+        source_engine.dispose()
+        receiver_engine.dispose()
+
+
+def test_catalog_authority_role_travels_with_kind_provenance_and_period(
+    tmp_path: Path,
+) -> None:
+    from archive_workbench.authorities import create_authority
+    from archive_workbench.db.models import EntityRelation
+    from archive_workbench.relations import create_entity_relation
+
+    (
+        source_root,
+        source_engine,
+        decisions,
+        _object_id,
+        receiver_root,
+        receiver_engine,
+        _receiver_workspace_id,
+    ) = _source_and_receiver(tmp_path)
+    try:
+        with session_scope(source_engine) as session:
+            unit = session.scalar(
+                select(ArchivalUnit).order_by(ArchivalUnit.created_at, ArchivalUnit.id)
+            )
+            assert unit is not None
+            producer = create_authority(
+                session,
+                project_id=decisions.project_id,
+                entity_type="organization",
+                preferred_name="Dirección de Inteligencia",
+                created_by="Source",
+            )
+            relation = create_entity_relation(
+                session,
+                project_id=decisions.project_id,
+                source_authority_id=producer.id,
+                relation_kind="producer",
+                relation_label="texto libre que no debe conservarse",
+                target_kind="archival_unit",
+                target_id=unit.id,
+                evidence_note="Membrete del documento.",
+                provenance_note="Descripción archivística controlada.",
+                temporal_expression="1974 - 1976",
+                temporal_note="Período documentado",
+                created_by="Source",
+            )
+            relation_id = relation.id
+            unit_id = unit.id
+
+        with session_scope(source_engine) as session:
+            bundle = export_change_bundle(
+                session,
+                project_root=source_root,
+                checkpoint_ref="baseline",
+                created_by="Source",
+            )
+            assert bundle.event_count == 2
+        with session_scope(receiver_engine) as session:
+            dry = dry_run_change_bundle(
+                session,
+                project_root=receiver_root,
+                bundle_path=bundle.output_path,
+                assessed_by="Receiver",
+            )
+            assert dry.overall_status == "ready_to_apply"
+        with session_scope(receiver_engine) as session:
+            applied = apply_change_bundle(
+                session,
+                project_root=receiver_root,
+                bundle_ref=str(bundle.output_path),
+                applied_by="Receiver",
+            )
+            assert applied.applied_event_count == 2
+        with session_scope(receiver_engine) as session:
+            relation = session.get(EntityRelation, relation_id)
+            assert relation is not None
+            assert relation.relation_kind == "producer"
+            assert relation.relation_label == "produjo"
+            assert relation.target_archival_unit_id == unit_id
+            assert relation.evidence_note == "Membrete del documento."
+            assert relation.provenance_note == "Descripción archivística controlada."
+            assert relation.temporal_expression == "1974 - 1976"
+            assert relation.temporal_start.isoformat() == "1974-01-01"
+            assert relation.temporal_end.isoformat() == "1976-12-31"
+            assert relation.temporal_note == "Período documentado"
             assert relation.revision == 1
     finally:
         source_engine.dispose()
@@ -3472,8 +3562,8 @@ def test_0030_repairs_legacy_source_replaced_bundle_end_to_end(
     # generar nuevos eventos y la exportación corrige el evento ya existente.
     upgrade_database(source_root)
     upgrade_database(receiver_root)
-    assert current_revision(source_root) == "0040_discovery_grouping_continuity"
-    assert current_revision(receiver_root) == "0040_discovery_grouping_continuity"
+    assert current_revision(source_root) == "0041_catalog_authority_roles_graph_layers"
+    assert current_revision(receiver_root) == "0041_catalog_authority_roles_graph_layers"
     source_engine = create_sqlite_engine(database_path(source_root))
     receiver_engine = create_sqlite_engine(database_path(receiver_root))
     try:
@@ -3728,8 +3818,8 @@ def test_0031_backfills_legacy_page_action_and_preserves_history_end_to_end(
 
     upgrade_database(source_root)
     upgrade_database(receiver_root)
-    assert current_revision(source_root) == "0040_discovery_grouping_continuity"
-    assert current_revision(receiver_root) == "0040_discovery_grouping_continuity"
+    assert current_revision(source_root) == "0041_catalog_authority_roles_graph_layers"
+    assert current_revision(receiver_root) == "0041_catalog_authority_roles_graph_layers"
 
     source_engine = create_sqlite_engine(database_path(source_root))
     receiver_engine = create_sqlite_engine(database_path(receiver_root))
@@ -4657,7 +4747,7 @@ def test_lineage_validation_script_creates_recoverable_discardable_pair(
         receiver,
         force=False,
     )
-    assert result["revision"] == "0040_discovery_grouping_continuity"
+    assert result["revision"] == "0041_catalog_authority_roles_graph_layers"
 
     engine = create_sqlite_engine(database_path(receiver))
     try:
@@ -5294,7 +5384,7 @@ def test_common_base_validation_script_creates_distinct_identical_copies(
         tmp_path / "common_base_b",
         force=False,
     )
-    assert result["revision"] == "0040_discovery_grouping_continuity"
+    assert result["revision"] == "0041_catalog_authority_roles_graph_layers"
     assert result["initiator_workspace_id"] != result["counterpart_workspace_id"]
     assert len(str(result["state_sha256"])) == 64
     assert Path(result["validation_path"]).is_file()
@@ -5579,7 +5669,7 @@ def test_state_adoption_validation_script_creates_divergent_copies_and_package(
         tmp_path / "state_adoption_target",
         force=False,
     )
-    assert result["revision"] == "0040_discovery_grouping_continuity"
+    assert result["revision"] == "0041_catalog_authority_roles_graph_layers"
     assert result["source_workspace_id"] != result["target_workspace_id"]
     assert result["source_state_sha256"] != result["target_state_sha256"]
     assert Path(result["package_path"]).is_file()

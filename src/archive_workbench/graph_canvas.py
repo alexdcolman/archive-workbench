@@ -12,10 +12,16 @@ _COMPONENT_HTML = """
   <button type="button" data-action="fit" title="Ajustar">Ajustar</button>
   <button type="button" data-action="zoom-in" title="Acercar">+</button>
   <span class="awg-zoom">100%</span>
-  <span class="awg-help">Arrastrá nodos para reubicarlos. Pasá el puntero sobre elementos y vínculos para ver su procedencia.</span>
+  <span class="awg-help">Arrastrá nodos para reubicarlos. Las flechas indican el sentido del vínculo; las entidades compartidas son simétricas. Pasá el puntero para ver la procedencia.</span>
 </div>
 <div class="awg-viewport">
   <svg class="awg-svg" viewBox="0 0 1000 720" role="img" aria-label="Grafo documental">
+    <defs>
+      <marker id="awg-arrowhead" viewBox="0 0 10 10" refX="9" refY="5"
+              markerWidth="9" markerHeight="9" orient="auto" markerUnits="userSpaceOnUse">
+        <path d="M 0 0 L 10 5 L 0 10 z" fill="context-stroke"></path>
+      </marker>
+    </defs>
     <g class="awg-world"></g>
   </svg>
 </div>
@@ -44,7 +50,10 @@ _COMPONENT_CSS = """
 .awg-svg { width: 100%; height: 100%; display: block; }
 .awg-world { transform-origin: 0 0; }
 .awg-edge { fill: none; stroke: color-mix(in srgb, var(--st-text-color) 36%, transparent); cursor: pointer; stroke-linecap: round; }
-.awg-edge.explicit { stroke-width: 2.4; }
+.awg-edge.hierarchy { stroke-width: 2.8; }
+.awg-edge.document, .awg-edge.part { stroke-width: 2.1; }
+.awg-edge.analytical { stroke-width: 2.4; }
+.awg-edge.producer, .awg-edge.manager { stroke-width: 2.5; stroke-dasharray: 12 4; }
 .awg-edge.mention { stroke-width: 1.7; stroke-dasharray: 7 5; }
 .awg-edge.shared_entity { stroke-width: 1.3; stroke-dasharray: 2 5; }
 .awg-edge:hover, .awg-edge.selected { stroke: var(--st-primary-color); stroke-width: 4.2; }
@@ -57,6 +66,7 @@ _COMPONENT_CSS = """
 .awg-node circle { stroke-width: 2.5; stroke: color-mix(in srgb, var(--st-text-color) 55%, transparent); }
 .awg-node.entity circle { fill: color-mix(in srgb, var(--st-primary-color) 46%, var(--st-background-color)); }
 .awg-node.archival_unit circle { fill: color-mix(in srgb, #d99728 46%, var(--st-background-color)); }
+.awg-node.digital_object circle { fill: color-mix(in srgb, #6f73d2 46%, var(--st-background-color)); }
 .awg-node.document_part circle { fill: color-mix(in srgb, #3d9b74 46%, var(--st-background-color)); }
 .awg-node:hover circle, .awg-node.selected circle { stroke: var(--st-primary-color); stroke-width: 5; }
 .awg-node text {
@@ -136,6 +146,13 @@ export default function(component) {
   }
 
   const nodeById = Object.fromEntries((data.nodes || []).map((node) => [node.id, node]));
+  const nodeRadius = (node) => Math.max(15, Math.min(27, 14 + Math.sqrt(Number(node?.degree || 0)) * 3));
+  const unitVector = (from, toward) => {
+    const dx = toward[0] - from[0];
+    const dy = toward[1] - from[1];
+    const distance = Math.max(1, Math.hypot(dx, dy));
+    return [dx / distance, dy / distance];
+  };
   const edgeElements = [];
   const routeFor = (edge) => {
     const source = state.positions[edge.source];
@@ -143,13 +160,16 @@ export default function(component) {
     if (!source || !target) return null;
     const slot = Number(edge.parallel_slot || 0);
     const direction = Number(edge.parallel_direction || 1);
+    const directed = edge.edge_type !== 'shared_entity';
+    const sourceNodeRadius = nodeRadius(nodeById[edge.source]) + 3;
+    const targetNodeRadius = nodeRadius(nodeById[edge.target]) + (directed ? 5 : 3);
     if (edge.source === edge.target) {
-      const radius = 48 + Math.abs(slot) * 24;
+      const loopRadius = 48 + Math.abs(slot) * 24;
       const side = slot < 0 ? -1 : 1;
       const x = source[0], y = source[1];
       return {
-        d: `M ${x} ${y - 16} C ${x + side * radius} ${y - radius}, ${x + side * radius} ${y + radius}, ${x} ${y + 16}`,
-        labelX: x + side * radius * .82,
+        d: `M ${x} ${y - sourceNodeRadius} C ${x + side * loopRadius} ${y - loopRadius}, ${x + side * loopRadius} ${y + loopRadius}, ${x} ${y + targetNodeRadius}`,
+        labelX: x + side * loopRadius * .82,
         labelY: y - 4,
         nx: side,
         ny: 0,
@@ -163,8 +183,14 @@ export default function(component) {
     const offset = slot * 38 * direction;
     const cx = (source[0] + target[0]) / 2 + nx * offset;
     const cy = (source[1] + target[1]) / 2 + ny * offset;
+    const sourceDirection = unitVector(source, [cx, cy]);
+    const targetDirection = unitVector([cx, cy], target);
+    const startX = source[0] + sourceDirection[0] * sourceNodeRadius;
+    const startY = source[1] + sourceDirection[1] * sourceNodeRadius;
+    const endX = target[0] - targetDirection[0] * targetNodeRadius;
+    const endY = target[1] - targetDirection[1] * targetNodeRadius;
     return {
-      d: `M ${source[0]} ${source[1]} Q ${cx} ${cy} ${target[0]} ${target[1]}`,
+      d: `M ${startX} ${startY} Q ${cx} ${cy} ${endX} ${endY}`,
       labelX: source[0] * .25 + cx * .5 + target[0] * .25,
       labelY: source[1] * .25 + cy * .5 + target[1] * .25 - 5,
       nx,
@@ -179,6 +205,9 @@ export default function(component) {
       'stroke-width': Math.min(6, 1.2 + Math.log1p(Number(edge.weight || 1))),
       tabindex: 0, role: 'button', 'aria-label': edge.tooltip || edge.label,
     });
+    if (edge.edge_type !== 'shared_entity') {
+      path.setAttribute('marker-end', 'url(#awg-arrowhead)');
+    }
     addTitle(path, edge.tooltip || edge.label);
     path.onclick = (event) => { event.stopPropagation(); setTriggerValue('selected_edge', edge.id); };
     path.onkeydown = (event) => {
@@ -195,10 +224,10 @@ export default function(component) {
   }
 
   const nodeElements = [];
-  const kindLabel = {entity: 'entidad', archival_unit: 'unidad', document_part: 'parte'};
+  const kindLabel = {entity: 'entidad', archival_unit: 'unidad', digital_object: 'documento', document_part: 'parte'};
   for (const node of data.nodes || []) {
     const position = state.positions[node.id];
-    const radius = Math.max(15, Math.min(27, 14 + Math.sqrt(Number(node.degree || 0)) * 3));
+    const radius = nodeRadius(node);
     const group = makeSvg('g', {
       class: `awg-node ${node.kind}${node.selected ? ' selected' : ''}`,
       transform: `translate(${position[0]} ${position[1]})`,

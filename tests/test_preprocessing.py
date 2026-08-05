@@ -87,7 +87,7 @@ def test_pdf_derivatives_are_created_and_reused(tmp_path: Path) -> None:
     corpus = _corpus([_document("pdf_a", "corpus/caja/a.pdf", "pdf", "PDF A")])
 
     upgrade_database(root)
-    assert current_revision(root) == "0040_discovery_grouping_continuity"
+    assert current_revision(root) == "0041_catalog_authority_roles_graph_layers"
     engine = create_sqlite_engine(database_path(root))
     try:
         with session_scope(engine) as session:

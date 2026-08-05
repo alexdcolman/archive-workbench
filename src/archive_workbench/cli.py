@@ -3515,6 +3515,7 @@ def entity_relation_list_command(
                 session,
                 project_id=_single_project_id(session),
                 authority_id=entity_id,
+                relation_kinds=("analytical",),
                 include_inactive=include_inactive,
                 temporal_start=_parse_temporal_cli_date(temporal_start, "--temporal-start"),
                 temporal_end=_parse_temporal_cli_date(temporal_end, "--temporal-end"),

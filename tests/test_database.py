@@ -71,7 +71,7 @@ def test_migration_and_registration_are_idempotent(tmp_path: Path) -> None:
     corpus = _corpus()
 
     upgrade_database(root)
-    assert current_revision(root) == "0040_discovery_grouping_continuity"
+    assert current_revision(root) == "0041_catalog_authority_roles_graph_layers"
 
     engine = create_sqlite_engine(database_path(root))
     try:
@@ -135,7 +135,7 @@ def test_quality_and_page_selection_migrations_upgrade_existing_0003_database(tm
     upgrade_database(root, revision="0003_extraction_objects")
     assert current_revision(root) == "0003_extraction_objects"
     upgrade_database(root)
-    assert current_revision(root) == "0040_discovery_grouping_continuity"
+    assert current_revision(root) == "0041_catalog_authority_roles_graph_layers"
     engine = create_sqlite_engine(database_path(root))
     try:
         inspector = inspect(engine)
@@ -198,7 +198,7 @@ def test_temporal_migration_upgrades_existing_031_database(tmp_path: Path) -> No
     upgrade_database(root, revision="0026_team_workflow")
     assert current_revision(root) == "0026_team_workflow"
     upgrade_database(root)
-    assert current_revision(root) == "0040_discovery_grouping_continuity"
+    assert current_revision(root) == "0041_catalog_authority_roles_graph_layers"
     engine = create_sqlite_engine(database_path(root))
     try:
         inspector = inspect(engine)
@@ -223,7 +223,7 @@ def test_operational_readiness_migration_upgrades_existing_032_database(tmp_path
     upgrade_database(root, revision="0027_temporal_authorities_relations")
     assert current_revision(root) == "0027_temporal_authorities_relations"
     upgrade_database(root)
-    assert current_revision(root) == "0040_discovery_grouping_continuity"
+    assert current_revision(root) == "0041_catalog_authority_roles_graph_layers"
     engine = create_sqlite_engine(database_path(root))
     try:
         inspector = inspect(engine)
@@ -458,7 +458,7 @@ def test_temporal_migration_preserves_authority_mentions_and_relations(tmp_path:
         engine.dispose()
 
     upgrade_database(root)
-    assert current_revision(root) == "0040_discovery_grouping_continuity"
+    assert current_revision(root) == "0041_catalog_authority_roles_graph_layers"
 
     engine = create_sqlite_engine(database_path(root))
     try:
@@ -575,7 +575,7 @@ def test_candidate_history_migration_preserves_populated_0331_database(tmp_path:
         engine.dispose()
 
     upgrade_database(root)
-    assert current_revision(root) == "0040_discovery_grouping_continuity"
+    assert current_revision(root) == "0041_catalog_authority_roles_graph_layers"
     engine = create_sqlite_engine(database_path(root))
     try:
         with session_scope(engine) as session:
@@ -629,7 +629,7 @@ def test_page_quality_migration_from_0031_is_explicit_and_empty(tmp_path: Path) 
     assert current_revision(root) == "0031_page_action_exchange"
 
     upgrade_database(root)
-    assert current_revision(root) == "0040_discovery_grouping_continuity"
+    assert current_revision(root) == "0041_catalog_authority_roles_graph_layers"
     engine = create_sqlite_engine(database_path(root))
     try:
         assert "extraction_page_quality_assessments" in inspect(engine).get_table_names()
@@ -732,7 +732,7 @@ def test_export_exchange_lifecycle_migration_upgrades_existing_0032_database(
         engine.dispose()
 
     upgrade_database(root)
-    assert current_revision(root) == "0040_discovery_grouping_continuity"
+    assert current_revision(root) == "0041_catalog_authority_roles_graph_layers"
 
     engine = create_sqlite_engine(database_path(root))
     try:
@@ -822,7 +822,7 @@ def test_analysis_authorization_migration_upgrades_existing_0033_database(
         engine.dispose()
 
     upgrade_database(root)
-    assert current_revision(root) == "0040_discovery_grouping_continuity"
+    assert current_revision(root) == "0041_catalog_authority_roles_graph_layers"
 
     engine = create_sqlite_engine(database_path(root))
     try:
@@ -948,7 +948,7 @@ def test_lineage_recovery_migration_upgrades_existing_0034_database(
         engine.dispose()
 
     upgrade_database(root)
-    assert current_revision(root) == "0040_discovery_grouping_continuity"
+    assert current_revision(root) == "0041_catalog_authority_roles_graph_layers"
 
     engine = create_sqlite_engine(database_path(root))
     try:
@@ -1003,7 +1003,7 @@ def test_common_base_migration_upgrades_existing_0035_database(tmp_path: Path) -
     upgrade_database(root, revision="0035_exchange_lineage_recovery")
     assert current_revision(root) == "0035_exchange_lineage_recovery"
     upgrade_database(root)
-    assert current_revision(root) == "0040_discovery_grouping_continuity"
+    assert current_revision(root) == "0041_catalog_authority_roles_graph_layers"
     engine = create_sqlite_engine(database_path(root))
     try:
         inspector = inspect(engine)
@@ -1037,7 +1037,7 @@ def test_state_adoption_migration_upgrades_existing_0036_database(
     upgrade_database(root, revision="0036_exchange_common_base_agreements")
     assert current_revision(root) == "0036_exchange_common_base_agreements"
     upgrade_database(root)
-    assert current_revision(root) == "0040_discovery_grouping_continuity"
+    assert current_revision(root) == "0041_catalog_authority_roles_graph_layers"
 
     engine = create_sqlite_engine(database_path(root))
     try:
@@ -1087,7 +1087,7 @@ def test_open_discovery_migration_upgrades_existing_0037_database(tmp_path: Path
     upgrade_database(root, revision="0037_exchange_state_adoptions")
     assert current_revision(root) == "0037_exchange_state_adoptions"
     upgrade_database(root)
-    assert current_revision(root) == "0040_discovery_grouping_continuity"
+    assert current_revision(root) == "0041_catalog_authority_roles_graph_layers"
 
     engine = create_sqlite_engine(database_path(root))
     try:
@@ -1161,7 +1161,7 @@ def test_discovery_decisions_migration_upgrades_existing_0038_database(
     upgrade_database(root, revision="0038_open_discovery")
     assert current_revision(root) == "0038_open_discovery"
     upgrade_database(root)
-    assert current_revision(root) == "0040_discovery_grouping_continuity"
+    assert current_revision(root) == "0041_catalog_authority_roles_graph_layers"
 
     engine = create_sqlite_engine(database_path(root))
     try:
@@ -1232,7 +1232,7 @@ def test_discovery_grouping_continuity_migration_upgrades_existing_0039_database
     upgrade_database(root, revision="0039_discovery_decisions")
     assert current_revision(root) == "0039_discovery_decisions"
     upgrade_database(root)
-    assert current_revision(root) == "0040_discovery_grouping_continuity"
+    assert current_revision(root) == "0041_catalog_authority_roles_graph_layers"
 
     engine = create_sqlite_engine(database_path(root))
     try:
@@ -1269,3 +1269,154 @@ def test_discovery_grouping_continuity_migration_upgrades_existing_0039_database
     }
     assert integrity == "ok"
     assert foreign_keys == []
+
+
+def test_catalog_authority_roles_migration_preserves_relations_and_enforces_contract(
+    tmp_path: Path,
+) -> None:
+    from sqlalchemy import inspect, text
+    from sqlalchemy.exc import IntegrityError
+
+    from archive_workbench.db.models import ArchivalUnit, AuthorityRecord, Project
+
+    root = tmp_path / "project_catalog_roles"
+    upgrade_database(root, revision="0040_discovery_grouping_continuity")
+    assert current_revision(root) == "0040_discovery_grouping_continuity"
+
+    engine = create_sqlite_engine(database_path(root))
+    try:
+        now = datetime.now(timezone.utc)
+        with session_scope(engine) as session:
+            session.add(
+                Project(
+                    id="catalog_roles_project",
+                    name="Catalog roles",
+                    decisions_json={},
+                )
+            )
+            session.flush()
+            session.add(
+                AuthorityRecord(
+                    id="authority-producer",
+                    project_id="catalog_roles_project",
+                    entity_type="organization",
+                    preferred_name="Organismo productor",
+                    normalized_name="organismo productor",
+                    lifecycle_status="active",
+                    review_status="approved",
+                    created_by="tests",
+                    created_at=now,
+                    updated_by="tests",
+                    updated_at=now,
+                    revision=1,
+                )
+            )
+            session.add(
+                ArchivalUnit(
+                    id="unit-role-target",
+                    project_id="catalog_roles_project",
+                    level_key="fondo",
+                    title="Fondo de prueba",
+                    registration_status="complete",
+                    created_by="tests",
+                    created_at=now,
+                    updated_by="tests",
+                    updated_at=now,
+                    revision=1,
+                )
+            )
+            session.flush()
+            session.execute(
+                text(
+                    """
+                    INSERT INTO entity_relations (
+                        id, project_id, source_authority_id, relation_label,
+                        target_authority_id, target_archival_unit_id, target_document_part_id,
+                        evidence_note, temporal_expression, temporal_start, temporal_end,
+                        temporal_precision, temporal_approximate, temporal_note,
+                        lifecycle_status, review_status, created_by, created_at,
+                        updated_by, updated_at, revision
+                    ) VALUES (
+                        'legacy-relation', 'catalog_roles_project', 'authority-producer',
+                        'custodió', NULL, 'unit-role-target', NULL,
+                        'Inventario previo', NULL, NULL, NULL,
+                        NULL, 0, NULL, 'active', 'approved', 'tests', :now,
+                        'tests', :now, 1
+                    )
+                    """
+                ),
+                {"now": now},
+            )
+    finally:
+        engine.dispose()
+
+    upgrade_database(root)
+    assert current_revision(root) == "0041_catalog_authority_roles_graph_layers"
+
+    engine = create_sqlite_engine(database_path(root))
+    try:
+        inspector = inspect(engine)
+        relation_columns = {row["name"] for row in inspector.get_columns("entity_relations")}
+        relation_indexes = {row["name"] for row in inspector.get_indexes("entity_relations")}
+        with engine.connect() as connection:
+            legacy = connection.execute(
+                text(
+                    "SELECT relation_kind, provenance_note FROM entity_relations "
+                    "WHERE id = 'legacy-relation'"
+                )
+            ).one()
+            integrity = connection.execute(text("PRAGMA integrity_check")).scalar_one()
+            foreign_keys = connection.execute(text("PRAGMA foreign_key_check")).all()
+        assert legacy.relation_kind == "analytical"
+        assert legacy.provenance_note is None
+        assert {"relation_kind", "provenance_note"} <= relation_columns
+        assert "ix_entity_relations_project_kind_target_unit" in relation_indexes
+        assert integrity == "ok"
+        assert foreign_keys == []
+
+        with engine.begin() as connection:
+            try:
+                connection.execute(
+                    text(
+                        """
+                        INSERT INTO entity_relations (
+                            id, project_id, source_authority_id, relation_kind, relation_label,
+                            target_archival_unit_id, evidence_note, provenance_note,
+                            lifecycle_status, review_status, created_by, created_at,
+                            updated_by, updated_at, revision
+                        ) VALUES (
+                            'invalid-role', 'catalog_roles_project', 'authority-producer',
+                            'producer', 'nombre libre', 'unit-role-target',
+                            'Inventario', 'Guía', 'active', 'approved', 'tests', :now,
+                            'tests', :now, 1
+                        )
+                        """
+                    ),
+                    {"now": now},
+                )
+            except IntegrityError:
+                pass
+            else:
+                raise AssertionError("La base aceptó un rol archivístico con etiqueta no canónica")
+
+        with engine.begin() as connection:
+            connection.execute(
+                text(
+                    """
+                    INSERT INTO entity_relations (
+                        id, project_id, source_authority_id, relation_kind, relation_label,
+                        target_archival_unit_id, evidence_note, provenance_note,
+                        lifecycle_status, review_status, created_by, created_at,
+                        updated_by, updated_at, revision
+                    ) VALUES (
+                        'valid-role', 'catalog_roles_project', 'authority-producer',
+                        'producer', 'produjo', 'unit-role-target',
+                        'Inventario', 'Guía', 'active', 'approved', 'tests', :now,
+                        'tests', :now, 1
+                    )
+                    """
+                ),
+                {"now": now},
+            )
+    finally:
+        engine.dispose()

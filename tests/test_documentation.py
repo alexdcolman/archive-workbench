@@ -62,8 +62,6 @@ def test_active_pending_ledger_has_index_and_recovers_all_major_lines() -> None:
     text = (OPERATIVE / "PENDIENTES_ACTIVOS.md").read_text(encoding="utf-8")
     assert "## Índice" in text
     for item in (
-        "CAT-02 — Entidades productoras y gestoras",
-        "GRAPH-02 — Estructura archivística, documentos y partes",
         "AV-01 — Registro audiovisual local y transcripción",
         "AV-02 — Plugin opcional de descarga desde YouTube",
         "AI-01 — Herramientas CLI opcionales con LLM",
@@ -86,6 +84,8 @@ def test_active_pending_ledger_has_index_and_recovers_all_major_lines() -> None:
     assert "EX-01 — Recuperación asistida de linaje" not in text
     assert "DISC-01 — Descubrimiento abierto" not in text
     assert "DISC-01D" not in text
+    assert "CAT-02 — Entidades productoras y gestoras" not in text
+    assert "GRAPH-02 — Estructura archivística, documentos y partes" not in text
 
 
 def test_implemented_ledger_separates_closed_work_from_active_pending() -> None:
@@ -139,6 +139,11 @@ def test_implemented_ledger_separates_closed_work_from_active_pending() -> None:
     assert "Validado manualmente en 0.76.0" in text
     assert "DISC-02` queda cerrado" in text
     assert "authority-dictionary-validate" in text
+    assert "CAT-02 + GRAPH-02 — implementación conjunta — 0.77.0" in text
+    assert "Productores y gestores CAT-02 | Implementados y validados en 0.77.0" in text
+    assert "Capas archivísticas GRAPH-02 | Implementadas y validadas en 0.77.0" in text
+    assert "0041_catalog_authority_roles_graph_layers" in text
+    assert "`CAT-02` y `GRAPH-02` quedan cerrados" in text
 
 
 def test_streamlit_form_policy_prevents_circular_disabled_buttons() -> None:
@@ -191,6 +196,8 @@ def test_interface_policy_requires_persistent_interactive_panels() -> None:
 def test_history_map_is_concise_and_references_historical_detail() -> None:
     text = (DOCS / "HISTORIAL_DE_CAMBIOS.md").read_text(encoding="utf-8")
     assert "## Documentación vigente" in text
+    assert "### 0.77.0" in text
+    assert "0041_catalog_authority_roles_graph_layers" in text
     assert "### 0.76.0" in text
     assert "`DISC-02` queda cerrado" in text
     assert "### 0.75.1" in text
@@ -232,6 +239,7 @@ def test_history_map_is_concise_and_references_historical_detail() -> None:
     assert "historico/actualizaciones" in text
     assert "historico/decisiones_tecnicas" in text
     assert "CHANGELOG.md" in text
+    assert text.index("### 0.77.0") < text.index("### 0.76.0")
     assert text.index("### 0.76.0") < text.index("### 0.75.1")
     assert text.index("### 0.75.1") < text.index("### 0.75.0")
     assert text.index("### 0.75.0") < text.index("### 0.74.0")
@@ -254,6 +262,9 @@ def test_current_architecture_is_separate_from_historical_design() -> None:
     historical = historical_path.read_text(encoding="utf-8")
     assert "Originales inmutables" in current
     assert "plantillas XLSX de catálogo" in current
+    assert "roles controlados" in current
+    assert "objetos digitales y partes documentales" in current
+    assert "pertenencia archivística nunca se presenta como relación analítica" in current
     assert "una sola transacción" in current
     assert "Resolver contenido de un paquete sin base común no crea linaje" in current
     positions = [historical.index(f"# {number}.") for number in range(17, 51)]
@@ -474,24 +485,24 @@ def test_automatic_analysis_quality_decision_is_preserved_and_auditable() -> Non
     assert "st.form" in text
 
 
-def test_current_update_guide_is_stable_named_and_validates_disc02() -> None:
+def test_current_update_guide_is_stable_named_and_validates_cat02_graph02() -> None:
     text = (OPERATIVE / "ACTUALIZACION_ACTUAL.md").read_text(encoding="utf-8")
-    assert "Archive Workbench 0.76.0" in text
-    assert "0040_discovery_grouping_continuity" in text
-    assert "No hay migración" in text
+    assert "Archive Workbench 0.77.0" in text
+    assert "0041_catalog_authority_roles_graph_layers" in text
+    assert "migración aditiva" in text.lower()
     assert "project_data" in text
     assert "no mueve ni elimina" in text.lower()
-    assert "create_authority_dictionary_validation_project.py" in text
-    assert "authority-dictionary-validate" in text
-    assert "Proyecto de validación DISC-02" in text
-    assert "diccionario_conflicto_sin_resolver.json" in text
-    assert "diccionario_relacion_sin_evidencia.json" in text
-    assert "cero autoridades, cero alias y cero relaciones" in text
-    assert "## 6. Resultado de la validación" in text
-    assert "dos relaciones duplicadas omitidas" in text
-    assert "project_data` no fue leído ni modificado" in text
+    assert "create_catalog_graph_validation_project.py" in text
+    assert "Proyecto de validación CAT-02 y GRAPH-02" in text
+    assert "project_data_touched: false" in text
+    assert "Productores y gestión" in text
+    assert "Mapa de relaciones" in text
+    assert "Migración autorizada de project_data" in text
+    assert "`CAT-02` y `GRAPH-02` quedan cerrados" in text
+    assert "backup" in text.lower()
     assert "pytest --collect-only -q" in text
-    assert "CAT-01" in text and "No repetir" in text
+    for closed in ("UX-03", "DISC-01A/B/C/D", "SEM-01", "GRAPH-01", "OCR-02", "CAT-01", "DISC-02"):
+        assert closed in text
 
 
 def test_authority_dictionary_format_is_versioned_and_conservative() -> None:
@@ -512,6 +523,8 @@ def test_authority_dictionary_format_is_versioned_and_conservative() -> None:
         assert item in text
     assert "nunca sobrescribe campos de una autoridad existente" in text
     assert "Una relación sin evidencia" in text
+    assert "clasificadas explícitamente como `analytical`" in text
+    assert "provenance_note" in text
 
 
 def test_ex01_lineage_recovery_plan_is_complete_and_conservative() -> None:
@@ -568,10 +581,12 @@ def test_pilot_guide_delegates_future_work_to_single_pending_ledger() -> None:
 def test_readme_points_only_to_current_documentation_map() -> None:
     text = (ROOT / "README.md").read_text(encoding="utf-8")
     citation = (ROOT / "CITATION.cff").read_text(encoding="utf-8")
-    assert "**Versión actual:** 0.76.0" in text
-    assert "La versión 0.76.0 incorpora pruebas automatizadas" in text
-    assert "(versión 0.76.0)" in text
-    assert 'version: "0.76.0"' in citation
+    assert "**Versión actual:** 0.77.0" in text
+    assert "La versión 0.77.0 incorpora pruebas automatizadas" in text
+    assert "(versión 0.77.0)" in text
+    assert 'version: "0.77.0"' in citation
+    assert "Productores y gestión" in text
+    assert "0041_catalog_authority_roles_graph_layers" in text
     assert "authority-dictionary-validate" in text
     assert "IMPORTACION_DICCIONARIOS_DISC_02.md" in text
     assert "docs/HISTORIAL_DE_CAMBIOS.md" in text

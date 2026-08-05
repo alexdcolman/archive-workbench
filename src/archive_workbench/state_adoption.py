@@ -946,11 +946,13 @@ def _synchronize_editable_state(
             {
                 "project_id": project_id,
                 "source_authority_id": item["source_authority_id"],
+                "relation_kind": item.get("relation_kind", "analytical"),
                 "relation_label": item["relation_label"],
                 "target_authority_id": item.get("target_authority_id"),
                 "target_archival_unit_id": item.get("target_archival_unit_id"),
                 "target_document_part_id": item.get("target_document_part_id"),
                 "evidence_note": item.get("evidence_note"),
+                "provenance_note": item.get("provenance_note"),
                 "temporal_expression": item.get("temporal_expression"),
                 "temporal_start": _parse_date(item.get("temporal_start")),
                 "temporal_end": _parse_date(item.get("temporal_end")),

@@ -1,3 +1,18 @@
+## 0.77.0 — 2026-08-05
+
+- Implementa `CAT-02` con relaciones controladas `producer` y `manager` entre autoridades canónicas y unidades archivísticas.
+- Conserva período, evidencia, procedencia, estados y revisiones append-only; las etiquetas `produjo` y `gestionó` se generan desde el tipo de rol y no desde texto libre.
+- Agrega la migración `0041_catalog_authority_roles_graph_layers` con columnas aditivas, índice por proyecto/rol/unidad y triggers de contrato; las relaciones previas quedan como `analytical`.
+- Integra los campos nuevos en intercambio offline, adopción de estado, búsqueda y diccionarios de autoridades.
+- Implementa `GRAPH-02` con nodos de autoridad, unidad archivística, objeto digital y parte documental, y capas separadas para jerarquía, documentos, partes, menciones, relaciones analíticas, productores y gestores.
+- Agrega filtros por nivel archivístico, foco sobre cualquiera de los cuatro tipos de nodo, profundidad, límite de nodos y procedencia explicable de cada arista.
+- Amplía el canvas, los detalles y las exportaciones JSON, CSV y GraphML; corrige la serialización ISO de fechas temporales en JSON.
+- Agrega flechas a todas las aristas dirigidas, mantiene sin flecha la capa simétrica de entidades compartidas y recorta los extremos para que las puntas queden visibles junto al nodo de destino.
+- Corrige el filtro **Distancia desde el centro** para que permanezca disponible después de aplicar filtros y se ignore, sin deshabilitarse, cuando no existe un foco.
+- Corrige la dirección y la etiqueta de las aristas entre objetos digitales y unidades archivísticas: el objeto apunta a la unidad y muestra `representa`, `contiene`, `es parte de` o `es representación alternativa de`.
+- Incluye `scripts/create_catalog_graph_validation_project.py`, que crea una base descartable fuera del repositorio y verifica las siete capas requeridas con cero errores de consistencia.
+- Completa la validación manual local: confirma roles e historial, siete capas, cuatro tipos de nodo, flechas dirigidas, distancia persistente, pertenencia documental correcta y exportaciones sin truncamiento ni inconsistencias; `CAT-02` y `GRAPH-02` quedan cerrados.
+
 ## 0.76.0 — 2026-08-04
 
 - Implementa `DISC-02` con un diccionario JSON versionado para autoridades, alias y relaciones, acompañado por JSON Schema y ejemplo editable.

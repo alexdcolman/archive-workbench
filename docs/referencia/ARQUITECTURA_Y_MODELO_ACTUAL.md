@@ -23,7 +23,7 @@ Archive Workbench organiza, procesa, revisa, busca y exporta documentación arch
 
 ### Catálogo
 
-Describe fondos, colecciones, series, unidades, documentos, partes internas, objetos digitales, ubicaciones y metadatos configurables. Las plantillas XLSX de catálogo transportan instrucciones, una estructura jerárquica restringida, unidades y listas controladas. Pueden ser más estrictas que la configuración del proyecto, pero no ampliar padres permitidos. La importación siempre simula el libro completo, informa errores por ubicación y aplica únicamente con confirmación explícita dentro de una sola transacción.
+Describe fondos, colecciones, series, unidades, documentos, partes internas, objetos digitales, ubicaciones y metadatos configurables. Las entidades productoras y gestoras se vinculan a cada unidad mediante autoridades canónicas existentes y roles controlados, con período, evidencia, procedencia, estado e historial append-only; no se duplican como texto libre canónico. Un cambio de gestión crea otro vínculo temporal y conserva el anterior. Las plantillas XLSX de catálogo transportan instrucciones, una estructura jerárquica restringida, unidades y listas controladas. Pueden ser más estrictas que la configuración del proyecto, pero no ampliar padres permitidos. La importación siempre simula el libro completo, informa errores por ubicación y aplica únicamente con confirmación explícita dentro de una sola transacción.
 
 ### Archivos y derivados
 
@@ -43,7 +43,9 @@ La búsqueda literal usa índices reconstruibles. La búsqueda semántica utiliz
 
 ### Autoridades y grafo
 
-Separa autoridad canónica, alias y menciones contextuales. Una grafía coincidente no implica identidad automática. Las relaciones explícitas requieren evidencia y revisión. El canvas del grafo es una proyección de lectura: separa de forma determinista relaciones paralelas o inversas, recalcula rutas y etiquetas al mover nodos y conserva tooltips de tipo, dirección, procedencia y evidencia. Cambiar el layout visual no escribe relaciones ni altera el modelo canónico.
+Separa autoridad canónica, alias y menciones contextuales. Una grafía coincidente no implica identidad automática. Las relaciones se clasifican como analíticas, productoras o gestoras. Los roles archivísticos solo pueden apuntar a unidades y exigen evidencia y procedencia; las relaciones anteriores permanecen como `analytical`.
+
+El grafo distingue autoridades, unidades archivísticas, objetos digitales y partes documentales. Las capas de jerarquía, pertenencia de documentos, partes, menciones, relaciones analíticas, productores y gestores pueden filtrarse de manera independiente. Cada arista explica la tabla o registro del que procede, por lo que una pertenencia archivística nunca se presenta como relación analítica. El foco puede partir de cualquiera de los cuatro tipos de nodo y limitar profundidad, niveles y cantidad de elementos. El canvas sigue siendo una proyección de lectura: separa de forma determinista relaciones paralelas o inversas, recalcula rutas y etiquetas al mover nodos y conserva tooltips de tipo, dirección, procedencia y evidencia. Cambiar el layout visual no escribe relaciones ni altera el modelo canónico.
 
 Los diccionarios externos usan un contrato JSON versionado. La simulación resuelve cada autoridad como creación, reutilización, omisión o conflicto; compara nombres y alias normalizados y nunca actualiza silenciosamente una ficha existente. Las características externas se conservan como descripción estructurada solo al crear una autoridad nueva. Los alias ambiguos requieren autorización expresa. Cada relación importada exige evidencia y puede apuntar a una autoridad, unidad archivística o parte documental existente. Autoridades, alias y relaciones se aplican dentro de una sola transacción. El formato vigente está en [`IMPORTACION_DICCIONARIOS_DISC_02.md`](IMPORTACION_DICCIONARIOS_DISC_02.md).
 
@@ -75,7 +77,7 @@ Los backups incluyen manifiesto, base y configuración. La restauración crea pr
 - Página editable y objeto editable: estado humano activo e historial.
 - Autoridad: identidad canónica revisada.
 - Mención: fragmento contextual con offsets, revisión textual y snapshots append-only.
-- Relación: vínculo explícito con tipo, evidencia, temporalidad y estado.
+- Relación: vínculo controlado `analytical`, `producer` o `manager` con destino tipado, evidencia, procedencia, temporalidad, estado e historial.
 - Perfil de exportación o búsqueda: configuración versionada.
 - Autorización de análisis automático: registro append-only del alcance, responsable, fundamento, origen, destino y hash de parámetros.
 - Punto de control y paquete de intercambio: ascendencia y transporte de eventos.

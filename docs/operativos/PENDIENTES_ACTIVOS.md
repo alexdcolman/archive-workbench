@@ -1,23 +1,22 @@
 # Pendientes activos — Archive Workbench
 
-**Estado verificado:** 2026-08-04 · **versión:** 0.76.0
+**Estado verificado:** 2026-08-05 · **versión:** 0.77.0
 
 Este archivo es la única fuente de verdad para trabajo abierto. Las capacidades cerradas se registran en `IMPLEMENTACIONES_REALIZADAS.md` y no deben reabrirse sin una regresión concreta o una ampliación explícita del alcance.
 
 ## Orden acordado
 
-`DISC-02` quedó validado en 0.76.0 y ya no forma parte del trabajo abierto. El orden previsto antes de la candidata a v1.0 es:
+`CAT-02` y `GRAPH-02` quedaron implementados, validados y cerrados en 0.77.0. El orden previsto antes de la candidata a v1.0 es:
 
-1. `CAT-02` junto con `GRAPH-02`;
-2. `OCR-01`;
-3. `AV-01`;
-4. `AV-02`;
-5. `INT-01`;
-6. `PILOT-01`;
-7. `UX-02`;
-8. `QA-01` junto con `OPS-02`;
-9. `OPS-01`;
-10. `OPS-03` y candidata a v1.0.
+1. `OCR-01`;
+2. `AV-01`;
+3. `AV-02`;
+4. `INT-01`;
+5. `PILOT-01`;
+6. `UX-02`;
+7. `QA-01` junto con `OPS-02`;
+8. `OPS-01`;
+9. `OPS-03` y candidata a v1.0.
 
 `AI-01` y `AI-02` quedan expresamente para después del release inicial.
 
@@ -25,8 +24,6 @@ Este archivo es la única fuente de verdad para trabajo abierto. Las capacidades
 
 | ID | Prioridad | Estado | Tarea |
 |---|---|---|---|
-| CAT-02 | Media | Pendiente | Entidades productoras y gestoras del catálogo |
-| GRAPH-02 | Media | Pendiente | Estructura archivística, documentos y partes en el grafo |
 | OCR-01 | Media | Parcial | Preprocesamiento, layout y clasificación documental |
 | AV-01 | Media | Pendiente | Registro audiovisual local y transcripción segmentada |
 | AV-02 | Baja | Pendiente | Plugin opcional de descarga desde YouTube y otras plataformas |
@@ -41,24 +38,6 @@ Este archivo es la única fuente de verdad para trabajo abierto. Las capacidades
 | AI-02 | Post-release | Pendiente | Sistema RAG trazable sobre corpus sistematizados |
 
 ## Mejora funcional
-
-### CAT-02 — Entidades productoras y gestoras del catálogo — PENDIENTE
-
-Agregar a las unidades archivísticas los roles de entidad productora y entidad gestora mediante relaciones controladas con autoridades existentes, no como texto libre canónico. La interfaz del catálogo debe presentarlas como campos propios y permitir registrar, cuando corresponda, período, evidencia, procedencia y cambios de gestión.
-
-La implementación debe evitar duplicar nombres ya normalizados, conservar historial y permitir que una misma autoridad desempeñe roles distintos en unidades o períodos diferentes.
-
-### GRAPH-02 — Estructura archivística, documentos y partes en el grafo — PENDIENTE
-
-Incorporar como capas filtrables del mapa:
-
-- la jerarquía entre archivo, fondo, sección, serie, subserie, unidad y demás niveles configurados;
-- la pertenencia de documentos y partes internas a sus unidades archivísticas;
-- las menciones de autoridades en documentos o partes;
-- las relaciones analíticas entre autoridades;
-- las entidades productoras y gestoras incorporadas por `CAT-02`.
-
-La vista debe permitir activar o desactivar cada capa, filtrar niveles, limitar profundidad y cantidad de nodos, y partir de una unidad, documento, parte o autoridad focal. La procedencia de cada arista debe seguir siendo explicable y no debe confundirse una relación archivística de pertenencia con una relación analítica entre entidades.
 
 ### OCR-01 — Preprocesamiento, layout y clasificación documental — PARCIAL
 

@@ -14,6 +14,13 @@ Este es el único documento en la raíz de `docs/`. Resume la evolución del pro
 
 ## Versiones recientes — más reciente primero
 
+### 0.77.0 — 2026-08-05
+- Implementa conjuntamente `CAT-02` y `GRAPH-02`: roles productores y gestores controlados, historial, períodos, evidencia, procedencia y capas archivísticas o documentales separadas.
+- Agrega foco sobre autoridades, unidades, documentos o partes; filtros de niveles, profundidad y límite de nodos; y exportación explicable en JSON, CSV y GraphML.
+- Muestra flechas en los vínculos dirigidos, conserva sin flecha las entidades compartidas, corrige la dirección y etiqueta de la pertenencia documental y mantiene disponible la distancia después de aplicar filtros.
+- Incorpora la migración aditiva `0041_catalog_authority_roles_graph_layers`; las relaciones existentes permanecen como `analytical`.
+- La validación automatizada y manual queda completa: nueve nodos, doce aristas, cero inconsistencias, flechas y filtros correctos; `CAT-02` y `GRAPH-02` quedan cerrados.
+
 ### 0.76.0 — 2026-08-04
 - Implementa `DISC-02`: formato JSON versionado, esquema, ejemplo, simulación, resolución de duplicados, evidencia obligatoria y aplicación transaccional de autoridades, alias y relaciones.
 - Valida manualmente el conflicto nominal sin resolver, el rechazo de relaciones sin evidencia, la conservación de una ficha reutilizada y la reimportación idéntica sin nuevas escrituras; `DISC-02` queda cerrado.

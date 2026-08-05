@@ -19,6 +19,7 @@ from archive_workbench.db.models import (
     ArchivalUnit,
     AuthorityRecord,
     DigitalObject,
+    DigitalObjectUnitLink,
     DocumentPart,
     EditableObject,
     EntityMention,
@@ -28,8 +29,25 @@ from archive_workbench.db.models import (
 from archive_workbench.sources import PROCESSABLE_SOURCE_TYPES
 from archive_workbench.temporal import format_temporal_range, temporal_overlap
 
-GRAPH_EDGE_TYPES = ("explicit", "mention", "shared_entity")
-GRAPH_NODE_KINDS = ("entity", "archival_unit", "document_part")
+GRAPH_EDGE_TYPES = (
+    "hierarchy",
+    "document",
+    "part",
+    "mention",
+    "analytical",
+    "producer",
+    "manager",
+    "shared_entity",
+)
+
+_DOCUMENT_RELATION_GRAPH_LABELS = {
+    "represents": "representa",
+    "contains": "contiene",
+    "is_part_of": "es parte de",
+    "alternate_representation": "es representación alternativa de",
+}
+GRAPH_NODE_KINDS = ("entity", "archival_unit", "digital_object", "document_part")
+_LEGACY_EDGE_ALIASES = {"explicit": ("analytical", "producer", "manager")}
 
 
 @dataclass(slots=True)
@@ -65,6 +83,7 @@ class GraphEdge:
     review_status: str | None = None
     lifecycle_status: str | None = None
     evidence_note: str | None = None
+    provenance_note: str | None = None
     temporal_expression: str | None = None
     temporal_start: date | None = None
     temporal_end: date | None = None
@@ -130,27 +149,33 @@ def _document_target_for_object(
     *,
     part_by_id: dict[str, DocumentPart],
     registration_by_digital: dict[str, SourceRegistration],
-) -> tuple[str, str, str, str | None, int | None] | None:
+) -> tuple[str, str, str | None, int | None]:
     if editable.document_part_id and editable.document_part_id in part_by_id:
         part = part_by_id[editable.document_part_id]
         registration = registration_by_digital.get(editable.digital_object_id)
         return (
             "document_part",
             part.id,
-            part.title,
             registration.source_key if registration else None,
             editable.page_number,
         )
     registration = registration_by_digital.get(editable.digital_object_id)
-    if registration is None or registration.archival_unit_id is None:
-        return None
     return (
-        "archival_unit",
-        registration.archival_unit_id,
-        "",
-        registration.source_key,
+        "digital_object",
+        editable.digital_object_id,
+        registration.source_key if registration else None,
         editable.page_number,
     )
+
+
+def _expanded_edge_types(edge_types: tuple[str, ...]) -> tuple[str, ...]:
+    expanded: list[str] = []
+    for edge_type in edge_types:
+        aliases = _LEGACY_EDGE_ALIASES.get(edge_type, (edge_type,))
+        for value in aliases:
+            if value not in expanded:
+                expanded.append(value)
+    return tuple(expanded)
 
 
 def build_graph(
@@ -159,6 +184,7 @@ def build_graph(
     project_id: str,
     edge_types: tuple[str, ...] = GRAPH_EDGE_TYPES,
     entity_types: tuple[str, ...] = (),
+    archival_levels: tuple[str, ...] = (),
     review_statuses: tuple[str, ...] = (),
     include_inactive: bool = False,
     include_pending_mentions: bool = False,
@@ -170,9 +196,11 @@ def build_graph(
     max_depth: int | None = None,
     max_nodes: int = 180,
 ) -> GraphView:
-    invalid = sorted(set(edge_types) - set(GRAPH_EDGE_TYPES))
+    allowed_input = set(GRAPH_EDGE_TYPES) | set(_LEGACY_EDGE_ALIASES)
+    invalid = sorted(set(edge_types) - allowed_input)
     if invalid:
         raise ValueError(f"Tipos de arista inválidos: {', '.join(invalid)}")
+    selected_edge_types = set(_expanded_edge_types(edge_types))
     if temporal_start is not None and temporal_end is not None and temporal_start > temporal_end:
         raise ValueError("El inicio del filtro temporal es posterior al final")
     if min_shared_entities < 1:
@@ -188,7 +216,28 @@ def build_graph(
     authorities = session.scalars(
         authority_stmt.order_by(AuthorityRecord.normalized_name, AuthorityRecord.id)
     ).all()
-    all_authority_by_id = {row.id: row for row in authorities}
+    authority_by_id = {row.id: row for row in authorities}
+
+    unit_stmt = select(ArchivalUnit).where(ArchivalUnit.project_id == project_id)
+    if archival_levels:
+        unit_stmt = unit_stmt.where(ArchivalUnit.level_key.in_(archival_levels))
+    unit_rows = session.scalars(unit_stmt.order_by(ArchivalUnit.title, ArchivalUnit.id)).all()
+    units = {row.id: row for row in unit_rows}
+
+    digital_rows = session.scalars(
+        select(DigitalObject)
+        .where(DigitalObject.project_id == project_id)
+        .order_by(DigitalObject.original_filename, DigitalObject.id)
+    ).all()
+    digital_by_id = {row.id: row for row in digital_rows}
+    part_rows = session.scalars(
+        select(DocumentPart)
+        .join(DigitalObject, DigitalObject.id == DocumentPart.digital_object_id)
+        .where(DigitalObject.project_id == project_id)
+        .order_by(DocumentPart.digital_object_id, DocumentPart.page_start, DocumentPart.id)
+    ).all()
+    part_by_id = {row.id: row for row in part_rows}
+    registration_by_digital = _source_registrations(session, project_id)
 
     relations_stmt = select(EntityRelation).where(EntityRelation.project_id == project_id)
     if not include_inactive:
@@ -227,49 +276,7 @@ def build_graph(
                 include_undated=temporal_include_undated,
             )
         ]
-    authority_by_id = {row.id: row for row in authorities}
-
-    target_unit_ids = {
-        row.target_archival_unit_id for row in relations if row.target_archival_unit_id is not None
-    }
-    target_part_ids = {
-        row.target_document_part_id for row in relations if row.target_document_part_id is not None
-    }
-    units = {
-        row.id: row
-        for row in session.scalars(
-            select(ArchivalUnit).where(
-                ArchivalUnit.project_id == project_id,
-                ArchivalUnit.id.in_(target_unit_ids) if target_unit_ids else False,
-            )
-        ).all()
-    } if target_unit_ids else {}
-    parts = {
-        row.id: row
-        for row in session.scalars(
-            select(DocumentPart).where(DocumentPart.id.in_(target_part_ids))
-        ).all()
-    } if target_part_ids else {}
-
-    registration_by_digital = _source_registrations(session, project_id)
-    part_by_id = {
-        row.id: row
-        for row in session.scalars(
-            select(DocumentPart)
-            .join(DigitalObject, DigitalObject.id == DocumentPart.digital_object_id)
-            .where(DigitalObject.project_id == project_id)
-        ).all()
-    }
-    unit_ids_from_reg = {
-        row.archival_unit_id
-        for row in registration_by_digital.values()
-        if row.archival_unit_id is not None
-    }
-    if unit_ids_from_reg:
-        for row in session.scalars(
-            select(ArchivalUnit).where(ArchivalUnit.id.in_(unit_ids_from_reg))
-        ).all():
-            units.setdefault(row.id, row)
+        authority_by_id = {row.id: row for row in authorities}
 
     nodes: dict[str, GraphNode] = {}
     edges: dict[str, GraphEdge] = {}
@@ -301,10 +308,7 @@ def build_graph(
     def add_unit(unit_id: str) -> str | None:
         unit = units.get(unit_id)
         if unit is None:
-            unit = session.get(ArchivalUnit, unit_id)
-            if unit is None or unit.project_id != project_id:
-                return None
-            units[unit.id] = unit
+            return None
         key = _node_id("archival_unit", unit.id)
         nodes.setdefault(
             key,
@@ -321,8 +325,39 @@ def build_graph(
         )
         return key
 
+    def add_digital(digital_id: str, *, source_key: str | None = None, page: int | None = None) -> str | None:
+        digital = digital_by_id.get(digital_id)
+        if digital is None:
+            return None
+        registration = registration_by_digital.get(digital_id)
+        key = _node_id("digital_object", digital.id)
+        context_parts = [f"SHA-256 {digital.sha256[:12]}…"]
+        if digital.page_count is not None:
+            context_parts.append(f"{digital.page_count} página{'s' if digital.page_count != 1 else ''}")
+        nodes.setdefault(
+            key,
+            GraphNode(
+                node_id=key,
+                kind="digital_object",
+                record_id=digital.id,
+                label=digital.original_filename,
+                context=" · ".join(context_parts),
+                subtype=digital.media_type,
+                review_status=None,
+                lifecycle_status="active",
+                source_key=source_key or (registration.source_key if registration else None),
+                page_number=page,
+            ),
+        )
+        node = nodes[key]
+        if source_key and not node.source_key:
+            node.source_key = source_key
+        if page is not None and node.page_number is None:
+            node.page_number = page
+        return key
+
     def add_part(part_id: str, *, source_key: str | None = None, page: int | None = None) -> str | None:
-        part = part_by_id.get(part_id) or parts.get(part_id)
+        part = part_by_id.get(part_id)
         if part is None:
             return None
         registration = registration_by_digital.get(part.digital_object_id)
@@ -344,44 +379,119 @@ def build_graph(
         )
         return key
 
-    if "explicit" in edge_types:
-        for relation in relations:
-            source_key = add_entity(relation.source_authority_id)
-            if source_key is None:
+    if "hierarchy" in selected_edge_types:
+        for unit in unit_rows:
+            child_key = add_unit(unit.id)
+            if child_key is None or unit.parent_id is None:
                 continue
-            if relation.target_authority_id is not None:
-                target_key = add_entity(relation.target_authority_id)
-                target_kind = "entity"
-            elif relation.target_archival_unit_id is not None:
-                target_key = add_unit(relation.target_archival_unit_id)
-                target_kind = "archival_unit"
-            elif relation.target_document_part_id is not None:
-                target_key = add_part(relation.target_document_part_id)
-                target_kind = "document_part"
-            else:
-                target_key = None
-                target_kind = "unknown"
-            if target_key is None:
+            parent_key = add_unit(unit.parent_id)
+            if parent_key is None:
                 continue
-            edges[relation.id] = GraphEdge(
-                edge_id=relation.id,
-                source=source_key,
-                target=target_key,
-                edge_type="explicit",
-                label=relation.relation_label,
-                explanation=(
-                    "Relación analítica explícita registrada por el equipo entre una entidad "
-                    f"y un destino de tipo {target_kind}."
-                ),
-                relation_id=relation.id,
-                review_status=relation.review_status,
-                lifecycle_status=relation.lifecycle_status,
-                evidence_note=relation.evidence_note,
-                temporal_expression=relation.temporal_expression,
-                temporal_start=relation.temporal_start,
-                temporal_end=relation.temporal_end,
-                temporal_approximate=bool(relation.temporal_approximate),
+            edge_key = _edge_id("hierarchy", unit.parent_id, unit.id)
+            edges[edge_key] = GraphEdge(
+                edge_id=edge_key,
+                source=parent_key,
+                target=child_key,
+                edge_type="hierarchy",
+                label="contiene",
+                explanation="Jerarquía archivística declarada entre la unidad superior y su unidad subordinada.",
+                provenance_note=f"archival_units.parent_id · unidad {unit.id}",
             )
+
+    if "document" in selected_edge_types:
+        link_rows = session.scalars(
+            select(DigitalObjectUnitLink)
+            .join(DigitalObject, DigitalObject.id == DigitalObjectUnitLink.digital_object_id)
+            .join(ArchivalUnit, ArchivalUnit.id == DigitalObjectUnitLink.archival_unit_id)
+            .where(DigitalObject.project_id == project_id, ArchivalUnit.project_id == project_id)
+            .order_by(DigitalObjectUnitLink.archival_unit_id, DigitalObjectUnitLink.digital_object_id)
+        ).all()
+        for link in link_rows:
+            unit_key = add_unit(link.archival_unit_id)
+            document_key = add_digital(link.digital_object_id)
+            if unit_key is None or document_key is None:
+                continue
+            page_range = ""
+            if link.page_start is not None or link.page_end is not None:
+                page_range = f" · págs. {link.page_start or '?'}-{link.page_end or '?'}"
+            edges[link.id] = GraphEdge(
+                edge_id=link.id,
+                source=document_key,
+                target=unit_key,
+                edge_type="document",
+                label=_DOCUMENT_RELATION_GRAPH_LABELS.get(
+                    link.relation_type, link.relation_type
+                ),
+                explanation=(
+                    "Pertenencia catalográfica registrada entre un objeto digital "
+                    "y una unidad archivística."
+                ),
+                provenance_note=f"digital_object_unit_links:{link.id}{page_range}",
+            )
+
+    if "part" in selected_edge_types:
+        for part in part_rows:
+            document_key = add_digital(part.digital_object_id)
+            part_key = add_part(part.id)
+            if document_key is None or part_key is None:
+                continue
+            edge_key = _edge_id("part", part.digital_object_id, part.id)
+            edges[edge_key] = GraphEdge(
+                edge_id=edge_key,
+                source=document_key,
+                target=part_key,
+                edge_type="part",
+                label="contiene parte",
+                explanation="Parte interna delimitada dentro del objeto digital por su secuencia de páginas.",
+                provenance_note=f"document_parts.digital_object_id · parte {part.id}",
+                source_key=nodes[part_key].source_key,
+                page_number=part.page_start,
+            )
+
+    for relation in relations:
+        relation_kind = relation.relation_kind or "analytical"
+        if relation_kind not in selected_edge_types:
+            continue
+        source_key = add_entity(relation.source_authority_id)
+        if source_key is None:
+            continue
+        if relation.target_authority_id is not None:
+            target_key = add_entity(relation.target_authority_id)
+            target_kind = "entidad"
+        elif relation.target_archival_unit_id is not None:
+            target_key = add_unit(relation.target_archival_unit_id)
+            target_kind = "unidad archivística"
+        elif relation.target_document_part_id is not None:
+            target_key = add_part(relation.target_document_part_id)
+            target_kind = "parte interna"
+        else:
+            target_key = None
+            target_kind = "destino desconocido"
+        if target_key is None:
+            continue
+        if relation_kind == "analytical":
+            explanation = f"Relación analítica explícita registrada por el equipo entre una autoridad y una {target_kind}."
+        elif relation_kind == "producer":
+            explanation = "Rol archivístico controlado que identifica a la autoridad productora de la unidad."
+        else:
+            explanation = "Rol archivístico controlado que identifica a la autoridad gestora de la unidad."
+        edges[relation.id] = GraphEdge(
+            edge_id=relation.id,
+            source=source_key,
+            target=target_key,
+            edge_type=relation_kind,
+            label=relation.relation_label,
+            explanation=explanation,
+            relation_id=relation.id,
+            review_status=relation.review_status,
+            lifecycle_status=relation.lifecycle_status,
+            evidence_note=relation.evidence_note,
+            provenance_note=relation.provenance_note,
+            temporal_expression=relation.temporal_expression,
+            temporal_start=relation.temporal_start,
+            temporal_end=relation.temporal_end,
+            temporal_approximate=bool(relation.temporal_approximate),
+        )
 
     mention_statuses = ["accepted", "modified"]
     if include_pending_mentions:
@@ -405,22 +515,15 @@ def build_graph(
         authority_id = mention.authority_id
         if authority_id is None or authority_id not in authority_by_id:
             continue
-        target = _document_target_for_object(
+        kind, record_id, source_key, page = _document_target_for_object(
             editable,
             part_by_id=part_by_id,
             registration_by_digital=registration_by_digital,
         )
-        if target is None:
-            continue
-        kind, record_id, _label, source_key, page = target
         if kind == "document_part":
             target_key = add_part(record_id, source_key=source_key, page=page)
         else:
-            target_key = add_unit(record_id)
-            node = nodes.get(target_key) if target_key else None
-            if node and not node.source_key:
-                node.source_key = source_key
-                node.page_number = page
+            target_key = add_digital(record_id, source_key=source_key, page=page)
         entity_key = add_entity(authority_id)
         if entity_key is None or target_key is None:
             continue
@@ -447,7 +550,7 @@ def build_graph(
         if mention.status == "pending":
             bucket["pending"] = int(bucket["pending"]) + 1
 
-    if "mention" in edge_types:
+    if "mention" in selected_edge_types:
         for (authority_id, target_key), bucket in mention_groups.items():
             entity_key = _node_id("entity", authority_id)
             count = int(bucket["count"])
@@ -458,7 +561,7 @@ def build_graph(
             explanation = (
                 f"{count} mención{'es' if count != 1 else ''} vinculada"
                 f"{'s' if count != 1 else ''} conecta{'n' if count != 1 else ''} "
-                "la entidad con este documento o parte interna."
+                "la autoridad con este documento o parte interna."
             )
             if pending:
                 explanation += f" {pending} todavía está(n) pendiente(s) de revisión humana."
@@ -473,18 +576,19 @@ def build_graph(
                 explanation=explanation,
                 weight=count,
                 evidence_note=", ".join(texts[:6]) or None,
+                provenance_note="entity_mentions + editable_objects",
                 authority_ids=(authority_id,),
                 source_key=str(bucket["source_key"]) if bucket["source_key"] else None,
                 page_number=int(bucket["page"]) if bucket["page"] is not None else None,
                 object_id=str(bucket["object_id"]) if bucket["object_id"] else None,
             )
 
-    if "shared_entity" in edge_types:
+    if "shared_entity" in selected_edge_types:
         shared: dict[tuple[str, str], set[str]] = defaultdict(set)
         document_keys = sorted(document_entities)
         for index, left in enumerate(document_keys):
             left_entities = document_entities[left]
-            for right in document_keys[index + 1 :]:
+            for right in document_keys[index + 1:]:
                 common = left_entities & document_entities[right]
                 if len(common) >= min_shared_entities:
                     shared[(left, right)].update(common)
@@ -500,14 +604,25 @@ def build_graph(
                 label=f"{count} entidad{'es' if count != 1 else ''} compartida{'s' if count != 1 else ''}",
                 explanation=(
                     "Los dos documentos o partes contienen menciones vinculadas de las mismas "
-                    "entidades. Esta arista es derivada y no constituye una afirmación analítica autónoma."
+                    "autoridades. Esta arista es derivada y no constituye una relación analítica autónoma."
                 ),
                 weight=count,
                 evidence_note=", ".join(names[:10]),
+                provenance_note="derivada de entity_mentions aceptadas o modificadas",
                 authority_ids=tuple(sorted(authority_ids)),
             )
 
-    # Mantener solamente el componente o vecindad solicitada.
+    if focus_node_id and focus_node_id not in nodes and ":" in focus_node_id:
+        kind, record_id = focus_node_id.split(":", 1)
+        if kind == "entity":
+            add_entity(record_id)
+        elif kind == "archival_unit":
+            add_unit(record_id)
+        elif kind == "digital_object":
+            add_digital(record_id)
+        elif kind == "document_part":
+            add_part(record_id)
+
     if focus_node_id and focus_node_id in nodes and max_depth is not None:
         adjacency: dict[str, set[str]] = defaultdict(set)
         for edge in edges.values():
@@ -525,8 +640,7 @@ def build_graph(
                     queue.append((neighbor, depth + 1))
         nodes = {key: value for key, value in nodes.items() if key in keep}
         edges = {
-            key: value
-            for key, value in edges.items()
+            key: value for key, value in edges.items()
             if value.source in keep and value.target in keep
         }
 
@@ -553,8 +667,7 @@ def build_graph(
             keep.add(focus_node_id)
         nodes = {key: value for key, value in nodes.items() if key in keep}
         edges = {
-            key: value
-            for key, value in edges.items()
+            key: value for key, value in edges.items()
             if value.source in keep and value.target in keep
         }
         truncated = True
@@ -573,7 +686,6 @@ def build_graph(
         total_nodes_before_limit=total_nodes,
         total_edges_before_limit=total_edges,
     )
-
 
 def graph_consistency_issues(session: Session, *, project_id: str) -> list[GraphConsistencyIssue]:
     issues: list[GraphConsistencyIssue] = []
@@ -614,7 +726,7 @@ def graph_consistency_issues(session: Session, *, project_id: str) -> list[Graph
         for row in session.scalars(select(DocumentPart).where(DocumentPart.id.in_(part_ids))).all()
     } if part_ids else {}
 
-    duplicate_groups: dict[tuple[str, str, str, str], list[EntityRelation]] = defaultdict(list)
+    duplicate_groups: dict[tuple[str, str, str, str, str], list[EntityRelation]] = defaultdict(list)
     for relation in relations:
         if relation.lifecycle_status != "active":
             continue
@@ -627,7 +739,7 @@ def graph_consistency_issues(session: Session, *, project_id: str) -> list[Graph
         else:
             target_kind, target_id = "missing", ""
         duplicate_groups[
-            (relation.source_authority_id, _normalized(relation.relation_label), target_kind, target_id)
+            ((relation.relation_kind or "analytical"), relation.source_authority_id, _normalized(relation.relation_label), target_kind, target_id)
         ].append(relation)
 
         source = authorities.get(relation.source_authority_id)
@@ -680,14 +792,37 @@ def graph_consistency_issues(session: Session, *, project_id: str) -> list[Graph
                     entity_id=target_id,
                 )
             )
+        relation_kind = relation.relation_kind or "analytical"
+        if relation_kind in {"producer", "manager"} and target_kind != "archival_unit":
+            issues.append(
+                GraphConsistencyIssue(
+                    code="invalid_archival_role_target",
+                    severity="error",
+                    message="Un rol productor o gestor debe apuntar a una unidad archivística.",
+                    relation_id=relation.id,
+                    entity_id=relation.source_authority_id,
+                )
+            )
         if not relation.evidence_note or not relation.evidence_note.strip():
             issues.append(
                 GraphConsistencyIssue(
                     code="missing_evidence",
-                    severity="warning",
+                    severity="error" if relation_kind in {"producer", "manager"} else "warning",
                     message=(
                         f"La relación “{relation.relation_label}” no tiene evidencia o fundamento registrado."
                     ),
+                    relation_id=relation.id,
+                    entity_id=relation.source_authority_id,
+                )
+            )
+        if relation_kind in {"producer", "manager"} and (
+            not relation.provenance_note or not relation.provenance_note.strip()
+        ):
+            issues.append(
+                GraphConsistencyIssue(
+                    code="missing_provenance",
+                    severity="error",
+                    message="El rol archivístico no tiene procedencia registrada.",
                     relation_id=relation.id,
                     entity_id=relation.source_authority_id,
                 )
@@ -807,13 +942,22 @@ def graph_consistency_issues(session: Session, *, project_id: str) -> list[Graph
     )
 
 
+def _graph_record_json(row: GraphNode | GraphEdge) -> dict[str, object]:
+    payload = asdict(row)
+    for field in ("temporal_start", "temporal_end"):
+        value = payload.get(field)
+        if isinstance(value, date):
+            payload[field] = value.isoformat()
+    if isinstance(row, GraphEdge):
+        payload["authority_ids"] = list(row.authority_ids)
+    return payload
+
+
 def _json_ready(view: GraphView) -> dict[str, object]:
     return {
         "schema_version": "1.0",
-        "nodes": [asdict(row) for row in view.nodes],
-        "edges": [
-            {**asdict(row), "authority_ids": list(row.authority_ids)} for row in view.edges
-        ],
+        "nodes": [_graph_record_json(row) for row in view.nodes],
+        "edges": [_graph_record_json(row) for row in view.edges],
         "truncated": view.truncated,
         "total_nodes_before_limit": view.total_nodes_before_limit,
         "total_edges_before_limit": view.total_edges_before_limit,
@@ -855,7 +999,7 @@ def export_graph(
         fieldnames = list(asdict(view.edges[0]).keys()) if view.edges else [
             "edge_id", "source", "target", "edge_type", "label", "explanation",
             "weight", "relation_id", "review_status", "lifecycle_status",
-            "evidence_note", "authority_ids", "source_key", "page_number", "object_id",
+            "evidence_note", "provenance_note", "authority_ids", "source_key", "page_number", "object_id",
         ]
         writer = csv.DictWriter(handle, fieldnames=fieldnames)
         writer.writeheader()
@@ -877,6 +1021,7 @@ def export_graph(
         ("edge_type", "edge", "edge_type", "string"),
         ("edge_weight", "edge", "weight", "int"),
         ("edge_explanation", "edge", "explanation", "string"),
+        ("edge_provenance", "edge", "provenance_note", "string"),
     ]
     for key_id, target, name, attr_type in key_specs:
         ET.SubElement(
@@ -908,6 +1053,7 @@ def export_graph(
             ("edge_type", edge.edge_type),
             ("edge_weight", edge.weight),
             ("edge_explanation", edge.explanation),
+            ("edge_provenance", edge.provenance_note or ""),
         ):
             data = ET.SubElement(element, f"{{{ns}}}data", key=key_id)
             data.text = str(value)
@@ -955,6 +1101,7 @@ def _node_tooltip(row: GraphNode) -> str:
     labels = {
         "entity": "Entidad",
         "archival_unit": "Unidad archivística",
+        "digital_object": "Documento u objeto digital",
         "document_part": "Parte documental",
     }
     lines = [f"{labels.get(row.kind, row.kind)}: {row.label}"]
@@ -978,6 +1125,8 @@ def _edge_tooltip(row: GraphEdge) -> str:
     lines = [row.label, f"Origen del vínculo: {row.explanation}"]
     if row.evidence_note:
         lines.append(f"Evidencia: {row.evidence_note}")
+    if row.provenance_note:
+        lines.append(f"Procedencia: {row.provenance_note}")
     if row.review_status:
         lines.append(f"Revisión: {row.review_status}")
     if row.temporal_expression:

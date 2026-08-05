@@ -210,7 +210,16 @@ def _group_entities(
                 target_name = units.get(relation.target_archival_unit_id, "Unidad archivística")
             else:
                 target_name = parts.get(relation.target_document_part_id, "Parte interna")
-            text_value = f"{source_name} — {relation.relation_label} → {target_name}"
+            relation_class = {
+                "producer": "entidad productora",
+                "manager": "entidad gestora",
+            }.get(relation.relation_kind, "relación analítica")
+            text_value = (
+                f"{source_name} — {relation.relation_label} → {target_name} "
+                f"[{relation_class}]"
+            )
+            if relation.provenance_note:
+                text_value += f" · {relation.provenance_note}"
             participating = {relation.source_authority_id}
             if relation.target_authority_id is not None:
                 participating.add(relation.target_authority_id)

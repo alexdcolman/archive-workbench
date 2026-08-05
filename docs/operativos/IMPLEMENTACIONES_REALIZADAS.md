@@ -1,10 +1,10 @@
 # Implementaciones realizadas — Archive Workbench
 
-**Estado verificado:** 2026-08-04 · **versión:** 0.76.0
+**Estado verificado:** 2026-08-05 · **versión:** 0.77.0
 
 Este documento registra capacidades ya implementadas y, cuando corresponde, validadas. No deben volver a aparecer en `PENDIENTES_ACTIVOS.md` salvo evidencia de regresión o ampliación explícita del alcance.
 
-## Índice de capacidades cerradas
+## Índice de capacidades implementadas
 
 | Área | Estado actual |
 |---|---|
@@ -29,6 +29,20 @@ Este documento registra capacidades ya implementadas y, cuando corresponde, vali
 | Duplicados OCR-02 | Cerrado por decisión de alcance en 0.74.0 |
 | Plantillas distribuibles CAT-01 | Implementadas y validadas en 0.75.1 |
 | Diccionarios de autoridades DISC-02 | Implementados y validados en 0.76.0 |
+| Productores y gestores CAT-02 | Implementados y validados en 0.77.0 |
+| Capas archivísticas GRAPH-02 | Implementadas y validadas en 0.77.0 |
+
+## Productores, gestores y estructura documental en el grafo
+
+### CAT-02 + GRAPH-02 — implementación conjunta — 0.77.0
+
+Las entidades productoras y gestoras se registran como relaciones controladas `producer` y `manager` entre una autoridad canónica existente y una unidad archivística. Cada vínculo conserva período, evidencia, procedencia, revisión humana, ciclo de vida e historial append-only. Las etiquetas visibles `produjo` y `gestionó` se generan desde el tipo controlado y no se admiten como nombres libres canónicos. Una misma autoridad puede ocupar roles distintos en unidades o períodos diferentes; un cambio de gestión crea otro vínculo y no reescribe el anterior.
+
+La migración `0041_catalog_authority_roles_graph_layers` agrega `relation_kind` y `provenance_note` de manera aditiva. Las relaciones anteriores quedan clasificadas como `analytical`. Los triggers de SQLite impiden roles sin unidad archivística, evidencia, procedencia o etiqueta canónica, y el intercambio offline conserva todos los campos nuevos.
+
+El grafo distingue nodos de autoridad, unidad archivística, objeto digital y parte documental. Sus capas separan jerarquía, pertenencia de documentos, partes internas, menciones, relaciones analíticas, productores, gestores y la capa derivada de entidades compartidas ya existente. La vista permite filtrar niveles, elegir cualquiera de los cuatro tipos de nodo como foco, limitar profundidad y cantidad de nodos, y mostrar la procedencia explicable de cada arista. Las aristas dirigidas terminan en una flecha visible, mientras que la capa simétrica de entidades compartidas permanece sin flecha. La distancia queda siempre disponible y solo se aplica cuando hay un foco. Las relaciones entre objeto digital y unidad siguen la dirección del contrato catalográfico y usan etiquetas legibles en español. JSON, CSV y GraphML conservan el tipo de vínculo, la explicación y la procedencia; las fechas se serializan en ISO.
+
+La validación automatizada creó una base descartable fuera del repositorio en revisión `0041_catalog_authority_roles_graph_layers`, produjo las siete capas requeridas, los cuatro tipos de nodo y cero errores de consistencia. **Validado manualmente en 0.77.0.** Se confirmaron los roles y períodos históricos, el historial append-only, las siete capas, el foco y la distancia, las flechas dirigidas, la pertenencia documental `objeto digital → unidad archivística` y las exportaciones JSON, CSV y GraphML. El JSON final registró nueve nodos, doce aristas, cero inconsistencias y ningún truncamiento. `CAT-02` y `GRAPH-02` quedan cerrados.
 
 ## Plantillas distribuibles de catálogo
 

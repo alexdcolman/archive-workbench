@@ -162,13 +162,13 @@ def test_version_docs_and_discovery_plan_are_packaged() -> None:
         / "archive_workbench"
         / "migrations"
         / "versions"
-        / "0040_discovery_grouping_continuity.py"
+        / "0041_catalog_authority_roles_graph_layers.py"
     )
 
-    assert data["project"]["version"] == "0.76.0"
-    assert '__version__ = "0.76.0"' in version_source
+    assert data["project"]["version"] == "0.77.0"
+    assert '__version__ = "0.77.0"' in version_source
     assert migration.is_file()
-    assert 'down_revision = "0039_discovery_decisions"' in migration.read_text(
+    assert 'down_revision = "0040_discovery_grouping_continuity"' in migration.read_text(
         encoding="utf-8"
     )
     assert (root / "src" / "archive_workbench" / "lineage_recovery.py").is_file()
@@ -208,6 +208,13 @@ def test_version_docs_and_discovery_plan_are_packaged() -> None:
     semantic_validator_source = semantic_validator.read_text(encoding="utf-8")
     assert "project_data no fue leído ni modificado" in semantic_validator_source
     assert "semantic_evaluation_alt.json" in semantic_validator_source
+    catalog_graph_validator = root / "scripts" / "create_catalog_graph_validation_project.py"
+    assert catalog_graph_validator.is_file()
+    catalog_graph_source = catalog_graph_validator.read_text(encoding="utf-8")
+    assert "el script no elimina ni reemplaza proyectos" in catalog_graph_source
+    assert "CAT-02/GRAPH-02" in catalog_graph_source
+    assert "project_data_touched" in catalog_graph_source
+    assert "0041_catalog_authority_roles_graph_layers" not in catalog_graph_source
     assert data["project"]["optional-dependencies"]["discovery"] == [
         "spacy>=3.8,<4"
     ]

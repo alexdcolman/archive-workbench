@@ -3,6 +3,8 @@ from __future__ import annotations
 from datetime import date, datetime, timezone
 from pathlib import Path
 
+from sqlalchemy import select
+
 from archive_workbench.ui_navigation import rerun_view, tracked_tabs
 
 from archive_workbench.authorities import (
@@ -24,7 +26,13 @@ from archive_workbench.authorities import (
 from archive_workbench.ui_navigation import rerun_app, request_app_view
 
 from archive_workbench.db import create_sqlite_engine, session_scope
-from archive_workbench.db.models import EditableObject
+from archive_workbench.db.models import (
+    ArchivalUnit,
+    AuthorityRecord,
+    DigitalObject,
+    DocumentPart,
+    EditableObject,
+)
 from archive_workbench.graph import (
     GRAPH_EDGE_TYPES,
     GraphEdge,
@@ -37,13 +45,19 @@ from archive_workbench.graph_canvas import interactive_graph_canvas
 from archive_workbench.temporal import format_temporal_range
 
 _EDGE_LABELS = {
-    "explicit": "Relaciones explícitas",
+    "hierarchy": "Jerarquía archivística",
+    "document": "Documentos en unidades",
+    "part": "Partes internas",
     "mention": "Menciones aceptadas",
+    "analytical": "Relaciones analíticas",
+    "producer": "Entidades productoras",
+    "manager": "Entidades gestoras",
     "shared_entity": "Entidades compartidas",
 }
 _NODE_LABELS = {
-    "entity": "Entidad",
+    "entity": "Autoridad",
     "archival_unit": "Unidad archivística",
+    "digital_object": "Documento u objeto digital",
     "document_part": "Parte interna",
 }
 _ENTITY_TYPE_LABELS = {
@@ -63,6 +77,8 @@ _SEVERITY_LABELS = {"error": "Error", "warning": "Advertencia", "info": "Informa
 _ISSUE_LABELS = {
     "duplicate_relation": "Relaciones duplicadas",
     "missing_evidence": "Relación sin evidencia",
+    "missing_provenance": "Rol archivístico sin procedencia",
+    "invalid_archival_role_target": "Destino inválido para un rol archivístico",
     "unreviewed_relation": "Relación pendiente de revisión",
     "missing_target": "Destino inexistente",
     "duplicate_mention": "Menciones duplicadas",
@@ -154,7 +170,7 @@ def _navigate_node(st, node: GraphNode) -> None:
             selection=node.record_id,
         )
         return
-    if node.kind == "document_part" and node.source_key:
+    if node.kind in {"digital_object", "document_part"} and node.source_key:
         request_app_view(
             st,
             mode="review",
@@ -473,7 +489,7 @@ def render_graph_view(
 ) -> None:
     st.header("Mapa de relaciones")
     st.caption(
-        "Explorá personas, organizaciones, documentos y vínculos registrados o derivados del corpus."
+        "Explorá la estructura archivística, los documentos, sus partes, las autoridades y la procedencia de cada vínculo."
     )
     repair_notice = st.session_state.pop("mention_repair_notice", None)
     if repair_notice:
@@ -481,29 +497,50 @@ def render_graph_view(
     with st.expander("Cómo se construye este mapa", expanded=False):
         st.write(
             "Es una vista derivada: no guarda datos paralelos ni crea relaciones nuevas. "
-            "Los vínculos continuos son afirmaciones explícitas; las menciones y entidades "
-            "compartidas se calculan a partir del corpus y siempre explican de dónde salen."
+            "Cada capa conserva su significado propio y explica la tabla o registro del que procede; "
+            "la pertenencia archivística nunca se presenta como una relación analítica."
         )
 
-    # Opciones de foco sobre un grafo amplio; no se renderizan todavía.
+    # El foco se obtiene directamente de los registros para incluir también elementos sin aristas visibles.
     engine = create_sqlite_engine(db_path)
     try:
         with session_scope(engine) as session:
-            broad = build_graph(
-                session,
-                project_id=project_id,
-                max_nodes=500,
-                include_inactive=True,
-                include_pending_mentions=True,
-            )
+            authority_focus = session.scalars(
+                select(AuthorityRecord)
+                .where(AuthorityRecord.project_id == project_id)
+                .order_by(AuthorityRecord.normalized_name, AuthorityRecord.id)
+            ).all()
+            unit_focus = session.scalars(
+                select(ArchivalUnit)
+                .where(ArchivalUnit.project_id == project_id)
+                .order_by(ArchivalUnit.title, ArchivalUnit.id)
+            ).all()
+            digital_focus = session.scalars(
+                select(DigitalObject)
+                .where(DigitalObject.project_id == project_id)
+                .order_by(DigitalObject.original_filename, DigitalObject.id)
+            ).all()
+            part_focus = session.scalars(
+                select(DocumentPart)
+                .join(DigitalObject, DigitalObject.id == DocumentPart.digital_object_id)
+                .where(DigitalObject.project_id == project_id)
+                .order_by(DocumentPart.title, DocumentPart.id)
+            ).all()
     except (ValueError, RuntimeError, OSError) as exc:
         st.error(str(exc))
         return
     finally:
         engine.dispose()
 
-    focus_options = [""] + [row.node_id for row in broad.nodes]
-    focus_map = {row.node_id: row for row in broad.nodes}
+    focus_rows = [
+        *[(f"entity:{row.id}", "entity", row.preferred_name) for row in authority_focus],
+        *[(f"archival_unit:{row.id}", "archival_unit", row.title) for row in unit_focus],
+        *[(f"digital_object:{row.id}", "digital_object", row.original_filename) for row in digital_focus],
+        *[(f"document_part:{row.id}", "document_part", row.title) for row in part_focus],
+    ]
+    focus_options = [""] + [row[0] for row in focus_rows]
+    focus_map = {row[0]: row for row in focus_rows}
+    level_options = sorted({row.level_key for row in unit_focus})
     with st.expander("Filtros del mapa", expanded=False):
         with st.form("graph_filters", enter_to_submit=False):
             left, middle, right = st.columns(3)
@@ -521,8 +558,13 @@ def render_graph_view(
                     format_func=lambda value: _ENTITY_TYPE_LABELS[value],
                 )
             with middle:
+                archival_levels = st.multiselect(
+                    "Niveles archivísticos",
+                    options=level_options,
+                    default=level_options,
+                )
                 review_statuses = st.multiselect(
-                    "Revisión de relaciones explícitas",
+                    "Revisión de relaciones registradas",
                     options=["unreviewed", "reviewed", "approved"],
                     default=["unreviewed", "reviewed", "approved"],
                     format_func=lambda value: _REVIEW_LABELS[value],
@@ -547,14 +589,17 @@ def render_graph_view(
                     format_func=lambda value: (
                         "Todo el mapa"
                         if not value
-                        else f"{_NODE_LABELS[focus_map[value].kind]} · {focus_map[value].label}"
+                        else f"{_NODE_LABELS[focus_map[value][1]]} · {focus_map[value][2]}"
                     ),
                 )
                 depth_value = st.selectbox(
                     "Distancia desde el centro",
                     options=[1, 2, 3, 0],
                     format_func=lambda value: "Sin límite" if value == 0 else f"{value} salto(s)",
-                    disabled=not bool(focus_node_id),
+                    help=(
+                        "Se aplica cuando elegís un elemento en «Centrar en». "
+                        "Sin foco, el mapa conserva todos los elementos y omite esta distancia."
+                    ),
                 )
             temporal_enabled = st.checkbox(
                 "Filtrar por período de entidades o relaciones",
@@ -583,6 +628,7 @@ def render_graph_view(
                 project_id=project_id,
                 edge_types=tuple(edge_types),
                 entity_types=tuple(entity_types),
+                archival_levels=tuple(archival_levels),
                 review_statuses=tuple(review_statuses),
                 include_inactive=include_inactive,
                 include_pending_mentions=include_pending_mentions,
@@ -638,17 +684,19 @@ def render_graph_view(
     finally:
         engine.dispose()
 
-    explicit_count = sum(edge.edge_type == "explicit" for edge in view.edges)
+    structural_count = sum(edge.edge_type in {"hierarchy", "document", "part"} for edge in view.edges)
+    analytical_count = sum(edge.edge_type == "analytical" for edge in view.edges)
+    role_count = sum(edge.edge_type in {"producer", "manager"} for edge in view.edges)
     mention_count = sum(edge.edge_type == "mention" for edge in view.edges)
-    shared_count = sum(edge.edge_type == "shared_entity" for edge in view.edges)
     with st.expander("Resumen del mapa", expanded=False):
-        metrics = st.columns(6)
+        metrics = st.columns(7)
         metrics[0].metric("Elementos", len(view.nodes))
         metrics[1].metric("Vínculos", len(view.edges))
-        metrics[2].metric("Explícitos", explicit_count)
-        metrics[3].metric("Menciones", mention_count)
-        metrics[4].metric("Compartidos", shared_count)
-        metrics[5].metric("Alertas", sum(item.severity != "info" for item in issues))
+        metrics[2].metric("Estructura", structural_count)
+        metrics[3].metric("Analíticos", analytical_count)
+        metrics[4].metric("Productores / gestores", role_count)
+        metrics[5].metric("Menciones", mention_count)
+        metrics[6].metric("Alertas", sum(item.severity != "info" for item in issues))
     if view.truncated:
         st.warning(
             f"La vista se limitó a {len(view.nodes)} elementos. Antes del límite había "
@@ -677,6 +725,8 @@ def render_graph_view(
                 + "_".join(sorted(edge_types))
                 + "_entities_"
                 + "_".join(sorted(entity_types))
+                + "_levels_"
+                + "_".join(sorted(archival_levels))
                 + "_reviews_"
                 + "_".join(sorted(review_statuses))
                 + f"_{include_inactive}_{include_pending_mentions}"
@@ -697,8 +747,9 @@ def render_graph_view(
 
         with st.expander("Cómo leer los elementos y vínculos", expanded=False):
             st.caption(
-                "Círculo: entidad · rectángulo: unidad archivística · otra forma: parte interna. "
-                "Línea continua: relación humana; guiones largos: mención; puntos: entidad compartida."
+                "Los nodos distinguen autoridades, unidades, documentos y partes. "
+                "Las líneas continuas representan estructura o relaciones analíticas; "
+                "los roles productor/gestor y las menciones usan guiones; las entidades compartidas usan puntos."
             )
         node_map = {row.node_id: row for row in view.nodes}
         edge_map = {row.edge_id: row for row in view.edges}
@@ -752,15 +803,25 @@ def render_graph_view(
                     st.write(f"**Vigencia:** {temporal_label}")
                 if edge.evidence_note:
                     st.write("**Evidencia:** " + edge.evidence_note)
+                if edge.provenance_note:
+                    st.write("**Procedencia:** " + edge.provenance_note)
                 actions = st.columns(2)
                 if edge.relation_id and source and source.kind == "entity":
-                    if actions[0].button("Abrir relación", key=f"graph_open_relation_{edge.edge_id}"):
-                        _go_to(
-                            st,
-                            mode="authorities",
-                            selection_key="authority_pending_selection",
-                            selection=source.record_id,
-                        )
+                    if actions[0].button("Abrir registro de origen", key=f"graph_open_relation_{edge.edge_id}"):
+                        if edge.edge_type in {"producer", "manager"} and target and target.kind == "archival_unit":
+                            _go_to(
+                                st,
+                                mode="catalog",
+                                selection_key="catalog_pending_unit_id",
+                                selection=target.record_id,
+                            )
+                        else:
+                            _go_to(
+                                st,
+                                mode="authorities",
+                                selection_key="authority_pending_selection",
+                                selection=source.record_id,
+                            )
                 if edge.source_key:
                     if actions[1].button("Abrir evidencia textual", key=f"graph_open_evidence_{edge.edge_id}"):
                         _navigate_edge_evidence(st, edge)

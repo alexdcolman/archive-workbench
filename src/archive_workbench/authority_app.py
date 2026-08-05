@@ -671,6 +671,7 @@ def _render_authority_workspace(
                     session,
                     project_id=project_id,
                     authority_id=selected.authority_id,
+                    relation_kinds=("analytical",),
                     include_inactive=True,
                     temporal_start=relation_filter_start if relation_temporal_filter else None,
                     temporal_end=relation_filter_end if relation_temporal_filter else None,

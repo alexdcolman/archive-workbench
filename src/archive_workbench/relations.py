@@ -23,6 +23,17 @@ from archive_workbench.sources import PROCESSABLE_SOURCE_TYPES
 from archive_workbench.temporal import parse_temporal_expression
 
 RELATION_TARGET_KINDS = ("entity", "archival_unit", "document_part")
+RELATION_KINDS = ("analytical", "producer", "manager")
+ARCHIVAL_ROLE_KINDS = ("producer", "manager")
+RELATION_KIND_LABELS = {
+    "analytical": "Relación analítica",
+    "producer": "Entidad productora",
+    "manager": "Entidad gestora",
+}
+RELATION_KIND_EDGE_LABELS = {
+    "producer": "produjo",
+    "manager": "gestionó",
+}
 RELATION_REVIEW_STATUSES = ("unreviewed", "reviewed", "approved")
 RELATION_LIFECYCLE_STATUSES = ("active", "inactive")
 
@@ -40,12 +51,14 @@ class EntityRelationRow:
     relation_id: str
     source_authority_id: str
     source_name: str
+    relation_kind: str
     relation_label: str
     target_kind: str
     target_id: str
     target_label: str
     target_context: str | None
     evidence_note: str | None
+    provenance_note: str | None
     temporal_expression: str | None
     temporal_start: date | None
     temporal_end: date | None
@@ -126,11 +139,13 @@ def _relation_snapshot(relation: EntityRelation) -> dict[str, object]:
     return {
         "project_id": relation.project_id,
         "source_authority_id": relation.source_authority_id,
+        "relation_kind": relation.relation_kind,
         "relation_label": relation.relation_label,
         "target_authority_id": relation.target_authority_id,
         "target_archival_unit_id": relation.target_archival_unit_id,
         "target_document_part_id": relation.target_document_part_id,
         "evidence_note": relation.evidence_note,
+        "provenance_note": relation.provenance_note,
         "temporal_expression": relation.temporal_expression,
         "temporal_start": relation.temporal_start.isoformat() if relation.temporal_start else None,
         "temporal_end": relation.temporal_end.isoformat() if relation.temporal_end else None,
@@ -165,6 +180,40 @@ def _append_relation_revision(
     return revision
 
 
+def _clean_optional(value: str | None) -> str | None:
+    if value is None:
+        return None
+    return value.strip() or None
+
+
+def _validate_relation_contract(
+    *,
+    relation_kind: str,
+    relation_label: str | None,
+    target_kind: str,
+    evidence_note: str | None,
+    provenance_note: str | None,
+) -> tuple[str, str | None, str | None]:
+    if relation_kind not in RELATION_KINDS:
+        raise ValueError(f"Clase de relación inválida: {relation_kind}")
+    clean_evidence = _clean_optional(evidence_note)
+    clean_provenance = _clean_optional(provenance_note)
+    if relation_kind in ARCHIVAL_ROLE_KINDS:
+        if target_kind != "archival_unit":
+            raise ValueError(
+                "Las entidades productoras y gestoras solo pueden vincularse con una unidad archivística"
+            )
+        if clean_evidence is None:
+            raise ValueError("El rol archivístico requiere evidencia")
+        if clean_provenance is None:
+            raise ValueError("El rol archivístico requiere procedencia")
+        return RELATION_KIND_EDGE_LABELS[relation_kind], clean_evidence, clean_provenance
+    clean_label = (relation_label or "").strip()
+    if not clean_label:
+        raise ValueError("La relación no puede quedar vacía")
+    return clean_label, clean_evidence, clean_provenance
+
+
 def create_entity_relation(
     session: Session,
     *,
@@ -174,7 +223,9 @@ def create_entity_relation(
     target_kind: str,
     target_id: str,
     created_by: str,
+    relation_kind: str = "analytical",
     evidence_note: str | None = None,
+    provenance_note: str | None = None,
     temporal_expression: str | None = None,
     temporal_note: str | None = None,
     review_status: str = "unreviewed",
@@ -185,9 +236,6 @@ def create_entity_relation(
     source = session.get(AuthorityRecord, source_authority_id)
     if source is None or source.project_id != project_id:
         raise ValueError("La entidad de origen no existe en este proyecto")
-    clean_label = relation_label.strip()
-    if not clean_label:
-        raise ValueError("La relación no puede quedar vacía")
     if review_status not in RELATION_REVIEW_STATUSES:
         raise ValueError(f"Estado de revisión inválido: {review_status}")
     _validate_target(
@@ -197,25 +245,35 @@ def create_entity_relation(
         target_kind=target_kind,
         target_id=target_id,
     )
+    clean_label, clean_evidence, clean_provenance = _validate_relation_contract(
+        relation_kind=relation_kind,
+        relation_label=relation_label,
+        target_kind=target_kind,
+        evidence_note=evidence_note,
+        provenance_note=provenance_note,
+    )
     targets = _target_fields(target_kind, target_id)
     temporal = parse_temporal_expression(temporal_expression)
+    actor = created_by.strip() or "local_user"
     relation = EntityRelation(
         id=new_id(),
         project_id=project_id,
         source_authority_id=source_authority_id,
+        relation_kind=relation_kind,
         relation_label=clean_label,
-        evidence_note=evidence_note.strip() if evidence_note and evidence_note.strip() else None,
+        evidence_note=clean_evidence,
+        provenance_note=clean_provenance,
         temporal_expression=temporal.expression,
         temporal_start=temporal.start,
         temporal_end=temporal.end,
         temporal_precision=temporal.precision,
         temporal_approximate=temporal.approximate,
-        temporal_note=temporal_note.strip() if temporal_note and temporal_note.strip() else None,
+        temporal_note=_clean_optional(temporal_note),
         lifecycle_status="active",
         review_status=review_status,
-        created_by=created_by.strip() or "local_user",
+        created_by=actor,
         created_at=utc_now(),
-        updated_by=created_by.strip() or "local_user",
+        updated_by=actor,
         updated_at=utc_now(),
         revision=1,
         **targets,
@@ -223,7 +281,7 @@ def create_entity_relation(
     session.add(relation)
     session.flush()
     _append_relation_revision(
-        session, relation, operation="create", changed_by=created_by, note=note
+        session, relation, operation="create", changed_by=actor, note=note
     )
     return relation
 
@@ -234,10 +292,13 @@ def update_entity_relation(
     relation_id: str,
     expected_revision: int,
     changed_by: str,
+    source_authority_id: str | None = None,
+    relation_kind: str | None = None,
     relation_label: str | None = None,
     target_kind: str | None = None,
     target_id: str | None = None,
     evidence_note: str | None = None,
+    provenance_note: str | None = None,
     temporal_expression: str | None = None,
     temporal_note: str | None = None,
     review_status: str | None = None,
@@ -251,27 +312,58 @@ def update_entity_relation(
         raise ValueError(
             f"La relación está en revisión {relation.revision}; se esperaba {expected_revision}"
         )
-    if relation_label is not None:
-        clean = relation_label.strip()
-        if not clean:
-            raise ValueError("La relación no puede quedar vacía")
-        relation.relation_label = clean
     if (target_kind is None) != (target_id is None):
         raise ValueError("target_kind y target_id deben indicarse juntos")
-    if target_kind is not None and target_id is not None:
-        _validate_target(
-            session,
-            project_id=relation.project_id,
-            source_authority_id=relation.source_authority_id,
-            target_kind=target_kind,
-            target_id=target_id,
-        )
-        targets = _target_fields(target_kind, target_id)
-        relation.target_authority_id = targets["target_authority_id"]
-        relation.target_archival_unit_id = targets["target_archival_unit_id"]
-        relation.target_document_part_id = targets["target_document_part_id"]
-    if evidence_note is not None:
-        relation.evidence_note = evidence_note.strip() or None
+
+    prospective_source_id = source_authority_id or relation.source_authority_id
+    source = session.get(AuthorityRecord, prospective_source_id)
+    if source is None or source.project_id != relation.project_id:
+        raise ValueError("La entidad de origen no existe en este proyecto")
+
+    current_target_kind, current_target_id = _relation_target(relation)
+    prospective_target_kind = target_kind or current_target_kind
+    prospective_target_id = target_id or current_target_id
+    _validate_target(
+        session,
+        project_id=relation.project_id,
+        source_authority_id=prospective_source_id,
+        target_kind=prospective_target_kind,
+        target_id=prospective_target_id,
+    )
+
+    prospective_kind = relation_kind or relation.relation_kind
+    if (
+        relation_kind == "analytical"
+        and relation.relation_kind != "analytical"
+        and relation_label is None
+    ):
+        raise ValueError("Indicá la etiqueta al convertir un rol archivístico en relación analítica")
+    prospective_label = relation_label if relation_label is not None else relation.relation_label
+    prospective_evidence = (
+        relation.evidence_note if evidence_note is None else _clean_optional(evidence_note)
+    )
+    prospective_provenance = (
+        relation.provenance_note
+        if provenance_note is None
+        else _clean_optional(provenance_note)
+    )
+    clean_label, clean_evidence, clean_provenance = _validate_relation_contract(
+        relation_kind=prospective_kind,
+        relation_label=prospective_label,
+        target_kind=prospective_target_kind,
+        evidence_note=prospective_evidence,
+        provenance_note=prospective_provenance,
+    )
+
+    relation.source_authority_id = prospective_source_id
+    relation.relation_kind = prospective_kind
+    relation.relation_label = clean_label
+    targets = _target_fields(prospective_target_kind, prospective_target_id)
+    relation.target_authority_id = targets["target_authority_id"]
+    relation.target_archival_unit_id = targets["target_archival_unit_id"]
+    relation.target_document_part_id = targets["target_document_part_id"]
+    relation.evidence_note = clean_evidence
+    relation.provenance_note = clean_provenance
     if temporal_expression is not None:
         temporal = parse_temporal_expression(temporal_expression)
         relation.temporal_expression = temporal.expression
@@ -280,7 +372,7 @@ def update_entity_relation(
         relation.temporal_precision = temporal.precision
         relation.temporal_approximate = temporal.approximate
     if temporal_note is not None:
-        relation.temporal_note = temporal_note.strip() or None
+        relation.temporal_note = _clean_optional(temporal_note)
     if review_status is not None:
         if review_status not in RELATION_REVIEW_STATUSES:
             raise ValueError(f"Estado de revisión inválido: {review_status}")
@@ -364,11 +456,16 @@ def entity_relation_rows(
     *,
     project_id: str,
     authority_id: str | None = None,
+    archival_unit_id: str | None = None,
+    relation_kinds: tuple[str, ...] = (),
     include_inactive: bool = False,
     temporal_start: date | None = None,
     temporal_end: date | None = None,
     include_undated: bool = False,
 ) -> list[EntityRelationRow]:
+    invalid_kinds = sorted(set(relation_kinds) - set(RELATION_KINDS))
+    if invalid_kinds:
+        raise ValueError(f"Clases de relación inválidas: {', '.join(invalid_kinds)}")
     statement = select(EntityRelation).where(EntityRelation.project_id == project_id)
     if authority_id is not None:
         statement = statement.where(
@@ -377,6 +474,12 @@ def entity_relation_rows(
                 EntityRelation.target_authority_id == authority_id,
             )
         )
+    if archival_unit_id is not None:
+        statement = statement.where(
+            EntityRelation.target_archival_unit_id == archival_unit_id
+        )
+    if relation_kinds:
+        statement = statement.where(EntityRelation.relation_kind.in_(relation_kinds))
     if not include_inactive:
         statement = statement.where(EntityRelation.lifecycle_status == "active")
     if temporal_start is not None or temporal_end is not None:
@@ -439,12 +542,14 @@ def entity_relation_rows(
                 relation_id=relation.id,
                 source_authority_id=relation.source_authority_id,
                 source_name=source.preferred_name if source else "Entidad inexistente",
+                relation_kind=relation.relation_kind,
                 relation_label=relation.relation_label,
                 target_kind=kind,
                 target_id=target_id,
                 target_label=target_label,
                 target_context=context,
                 evidence_note=relation.evidence_note,
+                provenance_note=relation.provenance_note,
                 temporal_expression=relation.temporal_expression,
                 temporal_start=relation.temporal_start,
                 temporal_end=relation.temporal_end,

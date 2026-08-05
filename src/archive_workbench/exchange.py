@@ -436,11 +436,13 @@ def _editable_state_payload(session: Session, project_id: str) -> dict[str, Any]
             {
                 "id": row.id,
                 "source_authority_id": row.source_authority_id,
+                "relation_kind": row.relation_kind,
                 "relation_label": row.relation_label,
                 "target_authority_id": row.target_authority_id,
                 "target_archival_unit_id": row.target_archival_unit_id,
                 "target_document_part_id": row.target_document_part_id,
                 "evidence_note": row.evidence_note,
+                "provenance_note": row.provenance_note,
                 "temporal_expression": row.temporal_expression,
                 "temporal_start": row.temporal_start.isoformat() if row.temporal_start else None,
                 "temporal_end": row.temporal_end.isoformat() if row.temporal_end else None,
@@ -1346,11 +1348,13 @@ def _entity_mention_values(mention: EntityMention) -> dict[str, Any]:
 def _entity_relation_values(relation: EntityRelation) -> dict[str, Any]:
     return {
         "source_authority_id": relation.source_authority_id,
+        "relation_kind": relation.relation_kind,
         "relation_label": relation.relation_label,
         "target_authority_id": relation.target_authority_id,
         "target_archival_unit_id": relation.target_archival_unit_id,
         "target_document_part_id": relation.target_document_part_id,
         "evidence_note": relation.evidence_note,
+        "provenance_note": relation.provenance_note,
         "temporal_expression": relation.temporal_expression,
         "temporal_start": relation.temporal_start.isoformat() if relation.temporal_start else None,
         "temporal_end": relation.temporal_end.isoformat() if relation.temporal_end else None,
@@ -4885,15 +4889,16 @@ def _apply_entity_relation_event(
         RELATION_LIFECYCLE_STATUSES,
         RELATION_REVIEW_STATUSES,
         _append_relation_revision,
+        _validate_relation_contract,
         _validate_target,
     )
 
     actor = f"{applied_by} [bundle de {source_workspace_name}]"
     relation = session.get(EntityRelation, event.entity_id)
     fields = (
-        "source_authority_id", "relation_label", "target_authority_id",
+        "source_authority_id", "relation_kind", "relation_label", "target_authority_id",
         "target_archival_unit_id", "target_document_part_id", "evidence_note",
-        "temporal_expression", "temporal_start", "temporal_end",
+        "provenance_note", "temporal_expression", "temporal_start", "temporal_end",
         "temporal_precision", "temporal_approximate", "temporal_note",
         "lifecycle_status", "review_status",
     )
@@ -4901,6 +4906,7 @@ def _apply_entity_relation_event(
         if relation is not None:
             raise ValueError(f"La relación {event.entity_id} ya existe")
         values = {field: _new_value(event.changed_fields, field) for field in fields}
+        values["relation_kind"] = values["relation_kind"] or "analytical"
         source = session.get(AuthorityRecord, values["source_authority_id"])
         if source is None or source.project_id != event.project_id:
             raise ValueError("La entidad de origen de la relación no existe")
@@ -4919,9 +4925,13 @@ def _apply_entity_relation_event(
             target_kind=selected[0][0],
             target_id=str(selected[0][1]),
         )
-        label = str(values["relation_label"] or "").strip()
-        if not label:
-            raise ValueError("La relación recibida no tiene etiqueta")
+        label, evidence_note, provenance_note = _validate_relation_contract(
+            relation_kind=str(values["relation_kind"]),
+            relation_label=values["relation_label"],
+            target_kind=selected[0][0],
+            evidence_note=values["evidence_note"],
+            provenance_note=values["provenance_note"],
+        )
         if values["review_status"] not in RELATION_REVIEW_STATUSES:
             raise ValueError("Estado de revisión de relación inválido")
         if values["lifecycle_status"] not in RELATION_LIFECYCLE_STATUSES:
@@ -4930,11 +4940,13 @@ def _apply_entity_relation_event(
             id=event.entity_id,
             project_id=event.project_id,
             source_authority_id=source.id,
+            relation_kind=str(values["relation_kind"]),
             relation_label=label,
             target_authority_id=values["target_authority_id"],
             target_archival_unit_id=values["target_archival_unit_id"],
             target_document_part_id=values["target_document_part_id"],
-            evidence_note=values["evidence_note"],
+            evidence_note=evidence_note,
+            provenance_note=provenance_note,
             temporal_expression=values["temporal_expression"],
             temporal_start=_coerce_date(values["temporal_start"]),
             temporal_end=_coerce_date(values["temporal_end"]),
@@ -4991,10 +5003,17 @@ def _apply_entity_relation_event(
         target_kind=selected[0][0],
         target_id=str(selected[0][1]),
     )
-    label = str(prospective["relation_label"] or "").strip()
-    if not label:
-        raise ValueError("La relación resultante no tiene etiqueta")
+    label, evidence_note, provenance_note = _validate_relation_contract(
+        relation_kind=str(prospective["relation_kind"] or "analytical"),
+        relation_label=prospective["relation_label"],
+        target_kind=selected[0][0],
+        evidence_note=prospective["evidence_note"],
+        provenance_note=prospective["provenance_note"],
+    )
+    relation.relation_kind = str(prospective["relation_kind"] or "analytical")
     relation.relation_label = label
+    relation.evidence_note = evidence_note
+    relation.provenance_note = provenance_note
     if prospective["review_status"] not in RELATION_REVIEW_STATUSES:
         raise ValueError("Estado de revisión de relación inválido")
     if prospective["lifecycle_status"] not in RELATION_LIFECYCLE_STATUSES:

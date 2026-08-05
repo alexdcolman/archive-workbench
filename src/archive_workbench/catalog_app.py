@@ -5,6 +5,7 @@ from pathlib import Path
 
 from typing import Callable
 
+from archive_workbench.authorities import authority_rows
 from archive_workbench.ui_navigation import rerun_app, rerun_view, request_app_view, tracked_tabs
 
 from archive_workbench.catalog import ensure_project, scan_file_instances
@@ -35,6 +36,17 @@ from archive_workbench.catalog_templates import (
 )
 from archive_workbench.db import create_sqlite_engine, session_scope
 from archive_workbench.db.models import ArchivalUnit
+from archive_workbench.relations import (
+    ARCHIVAL_ROLE_KINDS,
+    RELATION_KIND_LABELS,
+    RELATION_LIFECYCLE_STATUSES,
+    RELATION_REVIEW_STATUSES,
+    create_entity_relation,
+    entity_relation_revision_rows,
+    entity_relation_rows,
+    update_entity_relation,
+)
+from archive_workbench.temporal import format_temporal_range
 
 _STATUS_LABELS = {
     "incomplete": "Incompleto",
@@ -83,6 +95,16 @@ _OPERATION_LABELS = {
     "update": "Actualización descriptiva",
     "move": "Movimiento en la jerarquía",
     "undo_move": "Reversión de movimiento",
+}
+
+_ROLE_STATUS_LABELS = {
+    "active": "Activo",
+    "inactive": "Inactivo / histórico",
+}
+_ROLE_REVIEW_LABELS = {
+    "unreviewed": "Sin revisar",
+    "reviewed": "Revisado",
+    "approved": "Aprobado",
 }
 
 
@@ -439,6 +461,22 @@ def render_catalog_view(st, *, project_root: Path, db_path: Path, decisions, act
             digital_objects = unit_digital_objects(session, selected_id)
             revisions = archival_revision_rows(session, selected_id)
             object_choices = digital_object_choices(session, decisions.project_id)
+            archival_roles = entity_relation_rows(
+                session,
+                project_id=decisions.project_id,
+                archival_unit_id=selected_id,
+                relation_kinds=ARCHIVAL_ROLE_KINDS,
+                include_inactive=True,
+            )
+            role_histories = {
+                row.relation_id: entity_relation_revision_rows(session, row.relation_id)
+                for row in archival_roles
+            }
+            role_authorities = authority_rows(
+                session,
+                project_id=decisions.project_id,
+                lifecycle_statuses=("active", "inactive"),
+            )
     finally:
         engine.dispose()
 
@@ -448,9 +486,9 @@ def render_catalog_view(st, *, project_root: Path, db_path: Path, decisions, act
 
     with detail_col:
         st.subheader(f"{level_labels.get(unit.level_key, unit.level_key)} · {unit.title}")
-        description_tab, files_tab, structure_tab, history_tab = tracked_tabs(
+        description_tab, roles_tab, files_tab, structure_tab, history_tab = tracked_tabs(
             st,
-            ["Descripción", "Objetos y archivos", "Estructura", "Historial"],
+            ["Descripción", "Productores y gestión", "Objetos y archivos", "Estructura", "Historial"],
             key="catalog_detail_tabs",
         )
 
@@ -536,6 +574,205 @@ def render_catalog_view(st, *, project_root: Path, db_path: Path, decisions, act
                         "Descripción actualizada",
                     )[1],
                 )
+
+        with roles_tab:
+            st.caption(
+                "Los productores y gestores se vinculan con autoridades canónicas existentes. "
+                "Para registrar un cambio de gestión, agregá otro vínculo con su propio período; "
+                "no reemplaces el vínculo histórico anterior."
+            )
+            authority_map = {row.authority_id: row for row in role_authorities}
+            authority_options = [row.authority_id for row in role_authorities]
+
+            if not authority_options:
+                st.info(
+                    "Todavía no hay autoridades disponibles. Creá primero la persona u organización "
+                    "en Autoridades y luego volvé a esta unidad."
+                )
+            else:
+                with st.expander("Agregar productor o gestor", expanded=not archival_roles):
+                    with st.form(f"catalog_role_create_{unit.id}", clear_on_submit=True, enter_to_submit=False):
+                        create_cols = st.columns(2)
+                        with create_cols[0]:
+                            new_role_kind = st.selectbox(
+                                "Rol",
+                                options=list(ARCHIVAL_ROLE_KINDS),
+                                format_func=lambda value: RELATION_KIND_LABELS[value],
+                                key=f"catalog_role_kind_{unit.id}",
+                            )
+                            new_role_authority = st.selectbox(
+                                "Autoridad",
+                                options=authority_options,
+                                format_func=lambda value: authority_map[value].preferred_name,
+                                key=f"catalog_role_authority_{unit.id}",
+                            )
+                            new_role_period = st.text_input(
+                                "Período",
+                                placeholder="Ej.: 1974-1976, desde 1983 o década de 1990",
+                                key=f"catalog_role_period_{unit.id}",
+                            )
+                        with create_cols[1]:
+                            new_role_evidence = st.text_area(
+                                "Evidencia",
+                                help="Documento, pasaje o fundamento que sostiene la asignación del rol.",
+                                key=f"catalog_role_evidence_{unit.id}",
+                            )
+                            new_role_provenance = st.text_area(
+                                "Procedencia",
+                                help="Origen de la información: instrumento descriptivo, expediente, entrevista u otra fuente.",
+                                key=f"catalog_role_provenance_{unit.id}",
+                            )
+                        new_role_note = st.text_input(
+                            "Nota de registro",
+                            placeholder="Opcional",
+                            key=f"catalog_role_note_{unit.id}",
+                        )
+                        create_role_submit = st.form_submit_button(
+                            "Registrar vínculo", type="primary"
+                        )
+                    if create_role_submit:
+                        def create_role_callback(session):
+                            relation = create_entity_relation(
+                                session,
+                                project_id=decisions.project_id,
+                                source_authority_id=new_role_authority,
+                                relation_kind=new_role_kind,
+                                relation_label="",
+                                target_kind="archival_unit",
+                                target_id=unit.id,
+                                evidence_note=new_role_evidence,
+                                provenance_note=new_role_provenance,
+                                temporal_expression=new_role_period,
+                                created_by=actor or "local_user",
+                                note=new_role_note,
+                            )
+                            return f"{RELATION_KIND_LABELS[relation.relation_kind]} registrada"
+
+                        _run_catalog_action(
+                            st,
+                            db_path=db_path,
+                            unit_id=unit.id,
+                            callback=create_role_callback,
+                        )
+
+            if not archival_roles:
+                st.info("Esta unidad todavía no tiene productores ni gestores registrados.")
+            for role in archival_roles:
+                temporal_label = format_temporal_range(
+                    role.temporal_expression,
+                    role.temporal_start,
+                    role.temporal_end,
+                    role.temporal_approximate,
+                )
+                role_title = (
+                    f"{RELATION_KIND_LABELS.get(role.relation_kind, role.relation_kind)} · "
+                    f"{role.source_name}"
+                )
+                if temporal_label:
+                    role_title += f" · {temporal_label}"
+                role_title += f" · {_ROLE_STATUS_LABELS.get(role.lifecycle_status, role.lifecycle_status)}"
+                with st.expander(role_title, expanded=False):
+                    st.write(f"**Evidencia:** {role.evidence_note or 'No registrada'}")
+                    st.write(f"**Procedencia:** {role.provenance_note or 'No registrada'}")
+                    st.caption(
+                        f"Revisión: {_ROLE_REVIEW_LABELS.get(role.review_status, role.review_status)} · "
+                        f"versión interna {role.revision}"
+                    )
+                    edit_authority_options = list(authority_options)
+                    if role.source_authority_id not in edit_authority_options:
+                        edit_authority_options.insert(0, role.source_authority_id)
+                    with st.form(f"catalog_role_edit_{role.relation_id}", enter_to_submit=False):
+                        edit_cols = st.columns(2)
+                        with edit_cols[0]:
+                            edit_role_kind = st.selectbox(
+                                "Rol",
+                                options=list(ARCHIVAL_ROLE_KINDS),
+                                index=list(ARCHIVAL_ROLE_KINDS).index(role.relation_kind),
+                                format_func=lambda value: RELATION_KIND_LABELS[value],
+                                key=f"catalog_role_edit_kind_{role.relation_id}",
+                            )
+                            edit_role_authority = st.selectbox(
+                                "Autoridad",
+                                options=edit_authority_options,
+                                index=edit_authority_options.index(role.source_authority_id),
+                                format_func=lambda value: (
+                                    authority_map[value].preferred_name
+                                    if value in authority_map
+                                    else role.source_name
+                                ),
+                                key=f"catalog_role_edit_authority_{role.relation_id}",
+                            )
+                            edit_role_period = st.text_input(
+                                "Período",
+                                value=role.temporal_expression or "",
+                                key=f"catalog_role_edit_period_{role.relation_id}",
+                            )
+                            edit_role_review = st.selectbox(
+                                "Estado de revisión",
+                                options=list(RELATION_REVIEW_STATUSES),
+                                index=list(RELATION_REVIEW_STATUSES).index(role.review_status),
+                                format_func=lambda value: _ROLE_REVIEW_LABELS[value],
+                                key=f"catalog_role_edit_review_{role.relation_id}",
+                            )
+                            edit_role_lifecycle = st.selectbox(
+                                "Vigencia del registro",
+                                options=list(RELATION_LIFECYCLE_STATUSES),
+                                index=list(RELATION_LIFECYCLE_STATUSES).index(role.lifecycle_status),
+                                format_func=lambda value: _ROLE_STATUS_LABELS[value],
+                                key=f"catalog_role_edit_lifecycle_{role.relation_id}",
+                            )
+                        with edit_cols[1]:
+                            edit_role_evidence = st.text_area(
+                                "Evidencia",
+                                value=role.evidence_note or "",
+                                key=f"catalog_role_edit_evidence_{role.relation_id}",
+                            )
+                            edit_role_provenance = st.text_area(
+                                "Procedencia",
+                                value=role.provenance_note or "",
+                                key=f"catalog_role_edit_provenance_{role.relation_id}",
+                            )
+                        edit_role_note = st.text_input(
+                            "Nota sobre la corrección",
+                            placeholder="Opcional",
+                            key=f"catalog_role_edit_note_{role.relation_id}",
+                        )
+                        edit_role_submit = st.form_submit_button("Guardar corrección")
+                    if edit_role_submit:
+                        def update_role_callback(session, current=role):
+                            update_entity_relation(
+                                session,
+                                relation_id=current.relation_id,
+                                expected_revision=current.revision,
+                                changed_by=actor or "local_user",
+                                source_authority_id=edit_role_authority,
+                                relation_kind=edit_role_kind,
+                                evidence_note=edit_role_evidence,
+                                provenance_note=edit_role_provenance,
+                                temporal_expression=edit_role_period,
+                                review_status=edit_role_review,
+                                lifecycle_status=edit_role_lifecycle,
+                                note=edit_role_note,
+                            )
+                            return "Vínculo actualizado; el estado anterior quedó conservado en el historial"
+
+                        _run_catalog_action(
+                            st,
+                            db_path=db_path,
+                            unit_id=unit.id,
+                            callback=update_role_callback,
+                        )
+
+                    history_rows = role_histories.get(role.relation_id, [])
+                    with st.expander("Historial del vínculo", expanded=False):
+                        for revision in history_rows:
+                            st.markdown(
+                                f"**Revisión {revision.revision_number} · {revision.operation}** · "
+                                f"{revision.changed_by} · {revision.changed_at.isoformat()}"
+                            )
+                            if revision.note:
+                                st.caption(revision.note)
+                            st.json(revision.snapshot, expanded=False)
 
         with files_tab:
             scan_col, info_col = st.columns([1, 3])

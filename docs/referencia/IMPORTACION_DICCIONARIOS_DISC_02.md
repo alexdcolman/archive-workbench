@@ -80,6 +80,8 @@ Para `authority` se usa exactamente uno de `target_local_id` o `target_id`. Para
 
 `evidence` debe contener al menos uno de `note`, `source_url` o `source_reference`. Una relación sin evidencia ni siquiera cumple el esquema. La evidencia queda almacenada en la relación, no solo en el informe de importación.
 
+Desde 0.77.0, las relaciones creadas por este formato quedan clasificadas explícitamente como `analytical`. La procedencia del diccionario y del elemento importado se conserva en `provenance_note`; los roles archivísticos `producer` y `manager` se administran desde la unidad de catálogo y no se infieren a partir de etiquetas libres del diccionario.
+
 ### Relaciones existentes
 
 Una relación idéntica —mismo origen, etiqueta, destino, temporalidad y evidencia— se omite en una reimportación. Si ya existe la misma relación básica con evidencia o temporalidad distintas, `resolution.action` debe ser:

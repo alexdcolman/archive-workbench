@@ -121,7 +121,7 @@ def test_readiness_marks_recovery_until_latest_backup_is_tested(tmp_path: Path) 
                 tested_by="tests",
             )
             assert result.status == "completed"
-            assert result.upgraded_database_revision == "0040_discovery_grouping_continuity"
+            assert result.upgraded_database_revision == "0041_catalog_authority_roles_graph_layers"
 
         with session_scope(engine) as session:
             report = operational_readiness(session, project_root=root)

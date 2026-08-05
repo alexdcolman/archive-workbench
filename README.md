@@ -6,7 +6,7 @@ Está pensada especialmente para equipos de archivos, bibliotecas, ciencias soci
 
 Los documentos y la base de datos permanecen en la computadora del equipo: la aplicación no necesita subir el corpus a un servicio externo.
 
-**Versión actual:** 0.76.0 — importación versionada de diccionarios de autoridades, alias y relaciones.
+**Versión actual:** 0.77.0 — productores y gestores controlados en el catálogo y capas archivísticas explicables en el grafo.
 
 ## Qué permite hacer
 
@@ -26,8 +26,9 @@ Archive Workbench reúne en una misma interfaz:
 - edición, anotaciones y cronología integrada por página;
 - búsqueda literal y búsqueda semántica opcional;
 - entidades, alias, menciones y relaciones, con importación JSON simulable;
+- entidades productoras y gestoras vinculadas al catálogo con período, evidencia, procedencia e historial;
 - descubrimiento abierto reproducible con candidatos, decisiones humanas append-only y evaluación por familia;
-- grafo documental;
+- grafo documental con capas separadas para jerarquía, documentos, partes, menciones, relaciones analíticas, productores y gestores;
 - exportaciones reproducibles en CSV y JSONL;
 - asignación de tareas entre integrantes del equipo;
 - intercambio offline de cambios entre distintas copias;
@@ -207,6 +208,14 @@ archive-workbench catalog-template-import project_data plantilla.xlsx --apply --
 
 La primera plantilla pública de prueba se incluye en `examples/plantilla_catalogo_dippba.xlsx`. Conserva fuentes y advertencias sobre ramas parciales; no debe tratarse como descripción archivística definitiva.
 
+### Productores, gestores y mapa archivístico
+
+En la ficha de cada unidad, la sección **Productores y gestión** vincula autoridades existentes mediante roles controlados. Un cambio de gestión se registra como otro vínculo temporal y conserva el historial anterior.
+
+El **Mapa de relaciones** distingue autoridades, unidades archivísticas, documentos y partes internas. Las capas de jerarquía, pertenencia, menciones, relaciones analíticas, productores y gestores pueden filtrarse por separado, con foco, profundidad, niveles archivísticos y límite de nodos. Cada arista muestra una procedencia explicable.
+
+Los proyectos anteriores deben actualizar explícitamente su base mediante `archive-workbench db-upgrade` después de crear y comprobar un backup. La revisión vigente es `0041_catalog_authority_roles_graph_layers`.
+
 ### Diccionarios de autoridades y relaciones
 
 Desde **Entidades y menciones → Importar diccionario** se puede descargar un ejemplo y el esquema JSON `1.0`, simular un diccionario externo y aplicarlo con confirmación explícita. La importación detecta coincidencias por nombres y alias, no sobrescribe fichas existentes y exige evidencia para cada relación.
@@ -244,7 +253,7 @@ pip install -e ".[dev,extraction,streamlit,semantic,tiff,discovery]"
 pytest
 ```
 
-La versión 0.76.0 incorpora pruebas automatizadas para esquema, simulación, resolución de duplicados, idempotencia y aplicación transaccional de diccionarios de autoridades y relaciones.
+La versión 0.77.0 incorpora pruebas automatizadas para roles productores y gestores, historial, migración aditiva, capas archivísticas y documentales, foco, filtros y exportación explicable del grafo.
 
 ## Licencia y cita
 
@@ -256,6 +265,6 @@ El desarrollo fue realizado por **Alex Colman** en el marco del **Grupo de Inves
 
 Cuando Archive Workbench sea utilizado en una investigación, publicación, informe, actividad docente o desarrollo derivado, solicitamos citar:
 
-> Colman, Alex, y Grupo de Investigación en Archivos de la Represión (GIAR). 2026. *Archive Workbench* (versión 0.76.0) [software]. https://github.com/alexdcolman/archive-workbench
+> Colman, Alex, y Grupo de Investigación en Archivos de la Represión (GIAR). 2026. *Archive Workbench* (versión 0.77.0) [software]. https://github.com/alexdcolman/archive-workbench
 
 El archivo [`CITATION.cff`](CITATION.cff) contiene los metadatos de cita reconocidos por GitHub y por distintos gestores bibliográficos.

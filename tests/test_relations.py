@@ -639,3 +639,115 @@ def test_transversal_candidates_detect_same_fragment_across_text_revisions(
             assert any(issue.code == "duplicate_mention" for issue in issues)
     finally:
         engine.dispose()
+
+
+def test_archival_roles_are_controlled_versioned_and_filterable_by_unit(tmp_path: Path) -> None:
+    import pytest
+
+    _root, decisions, engine = _setup(tmp_path)
+    try:
+        with session_scope(engine) as session:
+            authority = create_authority(
+                session,
+                project_id=decisions.project_id,
+                entity_type="organization",
+                preferred_name="Dirección General del Archivo",
+                created_by="tests",
+            )
+            unit = create_archival_unit(
+                session,
+                decisions=decisions,
+                project_id=decisions.project_id,
+                parent_id=None,
+                level_key="archivo",
+                title="Archivo institucional",
+                created_by="tests",
+            )
+            with pytest.raises(ValueError, match="evidencia"):
+                create_entity_relation(
+                    session,
+                    project_id=decisions.project_id,
+                    source_authority_id=authority.id,
+                    relation_kind="producer",
+                    relation_label="texto libre",
+                    target_kind="archival_unit",
+                    target_id=unit.id,
+                    provenance_note="Inventario 1984",
+                    created_by="tests",
+                )
+            with pytest.raises(ValueError, match="procedencia"):
+                create_entity_relation(
+                    session,
+                    project_id=decisions.project_id,
+                    source_authority_id=authority.id,
+                    relation_kind="manager",
+                    relation_label="texto libre",
+                    target_kind="archival_unit",
+                    target_id=unit.id,
+                    evidence_note="Resolución 12/1983",
+                    created_by="tests",
+                )
+
+            producer = create_entity_relation(
+                session,
+                project_id=decisions.project_id,
+                source_authority_id=authority.id,
+                relation_kind="producer",
+                relation_label="texto libre no canónico",
+                target_kind="archival_unit",
+                target_id=unit.id,
+                evidence_note="Inventario institucional",
+                provenance_note="Guía del fondo, 1984",
+                temporal_expression="1974 - 1976",
+                created_by="tests",
+            )
+            manager = create_entity_relation(
+                session,
+                project_id=decisions.project_id,
+                source_authority_id=authority.id,
+                relation_kind="manager",
+                relation_label="otro texto libre",
+                target_kind="archival_unit",
+                target_id=unit.id,
+                evidence_note="Resolución administrativa",
+                provenance_note="Expediente 12/1983",
+                temporal_expression="desde 1983",
+                created_by="tests",
+            )
+            update_entity_relation(
+                session,
+                relation_id=manager.id,
+                expected_revision=1,
+                evidence_note="Resolución administrativa, foja 4",
+                provenance_note="Expediente 12/1983, Archivo General",
+                review_status="approved",
+                changed_by="tests",
+                note="Se precisó la evidencia",
+            )
+            rows = entity_relation_rows(
+                session,
+                project_id=decisions.project_id,
+                archival_unit_id=unit.id,
+                relation_kinds=("producer", "manager"),
+                include_inactive=True,
+            )
+            histories = {
+                row.relation_id: entity_relation_revision_rows(session, row.relation_id)
+                for row in rows
+            }
+
+        by_kind = {row.relation_kind: row for row in rows}
+        assert by_kind["producer"].relation_label == "produjo"
+        assert by_kind["manager"].relation_label == "gestionó"
+        assert by_kind["producer"].source_authority_id == by_kind["manager"].source_authority_id
+        assert by_kind["producer"].temporal_expression == "1974 - 1976"
+        assert by_kind["manager"].temporal_expression == "desde 1983"
+        assert by_kind["manager"].provenance_note == "Expediente 12/1983, Archivo General"
+        assert [row.operation for row in histories[manager.id]] == ["update", "create"]
+        assert histories[manager.id][0].snapshot["relation_kind"] == "manager"
+        assert histories[manager.id][0].snapshot["provenance_note"] == (
+            "Expediente 12/1983, Archivo General"
+        )
+        assert producer.id in histories
+    finally:
+        engine.dispose()

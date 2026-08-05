@@ -998,7 +998,7 @@ class EntityMentionRevision(Base):
 
 
 class EntityRelation(Base):
-    """Relación analítica explícita creada por el equipo de investigación."""
+    """Relación controlada entre una autoridad y otra entidad archivística."""
 
     __tablename__ = "entity_relations"
     __table_args__ = (
@@ -1014,6 +1014,22 @@ class EntityRelation(Base):
         Index("ix_entity_relations_target_unit", "target_archival_unit_id"),
         Index("ix_entity_relations_target_part", "target_document_part_id"),
         Index("ix_entity_relations_temporal", "project_id", "temporal_start", "temporal_end"),
+        Index(
+            "ix_entity_relations_project_kind_target_unit",
+            "project_id",
+            "relation_kind",
+            "target_archival_unit_id",
+        ),
+        CheckConstraint(
+            "relation_kind IN ('analytical', 'producer', 'manager')",
+            name="ck_entity_relation_kind",
+        ),
+        CheckConstraint(
+            "relation_kind = 'analytical' OR "
+            "(target_archival_unit_id IS NOT NULL AND "
+            "target_authority_id IS NULL AND target_document_part_id IS NULL)",
+            name="ck_entity_relation_archival_role_target",
+        ),
     )
 
     id: Mapped[str] = mapped_column(String(36), primary_key=True)
@@ -1022,6 +1038,9 @@ class EntityRelation(Base):
     )
     source_authority_id: Mapped[str] = mapped_column(
         ForeignKey("authority_records.id", ondelete="CASCADE"), nullable=False
+    )
+    relation_kind: Mapped[str] = mapped_column(
+        String(32), nullable=False, default="analytical"
     )
     relation_label: Mapped[str] = mapped_column(Text, nullable=False)
     target_authority_id: Mapped[str | None] = mapped_column(
@@ -1034,6 +1053,7 @@ class EntityRelation(Base):
         ForeignKey("document_parts.id", ondelete="CASCADE"), nullable=True
     )
     evidence_note: Mapped[str | None] = mapped_column(Text, nullable=True)
+    provenance_note: Mapped[str | None] = mapped_column(Text, nullable=True)
     temporal_expression: Mapped[str | None] = mapped_column(Text, nullable=True)
     temporal_start: Mapped[date | None] = mapped_column(Date, nullable=True)
     temporal_end: Mapped[date | None] = mapped_column(Date, nullable=True)
