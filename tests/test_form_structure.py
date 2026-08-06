@@ -197,7 +197,7 @@ def test_confirm_group_update_archive_history_and_export(tmp_path: Path) -> None
         assert summary.form_structure_count == 1
         assert exported[0]["structure"]["groups"][0]["label"] == "Identificación personal"
         manifest = json.loads(summary.manifest_path.read_text(encoding="utf-8"))
-        assert manifest["schema_version"] == "1.3"
+        assert manifest["schema_version"] == "1.4"
         assert manifest["form_structure_count"] == 1
         assert manifest["form_structures_path"] == "form_structures.jsonl"
     finally:
@@ -364,7 +364,7 @@ def test_form_structure_validation_project_is_controlled_and_noncanonical(
     destination = tmp_path / "ocr01b_validation"
     result = module.create_validation_project(destination)
 
-    assert result["revision"] == "0043_form_structure_review"
+    assert result["revision"] == "0044_layout_structure_review"
     assert result["documents"] == 1
     assert result["candidate_count"] == 3
     assert result["candidate_states"] == ["marked", "unmarked", "marked"]

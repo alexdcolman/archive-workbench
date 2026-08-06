@@ -5,6 +5,7 @@ from datetime import datetime
 from pathlib import Path
 from typing import Any
 
+import fitz
 from PIL import Image, ImageDraw, ImageFont, ImageOps
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session
@@ -20,6 +21,7 @@ from archive_workbench.db.models import (
     EditableObjectTag,
     EditablePage,
     ExtractedObject,
+    FileInstance,
     ExtractionPageSelection,
     PreprocessingRun,
     SourceRegistration,
@@ -110,6 +112,78 @@ def _registration(
         raise ValueError(f"source_key no registrado: {source_key}")
     return row[0], row[1], row[2]
 
+
+
+def _source_preview_fallback(
+    session: Session,
+    *,
+    project_root: str | Path,
+    digital: DigitalObject,
+    page: int,
+) -> tuple[Path | None, int | None, int | None]:
+    """Crea una vista cacheada desde el original cuando no existe preview derivado.
+
+    El archivo original permanece inmutable. La imagen se escribe únicamente bajo
+    ``.cache/review_previews``, una ruta local ignorada por Git.
+    """
+
+    instances = session.scalars(
+        select(FileInstance)
+        .where(
+            FileInstance.digital_object_id == digital.id,
+            FileInstance.storage_root == "project",
+        )
+        .order_by(FileInstance.presence.desc(), FileInstance.relative_path)
+    ).all()
+    source = next(
+        (
+            Path(project_root) / item.relative_path
+            for item in instances
+            if (Path(project_root) / item.relative_path).is_file()
+        ),
+        None,
+    )
+    if source is None:
+        return None, None, None
+
+    cache = (
+        Path(project_root)
+        / ".cache"
+        / "review_previews"
+        / digital.id
+        / f"page_{page:04d}.png"
+    )
+    try:
+        if cache.is_file() and cache.stat().st_mtime_ns >= source.stat().st_mtime_ns:
+            with Image.open(cache) as image:
+                width, height = image.size
+            return cache, width, height
+
+        cache.parent.mkdir(parents=True, exist_ok=True)
+        if digital.media_type == "pdf" or source.suffix.lower() == ".pdf":
+            with fitz.open(source) as document:
+                if page < 1 or page > len(document):
+                    return None, None, None
+                pixmap = document[page - 1].get_pixmap(
+                    dpi=150,
+                    colorspace=fitz.csRGB,
+                    alpha=False,
+                )
+                pixmap.save(cache)
+                return cache, pixmap.width, pixmap.height
+
+        with Image.open(source) as image:
+            frame_count = int(getattr(image, "n_frames", 1))
+            if page < 1 or page > frame_count:
+                return None, None, None
+            image.seek(page - 1)
+            rendered = ImageOps.exif_transpose(image).convert("RGB")
+            rendered.thumbnail((1800, 2400), Image.Resampling.LANCZOS)
+            rendered.save(cache, format="PNG")
+            width, height = rendered.size
+            return cache, width, height
+    except (OSError, ValueError, RuntimeError, fitz.FileDataError):
+        return None, None, None
 
 def review_document_rows(session: Session) -> list[ReviewDocumentRow]:
     rows = session.execute(
@@ -299,8 +373,19 @@ def review_page_view(
         for item in editable_objects
     ]
     preview_path = Path(project_root) / asset.relative_path if asset is not None else None
+    preview_width = asset.width if asset is not None else None
+    preview_height = asset.height if asset is not None else None
     if preview_path is not None and not preview_path.is_file():
         preview_path = None
+        preview_width = None
+        preview_height = None
+    if preview_path is None:
+        preview_path, preview_width, preview_height = _source_preview_fallback(
+            session,
+            project_root=project_root,
+            digital=digital,
+            page=page,
+        )
     return ReviewPageView(
         source_key=source_key,
         title=unit.title,
@@ -312,8 +397,8 @@ def review_page_view(
         editable_page_id=editable_page.id,
         is_stale=is_stale,
         preview_path=preview_path,
-        preview_width=asset.width if asset is not None else None,
-        preview_height=asset.height if asset is not None else None,
+        preview_width=preview_width,
+        preview_height=preview_height,
         parts=parts,
         objects=objects,
     )

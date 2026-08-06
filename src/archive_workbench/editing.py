@@ -15,6 +15,7 @@ from archive_workbench.contracts.editing import (
     EditableCommentExport,
     EditableExportManifest,
     EditableFormStructureExport,
+    EditableLayoutStructureExport,
     EditableObjectExport,
     EditableRevisionExport,
     EditableTagExport,
@@ -103,11 +104,13 @@ class EditableExportSummary:
     comments_path: Path
     tags_path: Path
     form_structures_path: Path
+    layout_structures_path: Path
     object_count: int
     revision_count: int
     comment_count: int
     tag_count: int
     form_structure_count: int
+    layout_structure_count: int
 
 
 def _registration_for_source(
@@ -190,6 +193,7 @@ def _append_page_revision(
         review_status=page.review_status,
         review_note=page.review_note,
         form_structure_json=page.form_structure_json or {},
+        layout_structure_json=page.layout_structure_json or {},
         details_json=details or {},
         note=note,
         created_by=created_by,
@@ -1241,17 +1245,31 @@ def export_editable_layer(
         if (item.form_structure_json or {}).get("groups")
         or (item.form_structure_json or {}).get("controls")
     ]
+    layout_structure_exports = [
+        EditableLayoutStructureExport(
+            editable_page_id=item.id,
+            source_key=source_key,
+            digital_object_id=item.digital_object_id,
+            page=item.page_number,
+            revision_number=item.revision_number,
+            structure=item.layout_structure_json or {},
+        )
+        for item in pages
+        if (item.layout_structure_json or {}).get("columns")
+    ]
     objects_path = output_root / "editable_objects.jsonl"
     revisions_path = output_root / "editable_revisions.jsonl"
     comments_path = output_root / "editable_comments.jsonl"
     tags_path = output_root / "editable_tags.jsonl"
     form_structures_path = output_root / "form_structures.jsonl"
+    layout_structures_path = output_root / "layout_structures.jsonl"
     manifest_path = output_root / "manifest.json"
     write_models_atomic(objects_path, object_exports)
     write_models_atomic(revisions_path, revision_exports)
     write_models_atomic(comments_path, comment_exports)
     write_models_atomic(tags_path, tag_exports)
     write_models_atomic(form_structures_path, form_structure_exports)
+    write_models_atomic(layout_structures_path, layout_structure_exports)
     active_count = sum(item.lifecycle_status == "active" for item in objects)
     manifest = EditableExportManifest(
         source_key=source_key,
@@ -1264,11 +1282,13 @@ def export_editable_layer(
         comment_count=len(comments),
         tag_count=len(tags),
         form_structure_count=len(form_structure_exports),
+        layout_structure_count=len(layout_structure_exports),
         objects_path=objects_path.name,
         revisions_path=revisions_path.name,
         comments_path=comments_path.name,
         tags_path=tags_path.name,
         form_structures_path=form_structures_path.name,
+        layout_structures_path=layout_structures_path.name,
     )
     manifest_path.write_text(
         json.dumps(manifest.model_dump(mode="json"), ensure_ascii=False, indent=2),
@@ -1282,9 +1302,11 @@ def export_editable_layer(
         comments_path=comments_path,
         tags_path=tags_path,
         form_structures_path=form_structures_path,
+        layout_structures_path=layout_structures_path,
         object_count=len(objects),
         revision_count=len(revisions),
         comment_count=len(comments),
         tag_count=len(tags),
         form_structure_count=len(form_structure_exports),
+        layout_structure_count=len(layout_structure_exports),
     )

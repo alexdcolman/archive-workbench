@@ -162,17 +162,22 @@ def test_version_docs_and_discovery_plan_are_packaged() -> None:
         / "archive_workbench"
         / "migrations"
         / "versions"
-        / "0043_form_structure_review.py"
+        / "0044_layout_structure_review.py"
     )
 
-    assert data["project"]["version"] == "0.79.0"
-    assert '__version__ = "0.79.0"' in version_source
+    assert data["project"]["version"] == "0.80.0"
+    assert '__version__ = "0.80.0"' in version_source
     assert migration.is_file()
-    assert 'down_revision = "0042_preprocessing_geometry_trace"' in migration.read_text(
+    assert 'down_revision = "0043_form_structure_review"' in migration.read_text(
         encoding="utf-8"
     )
     assert (root / "src" / "archive_workbench" / "contracts" / "forms.py").is_file()
     assert (root / "src" / "archive_workbench" / "form_structure.py").is_file()
+    assert (root / "src" / "archive_workbench" / "contracts" / "layout.py").is_file()
+    assert (root / "src" / "archive_workbench" / "layout_structure.py").is_file()
+    assert (root / "scripts" / "create_layout_structure_validation_project.py").is_file()
+    assert (root / "scripts" / "verify_layout_structure_validation_project.py").is_file()
+    assert (root / "scripts" / "update_assistant_guidance_0800.py").is_file()
     assert (root / "src" / "archive_workbench" / "preprocessing_geometry.py").is_file()
     processing_app = (root / "src" / "archive_workbench" / "processing_app.py").read_text(
         encoding="utf-8"

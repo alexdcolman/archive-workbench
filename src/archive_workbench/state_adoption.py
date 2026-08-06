@@ -699,6 +699,7 @@ def _synchronize_editable_state(
                 "review_status": item["review_status"],
                 "review_note": item.get("review_note"),
                 "form_structure_json": item.get("form_structure") or {},
+                "layout_structure_json": item.get("layout_structure") or {},
                 "reviewed_by": actor if item["review_status"] != "unreviewed" else None,
                 "reviewed_at": now if item["review_status"] != "unreviewed" else None,
                 "bootstrapped_by": existing.bootstrapped_by if existing else actor,

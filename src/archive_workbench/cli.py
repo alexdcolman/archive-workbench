@@ -1810,7 +1810,8 @@ def export_editable_jsonl_command(
         engine.dispose()
     typer.echo(
         f"OK: objetos {summary.object_count}, revisiones {summary.revision_count}, "
-        f"formularios {summary.form_structure_count} | salida {summary.output_root}"
+        f"formularios {summary.form_structure_count}, "
+        f"layouts {summary.layout_structure_count} | salida {summary.output_root}"
     )
 
 

@@ -42,6 +42,19 @@ from archive_workbench.editing import (
     split_editable_object,
     update_editable_object,
 )
+from archive_workbench.layout_structure import (
+    apply_layout_proposal,
+    archive_duplicate_candidate,
+    archive_layout_column,
+    assign_object_to_column,
+    create_layout_column_for_object,
+    layout_proposal,
+    layout_structure,
+    layout_structure_history,
+    merge_fragment_candidate,
+    rename_layout_column,
+    render_layout_overlay,
+)
 from archive_workbench.form_structure import (
     archive_control,
     archive_group,
@@ -148,6 +161,8 @@ _ACTION_LABELS = {
     "revert": "restauración de revisión",
     "assign_part": "asignación de parte interna",
     "form_structure": "estructura de formulario",
+    "layout": "estructura de columnas y orden",
+    "delete": "archivo de objeto",
 }
 _TAG_KIND_LABELS = {
     "thematic": "Temática",
@@ -431,6 +446,440 @@ def _database_action(db_path: Path, callback: Callable) -> str | None:
         engine.dispose()
 
 
+
+
+_LAYOUT_HISTORY_LABELS = {
+    "apply_layout_proposal": "Confirmó columnas y aplicó el orden",
+    "create_layout_column": "Creó una columna manual",
+    "create_and_assign_layout_column": "Creó una columna manual y asignó el objeto seleccionado",
+    "assign_layout_column": "Asignó el objeto seleccionado a una columna",
+    "rename_layout_column": "Renombró una columna",
+    "archive_layout_column": "Archivó una columna",
+    "merge_layout_fragment": "Combinó una fragmentación",
+    "archive_layout_duplicate": "Archivó un duplicado",
+}
+
+
+def _layout_history_label(row) -> str:
+    if row.operation == "undo":
+        return "Deshizo la última acción"
+    if row.operation == "redo":
+        return "Rehizo la última acción"
+    action = str((row.details or {}).get("action") or "")
+    return _LAYOUT_HISTORY_LABELS.get(action, action or "Actualizó la estructura")
+
+
+def _render_layout_structure_panel(
+    st,
+    *,
+    db_path: Path,
+    view,
+    selected: ReviewObjectRow,
+    objects_by_id: dict[str, ReviewObjectRow],
+    reviewer: str,
+    object_state_key: str,
+) -> None:
+    engine = create_sqlite_engine(db_path)
+    try:
+        with session_scope(engine) as session:
+            proposal = layout_proposal(session, editable_page_id=view.editable_page_id)
+            structure = layout_structure(session, editable_page_id=view.editable_page_id)
+            history = layout_structure_history(
+                session, editable_page_id=view.editable_page_id
+            )
+    finally:
+        engine.dispose()
+
+    active_columns = sorted(
+        (item for item in structure.columns if item.lifecycle_status == "active"),
+        key=lambda item: (item.order_index, item.column_id),
+    )
+    st.subheader("Orden y estructura")
+    st.info(
+        "Esta pestaña trabaja sobre el objeto elegido en el selector «Objeto», ubicado "
+        "arriba de estas pestañas. Cada bloque está numerado y puede usarse por separado."
+    )
+    st.write("**Objeto seleccionado**")
+    st.code(selected.text or "[sin texto]", language="text")
+    st.caption(
+        "Para trabajar con otro objeto, cambialo en el selector «Objeto» que aparece "
+        "arriba de la fila de pestañas."
+    )
+    st.write("### 1. Revisar la propuesta automática")
+    st.caption(
+        "La propuesta se calcula sobre las cajas de la capa editable. No cambia el orden "
+        "ni crea columnas hasta que la confirmes."
+    )
+    metrics = st.columns(5)
+    metrics[0].metric("Columnas propuestas", len(proposal.columns))
+    metrics[1].metric("Objetos reordenados", proposal.changed_positions)
+    metrics[2].metric("Sin geometría", len(proposal.unassigned_object_ids))
+    metrics[3].metric("Fragmentaciones", len(proposal.fragment_candidates))
+    metrics[4].metric("Duplicados", len(proposal.duplicate_candidates))
+    st.caption(
+        f"Algoritmo `{proposal.algorithm}` · confianza {proposal.confidence:.1%} · "
+        f"huella `{proposal.fingerprint[:12]}…`"
+    )
+
+    if view.preview_path is not None and proposal.columns:
+        overlay = render_layout_overlay(
+            view.preview_path,
+            view.objects,
+            proposal=proposal,
+            page_number=view.page,
+        )
+        st.image(overlay, use_container_width=True)
+        st.caption(
+            "Cada caja muestra columna y posición propuesta. Esta imagen es solo diagnóstica."
+        )
+
+    column_by_object = {
+        object_id: column.label
+        for column in proposal.columns
+        for object_id in column.object_ids
+    }
+    proposed_rows = []
+    for position, object_id in enumerate(proposal.proposed_order, start=1):
+        item = objects_by_id.get(object_id)
+        proposed_rows.append(
+            {
+                "propuesto": position,
+                "actual": (item.order_index + 1) if item is not None else None,
+                "columna": column_by_object.get(object_id, "Sin geometría"),
+                "tipo": item.object_type if item is not None else "",
+                "texto": _snippet(item.text, 90) if item is not None else object_id,
+            }
+        )
+    if proposed_rows:
+        st.dataframe(proposed_rows, hide_index=True, use_container_width=True)
+
+    with st.form(f"apply_layout_{view.editable_page_id}", enter_to_submit=False):
+        layout_note = st.text_input(
+            "Evidencia o nota de revisión",
+            key=f"layout_apply_note_{view.editable_page_id}",
+        )
+        apply_layout = st.form_submit_button(
+            "Confirmar columnas y aplicar orden",
+            type="primary",
+            disabled=not proposal.proposed_order,
+        )
+    if apply_layout:
+        def apply_callback(session):
+            return execute_page_action(
+                session,
+                editable_page_id=view.editable_page_id,
+                action_type="layout",
+                changed_by=reviewer,
+                selected_object_id=selected.object_id,
+                note=layout_note or None,
+                action=lambda: apply_layout_proposal(
+                    session,
+                    editable_page_id=view.editable_page_id,
+                    changed_by=reviewer,
+                    note=layout_note or None,
+                ),
+            )
+        _run_action(
+            st,
+            lambda: _database_action(db_path, apply_callback),
+            selection_key=object_state_key,
+            fallback_selection=selected.object_id,
+        )
+
+    st.divider()
+    st.write("### 2. Ajustar las columnas confirmadas")
+    st.caption(
+        "Acá podés crear una columna para el objeto seleccionado, moverlo a otra "
+        "columna o administrar los nombres existentes."
+    )
+    st.write("**Estructura confirmada**")
+    if active_columns:
+        confirmed_rows = []
+        for column in active_columns:
+            confirmed_rows.append(
+                {
+                    "orden": column.order_index + 1,
+                    "columna": column.label,
+                    "objetos": len(column.object_ids),
+                    "origen": column.source,
+                    "evidencia": column.evidence_note or "",
+                }
+            )
+        st.dataframe(confirmed_rows, hide_index=True, use_container_width=True)
+    else:
+        st.info("Todavía no hay columnas confirmadas para esta página.")
+
+    with st.expander(
+        "Crear una columna manual para el objeto seleccionado",
+        expanded=False,
+    ):
+        st.caption(
+            f"La nueva columna se asignará directamente a: {selected.text or '[sin texto]'}"
+        )
+        with st.form(
+            f"create_layout_column_{view.editable_page_id}_{selected.object_id}",
+            enter_to_submit=False,
+        ):
+            new_column_label = st.text_input(
+                "Nombre de la nueva columna",
+                key=f"layout_new_column_{view.editable_page_id}_{selected.object_id}",
+            )
+            new_column_note = st.text_input(
+                "Nota opcional",
+                key=f"layout_new_column_note_{view.editable_page_id}_{selected.object_id}",
+            )
+            create_column = st.form_submit_button(
+                "Crear columna y asignar este objeto"
+            )
+        if create_column:
+            def create_and_assign_callback(session):
+                return execute_page_action(
+                    session,
+                    editable_page_id=view.editable_page_id,
+                    action_type="layout",
+                    changed_by=reviewer,
+                    selected_object_id=selected.object_id,
+                    note=new_column_note or None,
+                    action=lambda: (
+                        create_layout_column_for_object(
+                            session,
+                            editable_page_id=view.editable_page_id,
+                            object_id=selected.object_id,
+                            label=new_column_label,
+                            changed_by=reviewer,
+                            note=new_column_note or None,
+                        ),
+                        selected.object_id,
+                    )[1],
+                )
+
+            _run_action(
+                st,
+                lambda: _database_action(db_path, create_and_assign_callback),
+                selection_key=object_state_key,
+                fallback_selection=selected.object_id,
+            )
+
+    active_column_map = {item.column_id: item for item in active_columns}
+    current_column_id = next(
+        (
+            column.column_id
+            for column in active_columns
+            if selected.object_id in column.object_ids
+        ),
+        None,
+    )
+    assignment_options = [None, *active_column_map]
+    current_column_label = (
+        active_column_map[current_column_id].label
+        if current_column_id is not None
+        else "Sin columna"
+    )
+    st.info(
+        "Columna actual del objeto seleccionado: "
+        f"**{current_column_label}**"
+    )
+    st.write("**Mover el objeto seleccionado a otra columna**")
+    st.caption(
+        f"Objeto actual: {selected.text or '[sin texto]'}"
+    )
+    with st.form(
+        f"layout_assign_{selected.object_id}_{selected.revision_number}",
+        enter_to_submit=False,
+    ):
+        target_column_id = st.selectbox(
+            "Columna del objeto seleccionado",
+            options=assignment_options,
+            index=assignment_options.index(current_column_id),
+            format_func=lambda value: (
+                "Sin columna"
+                if value is None
+                else active_column_map[value].label
+            ),
+        )
+        assignment_note = st.text_input("Nota de asignación")
+        assign_column = st.form_submit_button("Guardar columna del objeto")
+    if assign_column:
+        def assign_callback(session):
+            return execute_page_action(
+                session,
+                editable_page_id=view.editable_page_id,
+                action_type="layout",
+                changed_by=reviewer,
+                selected_object_id=selected.object_id,
+                note=assignment_note or None,
+                action=lambda: assign_object_to_column(
+                    session,
+                    editable_page_id=view.editable_page_id,
+                    object_id=selected.object_id,
+                    column_id=target_column_id,
+                    changed_by=reviewer,
+                    note=assignment_note or None,
+                ),
+            )
+        _run_action(
+            st,
+            lambda: _database_action(db_path, assign_callback),
+            selection_key=object_state_key,
+            fallback_selection=selected.object_id,
+        )
+
+    if active_columns:
+        with st.expander("Renombrar o archivar columnas confirmadas", expanded=False):
+            for column in active_columns:
+                st.markdown(f"**{column.order_index + 1}. {column.label}**")
+                with st.form(
+                    f"layout_column_{column.column_id}_{column.updated_at.isoformat()}",
+                    enter_to_submit=False,
+                ):
+                    renamed = st.text_input(
+                        "Nombre",
+                        value=column.label,
+                        key=f"layout_rename_{column.column_id}",
+                    )
+                    note = st.text_input(
+                        "Nota",
+                        value=column.evidence_note or "",
+                        key=f"layout_column_note_{column.column_id}",
+                    )
+                    rename_submit = st.form_submit_button("Guardar nombre")
+                    archive_submit = st.form_submit_button("Archivar columna")
+                if rename_submit:
+                    _run_action(
+                        st,
+                        lambda column_id=column.column_id, renamed=renamed, note=note: _database_action(
+                            db_path,
+                            lambda session: rename_layout_column(
+                                session,
+                                editable_page_id=view.editable_page_id,
+                                column_id=column_id,
+                                label=renamed,
+                                changed_by=reviewer,
+                                note=note or None,
+                            ),
+                        ),
+                        selection_key=object_state_key,
+                        fallback_selection=selected.object_id,
+                    )
+                if archive_submit:
+                    _run_action(
+                        st,
+                        lambda column_id=column.column_id, note=note: _database_action(
+                            db_path,
+                            lambda session: archive_layout_column(
+                                session,
+                                editable_page_id=view.editable_page_id,
+                                column_id=column_id,
+                                changed_by=reviewer,
+                                note=note or None,
+                            ),
+                        ),
+                        selection_key=object_state_key,
+                        fallback_selection=selected.object_id,
+                    )
+                st.divider()
+
+    st.divider()
+    st.write("### 3. Resolver fragmentaciones y duplicados")
+    st.caption(
+        "Estas acciones afectan solo la capa editable. El OCR de origen y el archivo "
+        "original permanecen intactos."
+    )
+    with st.expander("Fragmentación y duplicaciones", expanded=True):
+        if not proposal.fragment_candidates and not proposal.duplicate_candidates:
+            st.success("No se detectaron candidatas en esta página.")
+        for candidate in proposal.fragment_candidates:
+            st.warning(
+                f"Posible fragmentación en columna {candidate.column_index + 1}: "
+                f"{candidate.text_preview}"
+            )
+            if st.button(
+                "Combinar secuencia confirmada",
+                key=f"merge_layout_fragment_{candidate.fingerprint}",
+            ):
+                def merge_callback(session, fingerprint=candidate.fingerprint):
+                    return execute_page_action(
+                        session,
+                        editable_page_id=view.editable_page_id,
+                        action_type="merge",
+                        changed_by=reviewer,
+                        selected_object_id=candidate.object_ids[0],
+                        action=lambda: merge_fragment_candidate(
+                            session,
+                            editable_page_id=view.editable_page_id,
+                            fingerprint=fingerprint,
+                            changed_by=reviewer,
+                        ),
+                    )
+                _run_action(
+                    st,
+                    lambda: _database_action(db_path, merge_callback),
+                    selection_key=object_state_key,
+                    fallback_selection=candidate.object_ids[0],
+                )
+        for candidate in proposal.duplicate_candidates:
+            st.warning(
+                f"Posible duplicado ({candidate.overlap:.0%} de superposición): "
+                f"{candidate.text_preview}"
+            )
+            if st.button(
+                "Confirmar y archivar duplicado",
+                key=f"archive_layout_duplicate_{candidate.fingerprint}",
+            ):
+                def duplicate_callback(
+                    session,
+                    fingerprint=candidate.fingerprint,
+                    keep_object_id=candidate.keep_object_id,
+                ):
+                    execute_page_action(
+                        session,
+                        editable_page_id=view.editable_page_id,
+                        action_type="delete",
+                        changed_by=reviewer,
+                        selected_object_id=keep_object_id,
+                        action=lambda: archive_duplicate_candidate(
+                            session,
+                            editable_page_id=view.editable_page_id,
+                            fingerprint=fingerprint,
+                            changed_by=reviewer,
+                        ),
+                    )
+                    return keep_object_id
+                _run_action(
+                    st,
+                    lambda: _database_action(db_path, duplicate_callback),
+                    selection_key=object_state_key,
+                    fallback_selection=candidate.keep_object_id,
+                )
+
+    st.divider()
+    st.write("### 4. Historial de Orden y estructura")
+    st.info(
+        "Este cuadro contiene únicamente acciones de columnas, orden, fragmentaciones "
+        "y duplicados. No es la pestaña «Historial general» de la fila superior."
+    )
+    st.caption(
+        "La columna «acción» usa descripciones visibles y no nombres técnicos internos."
+    )
+    if history:
+        st.dataframe(
+            [
+                {
+                    "revisión": row.revision_number,
+                    "acción": _layout_history_label(row),
+                    "columnas activas": row.active_column_count,
+                    "objetos asignados": row.assigned_object_count,
+                    "responsable": row.created_by,
+                    "fecha": row.created_at.isoformat(),
+                    "nota": row.note or "",
+                }
+                for row in history
+            ],
+            hide_index=True,
+            use_container_width=True,
+        )
+    else:
+        st.caption("Todavía no hay revisiones de layout.")
 
 def _render_form_structure_tab(
     st,
@@ -2831,7 +3280,7 @@ def main() -> None:
                         "Anotaciones",
                         "Datos adicionales",
                         "Menciones",
-                        "Historial",
+                        "Historial general",
                         "Agregar objeto",
                     ],
                     key="review_object_tabs",
@@ -2912,6 +3361,16 @@ def main() -> None:
                         )
 
                 with structure_tab:
+                    _render_layout_structure_panel(
+                        st,
+                        db_path=db_path,
+                        view=view,
+                        selected=selected,
+                        objects_by_id=objects_by_id,
+                        reviewer=reviewer or "local_user",
+                        object_state_key=object_state_key,
+                    )
+                    st.divider()
                     st.write("**Parte interna**")
                     if view.parts:
                         part_map = {item.part_id: item for item in view.parts}
@@ -3495,6 +3954,11 @@ def main() -> None:
                             )
 
                 with history_tab:
+                    st.info(
+                        "Este es el historial general de la página y de sus objetos. "
+                        "El historial específico de columnas y orden está dentro de "
+                        "«Orden y estructura», bloque 4."
+                    )
                     history_engine = create_sqlite_engine(db_path)
                     try:
                         with session_scope(history_engine) as history_session:

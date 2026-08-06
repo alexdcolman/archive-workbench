@@ -50,6 +50,7 @@ def capture_page_snapshot(session: Session, editable_page_id: str) -> dict[str, 
     ).all()
     return {
         "form_structure": page.form_structure_json or {},
+        "layout_structure": page.layout_structure_json or {},
         "objects": [_object_snapshot(item) for item in objects],
     }
 
@@ -74,9 +75,19 @@ def _restore_page_snapshot(
     if page is None:
         raise ValueError(f"Página editable inexistente: {editable_page_id}")
     target_structure = dict(snapshot.get("form_structure") or {})
+    target_layout = dict(snapshot.get("layout_structure") or {})
+    page_changed = False
+    restored: list[str] = []
+    base_page_revision = page.revision_number
     if (page.form_structure_json or {}) != target_structure:
-        base_page_revision = page.revision_number
         page.form_structure_json = target_structure
+        page_changed = True
+        restored.append("form_structure")
+    if (page.layout_structure_json or {}) != target_layout:
+        page.layout_structure_json = target_layout
+        page_changed = True
+        restored.append("layout_structure")
+    if page_changed:
         page.revision_number += 1
         page.updated_at = utc_now()
         _append_page_revision(
@@ -85,7 +96,7 @@ def _restore_page_snapshot(
             operation=operation,
             created_by=changed_by,
             note=note,
-            details={"restored": "form_structure"},
+            details={"restored": restored},
             base_revision_number=base_page_revision,
         )
 

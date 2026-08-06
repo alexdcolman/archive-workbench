@@ -810,7 +810,7 @@ def test_review_uses_progressive_task_oriented_hierarchy() -> None:
         '"Anotaciones"',
         '"Datos adicionales"',
         '"Menciones"',
-        '"Historial"',
+        '"Historial general"',
         '"Agregar objeto"',
     ):
         assert label in view
@@ -1051,3 +1051,37 @@ def test_manual_discovery_group_defers_selectbox_selection_until_next_rerun() ->
     assert 'pending_group_id = st.session_state.pop(' in source
     assert 'if pending_group_id in group_map:' in source
     assert 'st.session_state["open_discovery_group_selected"] = pending_group_id' in source
+
+
+def test_review_layout_panel_exposes_explicit_confirmation_and_diagnostics() -> None:
+    root = Path(__file__).parents[1]
+    source = (root / "src" / "archive_workbench" / "review_app.py").read_text(
+        encoding="utf-8"
+    )
+
+    assert "Orden y estructura" in source
+    assert "Objeto seleccionado" in source
+    assert "1. Revisar la propuesta automática" in source
+    assert "No cambia el orden" in source
+    assert "Confirmar columnas y aplicar orden" in source
+    assert "2. Ajustar las columnas confirmadas" in source
+    assert "Crear columna y asignar este objeto" in source
+    assert "Mover el objeto seleccionado a otra columna" in source
+    assert "Renombrar o archivar columnas confirmadas" in source
+    assert "3. Resolver fragmentaciones y duplicados" in source
+    assert "Combinar secuencia confirmada" in source
+    assert "Confirmar y archivar duplicado" in source
+    assert "4. Historial de Orden y estructura" in source
+    assert "No es la pestaña «Historial general»" in source
+    assert "Columna actual del objeto seleccionado" in source
+    assert "Confirmó columnas y aplicó el orden" in source
+    assert "Deshizo la última acción" in source
+
+
+def test_layout_overlay_uses_review_page_field() -> None:
+    source = (
+        Path(__file__).parents[1] / "src" / "archive_workbench" / "review_app.py"
+    ).read_text(encoding="utf-8")
+
+    assert "page_number=view.page," in source
+    assert "view.page_number" not in source

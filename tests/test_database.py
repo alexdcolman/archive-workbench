@@ -71,7 +71,7 @@ def test_migration_and_registration_are_idempotent(tmp_path: Path) -> None:
     corpus = _corpus()
 
     upgrade_database(root)
-    assert current_revision(root) == "0043_form_structure_review"
+    assert current_revision(root) == "0044_layout_structure_review"
 
     engine = create_sqlite_engine(database_path(root))
     try:
@@ -135,7 +135,7 @@ def test_quality_and_page_selection_migrations_upgrade_existing_0003_database(tm
     upgrade_database(root, revision="0003_extraction_objects")
     assert current_revision(root) == "0003_extraction_objects"
     upgrade_database(root)
-    assert current_revision(root) == "0043_form_structure_review"
+    assert current_revision(root) == "0044_layout_structure_review"
     engine = create_sqlite_engine(database_path(root))
     try:
         inspector = inspect(engine)
@@ -198,7 +198,7 @@ def test_temporal_migration_upgrades_existing_031_database(tmp_path: Path) -> No
     upgrade_database(root, revision="0026_team_workflow")
     assert current_revision(root) == "0026_team_workflow"
     upgrade_database(root)
-    assert current_revision(root) == "0043_form_structure_review"
+    assert current_revision(root) == "0044_layout_structure_review"
     engine = create_sqlite_engine(database_path(root))
     try:
         inspector = inspect(engine)
@@ -223,7 +223,7 @@ def test_operational_readiness_migration_upgrades_existing_032_database(tmp_path
     upgrade_database(root, revision="0027_temporal_authorities_relations")
     assert current_revision(root) == "0027_temporal_authorities_relations"
     upgrade_database(root)
-    assert current_revision(root) == "0043_form_structure_review"
+    assert current_revision(root) == "0044_layout_structure_review"
     engine = create_sqlite_engine(database_path(root))
     try:
         inspector = inspect(engine)
@@ -458,7 +458,7 @@ def test_temporal_migration_preserves_authority_mentions_and_relations(tmp_path:
         engine.dispose()
 
     upgrade_database(root)
-    assert current_revision(root) == "0043_form_structure_review"
+    assert current_revision(root) == "0044_layout_structure_review"
 
     engine = create_sqlite_engine(database_path(root))
     try:
@@ -575,7 +575,7 @@ def test_candidate_history_migration_preserves_populated_0331_database(tmp_path:
         engine.dispose()
 
     upgrade_database(root)
-    assert current_revision(root) == "0043_form_structure_review"
+    assert current_revision(root) == "0044_layout_structure_review"
     engine = create_sqlite_engine(database_path(root))
     try:
         with session_scope(engine) as session:
@@ -629,7 +629,7 @@ def test_page_quality_migration_from_0031_is_explicit_and_empty(tmp_path: Path) 
     assert current_revision(root) == "0031_page_action_exchange"
 
     upgrade_database(root)
-    assert current_revision(root) == "0043_form_structure_review"
+    assert current_revision(root) == "0044_layout_structure_review"
     engine = create_sqlite_engine(database_path(root))
     try:
         assert "extraction_page_quality_assessments" in inspect(engine).get_table_names()
@@ -732,7 +732,7 @@ def test_export_exchange_lifecycle_migration_upgrades_existing_0032_database(
         engine.dispose()
 
     upgrade_database(root)
-    assert current_revision(root) == "0043_form_structure_review"
+    assert current_revision(root) == "0044_layout_structure_review"
 
     engine = create_sqlite_engine(database_path(root))
     try:
@@ -822,7 +822,7 @@ def test_analysis_authorization_migration_upgrades_existing_0033_database(
         engine.dispose()
 
     upgrade_database(root)
-    assert current_revision(root) == "0043_form_structure_review"
+    assert current_revision(root) == "0044_layout_structure_review"
 
     engine = create_sqlite_engine(database_path(root))
     try:
@@ -948,7 +948,7 @@ def test_lineage_recovery_migration_upgrades_existing_0034_database(
         engine.dispose()
 
     upgrade_database(root)
-    assert current_revision(root) == "0043_form_structure_review"
+    assert current_revision(root) == "0044_layout_structure_review"
 
     engine = create_sqlite_engine(database_path(root))
     try:
@@ -1003,7 +1003,7 @@ def test_common_base_migration_upgrades_existing_0035_database(tmp_path: Path) -
     upgrade_database(root, revision="0035_exchange_lineage_recovery")
     assert current_revision(root) == "0035_exchange_lineage_recovery"
     upgrade_database(root)
-    assert current_revision(root) == "0043_form_structure_review"
+    assert current_revision(root) == "0044_layout_structure_review"
     engine = create_sqlite_engine(database_path(root))
     try:
         inspector = inspect(engine)
@@ -1037,7 +1037,7 @@ def test_state_adoption_migration_upgrades_existing_0036_database(
     upgrade_database(root, revision="0036_exchange_common_base_agreements")
     assert current_revision(root) == "0036_exchange_common_base_agreements"
     upgrade_database(root)
-    assert current_revision(root) == "0043_form_structure_review"
+    assert current_revision(root) == "0044_layout_structure_review"
 
     engine = create_sqlite_engine(database_path(root))
     try:
@@ -1087,7 +1087,7 @@ def test_open_discovery_migration_upgrades_existing_0037_database(tmp_path: Path
     upgrade_database(root, revision="0037_exchange_state_adoptions")
     assert current_revision(root) == "0037_exchange_state_adoptions"
     upgrade_database(root)
-    assert current_revision(root) == "0043_form_structure_review"
+    assert current_revision(root) == "0044_layout_structure_review"
 
     engine = create_sqlite_engine(database_path(root))
     try:
@@ -1161,7 +1161,7 @@ def test_discovery_decisions_migration_upgrades_existing_0038_database(
     upgrade_database(root, revision="0038_open_discovery")
     assert current_revision(root) == "0038_open_discovery"
     upgrade_database(root)
-    assert current_revision(root) == "0043_form_structure_review"
+    assert current_revision(root) == "0044_layout_structure_review"
 
     engine = create_sqlite_engine(database_path(root))
     try:
@@ -1232,7 +1232,7 @@ def test_discovery_grouping_continuity_migration_upgrades_existing_0039_database
     upgrade_database(root, revision="0039_discovery_decisions")
     assert current_revision(root) == "0039_discovery_decisions"
     upgrade_database(root)
-    assert current_revision(root) == "0043_form_structure_review"
+    assert current_revision(root) == "0044_layout_structure_review"
 
     engine = create_sqlite_engine(database_path(root))
     try:
@@ -1351,7 +1351,7 @@ def test_catalog_authority_roles_migration_preserves_relations_and_enforces_cont
         engine.dispose()
 
     upgrade_database(root)
-    assert current_revision(root) == "0043_form_structure_review"
+    assert current_revision(root) == "0044_layout_structure_review"
 
     engine = create_sqlite_engine(database_path(root))
     try:
@@ -1498,7 +1498,7 @@ def test_preprocessing_geometry_migration_preserves_existing_derivative_assets(
         engine.dispose()
 
     upgrade_database(root)
-    assert current_revision(root) == "0043_form_structure_review"
+    assert current_revision(root) == "0044_layout_structure_review"
     engine = create_sqlite_engine(database_path(root))
     try:
         columns = {
@@ -1620,7 +1620,7 @@ def test_form_structure_migration_preserves_editable_pages_and_revision_history(
         engine.dispose()
 
     upgrade_database(root)
-    assert current_revision(root) == "0043_form_structure_review"
+    assert current_revision(root) == "0044_layout_structure_review"
 
     engine = create_sqlite_engine(database_path(root))
     try:
@@ -1665,5 +1665,146 @@ def test_form_structure_migration_preserves_editable_pages_and_revision_history(
     assert page_value == "{}"
     assert revision_value == "{}"
     assert triggers == {"trg_exchange_page_form_structure_au"}
+    assert integrity == "ok"
+    assert foreign_keys == []
+
+
+def test_layout_structure_migration_preserves_pages_and_adds_exchange_trigger(
+    tmp_path: Path,
+) -> None:
+    from datetime import datetime, timezone
+    from sqlalchemy import inspect, text
+
+    root = tmp_path / "project"
+    _write_pdf(root / "corpus/caja/a.pdf")
+    decisions = load_decisions(Path(__file__).parents[1] / "config/decisions.yaml")
+    upgrade_database(root, revision="0043_form_structure_review")
+    engine = create_sqlite_engine(database_path(root))
+    try:
+        with session_scope(engine) as session:
+            register_test_corpus(
+                session,
+                project_root=root,
+                decisions=decisions,
+                corpus=_corpus(),
+            )
+        now = datetime.now(timezone.utc).isoformat()
+        with engine.begin() as connection:
+            digital = connection.execute(
+                text("SELECT id, sha256 FROM digital_objects LIMIT 1")
+            ).one()
+            connection.execute(
+                text(
+                    """
+                    INSERT INTO extraction_runs (
+                        id, digital_object_id, engine, source_sha256, options_hash,
+                        status, is_current, warnings_json, created_at,
+                        total_pages, total_objects, total_paragraphs,
+                        total_characters, quality_status
+                    ) VALUES (
+                        'legacy-layout-run', :digital_object_id, 'tesseract_tsv',
+                        :source_sha256, :options_hash, 'completed', 1, '[]', :now,
+                        1, 0, 0, 0, 'needs_review'
+                    )
+                    """
+                ),
+                {
+                    "digital_object_id": digital.id,
+                    "source_sha256": digital.sha256,
+                    "options_hash": "5" * 64,
+                    "now": now,
+                },
+            )
+            connection.execute(
+                text(
+                    """
+                    INSERT INTO extraction_pages (
+                        id, extraction_run_id, page_number, object_count,
+                        character_count, status, created_at
+                    ) VALUES (
+                        'legacy-layout-extraction-page', 'legacy-layout-run', 1,
+                        0, 0, 'completed', :now
+                    )
+                    """
+                ),
+                {"now": now},
+            )
+            connection.execute(
+                text(
+                    """
+                    INSERT INTO editable_pages (
+                        id, digital_object_id, page_number,
+                        source_extraction_run_id, source_extraction_page_id,
+                        status, bootstrapped_by, bootstrapped_at, updated_at,
+                        review_status, revision_number, form_structure_json
+                    ) VALUES (
+                        'legacy-layout-page', :digital_object_id, 1,
+                        'legacy-layout-run', 'legacy-layout-extraction-page',
+                        'active', 'tests', :now, :now, 'unreviewed', 1, '{}'
+                    )
+                    """
+                ),
+                {"digital_object_id": digital.id, "now": now},
+            )
+            connection.execute(
+                text(
+                    """
+                    INSERT INTO editable_page_revisions (
+                        id, editable_page_id, revision_number,
+                        base_revision_number, operation,
+                        source_extraction_run_id, source_extraction_page_id,
+                        status, review_status, form_structure_json, details_json,
+                        created_by, created_at
+                    ) VALUES (
+                        'legacy-layout-page-revision', 'legacy-layout-page', 1,
+                        NULL, 'import', 'legacy-layout-run',
+                        'legacy-layout-extraction-page', 'active', 'unreviewed',
+                        '{}', '{}', 'tests', :now
+                    )
+                    """
+                ),
+                {"now": now},
+            )
+    finally:
+        engine.dispose()
+
+    upgrade_database(root)
+    assert current_revision(root) == "0044_layout_structure_review"
+    engine = create_sqlite_engine(database_path(root))
+    try:
+        inspector = inspect(engine)
+        page_columns = {row["name"] for row in inspector.get_columns("editable_pages")}
+        revision_columns = {
+            row["name"] for row in inspector.get_columns("editable_page_revisions")
+        }
+        with engine.connect() as connection:
+            page_value = connection.execute(
+                text(
+                    "SELECT layout_structure_json FROM editable_pages "
+                    "WHERE id = 'legacy-layout-page'"
+                )
+            ).scalar_one()
+            revision_value = connection.execute(
+                text(
+                    "SELECT layout_structure_json FROM editable_page_revisions "
+                    "WHERE id = 'legacy-layout-page-revision'"
+                )
+            ).scalar_one()
+            trigger = connection.execute(
+                text(
+                    "SELECT name FROM sqlite_master WHERE type='trigger' "
+                    "AND name='trg_exchange_page_layout_structure_au'"
+                )
+            ).scalar_one()
+            integrity = connection.execute(text("PRAGMA integrity_check")).scalar_one()
+            foreign_keys = connection.execute(text("PRAGMA foreign_key_check")).all()
+    finally:
+        engine.dispose()
+
+    assert "layout_structure_json" in page_columns
+    assert "layout_structure_json" in revision_columns
+    assert page_value == "{}"
+    assert revision_value == "{}"
+    assert trigger == "trg_exchange_page_layout_structure_au"
     assert integrity == "ok"
     assert foreign_keys == []

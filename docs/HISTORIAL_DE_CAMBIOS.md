@@ -14,6 +14,10 @@ Este es el único documento en la raíz de `docs/`. Resume la evolución del pro
 
 ## Versiones recientes — más reciente primero
 
+### 0.80.0 — 2026-08-06
+
+Implementa y valida `OCR-01C` para columnas y orden de lectura revisables, con diagnóstico de fragmentación y duplicaciones, migración `0044_layout_structure_review` y exportación `layout_structures.jsonl`. La RC2 agrega un recorrido numerado, selección visible, creación y asignación combinadas, historial legible, imagen de revisión desde el original cuando falta preview y verificación diagnóstica explícita. La RC3 corrige el uso de un atributo inexistente de `ReviewPageView` que interrumpía el render después del bloque 1. La RC4 distingue **Historial general** del historial específico de layout y muestra la columna actual del objeto. La validación final confirmó tres columnas activas, cinco objetos editables, combinación y archivo explícitos, deshacer/rehacer, exportación 1.4, conservación del PDF y de los siete objetos OCR de origen; `OCR-01C` queda cerrada.
+
 ### 0.79.0 — 2026-08-05
 - Implementa `OCR-01B`: candidatos de casillero no canónicos, confirmación explícita, estados controlados y grupos estables por página.
 - Conserva evidencia, anclajes a objetos editables, ciclo de vida e historial append-only; permite alta manual cuando el casillero visible no fue OCRizado.

@@ -69,6 +69,7 @@ from archive_workbench.exchange import (
 )
 from archive_workbench.extraction import select_extraction_pages
 from archive_workbench.form_structure import ensure_group, form_structure, register_control
+from archive_workbench.layout_structure import apply_layout_proposal, layout_structure
 from archive_workbench.identity import new_id
 from archive_workbench.page_actions import execute_page_action, redo_page_action, undo_page_action
 from archive_workbench.work import (
@@ -351,7 +352,7 @@ def test_exchange_migration_upgrades_existing_0012_database(tmp_path: Path) -> N
     upgrade_database(root, revision="0012_editable_search_fts")
     assert current_revision(root) == "0012_editable_search_fts"
     upgrade_database(root)
-    assert current_revision(root) == "0043_form_structure_review"
+    assert current_revision(root) == "0044_layout_structure_review"
     engine = create_sqlite_engine(database_path(root))
     try:
         tables = set(inspect(engine).get_table_names())
@@ -380,7 +381,7 @@ def test_dry_run_migration_upgrades_populated_0013_database(tmp_path: Path) -> N
         engine.dispose()
     assert current_revision(root) == "0013_offline_exchange_log"
     upgrade_database(root)
-    assert current_revision(root) == "0043_form_structure_review"
+    assert current_revision(root) == "0044_layout_structure_review"
     engine = create_sqlite_engine(database_path(root))
     try:
         tables = set(inspect(engine).get_table_names())
@@ -1027,7 +1028,7 @@ def test_transactional_apply_migration_upgrades_populated_0014_database(tmp_path
         engine.dispose()
     assert current_revision(root) == "0014_exchange_dry_run"
     upgrade_database(root)
-    assert current_revision(root) == "0043_form_structure_review"
+    assert current_revision(root) == "0044_layout_structure_review"
     engine = create_sqlite_engine(database_path(root))
     try:
         tables = set(inspect(engine).get_table_names())
@@ -1605,7 +1606,7 @@ def test_delete_precondition_migration_upgrades_populated_0015_database(tmp_path
         engine.dispose()
     assert current_revision(root) == "0015_exchange_transactional_apply"
     upgrade_database(root)
-    assert current_revision(root) == "0043_form_structure_review"
+    assert current_revision(root) == "0044_layout_structure_review"
     engine = create_sqlite_engine(database_path(root))
     try:
         columns = {
@@ -1626,7 +1627,7 @@ def test_conflict_resolution_migration_upgrades_populated_0016_database(tmp_path
     engine.dispose()
     assert current_revision(root) == "0016_exchange_delete_preconditions"
     upgrade_database(root)
-    assert current_revision(root) == "0043_form_structure_review"
+    assert current_revision(root) == "0044_layout_structure_review"
     engine = create_sqlite_engine(database_path(root))
     try:
         tables = set(inspect(engine).get_table_names())
@@ -2033,7 +2034,7 @@ def test_resolution_usability_migration_upgrades_populated_0017_database(tmp_pat
         engine.dispose()
     assert current_revision(root) == "0017_exchange_conflict_resolutions"
     upgrade_database(root)
-    assert current_revision(root) == "0043_form_structure_review"
+    assert current_revision(root) == "0044_layout_structure_review"
     engine = create_sqlite_engine(database_path(root))
     try:
         columns = {
@@ -3565,8 +3566,8 @@ def test_0030_repairs_legacy_source_replaced_bundle_end_to_end(
     # generar nuevos eventos y la exportación corrige el evento ya existente.
     upgrade_database(source_root)
     upgrade_database(receiver_root)
-    assert current_revision(source_root) == "0043_form_structure_review"
-    assert current_revision(receiver_root) == "0043_form_structure_review"
+    assert current_revision(source_root) == "0044_layout_structure_review"
+    assert current_revision(receiver_root) == "0044_layout_structure_review"
     source_engine = create_sqlite_engine(database_path(source_root))
     receiver_engine = create_sqlite_engine(database_path(receiver_root))
     try:
@@ -3941,8 +3942,8 @@ def test_0031_backfills_legacy_page_action_and_preserves_history_end_to_end(
 
     upgrade_database(source_root)
     upgrade_database(receiver_root)
-    assert current_revision(source_root) == "0043_form_structure_review"
-    assert current_revision(receiver_root) == "0043_form_structure_review"
+    assert current_revision(source_root) == "0044_layout_structure_review"
+    assert current_revision(receiver_root) == "0044_layout_structure_review"
 
     source_engine = create_sqlite_engine(database_path(source_root))
     receiver_engine = create_sqlite_engine(database_path(receiver_root))
@@ -4870,7 +4871,7 @@ def test_lineage_validation_script_creates_recoverable_discardable_pair(
         receiver,
         force=False,
     )
-    assert result["revision"] == "0043_form_structure_review"
+    assert result["revision"] == "0044_layout_structure_review"
 
     engine = create_sqlite_engine(database_path(receiver))
     try:
@@ -5507,7 +5508,7 @@ def test_common_base_validation_script_creates_distinct_identical_copies(
         tmp_path / "common_base_b",
         force=False,
     )
-    assert result["revision"] == "0043_form_structure_review"
+    assert result["revision"] == "0044_layout_structure_review"
     assert result["initiator_workspace_id"] != result["counterpart_workspace_id"]
     assert len(str(result["state_sha256"])) == 64
     assert Path(result["validation_path"]).is_file()
@@ -5819,8 +5820,91 @@ def test_state_adoption_validation_script_creates_divergent_copies_and_package(
         tmp_path / "state_adoption_target",
         force=False,
     )
-    assert result["revision"] == "0043_form_structure_review"
+    assert result["revision"] == "0044_layout_structure_review"
     assert result["source_workspace_id"] != result["target_workspace_id"]
     assert result["source_state_sha256"] != result["target_state_sha256"]
     assert Path(result["package_path"]).is_file()
     assert Path(result["validation_path"]).is_file()
+
+
+def test_layout_structure_travels_in_bundle_with_page_revision_history(
+    tmp_path: Path,
+) -> None:
+    (
+        source_root,
+        source_engine,
+        _decisions,
+        object_id,
+        receiver_root,
+        receiver_engine,
+        _receiver_workspace_id,
+    ) = _source_and_receiver(tmp_path)
+    try:
+        with session_scope(source_engine) as session:
+            obj = session.get(EditableObject, object_id)
+            assert obj is not None
+            execute_page_action(
+                session,
+                editable_page_id=obj.editable_page_id,
+                action_type="layout",
+                changed_by="Source",
+                selected_object_id=obj.id,
+                note="Confirmación de layout",
+                action=lambda: apply_layout_proposal(
+                    session,
+                    editable_page_id=obj.editable_page_id,
+                    changed_by="Source",
+                    note="Una columna confirmada",
+                ),
+            )
+            page_id = obj.editable_page_id
+
+        with session_scope(source_engine) as session:
+            bundle = export_change_bundle(
+                session,
+                project_root=source_root,
+                checkpoint_ref="baseline",
+                created_by="Source",
+            )
+        with session_scope(receiver_engine) as session:
+            dry = dry_run_change_bundle(
+                session,
+                project_root=receiver_root,
+                bundle_path=bundle.output_path,
+                assessed_by="Receiver",
+            )
+            assert dry.overall_status == "ready_to_apply"
+            assert dry.counts["conflict"] == 0
+        with session_scope(receiver_engine) as session:
+            applied = apply_change_bundle(
+                session,
+                project_root=receiver_root,
+                bundle_ref=bundle.bundle_id,
+                applied_by="Receiver",
+            )
+            assert applied.applied_event_count >= 1
+
+        with session_scope(source_engine) as source_session, session_scope(
+            receiver_engine
+        ) as receiver_session:
+            source_layout = layout_structure(
+                source_session, editable_page_id=page_id
+            ).model_dump(mode="json")
+            receiver_layout = layout_structure(
+                receiver_session, editable_page_id=page_id
+            ).model_dump(mode="json")
+            assert receiver_layout == source_layout
+            assert len(source_layout["columns"]) == 1
+            source_page = source_session.get(EditablePage, page_id)
+            receiver_page = receiver_session.get(EditablePage, page_id)
+            assert source_page is not None and receiver_page is not None
+            assert receiver_page.revision_number == source_page.revision_number
+            receiver_operations = receiver_session.scalars(
+                select(EditablePageRevision.operation)
+                .where(EditablePageRevision.editable_page_id == page_id)
+                .order_by(EditablePageRevision.revision_number)
+            ).all()
+            assert "layout_structure" in receiver_operations
+    finally:
+        source_engine.dispose()
+        receiver_engine.dispose()

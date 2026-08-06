@@ -207,6 +207,8 @@ def test_interface_policy_requires_persistent_interactive_panels() -> None:
 def test_history_map_is_concise_and_references_historical_detail() -> None:
     text = (DOCS / "HISTORIAL_DE_CAMBIOS.md").read_text(encoding="utf-8")
     assert "## Documentación vigente" in text
+    assert "### 0.80.0" in text
+    assert "0044_layout_structure_review" in text
     assert "### 0.79.0" in text
     assert "0043_form_structure_review" in text
     assert "### 0.77.0" in text
@@ -501,21 +503,20 @@ def test_automatic_analysis_quality_decision_is_preserved_and_auditable() -> Non
     assert "st.form" in text
 
 
-def test_current_update_guide_is_stable_named_and_closes_ocr01b() -> None:
+def test_current_update_guide_is_stable_named_and_describes_closed_ocr01c() -> None:
     text = (OPERATIVE / "ACTUALIZACION_ACTUAL.md").read_text(encoding="utf-8")
-    assert "Archive Workbench 0.79.0" in text
-    assert "implementa y cierra `OCR-01B`" in text
-    assert "0043_form_structure_review" in text
+    assert "Archive Workbench 0.80.0" in text
+    assert "implementa y cierra `OCR-01C`" in text
+    assert "0044_layout_structure_review" in text
     assert "migración" in text.lower() and "aditiva" in text.lower()
     assert "project_data" in text
     assert "backup SQLite verificado" in text
-    assert "Formulario" in text
-    assert "Deshacer" in text and "Rehacer" in text
-    assert "Exportar estado editable" in text
-    assert "Editar texto" in text
-    assert "form_structures.jsonl" in text
-    assert "SHA-256" in text
-    assert "`OCR-01B`" in text and "cerrados" in text
+    assert "columnas" in text.lower() and "orden de lectura" in text.lower()
+    assert "deshacer" in text.lower() and "rehacer" in text.lower()
+    assert "layout_structures.jsonl" in text
+    assert "Historial general" in text
+    assert "Historial de Orden y estructura" in text
+    assert "Validación cerrada" in text
     for closed in (
         "UX-03",
         "DISC-01A/B/C/D",
@@ -528,6 +529,7 @@ def test_current_update_guide_is_stable_named_and_closes_ocr01b() -> None:
         "GRAPH-02",
         "OCR-01A",
         "OCR-01B",
+        "OCR-01C",
     ):
         assert closed in text
 
@@ -608,10 +610,10 @@ def test_pilot_guide_delegates_future_work_to_single_pending_ledger() -> None:
 def test_readme_points_only_to_current_documentation_map() -> None:
     text = (ROOT / "README.md").read_text(encoding="utf-8")
     citation = (ROOT / "CITATION.cff").read_text(encoding="utf-8")
-    assert "**Versión actual:** 0.79.0" in text
-    assert "La versión 0.79.0 incorpora pruebas automatizadas" in text
-    assert "(versión 0.79.0)" in text
-    assert 'version: "0.79.0"' in citation
+    assert "**Versión actual:** 0.80.0" in text
+    assert "La versión 0.80.0 incorpora pruebas automatizadas" in text
+    assert "(versión 0.80.0)" in text
+    assert 'version: "0.80.0"' in citation
     assert "orientación, deskew y eliminación controlada de líneas" in text
     assert "confirmación explícita de casilleros" in text
     assert "Productores y gestión" in text
@@ -645,3 +647,34 @@ def test_open_discovery_plan_separates_suggestions_from_canonical_records() -> N
     assert "spacy_ner" in text
     assert "config/discovery_evaluation_corpus.jsonl" in text
     assert "Criterio de cierre cumplido" in text
+
+
+def test_ocr01c_assistant_guidance_update_is_idempotent(tmp_path: Path) -> None:
+    import importlib.util
+
+    assistant = tmp_path / ".assistant"
+    assistant.mkdir()
+    for name in (
+        "01_INTERACCION_Y_GUIADO.md",
+        "03_POLITICA_DE_PRUEBAS.md",
+        "05_CRITERIOS_INTERFAZ.md",
+    ):
+        (assistant / name).write_text(f"# {name}\n", encoding="utf-8")
+
+    script = ROOT / "scripts" / "update_assistant_guidance_0800.py"
+    spec = importlib.util.spec_from_file_location("assistant_guidance_0800", script)
+    assert spec and spec.loader
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+
+    first = module.update(tmp_path)
+    second = module.update(tmp_path)
+
+    assert len(first) == 3
+    assert second == []
+    interaction = (assistant / "01_INTERACCION_Y_GUIADO.md").read_text(encoding="utf-8")
+    tests_policy = (assistant / "03_POLITICA_DE_PRUEBAS.md").read_text(encoding="utf-8")
+    interface = (assistant / "05_CRITERIOS_INTERFAZ.md").read_text(encoding="utf-8")
+    assert "Cada control nuevo debe explicarse" in interaction
+    assert "No se deben usar `assert` sin mensaje" in tests_policy
+    assert "Crear una columna para un objeto" in interface

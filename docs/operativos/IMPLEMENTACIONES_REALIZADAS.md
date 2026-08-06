@@ -1,6 +1,6 @@
 # Implementaciones realizadas — Archive Workbench
 
-**Estado preparado:** 2026-08-05 · **candidata:** 0.79.0
+**Estado preparado:** 2026-08-06 · **versión:** 0.80.0
 
 Este documento registra capacidades ya implementadas y, cuando corresponde, validadas. No deben volver a aparecer en `PENDIENTES_ACTIVOS.md` salvo evidencia de regresión o ampliación explícita del alcance.
 
@@ -11,7 +11,7 @@ Este documento registra capacidades ya implementadas y, cuando corresponde, vali
 | Catálogo, originales y estructura archivística | Implementado |
 | Extracciones versionadas y selección canónica | Implementado y validado |
 | Revisión, historial y rebase | Implementado y validado |
-| Calidad de página y derivados OCR | Implementación parcial; OCR-01A validada en 0.78.0 y OCR-01B validada en 0.79.0 |
+| Calidad de página y derivados OCR | Implementación parcial; OCR-01A, OCR-01B y OCR-01C validadas y cerradas |
 | Búsqueda literal y semántica | Implementado; calibración reproducible cerrada en 0.74.0 |
 | Autoridades, menciones y relaciones | Núcleo implementado y validado |
 | Exportaciones reproducibles | Implementado y validado |
@@ -33,6 +33,15 @@ Este documento registra capacidades ya implementadas y, cuando corresponde, vali
 | Capas archivísticas GRAPH-02 | Implementadas y validadas en 0.77.0 |
 
 ## Preprocesamiento geométrico para OCR
+
+### OCR-01C — columnas y orden de lectura revisables — 0.80.0
+
+La capa editable calcula una propuesta no canónica de columnas a partir de geometrías normalizadas, muestra el orden sugerido sobre la página y conserva sin cambios el orden vigente hasta una confirmación explícita. La confirmación crea columnas estables, aplica el orden mediante revisiones de objeto y permite reasignación manual, creación, renombrado y archivo de columnas.
+
+El mismo diagnóstico señala secuencias posiblemente fragmentadas y objetos posiblemente duplicados. Ninguna candidata se corrige sola: combinar o archivar exige una acción humana y participa en historial, deshacer/rehacer e intercambio. La migración `0044_layout_structure_review` agrega `layout_structure_json` a páginas y revisiones; la exportación incorpora `layout_structures.jsonl` y manifiesto 1.4.
+
+**Validada manualmente en 0.80.0.** La base controlada confirmó tres columnas activas —`Columna 1`, `Columna 2` y `Margen derecho`—, cinco objetos editables activos, cero fragmentaciones o duplicaciones pendientes, orden vigente coincidente con la propuesta, historial específico con confirmación, renombrado, combinación, archivo, deshacer y rehacer, y exportación `layout_structures.jsonl` con manifiesto 1.4. El PDF conservó su SHA-256 y los siete objetos OCR de origen permanecieron intactos. Durante la validación se corrigieron la ausencia de imagen cuando no había preview, un acceso inválido a `ReviewPageView.page_number`, la ambigüedad entre **Historial general** y el historial específico de layout, y el guiado de las acciones nuevas. `OCR-01C` queda cerrada; la revisión integral de densidad y comprensión de **Orden y estructura** permanece registrada en `UX-02`.
+
 
 ### OCR-01B — formularios y casilleros revisables — 0.79.0
 

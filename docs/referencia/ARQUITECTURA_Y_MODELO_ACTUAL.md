@@ -41,6 +41,8 @@ Mantiene objetos editables con texto, tipo, orden, geometría, atributos, estado
 
 La estructura revisada de formularios pertenece a la página editable y no al resultado OCR. Los detectores producen candidatos sin autoridad canónica; una persona debe confirmar cada control, su estado y su rótulo. Los casilleros se anclan al menos a un objeto editable de marca o etiqueta, pueden agruparse mediante IDs estables y conservan evidencia, método candidato, responsable, fechas y ciclo de vida. Los grupos archivados permanecen en el snapshot histórico y sus controles activos quedan sin grupo. Cada cambio genera una revisión de página y participa en deshacer/rehacer, intercambio y adopción de estado.
 
+La estructura revisada de layout también pertenece a la página editable. La detección geométrica propone columnas y un orden de lectura, pero no modifica `current_order_index` hasta una confirmación explícita. Las columnas tienen IDs estables y asignaciones de objetos; el orden canónico continúa en las revisiones de cada objeto. Fragmentaciones y duplicaciones son diagnósticos revisables: combinar o archivar exige una acción humana y conserva linaje, historial y reversibilidad.
+
 ### Búsqueda
 
 La búsqueda literal usa índices reconstruibles. La búsqueda semántica utiliza perfiles con modelo, fragmentación, filtros y estado del corpus. Su calibración se ejecuta sin modificar la base: un corpus JSONL de consultas positivas, negativas y ambiguas se compara contra una revisión concreta del índice, se evalúan umbrales y se conservan métricas, falsos positivos, falsos negativos, parámetros y huellas reproducibles. Las comparaciones solo aceptan informes del mismo corpus y tipo de fragmento; cualquier umbral recomendado queda limitado al corpus, perfil, modelo, revisión de índice y grilla evaluada.
@@ -81,6 +83,7 @@ Los backups incluyen manifiesto, base y configuración. La restauración crea pr
 - Página extraída y objeto extraído: candidatos automáticos.
 - Página editable y objeto editable: estado humano activo e historial.
 - Estructura de formulario: snapshot coherente por página con grupos y casilleros de IDs estables, estados controlados, anclajes editables, evidencia y ciclo de vida.
+- Estructura de layout: columnas estables y asignaciones revisadas por página; el orden canónico se conserva en las revisiones de objetos.
 - Autoridad: identidad canónica revisada.
 - Mención: fragmento contextual con offsets, revisión textual y snapshots append-only.
 - Relación: vínculo controlado `analytical`, `producer` o `manager` con destino tipado, evidencia, procedencia, temporalidad, estado e historial.
@@ -119,6 +122,7 @@ Los backups incluyen manifiesto, base y configuración. La restauración crea pr
 - La continuidad textual crea un candidato nuevo; el candidato obsoleto permanece visible y no recibe decisiones nuevas.
 - No trasladar anotaciones por similitud ambigua.
 - Un candidato de casillero no es una decisión: el estado y la agrupación solo se vuelven revisados mediante confirmación explícita.
+- Una propuesta de columnas, orden, fragmentación o duplicación no modifica la capa editable hasta una confirmación explícita.
 - Dar de alta un casillero visible sin marca OCR exige anclarlo a un objeto editable existente y registrar evidencia; no se inventan trazos ni objetos extraídos.
 - No aplicar un paquete con simulación obsoleta.
 - Resolver contenido de un paquete sin base común no crea linaje.

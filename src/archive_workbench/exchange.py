@@ -18,6 +18,7 @@ from archive_workbench.contracts.changes import (
     ChangeEvent,
 )
 from archive_workbench.contracts.forms import FormStructure
+from archive_workbench.contracts.layout import LayoutStructure
 from archive_workbench.db.models import (
     EditableObject,
     EditableObjectRevision,
@@ -321,6 +322,7 @@ def _editable_state_payload(session: Session, project_id: str) -> dict[str, Any]
                 "review_status": row.review_status,
                 "review_note": row.review_note,
                 "form_structure": row.form_structure_json or {},
+                "layout_structure": row.layout_structure_json or {},
             }
             for row in pages
         ],
@@ -1633,11 +1635,12 @@ def _assess_current_state(
             ("review_status", "review_status"),
             ("review_note", "review_note"),
             ("form_structure", "form_structure_json"),
+            ("layout_structure", "layout_structure_json"),
         ):
             pair = _changed_pair(event, field)
             if pair is not None:
                 current = getattr(page, attribute)
-                if field == "form_structure":
+                if field in {"form_structure", "layout_structure"}:
                     current = current or {}
                 pairs.append((field, current, pair[0], pair[1]))
     elif event.entity_type == "extraction_selection_baseline":
@@ -2974,6 +2977,7 @@ def _current_field_value(session: Session, event: ChangeEvent, field: str) -> An
             "review_status": "review_status",
             "review_note": "review_note",
             "form_structure": "form_structure_json",
+            "layout_structure": "layout_structure_json",
         }
         attribute = mapping.get(field)
         return getattr(page, attribute) if attribute else None
@@ -3805,7 +3809,8 @@ def _apply_page_event(
     status_pair = _changed_pair(event, "review_status")
     note_pair = _changed_pair(event, "review_note")
     structure_pair = _changed_pair(event, "form_structure")
-    if status_pair is None and note_pair is None and structure_pair is None:
+    layout_pair = _changed_pair(event, "layout_structure")
+    if status_pair is None and note_pair is None and structure_pair is None and layout_pair is None:
         raise ValueError(f"El evento {event.event_id} no contiene campos de página aplicables")
     if status_pair is not None:
         old, new = status_pair
@@ -3828,6 +3833,24 @@ def _apply_page_event(
             session,
             page,
             operation="form_structure",
+            created_by=actor,
+            note=f"Aplicado desde evento remoto {event.event_id}",
+            details={"source_event_id": event.event_id},
+            base_revision_number=base,
+        )
+    if layout_pair is not None:
+        old, new = layout_pair
+        _assert_expected(
+            page.layout_structure_json or {}, old or {}, event=event, field="layout_structure"
+        )
+        validated = LayoutStructure.model_validate(new or {})
+        base = page.revision_number
+        page.layout_structure_json = validated.model_dump(mode="json")
+        page.revision_number += 1
+        _append_page_revision(
+            session,
+            page,
+            operation="layout_structure",
             created_by=actor,
             note=f"Aplicado desde evento remoto {event.event_id}",
             details={"source_event_id": event.event_id},

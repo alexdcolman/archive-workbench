@@ -6,7 +6,7 @@ Está pensada especialmente para equipos de archivos, bibliotecas, ciencias soci
 
 Los documentos y la base de datos permanecen en la computadora del equipo: la aplicación no necesita subir el corpus a un servicio externo.
 
-**Versión actual:** 0.79.0 — formularios y casilleros revisables sobre la capa editable.
+**Versión actual:** 0.80.0 — columnas y orden de lectura revisables sobre la capa editable.
 
 ## Qué permite hacer
 
@@ -24,6 +24,7 @@ Archive Workbench reúne en una misma interfaz:
 - adopción segura de una nueva candidata mediante rebase de correcciones, conflictos textuales y menciones;
 - revisión del texto junto con la imagen y sus regiones;
 - confirmación explícita de casilleros, estados y grupos de formulario con historial y exportación;
+- propuestas revisables de columnas y orden de lectura, con diagnóstico de fragmentación y duplicaciones;
 - edición, anotaciones y cronología integrada por página;
 - búsqueda literal y búsqueda semántica opcional;
 - entidades, alias, menciones y relaciones, con importación JSON simulable;
@@ -254,7 +255,7 @@ pip install -e ".[dev,extraction,streamlit,semantic,tiff,discovery]"
 pytest
 ```
 
-La versión 0.79.0 incorpora pruebas automatizadas para candidatos de casillero no canónicos, confirmación explícita, grupos estables, alta manual, estados controlados, historial, deshacer/rehacer, intercambio, adopción de estado y exportación.
+La versión 0.80.0 incorpora pruebas automatizadas para propuestas no canónicas de columnas y orden de lectura, confirmación explícita, reasignación manual, fragmentaciones, duplicaciones, historial, deshacer/rehacer, intercambio y exportación.
 
 ## Licencia y cita
 
@@ -266,6 +267,6 @@ El desarrollo fue realizado por **Alex Colman** en el marco del **Grupo de Inves
 
 Cuando Archive Workbench sea utilizado en una investigación, publicación, informe, actividad docente o desarrollo derivado, solicitamos citar:
 
-> Colman, Alex, y Grupo de Investigación en Archivos de la Represión (GIAR). 2026. *Archive Workbench* (versión 0.79.0) [software]. https://github.com/alexdcolman/archive-workbench
+> Colman, Alex, y Grupo de Investigación en Archivos de la Represión (GIAR). 2026. *Archive Workbench* (versión 0.80.0) [software]. https://github.com/alexdcolman/archive-workbench
 
 El archivo [`CITATION.cff`](CITATION.cff) contiene los metadatos de cita reconocidos por GitHub y por distintos gestores bibliográficos.

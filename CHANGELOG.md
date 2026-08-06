@@ -1,3 +1,17 @@
+## 0.80.0 — 2026-08-06
+
+- Implementa `OCR-01C` con propuestas no canónicas de columnas y orden de lectura calculadas sobre la geometría de la capa editable.
+- La confirmación explícita crea columnas estables por página y aplica el orden mediante revisiones de los objetos; permite reasignar objetos, crear, renombrar o archivar columnas y usar deshacer/rehacer.
+- Agrega una superposición diagnóstica numerada y señala fragmentaciones y duplicaciones sin corregirlas automáticamente; cada resolución requiere una acción humana y conserva linaje.
+- Integra la estructura de layout en intercambio offline, adopción de estado y exportación reproducible mediante `layout_structures.jsonl` y manifiesto 1.4.
+- Añade la migración aditiva `0044_layout_structure_review`, que incorpora snapshots JSON de layout a páginas editables y sus revisiones sin alterar textos, imágenes ni objetos existentes.
+- Incluye `create_layout_structure_validation_project.py` con dos columnas, una fragmentación y un duplicado controlados. La validación manual confirmó propuesta no canónica, columnas estables, reasignación, renombrado, combinación, archivo de duplicados, deshacer/rehacer, exportación e integridad de los originales.
+- La RC2 reorganiza **Orden y estructura** como un recorrido numerado, mantiene visible el objeto seleccionado y reúne la creación de una columna manual con la asignación del objeto en una sola acción.
+- Muestra el historial con frases humanas, genera una referencia visual cacheada desde el original cuando falta el derivado de previsualización y agrega `verify_layout_structure_validation_project.py` con diagnósticos explícitos en lugar de aserciones anónimas.
+- Agrega `update_assistant_guidance_0800.py` para incorporar de forma idempotente las reglas de guiado y UX en la documentación privada `.assistant` sin versionarla.
+- La RC3 corrige el acceso a `ReviewPageView.page_number` por el atributo contractual `page`, evitando que **Orden y estructura** se interrumpa después del primer bloque; agrega una prueba de regresión específica.
+- La RC4 diferencia **Historial general** del historial específico de **Orden y estructura**, muestra la columna vigente del objeto seleccionado, mejora el diagnóstico de estado pendiente y refuerza las reglas privadas de guiado para no pedir comprobaciones en pantallas equivocadas. La verificación final cerró `OCR-01C` con tres columnas activas, cinco objetos editables, cero fragmentaciones o duplicaciones pendientes, historial específico completo, exportación 1.4 y conservación del PDF y de los siete objetos OCR de origen.
+
 ## 0.79.0 — 2026-08-05
 
 - Implementa `OCR-01B` con candidatos de casillero no canónicos que requieren confirmación humana antes de incorporarse a la estructura revisada.
