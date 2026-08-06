@@ -7,6 +7,33 @@ from pydantic import Field, model_validator
 from archive_workbench.contracts.common import ContractModel
 
 
+
+RegionSemanticRole = Literal[
+    "body_text",
+    "cover",
+    "page_header",
+    "page_footer",
+    "page_number",
+    "stamp",
+    "signature",
+    "handwriting",
+    "illustration",
+    "preprinted",
+]
+
+REGION_SEMANTIC_OBJECT_TYPES: dict[str, str] = {
+    "body_text": "paragraph",
+    "cover": "title",
+    "page_header": "page_header",
+    "page_footer": "page_footer",
+    "page_number": "page_footer",
+    "stamp": "stamp",
+    "signature": "handwritten_region",
+    "handwriting": "handwritten_region",
+    "illustration": "figure",
+    "preprinted": "form_field",
+}
+
 class NormalizedRegionBox(ContractModel):
     x0: float = Field(ge=0, le=1)
     y0: float = Field(ge=0, le=1)
@@ -52,6 +79,7 @@ class RegionDefinition(ContractModel):
     bbox: NormalizedRegionBox
     mode: Literal["ocr", "manual"]
     object_type: str = Field(min_length=1, max_length=100)
+    semantic_role: RegionSemanticRole | None = None
     hidden_by_default: bool = False
     ocr: RegionOcrOptions | None = None
     initial_text: str = ""
@@ -63,6 +91,12 @@ class RegionDefinition(ContractModel):
             raise ValueError(f"La región OCR '{self.region_key}' requiere opciones ocr")
         if self.mode == "manual" and self.ocr is not None:
             raise ValueError(f"La región manual '{self.region_key}' no debe declarar opciones ocr")
+        if self.semantic_role is not None:
+            expected = REGION_SEMANTIC_OBJECT_TYPES[self.semantic_role]
+            if self.object_type != expected:
+                raise ValueError(
+                    f"La clasificación '{self.semantic_role}' requiere object_type '{expected}'"
+                )
         return self
 
 
@@ -99,6 +133,7 @@ class RegionExportRecord(ContractModel):
     reading_order: int = Field(ge=0)
     mode: Literal["ocr", "manual"]
     object_type: str
+    semantic_role: RegionSemanticRole | None = None
     bbox: NormalizedRegionBox
     crop_path: str
     raw_json_path: str | None = None

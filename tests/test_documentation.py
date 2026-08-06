@@ -16,6 +16,7 @@ def test_docs_root_is_clean_and_operational_documents_are_unique() -> None:
         "ACTUALIZACION_ACTUAL.md",
         "ESTRATEGIA_DE_PRUEBAS.md",
         "GUIA_PRUEBA_PILOTO.md",
+        "HOJA_DE_RUTA_PRE_RELEASE.md",
         "IMPLEMENTACIONES_REALIZADAS.md",
         "PENDIENTES_ACTIVOS.md",
     ]
@@ -62,12 +63,15 @@ def test_active_pending_ledger_has_index_and_recovers_all_major_lines() -> None:
     text = (OPERATIVE / "PENDIENTES_ACTIVOS.md").read_text(encoding="utf-8")
     assert "## Índice" in text
     for item in (
-        "AV-01 — Registro audiovisual local y transcripción",
-        "AV-02 — Plugin opcional de descarga desde YouTube",
-        "AI-01 — Herramientas CLI opcionales con LLM",
+        "AV-01 — Registro local de audio y video y transcripción",
+        "AV-02 — Plugin opcional de incorporación desde YouTube",
+        "AI-01 — Pipeline CLI opcional de análisis con LLM",
         "AI-02 — Sistema RAG trazable",
         "OPS-01 — Imagen Docker",
         "INT-01 — Integración opcional con Google Drive",
+        "EXP-01 — Exportación trazable de imágenes y recortes",
+        "WEB-01 — Sitio público y documentación de release",
+        "GIAR-01 — Base de conocimiento y sitio",
     ):
         assert item in text
     assert "SEM-01 — Calibración reproducible de búsqueda semántica" not in text
@@ -503,36 +507,19 @@ def test_automatic_analysis_quality_decision_is_preserved_and_auditable() -> Non
     assert "st.form" in text
 
 
-def test_current_update_guide_is_stable_named_and_describes_closed_ocr01c() -> None:
+def test_current_update_guide_describes_closed_ocr01d_without_migration() -> None:
     text = (OPERATIVE / "ACTUALIZACION_ACTUAL.md").read_text(encoding="utf-8")
-    assert "Archive Workbench 0.80.0" in text
-    assert "implementa y cierra `OCR-01C`" in text
+    assert "Archive Workbench 0.81.0" in text
+    assert "`OCR-01D`" in text
     assert "0044_layout_structure_review" in text
-    assert "migración" in text.lower() and "aditiva" in text.lower()
-    assert "project_data" in text
-    assert "backup SQLite verificado" in text
-    assert "columnas" in text.lower() and "orden de lectura" in text.lower()
-    assert "deshacer" in text.lower() and "rehacer" in text.lower()
-    assert "layout_structures.jsonl" in text
-    assert "Historial general" in text
-    assert "Historial de Orden y estructura" in text
-    assert "Validación cerrada" in text
-    for closed in (
-        "UX-03",
-        "DISC-01A/B/C/D",
-        "SEM-01",
-        "GRAPH-01",
-        "OCR-02",
-        "CAT-01",
-        "DISC-02",
-        "CAT-02",
-        "GRAPH-02",
-        "OCR-01A",
-        "OCR-01B",
-        "OCR-01C",
-    ):
-        assert closed in text
-
+    assert "No hay migración" in text
+    assert "OCR regional" in text
+    assert "Dibujar una zona" in text
+    assert "selection_policy=never" in text
+    assert "regions.jsonl" in text
+    assert "no cambia la selección canónica" in text.lower()
+    assert "quedó validada y cerrada" in text.lower()
+    assert "primer múltiplo de diez libre" in text
 
 def test_authority_dictionary_format_is_versioned_and_conservative() -> None:
     text = (
@@ -602,7 +589,15 @@ def test_testing_strategy_is_explicit_and_does_not_discard_slow_tests() -> None:
 def test_pilot_guide_delegates_future_work_to_single_pending_ledger() -> None:
     text = (OPERATIVE / "GUIA_PRUEBA_PILOTO.md").read_text(encoding="utf-8")
     assert "PENDIENTES_ACTIVOS.md" in text
+    assert "HOJA_DE_RUTA_PRE_RELEASE.md" in text
+    assert "PROYECTO_PARALELO_GIAR.md" in text
     assert "Esta guía se limita al piloto" in text
+    assert "Archivo de la DIPPBA" in text
+    assert "APM-Chubut" in text
+    assert "testimonios audiovisuales" in text
+    assert "audios y videos autorizados" in text
+    assert "velocidades" in text
+    assert "no se tratará como una base descartable" in text
     assert "# Fase 7 — Candidata a v1.0" in text
     assert "## Capacidades previstas después del núcleo" not in text
 
@@ -610,10 +605,10 @@ def test_pilot_guide_delegates_future_work_to_single_pending_ledger() -> None:
 def test_readme_points_only_to_current_documentation_map() -> None:
     text = (ROOT / "README.md").read_text(encoding="utf-8")
     citation = (ROOT / "CITATION.cff").read_text(encoding="utf-8")
-    assert "**Versión actual:** 0.80.0" in text
-    assert "La versión 0.80.0 incorpora pruebas automatizadas" in text
-    assert "(versión 0.80.0)" in text
-    assert 'version: "0.80.0"' in citation
+    assert "**Versión actual:** 0.81.0" in text
+    assert "La versión 0.81.0 incorpora pruebas automatizadas" in text
+    assert "(versión 0.81.0)" in text
+    assert 'version: "0.81.0"' in citation
     assert "orientación, deskew y eliminación controlada de líneas" in text
     assert "confirmación explícita de casilleros" in text
     assert "Productores y gestión" in text
@@ -649,6 +644,38 @@ def test_open_discovery_plan_separates_suggestions_from_canonical_records() -> N
     assert "Criterio de cierre cumplido" in text
 
 
+
+def test_pre_release_roadmap_includes_public_site_export_and_parallel_giar() -> None:
+    text = (OPERATIVE / "HOJA_DE_RUTA_PRE_RELEASE.md").read_text(encoding="utf-8")
+    assert "EXP-01" in text
+    assert "WEB-01" in text
+    assert "PILOT-01" in text
+    assert "GIAR-01" in text
+    assert "vision_describe" in text
+    assert "GitHub Pages" in text
+    assert "audio y video" in text
+    assert "velocidad variable" in text
+
+
+def test_giar_parallel_project_is_referential_and_preserves_provenance() -> None:
+    path = DOCS / "referencia" / "PROYECTO_PARALELO_GIAR.md"
+    text = path.read_text(encoding="utf-8")
+    for item in (
+        "integrantes e investigadores",
+        "publicaciones e informes",
+        "DIPPBA Bahía Blanca",
+        "páginas personales",
+        "Páginas temáticas",
+        "Glosario conceptual",
+        "Páginas de archivos",
+        "GitHub Pages",
+        "POLITICA_SITIO_PUBLICO",
+    ):
+        assert item in text
+    assert "proyecto separado y persistente" in text
+    assert "ninguna relación analítica se creará sin evidencia" in text
+
+
 def test_ocr01c_assistant_guidance_update_is_idempotent(tmp_path: Path) -> None:
     import importlib.util
 
@@ -678,3 +705,19 @@ def test_ocr01c_assistant_guidance_update_is_idempotent(tmp_path: Path) -> None:
     assert "Cada control nuevo debe explicarse" in interaction
     assert "No se deben usar `assert` sin mensaje" in tests_policy
     assert "Crear una columna para un objeto" in interface
+
+
+def test_ocr01d_pending_and_architecture_are_conservative() -> None:
+    pending = (OPERATIVE / "PENDIENTES_ACTIVOS.md").read_text(encoding="utf-8")
+    architecture = (DOCS / "referencia" / "ARQUITECTURA_Y_MODELO_ACTUAL.md").read_text(encoding="utf-8")
+    assert "La fase `OCR-01D` quedó implementada y validada en 0.81.0" in pending
+    assert "dewarp" in pending
+    assert "benchmark ampliado" in pending
+    assert "OCR regional" in architecture
+    assert "selección canónica desactivada" in architecture
+    assert "Una región manual no inventa" in architecture
+    assert "archivos locales de audio y video" in pending
+    assert "velocidades de reproducción configurables" in pending
+    assert "pantalla de transcripción y corrección poco cargada" in pending
+    assert "audio o video" in pending
+    assert "reproducción con velocidades configurables" in architecture

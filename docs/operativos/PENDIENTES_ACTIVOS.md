@@ -1,24 +1,16 @@
 # Pendientes activos — Archive Workbench
 
-**Estado preparado:** 2026-08-06 · **versión:** 0.80.0
+**Estado preparado:** 2026-08-06 · **versión:** 0.81.0
 
 Este archivo es la única fuente de verdad para trabajo abierto. Las capacidades cerradas se registran en `IMPLEMENTACIONES_REALIZADAS.md` y no deben reabrirse sin una regresión concreta o una ampliación explícita del alcance.
 
 ## Orden acordado
 
-`CAT-02` y `GRAPH-02` quedaron implementados, validados y cerrados en 0.77.0. El orden previsto antes de la candidata a v1.0 es:
+`CAT-02` y `GRAPH-02` quedaron implementados, validados y cerrados en 0.77.0. La secuencia principal y las líneas paralelas se mantienen en [`HOJA_DE_RUTA_PRE_RELEASE.md`](HOJA_DE_RUTA_PRE_RELEASE.md).
 
-1. `OCR-01`;
-2. `AV-01`;
-3. `AV-02`;
-4. `INT-01`;
-5. `PILOT-01`;
-6. `UX-02`;
-7. `QA-01` junto con `OPS-02`;
-8. `OPS-01`;
-9. `OPS-03` y candidata a v1.0.
+Antes de la candidata a v1.0 siguen, en este orden general: `OCR-01`, `AV-01`, `AV-02`, `INT-01`, `EXP-01`, `PILOT-01`, `UX-02`, `WEB-01`, `QA-01` junto con `OPS-02`, `OPS-01` y `OPS-03`.
 
-`AI-01` y `AI-02` quedan expresamente para después del release inicial.
+`GIAR-01` comienza como proyecto paralelo vinculado a `PILOT-01` y no bloquea por sí solo la v1.0. `AI-01` y `AI-02` quedan para después del release inicial.
 
 ## Índice
 
@@ -28,13 +20,16 @@ Este archivo es la única fuente de verdad para trabajo abierto. Las capacidades
 | AV-01 | Media | Pendiente | Registro audiovisual local y transcripción segmentada |
 | AV-02 | Baja | Pendiente | Plugin opcional de descarga desde YouTube y otras plataformas |
 | INT-01 | Baja | Pendiente | Integración opcional con Google Drive como transporte |
-| PILOT-01 | Alta | Parcial | Corpus de evaluación, verdad terreno y cierre del piloto |
+| EXP-01 | Alta | Pendiente pre-release | Exportación trazable de imágenes y recortes para análisis visual |
+| PILOT-01 | Alta | Parcial | Corpus real persistente, verdad terreno y cierre del piloto |
+| GIAR-01 | Paralela | Planificado | Base de conocimiento y sitio del Grupo de Investigación en Archivos de la Represión |
 | UX-02 | Alta | Pendiente | Revisión final de complejidad acumulada de la interfaz |
+| WEB-01 | Alta | Pendiente pre-release | Sitio público, tutorial, README ilustrado y referencia técnica |
 | QA-01 | Media | Pendiente | Ruff y mypy como control estático pre-release |
 | OPS-02 | Media | Pendiente | Clasificación formal de la suite de pruebas |
 | OPS-01 | Media | Pendiente | Imagen Docker y perfiles de instalación |
 | OPS-03 | Media | Parcial | Instalación limpia, rutas CPU/GPU y candidata a v1.0 |
-| AI-01 | Post-release | Pendiente | Herramientas CLI opcionales con LLM sobre exportaciones |
+| AI-01 | Post-release | Pendiente | Pipeline CLI opcional de análisis con LLM |
 | AI-02 | Post-release | Pendiente | Sistema RAG trazable sobre corpus sistematizados |
 
 ## Mejora funcional
@@ -47,53 +42,73 @@ La fase `OCR-01B` quedó implementada y validada en 0.79.0: candidatos de casill
 
 La fase `OCR-01C` quedó implementada y validada en 0.80.0: propuestas no canónicas de columnas y orden de lectura, confirmación explícita, columnas estables, reasignación y renombrado manual, historial específico, deshacer/rehacer, intercambio, exportación y resolución humana de fragmentaciones y duplicaciones. La propuesta no modifica la capa editable hasta su confirmación. `OCR-01C` queda cerrada; la revisión integral de la densidad y comprensión de **Orden y estructura** permanece registrada en `UX-02`.
 
+La fase `OCR-01D` quedó implementada y validada en 0.81.0. La vista integra el OCR regional en un recorrido lineal, permite cargar plantillas o dibujar zonas sobre la página, clasifica portadas, encabezados, pies, números, sellos, firmas, manuscritos, ilustraciones y elementos preimpresos, y crea siempre corridas candidatas sin selección canónica automática. La RC2 corrigió la asignación del `reading_order` cuando una plantilla dejaba un hueco y la región manual coincidía con un orden existente. La validación confirmó seis zonas, tres regiones OCR, tres regiones manuales, seis recortes, al menos un objeto por zona, manifiesto regional 1.1, selección canónica vacía e integridad del PDF original. No requirió migración; reutiliza la revisión `0044_layout_structure_review`. `OCR-01D` queda cerrada.
+
 Queda por completar y evaluar dentro de `OCR-01`:
 
 - dewarp;
-- OCR regional;
-- portadas, encabezados, pies, números de página, sellos, firmas, manuscritos, ilustraciones y elementos preimpresos;
 - benchmark ampliado de Tesseract, Docling y Surya con verdad terreno.
 
 Toda transformación debe producir un derivado reproducible y nunca inventar trazos.
 
-### AV-01 — Registro audiovisual local y transcripción segmentada — PENDIENTE
+### AV-01 — Registro local de audio y video y transcripción segmentada — PENDIENTE
 
-Agregar un módulo opcional para audio y video local:
+Agregar un módulo opcional para incorporar y transcribir archivos locales de audio y video en formatos habituales, con normalización técnica mediante FFmpeg cuando corresponda:
 
 - original inmutable, archivo local y SHA-256;
-- título, productor o canal, procedencia, fecha, duración, derechos y descripción;
+- detección controlada de formato, códecs, canales, frecuencia, resolución y duración;
+- título, productor, canal o responsable, procedencia, fecha, derechos y descripción;
 - transcripción como derivado versionado;
 - segmentos con `start_time`, `end_time` y texto;
+- reproductor integrado para audio y video, con salto al segmento y velocidades de reproducción configurables;
+- pantalla de transcripción y corrección poco cargada, con el medio, el segmento vigente y el texto necesarios para la tarea inmediata;
 - revisión manual, búsqueda, entidades y exportación sobre segmentos;
 - backend intercambiable con recorrido CPU funcional;
 - identificación de hablantes como ampliación opcional posterior.
 
-Debe instalarse como dependencia opcional y evitar conflictos con el runtime OCR/CUDA.
+La transcripción debe poder corregirse sin perder sincronización temporal. Las opciones de modelo, códecs, diagnóstico y ejecución avanzada permanecen cerradas por defecto. El módulo debe instalarse como dependencia opcional y evitar conflictos con el runtime OCR/CUDA.
 
-### AV-02 — Plugin opcional de descarga desde YouTube y otras plataformas — PENDIENTE
+### AV-02 — Plugin opcional de incorporación desde YouTube y otras plataformas — PENDIENTE
 
-Implementar fuera del núcleo un plugin prescindible, probablemente basado en `yt-dlp` y FFmpeg, para descargar materiales autorizados. Debe conservar URL, identificador de plataforma, metadatos, fecha de incorporación, checksum y condiciones de acceso.
+Implementar fuera del núcleo un plugin prescindible, probablemente basado en `yt-dlp` y FFmpeg, para descargar materiales autorizados como audio o video. Debe conservar URL, identificador de plataforma, formato incorporado, metadatos, fecha, checksum y condiciones de acceso.
 
-No será requisito para usar Archive Workbench ni se mezclará con el módulo de transcripción local.
+El material descargado ingresa después al mismo circuito local de `AV-01`: reproducción, velocidad variable, transcripción segmentada y corrección humana. El plugin no será requisito para usar Archive Workbench y no contendrá una ruta paralela de transcripción.
 
 ### INT-01 — Integración opcional con Google Drive como transporte — PENDIENTE
 
 Agregar enlaces, descarga asistida, subida de paquetes de intercambio y comparación de manifiestos. Drive no será una base viva ni permitirá edición simultánea de SQLite; su función es transportar archivos y paquetes entre copias controladas.
 
+### EXP-01 — Exportación trazable de imágenes y recortes — PENDIENTE PRE-RELEASE
+
+Extender la exportación para incluir imágenes de página, recortes regionales y figuras seleccionadas junto con un manifiesto que conserve documento, página, región, geometría, checksum, procedencia, estado de revisión y relación con el texto exportado.
+
+La salida debe poder consumirse después desde `AI-01` por una etapa CLI `vision_describe`, sin acceder directamente a originales ni perder el vínculo con la fuente. La exportación no ejecutará modelos ni convertirá descripciones automáticas en datos revisados.
+
 ## Cierre pre-release
 
-### PILOT-01 — Corpus de evaluación, verdad terreno y cierre del piloto — PARCIAL
+### PILOT-01 — Corpus real persistente, verdad terreno y cierre del piloto — PARCIAL
 
-Consolidar un corpus de cinco documentos representativos y ampliarlo después a entre veinte y treinta. Para páginas seleccionadas registrar objetos esperados, orden, texto crítico, estructura y regiones que no deben perderse.
+El piloto pre-release se ejecutará sobre un proyecto real y persistente destinado después al equipo de investigación. No será una base descartable ni se reinicializará entre pruebas. Antes de comenzar se acordarán su ruta, política de backups, responsables y reglas de acceso.
+
+El corpus incluirá:
+
+- legajos del archivo de la DIPPBA, reutilizando la base de catálogo ya construida;
+- legajos del APM-Chubut;
+- audios y videos testimoniales, incluidos los materiales autorizados de una página de YouTube, incorporados mediante `AV-01` y, cuando corresponda, `AV-02`.
+
+Las pruebas deben conservar corridas, selecciones, revisiones, transcripciones, entidades, relaciones, referencias archivísticas y exportaciones reales. El corpus técnico anterior puede seguir usándose para regresiones, pero no reemplaza este piloto.
 
 Debe permitir:
 
 - comparar corridas y perfiles;
 - medir cobertura y CER/WER cuando exista transcripción verdadera;
-- evaluar orden de lectura y layout;
+- evaluar orden de lectura, layout y regiones documentales;
+- evaluar transcripción segmentada de audio y video, reproducción con velocidad variable y corrección humana sincronizada;
 - documentar perfiles CPU y GPU;
-- decidir mejoras con evidencia y no por una sola página;
-- completar al menos un recorrido real de extremo a extremo antes de la candidata a v1.0.
+- decidir mejoras con evidencia acumulada;
+- completar recorridos reales de extremo a extremo sin perder resultados entre versiones.
+
+La guía operativa específica se encuentra en [`GUIA_PRUEBA_PILOTO.md`](GUIA_PRUEBA_PILOTO.md). El proyecto paralelo `GIAR-01` puede reutilizar referencias, autoridades y vínculos documentales sin compartir la misma base física.
 
 ### UX-02 — Revisión final de complejidad acumulada de la interfaz — PENDIENTE
 
@@ -110,8 +125,24 @@ La revisión debe:
 - validar recorridos representativos de OCR, revisión, entidades, descubrimiento, búsqueda, exportación, administración e intercambio;
 - reorganizar la subsección **Formulario** de revisión, hoy funcional pero difícil de comprender, y evaluar una referencia visual persistente de la página sin saturar el recorrido principal;
 - revisar nuevamente **Orden y estructura** después del cierre funcional: aun con el recorrido numerado incorporado en la RC2 de 0.80.0, debe evaluarse su densidad, la relación entre selección de objeto, columnas y diagnósticos, y la comprensión del historial.
+- reevaluar **OCR regional** sin perder su recorrido lineal de seis pasos, la página visible ni el ocultamiento de opciones avanzadas.
 
 `UX-02` se programa al final para evaluar la interfaz completa, pero no habilita a postergar regresiones: toda versión nueva debe aplicar de inmediato el principio permanente de **Interfaz y formularios** registrado en `IMPLEMENTACIONES_REALIZADAS.md`. Si una pantalla concreta se vuelve confusa antes, se corrige en ese mismo bloque funcional.
+
+### WEB-01 — Sitio público y documentación de release — PENDIENTE PRE-RELEASE
+
+Preparar un sitio de varias páginas HTML para GitHub Pages dirigido a archivistas, cientistas sociales, lingüistas, historiadores y personas que trabajan con archivos. Debe ser legible sin conocimientos de programación e incluir figuras, esquemas y capturas reales de la interfaz cuando ayuden a explicar una tarea.
+
+El bloque incluye:
+
+- portada y mapa de capacidades;
+- explicación del catálogo, procesamiento, revisión, autoridades, grafos, búsqueda, intercambio y resguardo;
+- tutorial completo de uso de la aplicación;
+- README revisado con capturas, instalación, recorrido inicial y enlaces públicos;
+- documento técnico detallado para el release sobre arquitectura, persistencia, contratos, trazabilidad, migraciones y extensiones;
+- revisión de accesibilidad, enlaces, metadatos y publicación en GitHub Pages.
+
+Las políticas privadas canónicas serán `.assistant/POLITICA_SITIO_PUBLICO.md` y `.assistant/LINEAMIENTOS_DE_DISENO_Y_ESCRITURA.md`. Las capturas deben mostrar estados reales de la aplicación y documentar cómo se reprodujeron. `WEB-01` se ejecuta después de `UX-02` para evitar publicar recorridos que todavía puedan reorganizarse.
 
 ### QA-01 — Control estático y tipado — PENDIENTE
 
@@ -155,18 +186,31 @@ Antes de v1.0 falta:
 
 Backups, restauración e intercambio ya fueron probados, pero deben repetirse en la candidata final y en un entorno limpio.
 
+## Proyecto paralelo vinculado
+
+### GIAR-01 — Base de conocimiento y sitio del Grupo de Investigación en Archivos de la Represión — PLANIFICADO
+
+Construir, en un proyecto separado y persistente de Archive Workbench, una base que relacione integrantes, publicaciones, informes, proyectos financiados, entidades estudiadas, alias, clases revisables, relaciones con evidencia y referencias a archivos, fondos, secciones y unidades documentales.
+
+A partir de esa base se prepararán páginas personales, páginas temáticas integradas, un glosario con variaciones conceptuales, páginas de archivos y unidades estudiadas, publicaciones y un grafo navegable. El sitio se publicará mediante GitHub Pages en una cuenta propia del grupo.
+
+La carga estructurada puede avanzar en paralelo con `PILOT-01`; la publicación del sitio se realizará cuando el modelo y los contenidos hayan sido revisados. El alcance, las fases y las reglas de separación están en [`PROYECTO_PARALELO_GIAR.md`](../referencia/PROYECTO_PARALELO_GIAR.md). Antes de diseñar ese sitio se crearán políticas propias de sitio, diseño y escritura en su repositorio.
+
 ## Post-release
 
-### AI-01 — Herramientas CLI opcionales con LLM sobre exportaciones — PENDIENTE POST-RELEASE
+### AI-01 — Pipeline CLI opcional de análisis con LLM — PENDIENTE POST-RELEASE
 
-Crear herramientas paralelas, ejecutables desde terminal y separadas del núcleo, que consuman salidas reproducibles de Exportar para:
+Diseñar las etapas concretas del pipeline de análisis con LLM, sus contratos de entrada y salida, orden, reintentos, caché, trazabilidad e ingeniería de contexto. Cuando comience este bloque, Alex proporcionará otro repositorio para estudiar qué componentes pueden reutilizarse y cuáles deben implementarse específicamente para Archive Workbench.
 
-- descripción y análisis de imágenes;
-- resumen o descripción de textos;
+El pipeline consumirá exportaciones reproducibles y podrá incluir, entre otras, estas familias de etapas:
+
+- `vision_describe` sobre imágenes y recortes producidos por `EXP-01`;
+- descripción o resumen de textos;
 - análisis temático;
-- análisis por conceptos definidos por el equipo.
+- análisis por conceptos definidos por el equipo;
+- etapas adicionales que se definan después de revisar el repositorio de referencia.
 
-Cada salida debe registrar archivo o fragmento de origen, modelo, versión, parámetros, prompt o plantilla, fecha y hash. No debe escribir sobre el corpus ni convertir resultados automáticos en anotaciones humanas sin una importación revisada.
+Cada salida debe registrar archivo o fragmento de origen, modelo, versión, parámetros, prompt o plantilla, contexto aportado, fecha y hash. No debe escribir sobre el corpus ni convertir resultados automáticos en anotaciones humanas sin una importación revisada.
 
 ### AI-02 — Sistema RAG trazable sobre corpus sistematizados — PENDIENTE POST-RELEASE
 

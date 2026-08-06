@@ -78,6 +78,7 @@ class RegionStatusRow:
     label: str
     mode: str
     object_type: str
+    semantic_role: str | None
     status: str
     objects: int
     characters: int
@@ -258,6 +259,7 @@ def _normalize_region_result(
                     "region_key": region.region_key,
                     "region_label": region.label,
                     "region_mode": region.mode,
+                    "semantic_role": region.semantic_role,
                     "crop_path": crop_path,
                     "manual_correction_required": True,
                     "ocr_empty": True,
@@ -320,6 +322,7 @@ def _normalize_region_result(
                     "region_key": region.region_key,
                     "region_label": region.label,
                     "region_mode": region.mode,
+                    "semantic_role": region.semantic_role,
                     "crop_path": crop_path,
                     "psm": region.ocr.psm,
                     "image_variant": region.ocr.image_variant,
@@ -364,6 +367,7 @@ def _manual_region_object(
             "region_key": region.region_key,
             "region_label": region.label,
             "region_mode": region.mode,
+            "semantic_role": region.semantic_role,
             "crop_path": crop_path,
             "manual_transcription_required": not bool(region.initial_text.strip()),
             "note": region.note,
@@ -560,9 +564,14 @@ def extract_regions(
                         object_type=region.object_type,
                         reading_order=region.reading_order,
                         bbox_json=region.bbox.model_dump(mode="json"),
-                        profile_json=(
-                            region.ocr.model_dump(mode="json") if region.ocr else None
-                        ),
+                        profile_json={
+                            "semantic_role": region.semantic_role,
+                            "ocr": (
+                                region.ocr.model_dump(mode="json")
+                                if region.ocr
+                                else None
+                            ),
+                        },
                         crop_path=crop_relative,
                         raw_json_path=raw_json_path,
                         raw_tsv_path=raw_tsv_path,
@@ -585,6 +594,7 @@ def extract_regions(
                             reading_order=region.reading_order,
                             mode=region.mode,
                             object_type=region.object_type,
+                            semantic_role=region.semantic_role,
                             bbox=region.bbox,
                             crop_path=crop_relative,
                             raw_json_path=raw_json_path,
@@ -739,6 +749,7 @@ def region_status_rows(
             ExtractionRegion.label,
             ExtractionRegion.mode,
             ExtractionRegion.object_type,
+            ExtractionRegion.profile_json,
             ExtractionRegion.status,
             ExtractionRegion.object_count,
             ExtractionRegion.character_count,
@@ -772,6 +783,7 @@ def region_status_rows(
             label=row.label,
             mode=row.mode,
             object_type=row.object_type,
+            semantic_role=(row.profile_json or {}).get("semantic_role"),
             status=row.status,
             objects=row.object_count,
             characters=row.character_count,

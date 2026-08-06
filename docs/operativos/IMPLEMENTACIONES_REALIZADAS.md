@@ -1,6 +1,6 @@
 # Implementaciones realizadas — Archive Workbench
 
-**Estado preparado:** 2026-08-06 · **versión:** 0.80.0
+**Estado preparado:** 2026-08-06 · **versión:** 0.81.0
 
 Este documento registra capacidades ya implementadas y, cuando corresponde, validadas. No deben volver a aparecer en `PENDIENTES_ACTIVOS.md` salvo evidencia de regresión o ampliación explícita del alcance.
 
@@ -11,7 +11,7 @@ Este documento registra capacidades ya implementadas y, cuando corresponde, vali
 | Catálogo, originales y estructura archivística | Implementado |
 | Extracciones versionadas y selección canónica | Implementado y validado |
 | Revisión, historial y rebase | Implementado y validado |
-| Calidad de página y derivados OCR | Implementación parcial; OCR-01A, OCR-01B y OCR-01C validadas y cerradas |
+| Calidad de página y derivados OCR | Implementación parcial; OCR-01A/B/C/D cerradas, quedan dewarp y benchmark ampliado |
 | Búsqueda literal y semántica | Implementado; calibración reproducible cerrada en 0.74.0 |
 | Autoridades, menciones y relaciones | Núcleo implementado y validado |
 | Exportaciones reproducibles | Implementado y validado |
@@ -33,6 +33,14 @@ Este documento registra capacidades ya implementadas y, cuando corresponde, vali
 | Capas archivísticas GRAPH-02 | Implementadas y validadas en 0.77.0 |
 
 ## Preprocesamiento geométrico para OCR
+
+### OCR-01D — OCR regional visual y zonas documentales — 0.81.0
+
+La extracción regional versionada ya disponible por CLI se integra en **Procesar documentos > OCR regional** mediante un recorrido lineal de seis pasos. La persona elige documento y página, ve la página preparada, carga una plantilla o dibuja zonas, las describe con una clasificación controlada y decide si cada una se procesa por OCR o queda como región manual. Las opciones técnicas de Tesseract permanecen bajo un panel avanzado.
+
+Cada corrida conserva cajas normalizadas, orden, modo, tipo de objeto, clasificación semántica, recortes, resultados crudos, `regions.jsonl` y manifiesto. Se ejecuta con `selection_policy=never`: no cambia la selección canónica ni la capa editable. Una región manual conserva imagen y geometría para revisión posterior y no inventa una transcripción. No agrega migraciones; continúa sobre `0044_layout_structure_review`.
+
+**Validada manualmente en 0.81.0.** La prueba confirmó una corrida terminada con seis zonas, tres regiones OCR y tres manuales, seis recortes, al menos un objeto por zona, clasificación semántica correcta, selección canónica vacía, contrato regional 1.1 e integridad del PDF original. `OCR-01D` queda cerrada.
 
 ### OCR-01C — columnas y orden de lectura revisables — 0.80.0
 

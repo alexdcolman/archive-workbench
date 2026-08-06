@@ -30,6 +30,18 @@ from archive_workbench.extraction import (
     select_extraction_pages,
     resolve_extraction_profile,
 )
+from archive_workbench.contracts.regions import RegionOcrOptions
+from archive_workbench.region_canvas import regional_region_canvas
+from archive_workbench.region_extraction import extract_regions, load_region_template
+from archive_workbench.regional_workflow import (
+    REGION_ROLE_DEFAULT_MODE,
+    REGION_ROLE_LABELS,
+    available_region_templates,
+    draft_from_region,
+    region_role_label,
+    regional_page_assets,
+    template_from_drafts,
+)
 from archive_workbench.preprocessing import (
     GEOMETRY_MODE_LABELS,
     OCR_TREATMENT_LABELS,
@@ -618,6 +630,290 @@ def _render_geometry_diagnostics(
                 st.caption("Esta preparación no generó una máscara diagnóstica.")
         st.json(row.transformations, expanded=False)
 
+
+def _render_regional_extraction_builder(
+    st,
+    *,
+    project_root: Path,
+    db_path: Path,
+    decisions,
+    inventory,
+    actor: str,
+) -> None:
+    st.caption(
+        "Definí zonas sobre una página visible y creá una extracción candidata. "
+        "La corrida no cambia la selección canónica ni la capa editable."
+    )
+    prepared = [
+        row
+        for row in inventory
+        if row.preprocessing_status in {"completed", "completed_with_warnings"}
+    ]
+    if not prepared:
+        st.info(
+            "Primero prepará al menos un documento en la pestaña Ejecutar. "
+            "El OCR regional necesita una imagen derivada por página."
+        )
+        return
+
+    st.subheader("1. Documento")
+    source_key = st.selectbox(
+        "Documento para OCR regional",
+        options=[row.source_key for row in prepared],
+        format_func=lambda value: next(
+            f"{row.title} · {value}" for row in prepared if row.source_key == value
+        ),
+        key="regional_source_key",
+    )
+
+    engine = create_sqlite_engine(db_path)
+    try:
+        with session_scope(engine) as session:
+            assets = regional_page_assets(session, source_key=source_key)
+    except (ValueError, RuntimeError) as exc:
+        st.error(str(exc))
+        return
+    finally:
+        engine.dispose()
+
+    if not assets:
+        st.warning("El documento no tiene páginas preparadas para OCR regional.")
+        return
+
+    st.subheader("2. Página")
+    page = st.selectbox(
+        "Página visible",
+        options=[item.page for item in assets],
+        key=f"regional_page_{source_key}",
+    )
+    asset = next(item for item in assets if item.page == page)
+    image_path = project_root / asset.preview_relative_path
+
+    drafts_key = f"regional_drafts_{source_key}"
+    pending_key = f"regional_pending_box_{source_key}_{page}"
+    drafts = list(st.session_state.get(drafts_key, []))
+
+    st.subheader("3. Dibujar o revisar las zonas")
+    st.caption(
+        "La página se muestra aquí. Azul: zona OCR. Naranja: zona manual. "
+        "Rojo: zona recién dibujada todavía no agregada."
+    )
+    templates = available_region_templates(project_root, source_key=source_key)
+    with st.expander("Cargar zonas desde una plantilla guardada", expanded=False):
+        if not templates:
+            st.caption("No hay plantillas guardadas para este documento.")
+        else:
+            selected_template = st.selectbox(
+                "Plantilla",
+                options=[str(path) for path in templates],
+                format_func=lambda value: Path(value).name,
+                key=f"regional_template_{source_key}",
+            )
+            if st.button(
+                "Cargar esta plantilla",
+                key=f"regional_load_template_{source_key}",
+            ):
+                template = load_region_template(selected_template)
+                st.session_state[drafts_key] = [
+                    draft_from_region(region) for region in template.regions
+                ]
+                st.session_state.pop(pending_key, None)
+                request_tab(st, key="processing_tabs", label="OCR regional")
+                rerun_view(st)
+
+    pending_box = st.session_state.get(pending_key)
+    visible_drafts = [item for item in drafts if int(item.get("page", page)) == page]
+    drawn = regional_region_canvas(
+        image_path,
+        visible_drafts,
+        page=page,
+        pending_box=pending_box,
+        key=f"regional_canvas_{source_key}_{page}_{len(visible_drafts)}",
+    )
+    if drawn is not None and drawn != pending_box:
+        st.session_state[pending_key] = drawn
+        pending_box = drawn
+
+    st.subheader("4. Describir la zona recién dibujada")
+    if pending_box is None:
+        st.info(
+            "Para agregar una zona nueva, pulsá Dibujar una zona sobre la imagen y "
+            "arrastrá un rectángulo."
+        )
+    else:
+        roles = list(REGION_ROLE_LABELS)
+        role = st.selectbox(
+            "Qué contiene esta zona",
+            options=roles,
+            format_func=region_role_label,
+            key=f"regional_role_{source_key}_{page}",
+        )
+        default_mode = REGION_ROLE_DEFAULT_MODE[role]
+        mode = st.selectbox(
+            "Cómo tratarla",
+            options=["ocr", "manual"],
+            index=0 if default_mode == "ocr" else 1,
+            format_func=lambda value: (
+                "Intentar OCR" if value == "ocr" else "Conservar para transcripción manual"
+            ),
+            key=f"regional_mode_{source_key}_{page}_{role}",
+        )
+        label = st.text_input(
+            "Nombre visible de la zona",
+            value=region_role_label(role),
+            key=f"regional_label_{source_key}_{page}_{role}",
+        )
+        note = st.text_input(
+            "Nota opcional",
+            key=f"regional_note_{source_key}_{page}_{role}",
+        )
+        ocr_payload = None
+        if mode == "ocr":
+            with st.expander("Opciones avanzadas de OCR para esta zona", expanded=False):
+                variant = st.selectbox(
+                    "Tratamiento de imagen",
+                    options=["original", "grayscale_autocontrast", "otsu"],
+                    key=f"regional_variant_{source_key}_{page}_{role}",
+                )
+                psm = st.selectbox(
+                    "Modo Tesseract (PSM)",
+                    options=[3, 4, 6, 7, 11, 13],
+                    index=2,
+                    key=f"regional_psm_{source_key}_{page}_{role}",
+                )
+                granularity = st.selectbox(
+                    "Unidad de salida",
+                    options=["paragraph", "line"],
+                    format_func=lambda value: "Párrafo" if value == "paragraph" else "Línea",
+                    key=f"regional_granularity_{source_key}_{page}_{role}",
+                )
+                languages_text = st.text_input(
+                    "Idiomas Tesseract",
+                    value="spa",
+                    key=f"regional_languages_{source_key}_{page}_{role}",
+                )
+            ocr_payload = RegionOcrOptions(
+                image_variant=variant,
+                psm=psm,
+                languages=[item.strip() for item in languages_text.split(",") if item.strip()],
+                object_granularity=granularity,
+                minimum_characters_warning=1,
+            ).model_dump(mode="json")
+        if st.button(
+            "Agregar esta zona",
+            type="primary",
+            disabled=not label.strip(),
+            key=f"regional_add_zone_{source_key}_{page}",
+        ):
+            index = len(drafts) + 1
+            used_orders = {
+                int(item.get("reading_order", 0))
+                for item in drafts
+                if int(item.get("page", page)) == page
+            }
+            reading_order = 10
+            while reading_order in used_orders:
+                reading_order += 10
+            drafts.append(
+                {
+                    "region_key": f"visual_{page}_{index:03d}",
+                    "label": label.strip(),
+                    "page": page,
+                    "reading_order": reading_order,
+                    "bbox": pending_box,
+                    "mode": mode,
+                    "semantic_role": role,
+                    "ocr": ocr_payload,
+                    "initial_text": "",
+                    "note": note.strip() or None,
+                }
+            )
+            st.session_state[drafts_key] = drafts
+            st.session_state.pop(pending_key, None)
+            request_tab(st, key="processing_tabs", label="OCR regional")
+            rerun_view(st)
+
+    drafts = list(st.session_state.get(drafts_key, drafts))
+    st.subheader("5. Zonas que formarán la candidata")
+    if not drafts:
+        st.caption("Todavía no hay zonas agregadas.")
+    else:
+        st.dataframe(
+            [
+                {
+                    "Orden": item.get("reading_order"),
+                    "Página": item.get("page"),
+                    "Zona": item.get("label"),
+                    "Contenido": region_role_label(str(item.get("semantic_role") or "")),
+                    "Tratamiento": "OCR" if item.get("mode") == "ocr" else "Manual",
+                }
+                for item in sorted(drafts, key=lambda row: (row.get("page", 0), row.get("reading_order", 0)))
+            ],
+            hide_index=True,
+            use_container_width=True,
+        )
+        remove_options = list(range(len(drafts)))
+        remove_index = st.selectbox(
+            "Zona a quitar",
+            options=remove_options,
+            format_func=lambda index: str(drafts[index].get("label") or f"Zona {index + 1}"),
+            key=f"regional_remove_select_{source_key}",
+        )
+        if st.button("Quitar la zona seleccionada", key=f"regional_remove_{source_key}"):
+            drafts.pop(remove_index)
+            st.session_state[drafts_key] = drafts
+            request_tab(st, key="processing_tabs", label="OCR regional")
+            rerun_view(st)
+
+    st.subheader("6. Crear la extracción candidata")
+    template_key = st.text_input(
+        "Identificador de la candidata",
+        value=f"regional_{source_key}",
+        key=f"regional_template_key_{source_key}",
+    )
+    st.caption(
+        "La corrida se registra como candidata. No se seleccionará ninguna página "
+        "ni se inicializará la capa editable."
+    )
+    if st.button(
+        "Crear extracción candidata",
+        type="primary",
+        disabled=not drafts or not template_key.strip(),
+        key=f"regional_execute_{source_key}",
+    ):
+        try:
+            template = template_from_drafts(
+                source_key=source_key,
+                drafts=drafts,
+                template_key=template_key.strip(),
+            )
+            engine = create_sqlite_engine(db_path)
+            try:
+                with session_scope(engine) as session:
+                    summary = extract_regions(
+                        session,
+                        project_root=project_root,
+                        decisions=decisions,
+                        template=template,
+                        created_by=actor or "local_user",
+                        selection_policy="never",
+                    )
+            finally:
+                engine.dispose()
+        except (ValueError, RuntimeError, OSError) as exc:
+            st.error(str(exc))
+        else:
+            st.success(
+                "Candidata creada: "
+                f"{summary.runs_created} corrida nueva, "
+                f"{summary.pages_processed} página(s), "
+                f"{summary.objects_created} objeto(s). "
+                "La selección canónica no cambió."
+            )
+            for warning in summary.warnings:
+                st.warning(warning)
+
+
 def render_processing_view(
     st,
     *,
@@ -652,8 +948,8 @@ def render_processing_view(
         metrics[4].metric("En revisión", counts["ready_for_review"] + counts["in_review"])
         metrics[5].metric("Completados", counts["completed"])
 
-    processing_tabs = ["Inventario", "Ejecutar", "Selección canónica", "Historial"]
-    inventory_tab, execute_tab, selection_tab, history_tab = tracked_tabs(
+    processing_tabs = ["Inventario", "Ejecutar", "OCR regional", "Selección canónica", "Historial"]
+    inventory_tab, execute_tab, regional_tab, selection_tab, history_tab = tracked_tabs(
         st,
         processing_tabs,
         key="processing_tabs",
@@ -930,6 +1226,16 @@ def render_processing_view(
                     geometry_mode=geometry_mode,
                     force=force,
                 )
+
+    with regional_tab:
+        _render_regional_extraction_builder(
+            st,
+            project_root=project_root,
+            db_path=db_path,
+            decisions=decisions,
+            inventory=inventory,
+            actor=actor,
+        )
 
     with selection_tab:
         st.caption(

@@ -6,7 +6,7 @@ Está pensada especialmente para equipos de archivos, bibliotecas, ciencias soci
 
 Los documentos y la base de datos permanecen en la computadora del equipo: la aplicación no necesita subir el corpus a un servicio externo.
 
-**Versión actual:** 0.80.0 — columnas y orden de lectura revisables sobre la capa editable.
+**Versión actual:** 0.81.0 — OCR regional visual con zonas documentales clasificadas y validadas.
 
 ## Qué permite hacer
 
@@ -17,6 +17,7 @@ Archive Workbench reúne en una misma interfaz:
 - registro de archivos originales sin modificarlos;
 - preparación versionada de derivados para OCR, con opciones conservadoras de autocontraste, Otsu, reducción de ruido, orientación, deskew y eliminación controlada de líneas;
 - extracción de texto y OCR versionados;
+- OCR regional visual sobre páginas preparadas, con zonas OCR o manuales y clasificación documental;
 - Surya como backend OCR/layout preferido cuando está disponible, siempre como candidato revisable;
 - fallback automático a Docling/Tesseract si Surya no está instalado o una corrida falla;
 - comparación y selección humana de extracciones por página;
@@ -242,7 +243,9 @@ Documentación vigente:
 - [Actualización actual](docs/operativos/ACTUALIZACION_ACTUAL.md)
 - [Estrategia de pruebas](docs/operativos/ESTRATEGIA_DE_PRUEBAS.md)
 - [Guía de prueba piloto](docs/operativos/GUIA_PRUEBA_PILOTO.md)
+- [Hoja de ruta pre-release](docs/operativos/HOJA_DE_RUTA_PRE_RELEASE.md)
 - [Arquitectura y modelo actual](docs/referencia/ARQUITECTURA_Y_MODELO_ACTUAL.md)
+- [Proyecto paralelo GIAR](docs/referencia/PROYECTO_PARALELO_GIAR.md)
 
 La documentación cerrada y las guías de versiones anteriores están separadas en [`docs/historico/`](docs/historico/). Los cambios técnicos exhaustivos se registran en [`CHANGELOG.md`](CHANGELOG.md).
 
@@ -255,7 +258,7 @@ pip install -e ".[dev,extraction,streamlit,semantic,tiff,discovery]"
 pytest
 ```
 
-La versión 0.80.0 incorpora pruebas automatizadas para propuestas no canónicas de columnas y orden de lectura, confirmación explícita, reasignación manual, fragmentaciones, duplicaciones, historial, deshacer/rehacer, intercambio y exportación.
+La versión 0.81.0 incorpora pruebas automatizadas para el recorrido visual de OCR regional, clasificación semántica de zonas, plantillas compatibles, extracción candidata sin selección automática y conservación de regiones manuales sin transcripción inventada.
 
 ## Licencia y cita
 
@@ -267,6 +270,6 @@ El desarrollo fue realizado por **Alex Colman** en el marco del **Grupo de Inves
 
 Cuando Archive Workbench sea utilizado en una investigación, publicación, informe, actividad docente o desarrollo derivado, solicitamos citar:
 
-> Colman, Alex, y Grupo de Investigación en Archivos de la Represión (GIAR). 2026. *Archive Workbench* (versión 0.80.0) [software]. https://github.com/alexdcolman/archive-workbench
+> Colman, Alex, y Grupo de Investigación en Archivos de la Represión (GIAR). 2026. *Archive Workbench* (versión 0.81.0) [software]. https://github.com/alexdcolman/archive-workbench
 
 El archivo [`CITATION.cff`](CITATION.cff) contiene los metadatos de cita reconocidos por GitHub y por distintos gestores bibliográficos.

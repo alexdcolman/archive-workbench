@@ -165,8 +165,8 @@ def test_version_docs_and_discovery_plan_are_packaged() -> None:
         / "0044_layout_structure_review.py"
     )
 
-    assert data["project"]["version"] == "0.80.0"
-    assert '__version__ = "0.80.0"' in version_source
+    assert data["project"]["version"] == "0.81.0"
+    assert '__version__ = "0.81.0"' in version_source
     assert migration.is_file()
     assert 'down_revision = "0043_form_structure_review"' in migration.read_text(
         encoding="utf-8"
@@ -178,6 +178,11 @@ def test_version_docs_and_discovery_plan_are_packaged() -> None:
     assert (root / "scripts" / "create_layout_structure_validation_project.py").is_file()
     assert (root / "scripts" / "verify_layout_structure_validation_project.py").is_file()
     assert (root / "scripts" / "update_assistant_guidance_0800.py").is_file()
+    assert (root / "src" / "archive_workbench" / "regional_workflow.py").is_file()
+    assert (root / "src" / "archive_workbench" / "region_canvas.py").is_file()
+    assert (root / "scripts" / "create_regional_ocr_validation_project.py").is_file()
+    assert (root / "scripts" / "verify_regional_ocr_validation_project.py").is_file()
+    assert (root / "scripts" / "update_assistant_guidance_0810.py").is_file()
     assert (root / "src" / "archive_workbench" / "preprocessing_geometry.py").is_file()
     processing_app = (root / "src" / "archive_workbench" / "processing_app.py").read_text(
         encoding="utf-8"
@@ -316,3 +321,26 @@ def test_state_adoption_validation_project_generator_is_packaged() -> None:
     assert "Estado remoto EX-01D" in source
     assert "Estado local EX-01D" in source
     assert "El proyecto fuente no fue modificado" in source
+
+
+def test_regional_ocr_validation_scripts_are_packaged_and_executable() -> None:
+    root = Path(__file__).parents[1]
+    creator = root / "scripts" / "create_regional_ocr_validation_project.py"
+    resume = root / "scripts" / "prepare_regional_ocr_validation_resume.py"
+    verifier = root / "scripts" / "verify_regional_ocr_validation_project.py"
+    guidance = root / "scripts" / "update_assistant_guidance_0810.py"
+
+    for script in (creator, resume, verifier, guidance):
+        assert script.is_file()
+        assert script.stat().st_mode & 0o111
+
+    creator_source = creator.read_text(encoding="utf-8")
+    resume_source = resume.read_text(encoding="utf-8")
+    verifier_source = verifier.read_text(encoding="utf-8")
+    assert "el script no elimina ni reemplaza proyectos" in creator_source
+    assert "project_data_touched" in creator_source
+    assert "manual_region_to_add" in creator_source
+    assert "ocr01d_controlada_resume.yaml" in resume_source
+    assert '"reading_order": 50' in resume_source
+    assert "RESULTADO: validación OCR-01D completa y consistente." in verifier_source
+    assert "la selección canónica permanece vacía" in verifier_source

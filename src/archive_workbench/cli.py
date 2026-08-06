@@ -151,6 +151,7 @@ from archive_workbench.processing import (
     processing_job_item_rows,
     processing_job_rows,
 )
+from archive_workbench.regional_workflow import region_role_label
 from archive_workbench.region_extraction import (
     extract_regions,
     load_region_template,
@@ -1478,7 +1479,7 @@ def region_status_command(
     for row in rows:
         typer.echo(
             f"{row.source_key} | pág. {row.page} | {row.region_key} | {row.mode} | "
-            f"{row.object_type} | {row.status} | objetos {row.objects} | "
+            f"{row.object_type} | {region_role_label(row.semantic_role)} | {row.status} | objetos {row.objects} | "
             f"caracteres {row.characters} | {row.label}"
         )
         if row.warning:

@@ -1,3 +1,16 @@
+## 0.81.0 — 2026-08-06
+
+- Implementa `OCR-01D` con una pestaña visual **Procesar documentos > OCR regional** organizada en seis pasos lineales.
+- Permite cargar plantillas YAML existentes o dibujar zonas sobre una página visible, clasificarlas y decidir si se intenta OCR o se conservan para transcripción manual.
+- Agrega clasificaciones controladas para texto principal, portada, encabezado, pie, número de página, sello, firma, manuscrito, ilustración y elemento preimpreso.
+- Conserva geometría, modo, clasificación semántica, recortes, archivos crudos, `regions.jsonl` y manifiesto completo dentro de una corrida inmutable.
+- Toda ejecución visual usa `selection_policy=never`: crea una candidata sin cambiar selección canónica ni capa editable. Las zonas manuales no inventan texto.
+- Agrega `create_regional_ocr_validation_project.py`, `verify_regional_ocr_validation_project.py` y reglas privadas idempotentes mediante `update_assistant_guidance_0810.py`.
+- La RC2 asigna a cada zona manual el primer orden libre de la página y normaliza borradores externos con posiciones repetidas; evita el error de validación observado al ocupar dos veces `reading_order=60`.
+- Agrega `EXP-01`, `WEB-01`, el piloto real persistente DIPPBA/APM-Chubut/audiovisual, la planificación de `AI-01` y el proyecto paralelo `GIAR-01`, junto con la hoja de ruta y las políticas privadas del futuro sitio público.
+- No agrega migraciones; la revisión continúa en `0044_layout_structure_review`. La validación manual confirmó seis regiones, tres zonas OCR, tres zonas manuales, seis recortes, al menos un objeto por zona, selección canónica vacía, manifiesto regional 1.1 e integridad del PDF original; `OCR-01D` queda cerrada.
+- Amplía la planificación de `AV-01` y `AV-02`: incorporación local de audio y video en formatos habituales, transcripción segmentada, reproducción integrada con control de velocidad y una pantalla de corrección deliberadamente simple y poco cargada.
+
 ## 0.80.0 — 2026-08-06
 
 - Implementa `OCR-01C` con propuestas no canónicas de columnas y orden de lectura calculadas sobre la geometría de la capa editable.

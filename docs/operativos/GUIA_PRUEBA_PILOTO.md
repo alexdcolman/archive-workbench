@@ -25,11 +25,37 @@ Las capacidades todavía abiertas no se mantienen en esta guía para evitar list
 
 Esta guía se limita al piloto, la evaluación de documentos reales y los criterios de cierre de la v1.0.
 
-## Corpus piloto actual
 
-El archivo `project_data/config/test_corpus.yaml` debe contener estos cinco casos:
+La secuencia general se consulta en [`HOJA_DE_RUTA_PRE_RELEASE.md`](HOJA_DE_RUTA_PRE_RELEASE.md). El proyecto paralelo del GIAR se documenta en [`PROYECTO_PARALELO_GIAR.md`](../referencia/PROYECTO_PARALELO_GIAR.md) y utilizará una base física separada.
 
-| test_id | Función en el piloto | Dificultad principal |
+## Reglas de preservación del piloto
+
+- No reinicializar, reemplazar ni eliminar el proyecto real para repetir una prueba.
+- Crear y verificar un backup antes de cada migración.
+- Mantener corridas rechazadas o superadas como historial comparativo.
+- Registrar responsables, notas y procedencia en las operaciones manuales.
+- Separar pruebas sintéticas descartables de materiales y resultados reales.
+- No publicar originales, capturas, transcripciones o metadatos sin revisar permisos y condiciones de acceso.
+
+## Proyecto real y persistente del piloto
+
+`PILOT-01` se realizará sobre un proyecto nuevo cuya ruta se acordará antes de incorporar materiales. Ese proyecto quedará para el equipo de investigación y no se tratará como una base descartable. Cada actualización deberá conservar resultados, crear backup antes de migrar y registrar cualquier operación que cambie selecciones o revisiones.
+
+El corpus real incluirá:
+
+| procedencia | materiales | uso previsto |
+|---|---|---|
+| Archivo de la DIPPBA | legajos y documentos asociados | reutilizar la base de catálogo ya construida, validar OCR, estructura, autoridades, relaciones y referencias archivísticas |
+| APM-Chubut | legajos e imágenes | ampliar tipos documentales, procedencias y condiciones materiales |
+| testimonios audiovisuales | audios y videos autorizados, incluidos materiales de una página de YouTube | validar registro local, incorporación opcional, reproducción a distintas velocidades, transcripción segmentada, corrección, búsqueda y exportación |
+
+Las rutas, permisos, restricciones de difusión y responsables se registrarán antes de cada lote. Los originales, hashes, catálogos, corridas, selecciones, revisiones y exportaciones deben preservarse de una versión a otra.
+
+## Corpus técnico preliminar
+
+El archivo `project_data/config/test_corpus.yaml` conserva cinco casos útiles para regresiones técnicas:
+
+| test_id | Función | Dificultad principal |
 |---|---|---|
 | `caja_administracion_publica_adm_pub_asp_contr` | documento relativamente controlable | inclinación y páginas apaisadas |
 | `caja_administracion_publica_carp_reg` | caso deliberadamente difícil | degradación, orientaciones, manuscritos, sellos y formularios |
@@ -37,7 +63,7 @@ El archivo `project_data/config/test_corpus.yaml` debe contener estos cinco caso
 | `leg_17_leg_15_a_c_2` | recorte periodístico | multicolumna |
 | `leg_17_leg_15_a_c_6` | ficha administrativa | formato irregular, manuscritos, sellos y campos |
 
-No es necesario reextraer los cuatro documentos ya procesados antes de evaluarlos.
+Estos documentos no reemplazan el piloto real. No es necesario reextraer los cuatro ya procesados antes de evaluarlos.
 
 ---
 

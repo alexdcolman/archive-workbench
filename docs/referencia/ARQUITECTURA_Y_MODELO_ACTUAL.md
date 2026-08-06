@@ -35,6 +35,8 @@ El preprocesamiento geométrico trabaja únicamente sobre el derivado destinado 
 
 Ejecuta corridas por página mediante perfiles y backends. Las corridas se conservan, se evalúan y pueden seleccionarse por página sin borrar alternativas.
 
+El OCR regional reutiliza la misma identidad de corrida y página. Una plantilla regional contiene cajas normalizadas, orden, modo `ocr` o `manual`, tipo de objeto y clasificación semántica. La interfaz visual puede cargar una plantilla o construirla mediante **Dibujar una zona** sobre la previsualización. La ejecución recorta cada zona y conserva el recorte, archivos crudos, `regions.jsonl` y manifiesto completo. Las zonas OCR pueden producir texto candidato; las zonas manuales crean candidatos visuales sin inventar texto. Toda corrida regional se crea con selección canónica desactivada y solo puede adoptarse posteriormente mediante la comparación normal por página.
+
 ### Revisión
 
 Mantiene objetos editables con texto, tipo, orden, geometría, atributos, estado y revisiones append-only. Comentarios, etiquetas, menciones y relaciones se gestionan como capas vinculadas.
@@ -123,6 +125,7 @@ Los backups incluyen manifiesto, base y configuración. La restauración crea pr
 - No trasladar anotaciones por similitud ambigua.
 - Un candidato de casillero no es una decisión: el estado y la agrupación solo se vuelven revisados mediante confirmación explícita.
 - Una propuesta de columnas, orden, fragmentación o duplicación no modifica la capa editable hasta una confirmación explícita.
+- Una corrida de OCR regional no modifica la selección canónica ni la capa editable. Una región manual no inventa transcripción: conserva geometría y recorte para revisión humana posterior.
 - Dar de alta un casillero visible sin marca OCR exige anclarlo a un objeto editable existente y registrar evidencia; no se inventan trazos ni objetos extraídos.
 - No aplicar un paquete con simulación obsoleta.
 - Resolver contenido de un paquete sin base común no crea linaje.
@@ -145,3 +148,11 @@ Los estados de página controlan qué contenido puede alimentar búsquedas, expo
 Las extensiones abiertas se describen únicamente en `../operativos/PENDIENTES_ACTIVOS.md`. El diseño vigente de descubrimiento abierto está en `DESCUBRIMIENTO_ABIERTO_DISC_01.md`; entre las extensiones restantes se encuentran audiovisual, herramientas LLM, RAG, Docker y transporte mediante Drive.
 
 Cada extensión debe respetar los mismos contratos de identidad, procedencia, calidad, revisión y auditoría.
+
+## Proyectos y extensiones planificados
+
+`AV-01` incorporará audio y video local mediante originales inmutables, metadatos técnicos, derivados de transcripción y segmentos temporales revisables. La interfaz prevista integrará reproducción con velocidades configurables y una pantalla de corrección deliberadamente simple. `AV-02` será un plugin opcional de incorporación autorizada desde plataformas y entregará sus archivos al mismo circuito local; no definirá un segundo modelo de transcripción.
+
+`EXP-01` agregará una exportación trazable de imágenes de página, recortes regionales y figuras para consumo posterior por herramientas externas. La etapa `vision_describe` se diseñará en `AI-01` y no accederá directamente a originales fuera de un paquete exportado.
+
+`GIAR-01` usará un proyecto separado y persistente de Archive Workbench como base estructurada para investigadores, publicaciones, entidades, relaciones, conceptos y referencias archivísticas. El alcance se encuentra en [`PROYECTO_PARALELO_GIAR.md`](PROYECTO_PARALELO_GIAR.md). Todavía no forma parte del esquema vigente y cualquier ampliación se diseñará antes de crear tablas nuevas.

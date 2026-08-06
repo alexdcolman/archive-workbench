@@ -92,6 +92,7 @@ def _template() -> RegionTemplate:
                     "bbox": {"x0": 0.1, "y0": 0.2, "x1": 0.9, "y1": 0.6},
                     "mode": "ocr",
                     "object_type": "paragraph",
+                    "semantic_role": "body_text",
                     "ocr": {
                         "image_variant": "grayscale_autocontrast",
                         "psm": 6,
@@ -107,6 +108,7 @@ def _template() -> RegionTemplate:
                     "bbox": {"x0": 0.15, "y0": 0.6, "x1": 0.45, "y1": 0.8},
                     "mode": "manual",
                     "object_type": "stamp",
+                    "semantic_role": "stamp",
                 },
             ],
         }
@@ -166,6 +168,7 @@ def test_region_template_validation_rejects_unknown_object_type() -> None:
 
     decisions = load_decisions(Path(__file__).parents[1] / "config/decisions.yaml")
     template = _template().model_copy(deep=True)
+    template.regions[0].semantic_role = None
     template.regions[0].object_type = "not_defined"
     with pytest.raises(ValueError, match="not_defined"):
         validate_region_template(template, decisions)
@@ -215,12 +218,15 @@ def test_render_and_extract_regions(tmp_path: Path, monkeypatch) -> None:
     assert len(objects) == 2
     assert objects[0].original_text == "Mensaje mecanografiado reconocido"
     assert objects[0].object_type == "paragraph"
+    assert objects[0].attributes_json["semantic_role"] == "body_text"
     assert objects[1].object_type == "stamp"
+    assert objects[1].attributes_json["semantic_role"] == "stamp"
     assert objects[1].original_text == ""
     assert objects[1].attributes_json["manual_transcription_required"] is True
     assert len(selections) == 1
     assert len(status) == 2
     assert any(row.mode == "manual" and row.warning for row in status)
+    assert {row.semantic_role for row in status} == {"body_text", "stamp"}
 
 
 def test_region_extraction_reuses_equivalent_run(tmp_path: Path, monkeypatch) -> None:

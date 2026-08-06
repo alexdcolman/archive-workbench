@@ -1,3 +1,7 @@
+## 0.81.0
+
+Integra el OCR regional en una pantalla visual de seis pasos, agrega clasificación controlada de zonas y conserva toda ejecución como candidata sin selección automática. La RC2 corrige una colisión de `reading_order` al agregar una zona manual en una plantilla con huecos. También incorpora la hoja de ruta pre-release, el piloto real persistente, `EXP-01`, `WEB-01`, la ampliación de `AI-01` y el proyecto paralelo `GIAR-01`. No modifica el esquema; la revisión continúa en `0044_layout_structure_review`. La validación manual confirmó seis zonas, recortes y objetos candidatos, clasificación semántica correcta, ausencia de selección canónica e integridad del original. `OCR-01D` queda cerrada. La planificación audiovisual incorpora archivos locales de audio y video, reproducción con velocidad variable y una interfaz de transcripción simple para la corrección humana.
+
 # Historial de cambios y mapa documental
 Este es el único documento en la raíz de `docs/`. Resume la evolución del proyecto y señala dónde encontrar el detalle sin duplicarlo.
 
@@ -7,10 +11,12 @@ Este es el único documento en la raíz de `docs/`. Resume la evolución del pro
 - [Actualización actual](operativos/ACTUALIZACION_ACTUAL.md): instalación y pruebas de la versión vigente.
 - [Estrategia de pruebas](operativos/ESTRATEGIA_DE_PRUEBAS.md).
 - [Guía de prueba piloto](operativos/GUIA_PRUEBA_PILOTO.md).
+- [Hoja de ruta pre-release](operativos/HOJA_DE_RUTA_PRE_RELEASE.md).
 - [Arquitectura y modelo actual](referencia/ARQUITECTURA_Y_MODELO_ACTUAL.md).
 - [Plan de recuperación de linaje EX-01](referencia/RECUPERACION_LINAJE_EX_01.md).
 - [Plan de descubrimiento abierto DISC-01](referencia/DESCUBRIMIENTO_ABIERTO_DISC_01.md).
 - [Formato de importación DISC-02](referencia/IMPORTACION_DICCIONARIOS_DISC_02.md).
+- [Proyecto paralelo GIAR](referencia/PROYECTO_PARALELO_GIAR.md).
 
 ## Versiones recientes — más reciente primero
 
