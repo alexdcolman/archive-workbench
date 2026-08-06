@@ -105,6 +105,31 @@ def test_programmatic_tab_survives_the_following_widget_rerun() -> None:
     assert st.calls[-1]["default"] == "Selección canónica"
 
 
+def test_tab_survives_rerun_triggered_before_widget_is_rendered() -> None:
+    st = _FakeStreamlit()
+    st.session_state["review_object_tabs"] = "Formulario"
+
+    tracked_tabs(
+        st,
+        ["Editar texto", "Orden y estructura", "Formulario"],
+        key="review_object_tabs",
+    )
+
+    # Streamlit elimina el estado de un widget que no llegó a renderizarse en un
+    # ciclo interrumpido por una acción anterior, como deshacer o exportar.
+    del st.session_state["review_object_tabs"]
+
+    tracked_tabs(
+        st,
+        ["Editar texto", "Orden y estructura", "Formulario"],
+        key="review_object_tabs",
+    )
+
+    assert st.session_state["review_object_tabs"] == "Formulario"
+    assert st.session_state["review_object_tabs__remembered"] == "Formulario"
+    assert st.calls[-1]["default"] == "Formulario"
+
+
 def test_all_application_tabs_use_shared_persistent_navigation() -> None:
     package = Path(__file__).parents[1] / "src" / "archive_workbench"
     offenders = []

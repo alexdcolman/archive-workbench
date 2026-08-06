@@ -14,6 +14,12 @@ Este es el único documento en la raíz de `docs/`. Resume la evolución del pro
 
 ## Versiones recientes — más reciente primero
 
+### 0.79.0 — 2026-08-05
+- Implementa `OCR-01B`: candidatos de casillero no canónicos, confirmación explícita, estados controlados y grupos estables por página.
+- Conserva evidencia, anclajes a objetos editables, ciclo de vida e historial append-only; permite alta manual cuando el casillero visible no fue OCRizado.
+- Integra formularios en deshacer/rehacer, intercambio, adopción de estado y la exportación `form_structures.jsonl`.
+- Agrega la migración aditiva `0043_form_structure_review` y una base descartable controlada. La validación manual confirmó grupos, controles, historial, deshacer/rehacer, exportación, integridad del original y persistencia de la pestaña activa; `OCR-01B` queda cerrada.
+
 ### 0.78.0 — 2026-08-05
 - Implementa `OCR-01A`: orientación conservadora, deskew acotado y eliminación controlada de líneas o marcos sobre derivados OCR.
 - Conserva originales y previsualizaciones sin cambios y agrega comparación visual con el derivado OCR y la máscara diagnóstica.

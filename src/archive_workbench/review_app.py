@@ -42,6 +42,17 @@ from archive_workbench.editing import (
     split_editable_object,
     update_editable_object,
 )
+from archive_workbench.form_structure import (
+    archive_control,
+    archive_group,
+    ensure_group,
+    form_candidates,
+    form_structure,
+    form_structure_history,
+    register_control,
+    rename_group,
+    update_control,
+)
 from archive_workbench.page_actions import (
     execute_page_action,
     page_action_availability,
@@ -136,6 +147,7 @@ _ACTION_LABELS = {
     "add": "alta de objeto",
     "revert": "restauración de revisión",
     "assign_part": "asignación de parte interna",
+    "form_structure": "estructura de formulario",
 }
 _TAG_KIND_LABELS = {
     "thematic": "Temática",
@@ -418,6 +430,486 @@ def _database_action(db_path: Path, callback: Callable) -> str | None:
     finally:
         engine.dispose()
 
+
+
+def _render_form_structure_tab(
+    st,
+    *,
+    db_path: Path,
+    view,
+    selected: ReviewObjectRow,
+    objects_by_id: dict[str, ReviewObjectRow],
+    reviewer: str,
+    object_state_key: str,
+) -> None:
+    engine = create_sqlite_engine(db_path)
+    try:
+        with session_scope(engine) as session:
+            structure = form_structure(session, editable_page_id=view.editable_page_id)
+            candidates = form_candidates(session, editable_page_id=view.editable_page_id)
+            history = form_structure_history(
+                session, editable_page_id=view.editable_page_id
+            )
+    finally:
+        engine.dispose()
+
+    active_groups = [
+        item for item in structure.groups if item.lifecycle_status == "active"
+    ]
+    active_controls = [
+        item for item in structure.controls if item.lifecycle_status == "active"
+    ]
+    group_map = {item.group_id: item for item in active_groups}
+    object_options = [
+        object_id
+        for object_id, item in objects_by_id.items()
+        if item.lifecycle_status == "active"
+    ]
+
+    metric_a, metric_b, metric_c = st.columns(3)
+    metric_a.metric("Grupos", len(active_groups))
+    metric_b.metric("Casilleros confirmados", len(active_controls))
+    metric_c.metric(
+        "Candidatos pendientes",
+        sum(not item.already_registered for item in candidates),
+    )
+    st.caption(
+        "Los candidatos son alertas visuales. Solo una confirmación explícita crea "
+        "estructura revisada; el texto OCR y la imagen permanecen intactos."
+    )
+
+    pending = [item for item in candidates if not item.already_registered]
+    with st.expander("Confirmar candidato detectado", expanded=bool(pending)):
+        if not pending:
+            st.info("No hay candidatos nuevos en esta página.")
+        else:
+            candidate_map = {item.fingerprint: item for item in pending}
+            candidate_id = st.selectbox(
+                "Candidato",
+                options=list(candidate_map),
+                format_func=lambda value: (
+                    f"{candidate_map[value].state} · "
+                    f"{candidate_map[value].label or '[sin rótulo]'} · "
+                    f"{candidate_map[value].method}"
+                ),
+                key=f"form_candidate_{view.editable_page_id}",
+            )
+            candidate = candidate_map[candidate_id]
+            group_options = [None, *group_map]
+            with st.form(
+                f"confirm_form_candidate_{view.editable_page_id}_{candidate_id}",
+                enter_to_submit=False,
+            ):
+                state = st.selectbox(
+                    "Estado confirmado",
+                    options=["marked", "unmarked", "indeterminate"],
+                    index=["marked", "unmarked", "indeterminate"].index(
+                        candidate.state
+                    ),
+                    format_func=lambda value: {
+                        "marked": "Marcado",
+                        "unmarked": "No marcado",
+                        "indeterminate": "Indeterminado",
+                    }[value],
+                )
+                label = st.text_input(
+                    "Rótulo confirmado", value=candidate.label or ""
+                )
+                group_id = st.selectbox(
+                    "Grupo existente",
+                    options=group_options,
+                    format_func=lambda value: (
+                        "Sin grupo" if value is None else group_map[value].label
+                    ),
+                )
+                new_group_label = st.text_input(
+                    "Crear o reutilizar grupo por nombre (opcional)"
+                )
+                evidence = st.text_area(
+                    "Evidencia o nota de revisión",
+                    value=f"Candidato {candidate.method}: {candidate.marker or ''}".strip(),
+                    height=90,
+                )
+                confirm_submit = st.form_submit_button(
+                    "Confirmar casillero", type="primary"
+                )
+            if confirm_submit:
+                def confirm_callback(session):
+                    def action():
+                        target_group = group_id
+                        if new_group_label.strip():
+                            target_group = ensure_group(
+                                session,
+                                editable_page_id=view.editable_page_id,
+                                label=new_group_label,
+                                changed_by=reviewer or "local_user",
+                                note=evidence or None,
+                            )
+                        return register_control(
+                            session,
+                            editable_page_id=view.editable_page_id,
+                            state=state,
+                            label=label,
+                            changed_by=reviewer or "local_user",
+                            marker_object_id=candidate.marker_object_id,
+                            label_object_id=candidate.label_object_id,
+                            group_id=target_group,
+                            source="candidate",
+                            candidate_fingerprint=candidate.fingerprint,
+                            candidate_method=candidate.method,
+                            marker_text=candidate.marker,
+                            evidence_note=evidence or None,
+                        )
+                    execute_page_action(
+                        session,
+                        editable_page_id=view.editable_page_id,
+                        action_type="form_structure",
+                        changed_by=reviewer or "local_user",
+                        selected_object_id=(
+                            candidate.label_object_id or candidate.marker_object_id
+                        ),
+                        note=evidence or None,
+                        action=action,
+                    )
+                    return candidate.label_object_id or candidate.marker_object_id
+                _run_action(
+                    st,
+                    lambda: _database_action(db_path, confirm_callback),
+                    selection_key=object_state_key,
+                    fallback_selection=selected.object_id,
+                )
+
+    with st.expander("Registrar casillero manual", expanded=False):
+        if not object_options:
+            st.info("La página no tiene objetos activos para usar como rótulo o marca.")
+        else:
+            marker_options = [None, *object_options]
+            default_label_index = (
+                object_options.index(selected.object_id)
+                if selected.object_id in object_options
+                else 0
+            )
+            with st.form(
+                f"manual_form_control_{view.editable_page_id}",
+                enter_to_submit=False,
+            ):
+                label_object_id = st.selectbox(
+                    "Objeto que contiene el rótulo",
+                    options=object_options,
+                    index=default_label_index,
+                    format_func=lambda value: _snippet(objects_by_id[value].text),
+                )
+                marker_object_id = st.selectbox(
+                    "Objeto que contiene la marca (opcional)",
+                    options=marker_options,
+                    format_func=lambda value: (
+                        "Sin objeto de marca"
+                        if value is None
+                        else _snippet(objects_by_id[value].text)
+                    ),
+                )
+                state = st.selectbox(
+                    "Estado",
+                    options=["marked", "unmarked", "indeterminate"],
+                    format_func=lambda value: {
+                        "marked": "Marcado",
+                        "unmarked": "No marcado",
+                        "indeterminate": "Indeterminado",
+                    }[value],
+                )
+                label = st.text_input(
+                    "Rótulo",
+                    value=objects_by_id[label_object_id].text,
+                )
+                group_id = st.selectbox(
+                    "Grupo existente",
+                    options=[None, *group_map],
+                    format_func=lambda value: (
+                        "Sin grupo" if value is None else group_map[value].label
+                    ),
+                )
+                new_group_label = st.text_input(
+                    "Crear o reutilizar grupo por nombre (opcional)",
+                    key=f"manual_new_group_{view.editable_page_id}",
+                )
+                evidence = st.text_area("Evidencia o nota", height=90)
+                manual_submit = st.form_submit_button("Registrar casillero")
+            if manual_submit:
+                def manual_callback(session):
+                    def action():
+                        target_group = group_id
+                        if new_group_label.strip():
+                            target_group = ensure_group(
+                                session,
+                                editable_page_id=view.editable_page_id,
+                                label=new_group_label,
+                                changed_by=reviewer or "local_user",
+                                note=evidence or None,
+                            )
+                        return register_control(
+                            session,
+                            editable_page_id=view.editable_page_id,
+                            state=state,
+                            label=label,
+                            changed_by=reviewer or "local_user",
+                            marker_object_id=marker_object_id,
+                            label_object_id=label_object_id,
+                            group_id=target_group,
+                            source="manual",
+                            evidence_note=evidence or None,
+                        )
+                    execute_page_action(
+                        session,
+                        editable_page_id=view.editable_page_id,
+                        action_type="form_structure",
+                        changed_by=reviewer or "local_user",
+                        selected_object_id=label_object_id,
+                        note=evidence or None,
+                        action=action,
+                    )
+                    return label_object_id
+                _run_action(
+                    st,
+                    lambda: _database_action(db_path, manual_callback),
+                    selection_key=object_state_key,
+                    fallback_selection=selected.object_id,
+                )
+
+    st.write("**Estructura confirmada**")
+    if not active_controls:
+        st.caption("Todavía no hay casilleros confirmados.")
+    else:
+        control_map = {item.control_id: item for item in active_controls}
+        control_id = st.selectbox(
+            "Casillero",
+            options=list(control_map),
+            format_func=lambda value: (
+                f"{control_map[value].label} · "
+                f"{control_map[value].state} · "
+                f"{group_map[control_map[value].group_id].label if control_map[value].group_id in group_map else 'sin grupo'}"
+            ),
+            key=f"form_control_{view.editable_page_id}",
+        )
+        control = control_map[control_id]
+        with st.form(
+            f"update_form_control_{view.editable_page_id}_{control_id}",
+            enter_to_submit=False,
+        ):
+            state = st.selectbox(
+                "Estado confirmado",
+                options=["marked", "unmarked", "indeterminate"],
+                index=["marked", "unmarked", "indeterminate"].index(control.state),
+                format_func=lambda value: {
+                    "marked": "Marcado",
+                    "unmarked": "No marcado",
+                    "indeterminate": "Indeterminado",
+                }[value],
+            )
+            label = st.text_input("Rótulo confirmado", value=control.label)
+            group_options = [None, *group_map]
+            current_group = control.group_id if control.group_id in group_map else None
+            group_id = st.selectbox(
+                "Grupo",
+                options=group_options,
+                index=group_options.index(current_group),
+                format_func=lambda value: (
+                    "Sin grupo" if value is None else group_map[value].label
+                ),
+            )
+            evidence = st.text_area(
+                "Evidencia o nota", value=control.evidence_note or "", height=90
+            )
+            update_submit = st.form_submit_button("Guardar revisión")
+        if update_submit:
+            def update_callback(session):
+                execute_page_action(
+                    session,
+                    editable_page_id=view.editable_page_id,
+                    action_type="form_structure",
+                    changed_by=reviewer or "local_user",
+                    selected_object_id=(
+                        control.label_object_id or control.marker_object_id
+                    ),
+                    note=evidence or None,
+                    action=lambda: update_control(
+                        session,
+                        editable_page_id=view.editable_page_id,
+                        control_id=control_id,
+                        changed_by=reviewer or "local_user",
+                        state=state,
+                        label=label,
+                        group_id=group_id,
+                        evidence_note=evidence or None,
+                    ),
+                )
+                return control.label_object_id or control.marker_object_id
+            _run_action(
+                st,
+                lambda: _database_action(db_path, update_callback),
+                selection_key=object_state_key,
+                fallback_selection=selected.object_id,
+            )
+
+        with st.form(
+            f"archive_form_control_{view.editable_page_id}_{control_id}",
+            enter_to_submit=False,
+        ):
+            archive_note = st.text_input("Motivo de archivo")
+            archive_submit = st.form_submit_button("Archivar casillero")
+        if archive_submit:
+            def archive_callback(session):
+                execute_page_action(
+                    session,
+                    editable_page_id=view.editable_page_id,
+                    action_type="form_structure",
+                    changed_by=reviewer or "local_user",
+                    selected_object_id=(
+                        control.label_object_id or control.marker_object_id
+                    ),
+                    note=archive_note or None,
+                    action=lambda: archive_control(
+                        session,
+                        editable_page_id=view.editable_page_id,
+                        control_id=control_id,
+                        changed_by=reviewer or "local_user",
+                        note=archive_note or None,
+                    ),
+                )
+                return control.label_object_id or control.marker_object_id
+            _run_action(
+                st,
+                lambda: _database_action(db_path, archive_callback),
+                selection_key=object_state_key,
+                fallback_selection=selected.object_id,
+            )
+
+    with st.expander("Administrar grupos", expanded=False):
+        with st.form(
+            f"create_form_group_{view.editable_page_id}", enter_to_submit=False
+        ):
+            new_label = st.text_input("Nombre del nuevo grupo")
+            new_note = st.text_input("Nota del grupo")
+            create_group_submit = st.form_submit_button("Crear grupo")
+        if create_group_submit:
+            def create_group_callback(session):
+                execute_page_action(
+                    session,
+                    editable_page_id=view.editable_page_id,
+                    action_type="form_structure",
+                    changed_by=reviewer or "local_user",
+                    selected_object_id=selected.object_id,
+                    note=new_note or None,
+                    action=lambda: ensure_group(
+                        session,
+                        editable_page_id=view.editable_page_id,
+                        label=new_label,
+                        changed_by=reviewer or "local_user",
+                        note=new_note or None,
+                    ),
+                )
+                return selected.object_id
+
+            _run_action(
+                st,
+                lambda: _database_action(db_path, create_group_callback),
+                selection_key=object_state_key,
+                fallback_selection=selected.object_id,
+            )
+        if active_groups:
+            target_group_id = st.selectbox(
+                "Grupo existente",
+                options=list(group_map),
+                format_func=lambda value: group_map[value].label,
+                key=f"manage_form_group_{view.editable_page_id}",
+            )
+            target_group = group_map[target_group_id]
+            with st.form(
+                f"rename_form_group_{view.editable_page_id}_{target_group_id}",
+                enter_to_submit=False,
+            ):
+                renamed_label = st.text_input(
+                    "Nombre", value=target_group.label
+                )
+                group_note = st.text_input(
+                    "Nota", value=target_group.note or ""
+                )
+                rename_submit = st.form_submit_button("Guardar grupo")
+            if rename_submit:
+                def rename_group_callback(session):
+                    execute_page_action(
+                        session,
+                        editable_page_id=view.editable_page_id,
+                        action_type="form_structure",
+                        changed_by=reviewer or "local_user",
+                        selected_object_id=selected.object_id,
+                        note=group_note or None,
+                        action=lambda: rename_group(
+                            session,
+                            editable_page_id=view.editable_page_id,
+                            group_id=target_group_id,
+                            label=renamed_label,
+                            changed_by=reviewer or "local_user",
+                            note=group_note or None,
+                        ),
+                    )
+                    return selected.object_id
+
+                _run_action(
+                    st,
+                    lambda: _database_action(db_path, rename_group_callback),
+                    selection_key=object_state_key,
+                    fallback_selection=selected.object_id,
+                )
+            with st.form(
+                f"archive_form_group_{view.editable_page_id}_{target_group_id}",
+                enter_to_submit=False,
+            ):
+                archive_group_note = st.text_input("Motivo de archivo del grupo")
+                archive_group_submit = st.form_submit_button("Archivar grupo")
+            if archive_group_submit:
+                def archive_group_callback(session):
+                    execute_page_action(
+                        session,
+                        editable_page_id=view.editable_page_id,
+                        action_type="form_structure",
+                        changed_by=reviewer or "local_user",
+                        selected_object_id=selected.object_id,
+                        note=archive_group_note or None,
+                        action=lambda: archive_group(
+                            session,
+                            editable_page_id=view.editable_page_id,
+                            group_id=target_group_id,
+                            changed_by=reviewer or "local_user",
+                            note=archive_group_note or None,
+                        ),
+                    )
+                    return selected.object_id
+
+                _run_action(
+                    st,
+                    lambda: _database_action(db_path, archive_group_callback),
+                    selection_key=object_state_key,
+                    fallback_selection=selected.object_id,
+                )
+
+    with st.expander("Historial de estructura de formulario", expanded=False):
+        if not history:
+            st.caption("Todavía no hay revisiones de formulario.")
+        else:
+            for row in reversed(history):
+                with st.container(border=True):
+                    st.write(
+                        f"**Revisión {row.revision_number}** · {row.operation} · "
+                        f"{row.created_by}"
+                    )
+                    st.caption(row.created_at.isoformat(timespec="minutes"))
+                    st.write(
+                        f"Grupos: {row.group_count} · Casilleros: {row.control_count}"
+                    )
+                    if row.note:
+                        st.write(row.note)
+                    if row.details:
+                        st.json(row.details, expanded=False)
 
 
 def _apply_pending_app_mode(st) -> None:
@@ -2324,6 +2816,7 @@ def main() -> None:
                 (
                     edit_tab,
                     structure_tab,
+                    form_tab,
                     annotations_tab,
                     attributes_tab,
                     entities_tab,
@@ -2334,6 +2827,7 @@ def main() -> None:
                     [
                         "Editar texto",
                         "Orden y estructura",
+                        "Formulario",
                         "Anotaciones",
                         "Datos adicionales",
                         "Menciones",
@@ -2661,6 +3155,17 @@ def main() -> None:
                                 selection_key=object_state_key,
                                 fallback_selection=selected.object_id,
                             )
+
+                with form_tab:
+                    _render_form_structure_tab(
+                        st,
+                        db_path=db_path,
+                        view=view,
+                        selected=selected,
+                        objects_by_id=objects_by_id,
+                        reviewer=reviewer or "local_user",
+                        object_state_key=object_state_key,
+                    )
 
                 with annotations_tab:
                     with st.form(f"object_review_{selected.object_id}", enter_to_submit=False):

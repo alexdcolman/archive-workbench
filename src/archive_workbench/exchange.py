@@ -17,6 +17,7 @@ from archive_workbench.contracts.changes import (
     ChangeBundleManifest,
     ChangeEvent,
 )
+from archive_workbench.contracts.forms import FormStructure
 from archive_workbench.db.models import (
     EditableObject,
     EditableObjectRevision,
@@ -319,6 +320,7 @@ def _editable_state_payload(session: Session, project_id: str) -> dict[str, Any]
                 "revision_number": row.revision_number,
                 "review_status": row.review_status,
                 "review_note": row.review_note,
+                "form_structure": row.form_structure_json or {},
             }
             for row in pages
         ],
@@ -1627,10 +1629,17 @@ def _assess_current_state(
         if page is None:
             return MergeDisposition.REVIEW.value, "La página editable no existe localmente.", []
         pairs = []
-        for field, attribute in (("review_status", "review_status"), ("review_note", "review_note")):
+        for field, attribute in (
+            ("review_status", "review_status"),
+            ("review_note", "review_note"),
+            ("form_structure", "form_structure_json"),
+        ):
             pair = _changed_pair(event, field)
             if pair is not None:
-                pairs.append((field, getattr(page, attribute), pair[0], pair[1]))
+                current = getattr(page, attribute)
+                if field == "form_structure":
+                    current = current or {}
+                pairs.append((field, current, pair[0], pair[1]))
     elif event.entity_type == "extraction_selection_baseline":
         selection = session.get(ExtractionPageSelection, event.entity_id)
         if selection is None:
@@ -2961,7 +2970,11 @@ def _current_field_value(session: Session, event: ChangeEvent, field: str) -> An
         page = session.get(EditablePage, event.entity_id)
         if page is None:
             return None
-        mapping = {"review_status": "review_status", "review_note": "review_note"}
+        mapping = {
+            "review_status": "review_status",
+            "review_note": "review_note",
+            "form_structure": "form_structure_json",
+        }
         attribute = mapping.get(field)
         return getattr(page, attribute) if attribute else None
     if event.entity_type == "extraction_selection_baseline":
@@ -3783,13 +3796,16 @@ def _apply_page_event(
     applied_by: str,
     source_workspace_name: str,
 ) -> None:
+    from archive_workbench.editing import _append_page_revision
+
     page = session.get(EditablePage, event.entity_id)
     if page is None:
         raise ValueError(f"Página editable inexistente: {event.entity_id}")
     actor = f"{applied_by} [bundle de {source_workspace_name}]"
     status_pair = _changed_pair(event, "review_status")
     note_pair = _changed_pair(event, "review_note")
-    if status_pair is None and note_pair is None:
+    structure_pair = _changed_pair(event, "form_structure")
+    if status_pair is None and note_pair is None and structure_pair is None:
         raise ValueError(f"El evento {event.event_id} no contiene campos de página aplicables")
     if status_pair is not None:
         old, new = status_pair
@@ -3799,8 +3815,27 @@ def _apply_page_event(
         old, new = note_pair
         _assert_expected(page.review_note, old, event=event, field="review_note")
         page.review_note = new
-    page.reviewed_by = actor
-    page.reviewed_at = utc_now()
+    if structure_pair is not None:
+        old, new = structure_pair
+        _assert_expected(
+            page.form_structure_json or {}, old or {}, event=event, field="form_structure"
+        )
+        validated = FormStructure.model_validate(new or {})
+        base = page.revision_number
+        page.form_structure_json = validated.model_dump(mode="json")
+        page.revision_number += 1
+        _append_page_revision(
+            session,
+            page,
+            operation="form_structure",
+            created_by=actor,
+            note=f"Aplicado desde evento remoto {event.event_id}",
+            details={"source_event_id": event.event_id},
+            base_revision_number=base,
+        )
+    if status_pair is not None or note_pair is not None:
+        page.reviewed_by = actor
+        page.reviewed_at = utc_now()
     page.updated_at = utc_now()
 
 

@@ -1,6 +1,6 @@
 # Pendientes activos — Archive Workbench
 
-**Estado verificado:** 2026-08-05 · **versión:** 0.78.0
+**Estado preparado:** 2026-08-05 · **candidata:** 0.79.0
 
 Este archivo es la única fuente de verdad para trabajo abierto. Las capacidades cerradas se registran en `IMPLEMENTACIONES_REALIZADAS.md` y no deben reabrirse sin una regresión concreta o una ampliación explícita del alcance.
 
@@ -43,14 +43,15 @@ Este archivo es la única fuente de verdad para trabajo abierto. Las capacidades
 
 La fase `OCR-01A` quedó implementada y validada en 0.78.0: orientación conservadora, deskew acotado, eliminación controlada de líneas y marcos, máscaras diagnósticas y trazabilidad estructurada por página. Los originales y las previsualizaciones permanecieron intactos en los cinco casos controlados.
 
-Queda por completar y evaluar dentro de `OCR-01`:
+La fase `OCR-01B` quedó implementada y validada en 0.79.0: candidatos de casillero no canónicos, confirmación explícita, estados controlados, grupos estables por página, alta manual de controles visibles sin representación OCR, historial append-only, deshacer/rehacer, intercambio y exportación. La corrección de navegación conserva la pestaña activa después de deshacer, rehacer, exportar y ejecutar otras acciones con rerun. `OCR-01B` queda cerrada; la simplificación integral de la subsección **Formulario** y una referencia visual persistente de la página quedan registradas para `UX-02`.
+
+Después de esa validación queda por completar y evaluar dentro de `OCR-01`:
 
 - dewarp;
 - OCR regional;
 - párrafos, columnas y orden de lectura;
 - reducción de fragmentación línea por línea y duplicaciones;
 - portadas, encabezados, pies, números de página, sellos, firmas, manuscritos, ilustraciones y elementos preimpresos;
-- casilleros vacíos, marcados e indeterminados y agrupaciones de formulario;
 - benchmark ampliado de Tesseract, Docling y Surya con verdad terreno.
 
 Toda transformación debe producir un derivado reproducible y nunca inventar trazos.
@@ -106,7 +107,8 @@ La revisión debe:
 - dejar cerrados por defecto los paneles secundarios que no sean necesarios para la tarea inmediata;
 - detectar controles, explicaciones, tarjetas o paneles duplicados;
 - revisar jerarquía visual, longitud de pantallas, navegación, formularios y comportamiento después de cada rerun;
-- validar recorridos representativos de OCR, revisión, entidades, descubrimiento, búsqueda, exportación, administración e intercambio.
+- validar recorridos representativos de OCR, revisión, entidades, descubrimiento, búsqueda, exportación, administración e intercambio;
+- reorganizar la subsección **Formulario** de revisión, hoy funcional pero difícil de comprender, y evaluar una referencia visual persistente de la página sin saturar el recorrido principal.
 
 `UX-02` se programa al final para evaluar la interfaz completa, pero no habilita a postergar regresiones: toda versión nueva debe aplicar de inmediato el principio permanente de **Interfaz y formularios** registrado en `IMPLEMENTACIONES_REALIZADAS.md`. Si una pantalla concreta se vuelve confusa antes, se corrige en ese mismo bloque funcional.
 

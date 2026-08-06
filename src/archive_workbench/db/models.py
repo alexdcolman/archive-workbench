@@ -644,6 +644,9 @@ class EditablePage(Base):
     revision_number: Mapped[int] = mapped_column(Integer, nullable=False, default=1)
     review_status: Mapped[str] = mapped_column(String(32), nullable=False, default="unreviewed")
     review_note: Mapped[str | None] = mapped_column(Text, nullable=True)
+    form_structure_json: Mapped[dict[str, Any]] = mapped_column(
+        JSON, nullable=False, default=dict
+    )
     reviewed_by: Mapped[str | None] = mapped_column(String(200), nullable=True)
     reviewed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     bootstrapped_by: Mapped[str] = mapped_column(String(200), nullable=False)
@@ -688,6 +691,9 @@ class EditablePageRevision(Base):
     status: Mapped[str] = mapped_column(String(32), nullable=False)
     review_status: Mapped[str] = mapped_column(String(32), nullable=False)
     review_note: Mapped[str | None] = mapped_column(Text, nullable=True)
+    form_structure_json: Mapped[dict[str, Any]] = mapped_column(
+        JSON, nullable=False, default=dict
+    )
     details_json: Mapped[dict[str, Any]] = mapped_column(JSON, nullable=False, default=dict)
     note: Mapped[str | None] = mapped_column(Text, nullable=True)
     created_by: Mapped[str] = mapped_column(String(200), nullable=False)

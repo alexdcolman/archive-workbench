@@ -449,7 +449,7 @@ def test_open_discovery_validation_script_prepares_disposable_copy(
         source_engine.dispose()
 
     result = create_validation_copy(source, destination, force=False)
-    assert result["revision"] == "0042_preprocessing_geometry_trace"
+    assert result["revision"] == "0043_form_structure_review"
     assert result["expected_candidate_count"] == 7
     assert Path(result["validation_path"]).is_file()
 
@@ -920,7 +920,7 @@ def test_open_discovery_review_validation_preparation_preserves_existing_run(
         json.dumps(payload), encoding="utf-8"
     )
     result = prepare_review_validation(destination)
-    assert result["revision"] == "0042_preprocessing_geometry_trace"
+    assert result["revision"] == "0043_form_structure_review"
     assert result["run_id"] == run.run_id
     assert len(result["candidate_ids_by_text"]) == 7
     engine = create_sqlite_engine(database_path(destination))

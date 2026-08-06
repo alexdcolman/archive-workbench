@@ -1,6 +1,6 @@
 # Implementaciones realizadas — Archive Workbench
 
-**Estado verificado:** 2026-08-05 · **versión:** 0.78.0
+**Estado preparado:** 2026-08-05 · **candidata:** 0.79.0
 
 Este documento registra capacidades ya implementadas y, cuando corresponde, validadas. No deben volver a aparecer en `PENDIENTES_ACTIVOS.md` salvo evidencia de regresión o ampliación explícita del alcance.
 
@@ -11,7 +11,7 @@ Este documento registra capacidades ya implementadas y, cuando corresponde, vali
 | Catálogo, originales y estructura archivística | Implementado |
 | Extracciones versionadas y selección canónica | Implementado y validado |
 | Revisión, historial y rebase | Implementado y validado |
-| Calidad de página y derivados OCR | Implementación parcial; OCR-01A implementada y validada en 0.78.0 |
+| Calidad de página y derivados OCR | Implementación parcial; OCR-01A validada en 0.78.0 y OCR-01B validada en 0.79.0 |
 | Búsqueda literal y semántica | Implementado; calibración reproducible cerrada en 0.74.0 |
 | Autoridades, menciones y relaciones | Núcleo implementado y validado |
 | Exportaciones reproducibles | Implementado y validado |
@@ -33,6 +33,16 @@ Este documento registra capacidades ya implementadas y, cuando corresponde, vali
 | Capas archivísticas GRAPH-02 | Implementadas y validadas en 0.77.0 |
 
 ## Preprocesamiento geométrico para OCR
+
+### OCR-01B — formularios y casilleros revisables — 0.79.0
+
+Los indicadores automáticos de casilleros siguen siendo candidatos no canónicos. La capa editable permite confirmarlos de forma explícita, asignar los estados controlados `marked`, `unmarked` o `indeterminate`, corregir rótulos, vincular la marca y el texto a objetos editables y registrar evidencia. Un casillero visible que no fue representado por OCR puede darse de alta manualmente sin inventar un objeto extraído ni modificar la imagen.
+
+Los controles pueden agruparse mediante identificadores persistentes dentro de cada página. Crear, renombrar o archivar un grupo y confirmar, corregir o archivar un control conserva snapshots append-only en las revisiones de página. Archivar un grupo no elimina sus controles: los desvincula y conserva tanto la agrupación histórica como las confirmaciones. Las acciones participan en deshacer/rehacer, intercambio offline y adopción de estado. La exportación editable incorpora `form_structures.jsonl` y el manifiesto 1.3.
+
+La migración aditiva `0043_form_structure_review` agrega `form_structure_json` a `editable_pages` y `editable_page_revisions`. La estructura se valida como una unidad coherente, con IDs únicos y referencias de grupo válidas; las páginas anteriores reciben objetos vacíos. `create_form_structure_validation_project.py` genera una ficha controlada con candidatos marcados y no marcados, un vínculo por proximidad y un casillero visible para alta manual.
+
+**Validada manualmente en 0.79.0.** Se confirmaron grupos, controles, historial, deshacer/rehacer, exportación, SHA-256 del original y ausencia de acceso a `project_data`. Durante la prueba se detectó que acciones renderizadas antes del bloque de pestañas podían hacer volver la interfaz a **Editar texto**; la RC2 agregó una copia durable de la pestaña activa y la validación posterior confirmó que deshacer, rehacer, exportar y las demás acciones conservan la subsección activa. `OCR-01B` queda cerrada; `OCR-01` continúa parcial por los alcances restantes. La simplificación integral de **Formulario** y una referencia visual persistente de la página quedan programadas en `UX-02`.
 
 ### OCR-01A — orientación, deskew y líneas controladas — 0.78.0
 

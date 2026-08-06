@@ -162,15 +162,17 @@ def test_version_docs_and_discovery_plan_are_packaged() -> None:
         / "archive_workbench"
         / "migrations"
         / "versions"
-        / "0042_preprocessing_geometry_trace.py"
+        / "0043_form_structure_review.py"
     )
 
-    assert data["project"]["version"] == "0.78.0"
-    assert '__version__ = "0.78.0"' in version_source
+    assert data["project"]["version"] == "0.79.0"
+    assert '__version__ = "0.79.0"' in version_source
     assert migration.is_file()
-    assert 'down_revision = "0041_catalog_authority_roles_graph_layers"' in migration.read_text(
+    assert 'down_revision = "0042_preprocessing_geometry_trace"' in migration.read_text(
         encoding="utf-8"
     )
+    assert (root / "src" / "archive_workbench" / "contracts" / "forms.py").is_file()
+    assert (root / "src" / "archive_workbench" / "form_structure.py").is_file()
     assert (root / "src" / "archive_workbench" / "preprocessing_geometry.py").is_file()
     processing_app = (root / "src" / "archive_workbench" / "processing_app.py").read_text(
         encoding="utf-8"
@@ -229,6 +231,13 @@ def test_version_docs_and_discovery_plan_are_packaged() -> None:
     assert "project_data_touched" in geometry_source
     assert "orientation_rotation" in geometry_source
     assert "crossing_line_removed" in geometry_source
+    form_validator = root / "scripts" / "create_form_structure_validation_project.py"
+    assert form_validator.is_file()
+    form_validator_source = form_validator.read_text(encoding="utf-8")
+    assert "el script no elimina ni reemplaza proyectos" in form_validator_source
+    assert "project_data_touched" in form_validator_source
+    assert "candidate_count" in form_validator_source
+    assert "confirmed_controls" in form_validator_source
     assert data["project"]["optional-dependencies"]["discovery"] == [
         "spacy>=3.8,<4"
     ]

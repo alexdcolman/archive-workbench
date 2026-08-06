@@ -32,6 +32,8 @@ from archive_workbench.db.models import (
     DigitalObjectUnitLink,
     EditableObject,
     EditableObjectRevision,
+    EditablePage,
+    EditablePageRevision,
     EditablePageAction,
     FileInstance,
     ExchangeChangeEvent,
@@ -66,6 +68,7 @@ from archive_workbench.exchange import (
     inspect_change_bundle,
 )
 from archive_workbench.extraction import select_extraction_pages
+from archive_workbench.form_structure import ensure_group, form_structure, register_control
 from archive_workbench.identity import new_id
 from archive_workbench.page_actions import execute_page_action, redo_page_action, undo_page_action
 from archive_workbench.work import (
@@ -348,7 +351,7 @@ def test_exchange_migration_upgrades_existing_0012_database(tmp_path: Path) -> N
     upgrade_database(root, revision="0012_editable_search_fts")
     assert current_revision(root) == "0012_editable_search_fts"
     upgrade_database(root)
-    assert current_revision(root) == "0042_preprocessing_geometry_trace"
+    assert current_revision(root) == "0043_form_structure_review"
     engine = create_sqlite_engine(database_path(root))
     try:
         tables = set(inspect(engine).get_table_names())
@@ -377,7 +380,7 @@ def test_dry_run_migration_upgrades_populated_0013_database(tmp_path: Path) -> N
         engine.dispose()
     assert current_revision(root) == "0013_offline_exchange_log"
     upgrade_database(root)
-    assert current_revision(root) == "0042_preprocessing_geometry_trace"
+    assert current_revision(root) == "0043_form_structure_review"
     engine = create_sqlite_engine(database_path(root))
     try:
         tables = set(inspect(engine).get_table_names())
@@ -1024,7 +1027,7 @@ def test_transactional_apply_migration_upgrades_populated_0014_database(tmp_path
         engine.dispose()
     assert current_revision(root) == "0014_exchange_dry_run"
     upgrade_database(root)
-    assert current_revision(root) == "0042_preprocessing_geometry_trace"
+    assert current_revision(root) == "0043_form_structure_review"
     engine = create_sqlite_engine(database_path(root))
     try:
         tables = set(inspect(engine).get_table_names())
@@ -1602,7 +1605,7 @@ def test_delete_precondition_migration_upgrades_populated_0015_database(tmp_path
         engine.dispose()
     assert current_revision(root) == "0015_exchange_transactional_apply"
     upgrade_database(root)
-    assert current_revision(root) == "0042_preprocessing_geometry_trace"
+    assert current_revision(root) == "0043_form_structure_review"
     engine = create_sqlite_engine(database_path(root))
     try:
         columns = {
@@ -1623,7 +1626,7 @@ def test_conflict_resolution_migration_upgrades_populated_0016_database(tmp_path
     engine.dispose()
     assert current_revision(root) == "0016_exchange_delete_preconditions"
     upgrade_database(root)
-    assert current_revision(root) == "0042_preprocessing_geometry_trace"
+    assert current_revision(root) == "0043_form_structure_review"
     engine = create_sqlite_engine(database_path(root))
     try:
         tables = set(inspect(engine).get_table_names())
@@ -2030,7 +2033,7 @@ def test_resolution_usability_migration_upgrades_populated_0017_database(tmp_pat
         engine.dispose()
     assert current_revision(root) == "0017_exchange_conflict_resolutions"
     upgrade_database(root)
-    assert current_revision(root) == "0042_preprocessing_geometry_trace"
+    assert current_revision(root) == "0043_form_structure_review"
     engine = create_sqlite_engine(database_path(root))
     try:
         columns = {
@@ -3562,8 +3565,8 @@ def test_0030_repairs_legacy_source_replaced_bundle_end_to_end(
     # generar nuevos eventos y la exportación corrige el evento ya existente.
     upgrade_database(source_root)
     upgrade_database(receiver_root)
-    assert current_revision(source_root) == "0042_preprocessing_geometry_trace"
-    assert current_revision(receiver_root) == "0042_preprocessing_geometry_trace"
+    assert current_revision(source_root) == "0043_form_structure_review"
+    assert current_revision(receiver_root) == "0043_form_structure_review"
     source_engine = create_sqlite_engine(database_path(source_root))
     receiver_engine = create_sqlite_engine(database_path(receiver_root))
     try:
@@ -3648,6 +3651,126 @@ def test_0030_repairs_legacy_source_replaced_bundle_end_to_end(
         source_engine.dispose()
         receiver_engine.dispose()
 
+
+
+def test_form_structure_travels_in_bundle_with_page_revision_history(
+    tmp_path: Path,
+) -> None:
+    (
+        source_root,
+        source_engine,
+        _decisions,
+        object_id,
+        receiver_root,
+        receiver_engine,
+        _receiver_workspace_id,
+    ) = _source_and_receiver(tmp_path)
+    try:
+        with session_scope(source_engine) as session:
+            obj = session.get(EditableObject, object_id)
+            assert obj is not None
+
+            def action():
+                group_id = ensure_group(
+                    session,
+                    editable_page_id=obj.editable_page_id,
+                    label="Datos personales",
+                    changed_by="Source",
+                )
+                return register_control(
+                    session,
+                    editable_page_id=obj.editable_page_id,
+                    state="marked",
+                    label="Afiliado",
+                    changed_by="Source",
+                    label_object_id=obj.id,
+                    group_id=group_id,
+                    source="manual",
+                    evidence_note="Visible en el formulario",
+                )
+
+            execute_page_action(
+                session,
+                editable_page_id=obj.editable_page_id,
+                action_type="form_structure",
+                changed_by="Source",
+                selected_object_id=obj.id,
+                note="Confirmación de formulario",
+                action=action,
+            )
+            page_id = obj.editable_page_id
+
+        with session_scope(source_engine) as session:
+            bundle = export_change_bundle(
+                session,
+                project_root=source_root,
+                checkpoint_ref="baseline",
+                created_by="Source",
+            )
+        with session_scope(receiver_engine) as session:
+            dry = dry_run_change_bundle(
+                session,
+                project_root=receiver_root,
+                bundle_path=bundle.output_path,
+                assessed_by="Receiver",
+            )
+            assert dry.overall_status == "ready_to_apply"
+            assert dry.counts["conflict"] == 0
+        with session_scope(receiver_engine) as session:
+            applied = apply_change_bundle(
+                session,
+                project_root=receiver_root,
+                bundle_ref=bundle.bundle_id,
+                applied_by="Receiver",
+            )
+            assert applied.applied_event_count >= 1
+
+        with session_scope(source_engine) as source_session, session_scope(
+            receiver_engine
+        ) as receiver_session:
+            source_structure = form_structure(
+                source_session, editable_page_id=page_id
+            ).model_dump(mode="json")
+            receiver_structure = form_structure(
+                receiver_session, editable_page_id=page_id
+            ).model_dump(mode="json")
+            assert receiver_structure == source_structure
+            source_page = source_session.get(EditablePage, page_id)
+            receiver_page = receiver_session.get(EditablePage, page_id)
+            assert source_page is not None and receiver_page is not None
+            assert receiver_page.revision_number == source_page.revision_number == 3
+            assert source_structure["groups"][0]["label"] == "Datos personales"
+            assert source_structure["controls"][0]["state"] == "marked"
+            receiver_operations = receiver_session.scalars(
+                select(EditablePageRevision.operation)
+                .where(EditablePageRevision.editable_page_id == page_id)
+                .order_by(EditablePageRevision.revision_number)
+            ).all()
+            source_operations = source_session.scalars(
+                select(EditablePageRevision.operation)
+                .where(EditablePageRevision.editable_page_id == page_id)
+                .order_by(EditablePageRevision.revision_number)
+            ).all()
+            assert receiver_operations == source_operations == [
+                "bootstrap",
+                "form_structure",
+                "form_structure",
+            ]
+            source_action = source_session.scalar(
+                select(EditablePageAction).where(
+                    EditablePageAction.editable_page_id == page_id,
+                    EditablePageAction.action_type == "form_structure",
+                )
+            )
+            receiver_action = receiver_session.get(
+                EditablePageAction, source_action.id if source_action else ""
+            )
+            assert source_action is not None and receiver_action is not None
+            assert receiver_action.before_snapshot_json == source_action.before_snapshot_json
+            assert receiver_action.after_snapshot_json == source_action.after_snapshot_json
+    finally:
+        source_engine.dispose()
+        receiver_engine.dispose()
 
 def test_bundle_preserves_object_revision_operations_and_page_undo_redo_history(
     tmp_path: Path,
@@ -3818,8 +3941,8 @@ def test_0031_backfills_legacy_page_action_and_preserves_history_end_to_end(
 
     upgrade_database(source_root)
     upgrade_database(receiver_root)
-    assert current_revision(source_root) == "0042_preprocessing_geometry_trace"
-    assert current_revision(receiver_root) == "0042_preprocessing_geometry_trace"
+    assert current_revision(source_root) == "0043_form_structure_review"
+    assert current_revision(receiver_root) == "0043_form_structure_review"
 
     source_engine = create_sqlite_engine(database_path(source_root))
     receiver_engine = create_sqlite_engine(database_path(receiver_root))
@@ -4747,7 +4870,7 @@ def test_lineage_validation_script_creates_recoverable_discardable_pair(
         receiver,
         force=False,
     )
-    assert result["revision"] == "0042_preprocessing_geometry_trace"
+    assert result["revision"] == "0043_form_structure_review"
 
     engine = create_sqlite_engine(database_path(receiver))
     try:
@@ -5384,7 +5507,7 @@ def test_common_base_validation_script_creates_distinct_identical_copies(
         tmp_path / "common_base_b",
         force=False,
     )
-    assert result["revision"] == "0042_preprocessing_geometry_trace"
+    assert result["revision"] == "0043_form_structure_review"
     assert result["initiator_workspace_id"] != result["counterpart_workspace_id"]
     assert len(str(result["state_sha256"])) == 64
     assert Path(result["validation_path"]).is_file()
@@ -5402,6 +5525,23 @@ def _create_state_adoption_pair(tmp_path: Path) -> dict[str, object]:
             expected_revision=editable.revision_number,
             edited_by="alex",
             text="Estado remoto adoptable",
+        )
+        group_id = ensure_group(
+            session,
+            editable_page_id=editable.editable_page_id,
+            label="Datos adoptables",
+            changed_by="alex",
+        )
+        register_control(
+            session,
+            editable_page_id=editable.editable_page_id,
+            state="marked",
+            label="Validado",
+            changed_by="alex",
+            label_object_id=editable.id,
+            group_id=group_id,
+            source="manual",
+            evidence_note="Estructura remota adoptable",
         )
     with session_scope(pair["counterpart_engine"]) as session:
         editable = session.get(EditableObject, pair["object_id"])
@@ -5530,6 +5670,11 @@ def test_state_adoption_is_transactional_audited_and_rollback_restores_previous_
             assert current_editable_state_sha256(session, target_project_id) == source_state
             editable = session.get(EditableObject, pair["object_id"])
             assert editable and editable.current_text == "Estado remoto adoptable"
+            adopted_structure = form_structure(
+                session, editable_page_id=editable.editable_page_id
+            )
+            assert adopted_structure.groups[0].label == "Datos adoptables"
+            assert adopted_structure.controls[0].state == "marked"
             assert session.scalar(select(func.count(ExchangeStateAdoption.id))) == 1
             assert session.execute(text("PRAGMA integrity_check")).scalar_one() == "ok"
             assert session.execute(text("PRAGMA foreign_key_check")).all() == []
@@ -5553,6 +5698,11 @@ def test_state_adoption_is_transactional_audited_and_rollback_restores_previous_
         with session_scope(pair["counterpart_engine"]) as session:
             editable = session.get(EditableObject, pair["object_id"])
             assert editable and editable.current_text == "Estado local divergente"
+            restored_structure = form_structure(
+                session, editable_page_id=editable.editable_page_id
+            )
+            assert restored_structure.groups == []
+            assert restored_structure.controls == []
             rows = state_adoption_rows(session)
             assert len(rows) == 1
             assert rows[0].rolled_back is True
@@ -5669,7 +5819,7 @@ def test_state_adoption_validation_script_creates_divergent_copies_and_package(
         tmp_path / "state_adoption_target",
         force=False,
     )
-    assert result["revision"] == "0042_preprocessing_geometry_trace"
+    assert result["revision"] == "0043_form_structure_review"
     assert result["source_workspace_id"] != result["target_workspace_id"]
     assert result["source_state_sha256"] != result["target_state_sha256"]
     assert Path(result["package_path"]).is_file()

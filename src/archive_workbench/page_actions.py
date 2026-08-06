@@ -12,7 +12,7 @@ from archive_workbench.db.models import (
     EditablePageAction,
     utc_now,
 )
-from archive_workbench.editing import _append_revision
+from archive_workbench.editing import _append_page_revision, _append_revision
 from archive_workbench.identity import new_id
 
 T = TypeVar("T")
@@ -40,12 +40,18 @@ def _object_snapshot(obj: EditableObject) -> dict[str, Any]:
 
 
 def capture_page_snapshot(session: Session, editable_page_id: str) -> dict[str, Any]:
+    page = session.get(EditablePage, editable_page_id)
+    if page is None:
+        raise ValueError(f"Página editable inexistente: {editable_page_id}")
     objects = session.scalars(
         select(EditableObject)
         .where(EditableObject.editable_page_id == editable_page_id)
         .order_by(EditableObject.current_order_index, EditableObject.id)
     ).all()
-    return {"objects": [_object_snapshot(item) for item in objects]}
+    return {
+        "form_structure": page.form_structure_json or {},
+        "objects": [_object_snapshot(item) for item in objects],
+    }
 
 
 def _restore_page_snapshot(
@@ -64,6 +70,24 @@ def _restore_page_snapshot(
         ).all()
     }
     target_rows = {str(item["id"]): item for item in snapshot.get("objects", [])}
+    page = session.get(EditablePage, editable_page_id)
+    if page is None:
+        raise ValueError(f"Página editable inexistente: {editable_page_id}")
+    target_structure = dict(snapshot.get("form_structure") or {})
+    if (page.form_structure_json or {}) != target_structure:
+        base_page_revision = page.revision_number
+        page.form_structure_json = target_structure
+        page.revision_number += 1
+        page.updated_at = utc_now()
+        _append_page_revision(
+            session,
+            page,
+            operation=operation,
+            created_by=changed_by,
+            note=note,
+            details={"restored": "form_structure"},
+            base_revision_number=base_page_revision,
+        )
 
     # Los objetos creados por una acción posterior no se borran físicamente: quedan eliminados.
     for object_id, obj in current.items():

@@ -5,6 +5,8 @@ from typing import Any, Literal
 
 from pydantic import BaseModel, ConfigDict, Field
 
+from archive_workbench.contracts.forms import FormStructure
+
 
 ReviewStatus = Literal["unreviewed", "needs_review", "reviewed", "approved"]
 
@@ -91,10 +93,22 @@ class EditableTagExport(BaseModel):
     created_at: datetime
 
 
+class EditableFormStructureExport(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    schema_version: Literal["1.0"] = "1.0"
+    editable_page_id: str
+    source_key: str
+    digital_object_id: str
+    page: int = Field(ge=1)
+    revision_number: int = Field(ge=1)
+    structure: FormStructure
+
+
 class EditableExportManifest(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
-    schema_version: Literal["1.2"] = "1.2"
+    schema_version: Literal["1.3"] = "1.3"
     source_key: str
     digital_object_id: str
     exported_at: datetime
@@ -104,7 +118,9 @@ class EditableExportManifest(BaseModel):
     revision_count: int = Field(ge=0)
     comment_count: int = Field(ge=0)
     tag_count: int = Field(ge=0)
+    form_structure_count: int = Field(ge=0)
     objects_path: str
     revisions_path: str
     comments_path: str
     tags_path: str
+    form_structures_path: str

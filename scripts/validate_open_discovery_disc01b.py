@@ -14,6 +14,7 @@ from archive_workbench.db import (
     create_sqlite_engine,
     current_revision,
     database_path,
+    require_current_database,
     session_scope,
 )
 from archive_workbench.db.models import (
@@ -239,7 +240,7 @@ def validate_review(root: Path) -> dict[str, object]:
 
             integrity = session.execute(text("PRAGMA integrity_check")).scalar_one()
             foreign_keys = session.execute(text("PRAGMA foreign_key_check")).all()
-            assert current_revision(root) == "0040_discovery_grouping_continuity"
+            require_current_database(root)
             assert integrity == "ok"
             assert foreign_keys == []
 

@@ -13,6 +13,7 @@ from archive_workbench.db import (
     create_sqlite_engine,
     current_revision,
     database_path,
+    require_current_database,
     session_scope,
 )
 from archive_workbench.db.models import (
@@ -96,10 +97,7 @@ def _clone_candidate(
 
 def prepare_grouping_validation(root: Path) -> dict[str, object]:
     root = root.resolve()
-    if current_revision(root) != "0040_discovery_grouping_continuity":
-        raise RuntimeError(
-            "La copia debe estar migrada a 0040_discovery_grouping_continuity."
-        )
+    require_current_database(root)
     validation_b = json.loads(
         (root / "validation" / "disc01b.json").read_text(encoding="utf-8")
     )

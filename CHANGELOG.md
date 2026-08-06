@@ -1,3 +1,13 @@
+## 0.79.0 — 2026-08-05
+
+- Implementa `OCR-01B` con candidatos de casillero no canónicos que requieren confirmación humana antes de incorporarse a la estructura revisada.
+- Agrega grupos estables por página y casilleros con estados controlados `marked`, `unmarked` e `indeterminate`, anclados a objetos editables y con evidencia, procedencia de detección y ciclo de vida.
+- Permite confirmar candidatos, registrar casilleros visibles que no fueron OCRizados, corregir estados y rótulos, crear o archivar grupos y conservar revisiones append-only.
+- Integra la estructura de formularios en deshacer/rehacer, intercambio offline, adopción de estado y exportación reproducible mediante `form_structures.jsonl`.
+- Añade la migración aditiva `0043_form_structure_review`, que incorpora snapshots JSON coherentes a páginas editables y sus revisiones sin alterar objetos OCR existentes.
+- Incluye `create_form_structure_validation_project.py` con tres candidatos controlados y un casillero visible de alta manual. La validación manual confirmó grupos, controles, historial, deshacer/rehacer, exportación e integridad del original.
+- Corrige la navegación persistente de pestañas para que deshacer, rehacer, exportar y otras acciones con rerun no devuelvan la interfaz a **Editar texto**; `OCR-01B` queda cerrada.
+
 ## 0.78.0 — 2026-08-05
 
 - Incorpora el modo de preprocesamiento geométrico conservador `OCR-01A` para orientación en cuartos de giro, deskew acotado y eliminación controlada de líneas y marcos.

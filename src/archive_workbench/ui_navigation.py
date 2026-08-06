@@ -32,16 +32,30 @@ def tracked_tabs(
         raise ValueError("tracked_tabs requiere al menos una pestaña")
 
     pending_key = f"{key}__pending"
+    remembered_key = f"{key}__remembered"
     pending = st.session_state.pop(pending_key, None)
-    current = st.session_state.get(key)
+    widget_value = st.session_state.get(key)
+
+    # El valor nativo de ``st.tabs`` puede desaparecer si una acción ubicada antes
+    # del widget interrumpe el render y solicita un rerun. Se conserva una copia
+    # no asociada al widget para restaurar la pestaña activa en ese caso.
+    if widget_value in options:
+        st.session_state[remembered_key] = widget_value
+
+    remembered = st.session_state.get(remembered_key)
     if pending in options:
         # La solicitud programática debe sobrevivir también al rerun siguiente.
         current = pending
-    elif current not in options:
+    elif widget_value in options:
+        current = widget_value
+    elif remembered in options:
+        current = remembered
+    else:
         current = default if default in options else options[0]
 
     if current not in options:
         current = options[0]
+    st.session_state[remembered_key] = current
     st.session_state[key] = current
     default = current
 

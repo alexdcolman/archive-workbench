@@ -14,6 +14,7 @@ from archive_workbench.db import (
     create_sqlite_engine,
     current_revision,
     database_path,
+    require_current_database,
     session_scope,
 )
 from archive_workbench.db.models import (
@@ -118,7 +119,7 @@ def validate_disc01a(root: Path) -> dict[str, object]:
             assert authorizations[0].source == "ui"
             assert authorizations[0].target_type == "discovery_profile"
             assert authorizations[0].page_review_statuses_json == ["approved"]
-            assert current_revision(root) == "0040_discovery_grouping_continuity"
+            require_current_database(root)
             assert integrity == "ok"
             assert foreign_keys == []
 

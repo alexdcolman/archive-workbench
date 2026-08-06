@@ -14,6 +14,7 @@ from archive_workbench.db import (
     create_sqlite_engine,
     current_revision,
     database_path,
+    require_current_database,
     session_scope,
 )
 from archive_workbench.db.models import (
@@ -31,10 +32,7 @@ EXISTING_AUTHORITY_NAME = "Ministerio de Archivos Imaginarios"
 
 def prepare_review_validation(root: Path) -> dict[str, object]:
     root = root.resolve()
-    if current_revision(root) != "0040_discovery_grouping_continuity":
-        raise RuntimeError(
-            "La copia debe estar migrada a 0040_discovery_grouping_continuity antes de preparar DISC-01B."
-        )
+    require_current_database(root)
     disc01a_path = root / "validation" / "disc01a.json"
     validation_a = json.loads(disc01a_path.read_text(encoding="utf-8"))
     expected_texts = list(validation_a["expected_texts"])

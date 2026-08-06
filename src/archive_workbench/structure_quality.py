@@ -109,22 +109,48 @@ class _CheckboxHtmlParser(HTMLParser):
 
 
 def _view(item: Any) -> _ObjectView:
+    attributes = dict(
+        getattr(
+            item,
+            "current_attributes_json",
+            getattr(item, "attributes_json", getattr(item, "attributes", {})),
+        )
+        or {}
+    )
+    source_label = getattr(item, "source_label", None)
+    if source_label is None:
+        source_label = attributes.get("source_label")
     return _ObjectView(
         object_id=str(getattr(item, "id", getattr(item, "object_id", ""))),
-        order_index=int(getattr(item, "order_index", 0)),
-        object_type=str(getattr(item, "object_type", "unknown") or "unknown"),
-        text=str(getattr(item, "original_text", getattr(item, "text", "")) or ""),
-        source_label=(
-            str(getattr(item, "source_label"))
-            if getattr(item, "source_label", None) is not None
-            else None
+        order_index=int(
+            getattr(item, "current_order_index", getattr(item, "order_index", 0))
         ),
+        object_type=str(
+            getattr(
+                item,
+                "current_object_type",
+                getattr(item, "object_type", "unknown"),
+            )
+            or "unknown"
+        ),
+        text=str(
+            getattr(
+                item,
+                "current_text",
+                getattr(item, "original_text", getattr(item, "text", "")),
+            )
+            or ""
+        ),
+        source_label=str(source_label) if source_label is not None else None,
         geometry=list(
-            getattr(item, "geometry_json", getattr(item, "geometry", [])) or []
+            getattr(
+                item,
+                "current_geometry_json",
+                getattr(item, "geometry_json", getattr(item, "geometry", [])),
+            )
+            or []
         ),
-        attributes=dict(
-            getattr(item, "attributes_json", getattr(item, "attributes", {})) or {}
-        ),
+        attributes=attributes,
     )
 
 
