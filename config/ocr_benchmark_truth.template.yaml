@@ -1,0 +1,13 @@
+schema_version: "1.0"
+benchmark_key: "ocr_truth_es_v1"
+ground_truth_root: "ground_truth/ocr"
+unicode_form: "NFC"
+collapse_whitespace: true
+case_sensitive: true
+engines:
+  - engine_key: tesseract
+    profile_path: "config/extraction_tesseract.yaml"
+  - engine_key: docling
+    profile_path: "config/extraction_docling_es.yaml"
+  - engine_key: surya
+    profile_path: "config/extraction_surya_es.yaml"

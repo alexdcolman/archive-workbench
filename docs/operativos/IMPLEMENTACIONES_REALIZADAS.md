@@ -1,6 +1,6 @@
 # Implementaciones realizadas — Archive Workbench
 
-**Estado preparado:** 2026-08-07 · **versión:** 0.82.0
+**Estado preparado:** 2026-08-07 · **versión:** 0.83.0
 
 Este documento registra capacidades ya implementadas y, cuando corresponde, validadas. No deben volver a aparecer en `PENDIENTES_ACTIVOS.md` salvo evidencia de regresión o ampliación explícita del alcance.
 
@@ -11,7 +11,7 @@ Este documento registra capacidades ya implementadas y, cuando corresponde, vali
 | Catálogo, originales y estructura archivística | Implementado |
 | Extracciones versionadas y selección canónica | Implementado y validado |
 | Revisión, historial y rebase | Implementado y validado |
-| Calidad de página y derivados OCR | Implementación parcial; OCR-01A/B/C/D/E cerradas, queda el benchmark ampliado |
+| Calidad de página y derivados OCR | OCR-01A–F implementadas, validadas y cerradas |
 | Búsqueda literal y semántica | Implementado; calibración reproducible cerrada en 0.74.0 |
 | Autoridades, menciones y relaciones | Núcleo implementado y validado |
 | Exportaciones reproducibles | Implementado y validado |
@@ -31,6 +31,14 @@ Este documento registra capacidades ya implementadas y, cuando corresponde, vali
 | Diccionarios de autoridades DISC-02 | Implementados y validados en 0.76.0 |
 | Productores y gestores CAT-02 | Implementados y validados en 0.77.0 |
 | Capas archivísticas GRAPH-02 | Implementadas y validadas en 0.77.0 |
+
+## Benchmark OCR con verdad terreno
+
+### OCR-01F — Tesseract, Docling y Surya — 0.83.0
+
+Se agregó una comparación reproducible contra transcripciones humanas por página. El benchmark usa los mismos derivados OCR vigentes, ejecuta los perfiles existentes de Tesseract, Docling y Surya sin fallback entre motores, calcula CER/WER mediante distancia de Levenshtein y registra tiempo, versiones, perfiles, texto y salida cruda. La verdad terreno se conserva por archivo y SHA-256, y cada corrida guarda una copia exacta de la referencia usada.
+
+No escribe selecciones canónicas ni inicializa la capa editable. La validación real ejecutó Tesseract 5.3.4, Docling 2.114.0 y Surya 0.22.1 sobre la misma página y la misma verdad terreno. Los tres obtuvieron CER 0.0000 y WER 0.0000 en el caso controlado; los tiempos registrados fueron 0.27 s para Tesseract, 23.07 s para Docling y 209.84 s para Surya. Se conservaron el texto comparado, las salidas crudas, versiones, perfiles, métricas, tiempos, la copia de la verdad terreno y su SHA-256. El TIFF original permaneció intacto y la selección canónica vacía. `OCR-01F` y el bloque completo `OCR-01` quedan cerrados en 0.83.0.
 
 ## Preprocesamiento geométrico para OCR
 

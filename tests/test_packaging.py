@@ -165,8 +165,8 @@ def test_version_docs_and_discovery_plan_are_packaged() -> None:
         / "0044_layout_structure_review.py"
     )
 
-    assert data["project"]["version"] == "0.82.0"
-    assert '__version__ = "0.82.0"' in version_source
+    assert data["project"]["version"] == "0.83.0"
+    assert '__version__ = "0.83.0"' in version_source
     assert migration.is_file()
     assert 'down_revision = "0043_form_structure_review"' in migration.read_text(
         encoding="utf-8"
@@ -187,6 +187,13 @@ def test_version_docs_and_discovery_plan_are_packaged() -> None:
     assert (root / "src" / "archive_workbench" / "preprocessing_dewarp.py").is_file()
     assert (root / "scripts" / "create_dewarp_validation_project.py").is_file()
     assert (root / "scripts" / "verify_dewarp_validation_project.py").is_file()
+    assert (root / "src" / "archive_workbench" / "ocr_truth_benchmark.py").is_file()
+    assert (root / "src" / "archive_workbench" / "contracts" / "ocr_truth.py").is_file()
+    assert (root / "config" / "ocr_benchmark_truth.yaml").is_file()
+    assert (root / "config" / "ocr_benchmark_truth.template.yaml").is_file()
+    assert (root / "scripts" / "create_ocr_truth_benchmark_validation_project.py").is_file()
+    assert (root / "scripts" / "verify_ocr_truth_benchmark_validation_project.py").is_file()
+    assert (root / "docs" / "referencia" / "BENCHMARK_OCR_VERDAD_TERRENO.md").is_file()
     processing_app = (root / "src" / "archive_workbench" / "processing_app.py").read_text(
         encoding="utf-8"
     )

@@ -16,6 +16,9 @@ Este es el único documento en la raíz de `docs/`. Resume la evolución del pro
 
 ## Versiones recientes — más reciente primero
 
+### 0.83.0 — 2026-08-07
+Implementa y valida `OCR-01F`: benchmark reproducible de Tesseract, Docling y Surya sobre los mismos derivados y verdad terreno. La ejecución real controlada obtuvo CER 0.0000 y WER 0.0000 con los tres motores, conservó tiempos, versiones, perfiles, textos, salidas crudas y copia verificable de la referencia, mantuvo intacto el TIFF original y no modificó la selección canónica. Con este cierre, `OCR-01A` a `OCR-01F` quedan implementadas y validadas. No hay migración; la revisión permanece en `0044_layout_structure_review`.
+
 ### 0.82.0 — 2026-08-07
 Implementa `OCR-01E` con dewarp conservador sobre derivados OCR. La página se analiza por franjas verticales, la curvatura se ajusta mediante una curva reproducible y el remapeo se aplica solo con soporte y confianza suficientes. Agrega un diagnóstico separado, trazabilidad completa y una base descartable con página curva y plana. No modifica el esquema. La validación manual confirmó la corrección de la página curva y la omisión de la plana; la corrección final conserva las selecciones del formulario al abrir el diagnóstico geométrico. `OCR-01E` queda cerrada.
 ### 0.81.0 — 2026-08-06

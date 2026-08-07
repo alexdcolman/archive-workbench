@@ -1,3 +1,15 @@
+## 0.83.0 — 2026-08-07
+
+- Implementa `OCR-01F` con benchmark reproducible Tesseract/Docling/Surya sobre verdad terreno por página.
+- Agrega cálculo explícito de CER y WER mediante distancia de Levenshtein, normalización Unicode configurable y recuentos de referencia/candidato.
+- Conserva por motor perfiles, versión, tiempo, texto normalizado para comparación, salida cruda y logs; cada corrida copia la verdad terreno usada y registra su SHA-256.
+- Incorpora `ocr-benchmark-truth-doctor` y `ocr-benchmark-truth`, junto con `config/ocr_benchmark_truth.yaml`.
+- El benchmark exige el motor solicitado y no aplica fallback entre Tesseract, Docling y Surya; no cambia selección canónica ni capa editable.
+- Agrega scripts de proyecto y verificación controlados para validar los tres motores sobre el mismo derivado.
+- La validación real controlada ejecutó Tesseract 5.3.4, Docling 2.114.0 y Surya 0.22.1 sobre la misma página: los tres obtuvieron CER 0.0000 y WER 0.0000; se conservaron tiempos, perfiles, versiones, textos, salidas crudas y la copia verificable de la verdad terreno.
+- El TIFF original permaneció intacto, la selección canónica siguió vacía y `project_data` no fue modificado durante la validación. `OCR-01F` y el bloque completo `OCR-01` quedan cerrados.
+- No agrega migraciones; la revisión continúa en `0044_layout_structure_review`.
+
 ## 0.82.0 — 2026-08-07
 
 - Agrega `OCR-01E` con el modo geométrico `conservative_dewarp` para corregir curvatura vertical suave únicamente sobre derivados OCR.

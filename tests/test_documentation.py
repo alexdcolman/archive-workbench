@@ -157,6 +157,11 @@ def test_implemented_ledger_separates_closed_work_from_active_pending() -> None:
     assert "copia durable de la pestaña activa" in text
     assert "Validada manualmente en 0.79.0" in text
     assert "`OCR-01B` queda cerrada" in text
+    assert "OCR-01F — Tesseract, Docling y Surya — 0.83.0" in text
+    assert "Tesseract 5.3.4" in text
+    assert "Docling 2.114.0" in text
+    assert "Surya 0.22.1" in text
+    assert "`OCR-01F` y el bloque completo `OCR-01` quedan cerrados" in text
 
 
 def test_streamlit_form_policy_prevents_circular_disabled_buttons() -> None:
@@ -213,6 +218,7 @@ def test_history_map_is_concise_and_references_historical_detail() -> None:
     assert "## Documentación vigente" in text
     assert "### 0.80.0" in text
     assert "0044_layout_structure_review" in text
+    assert "### 0.83.0" in text
     assert "### 0.79.0" in text
     assert "0043_form_structure_review" in text
     assert "### 0.77.0" in text
@@ -258,6 +264,7 @@ def test_history_map_is_concise_and_references_historical_detail() -> None:
     assert "historico/actualizaciones" in text
     assert "historico/decisiones_tecnicas" in text
     assert "CHANGELOG.md" in text
+    assert text.index("### 0.83.0") < text.index("### 0.82.0")
     assert text.index("### 0.79.0") < text.index("### 0.77.0")
     assert text.index("### 0.77.0") < text.index("### 0.76.0")
     assert text.index("### 0.76.0") < text.index("### 0.75.1")
@@ -266,7 +273,7 @@ def test_history_map_is_concise_and_references_historical_detail() -> None:
     assert text.index("### 0.74.0") < text.index("### 0.73.0")
     assert text.index("### 0.73.0") < text.index("### 0.72.0")
     assert text.index("### 0.72.0") < text.index("### 0.71.2")
-    assert len(text.splitlines()) < 265
+    assert len(text.splitlines()) < 270
 
 
 def test_current_architecture_is_separate_from_historical_design() -> None:
@@ -507,19 +514,21 @@ def test_automatic_analysis_quality_decision_is_preserved_and_auditable() -> Non
     assert "st.form" in text
 
 
-def test_current_update_guide_describes_closed_ocr01e_without_migration() -> None:
+def test_current_update_guide_describes_ocr01f_truth_benchmark_without_migration() -> None:
     text = (OPERATIVE / "ACTUALIZACION_ACTUAL.md").read_text(encoding="utf-8")
-    assert "Archive Workbench 0.82.0" in text
-    assert "`OCR-01E`" in text
+    assert "Archive Workbench 0.83.0" in text
+    assert "RC2" not in text
+    assert "`OCR-01F`" in text
     assert "0044_layout_structure_review" in text
     assert "No hay migración" in text
-    assert "dewarp conservador" in text
-    assert "curvatura vertical suave" in text
-    assert "Previsualización sin cambios" in text
-    assert "Diagnóstico de curvatura" in text
-    assert "la validación manual confirmó" in text.lower()
-    assert "conserva los documentos seleccionados y las opciones de preparación" in text.lower()
-    assert "no se reconstruyen letras" in text.lower()
+    assert "Tesseract" in text and "Docling" in text and "Surya" in text
+    assert "CER" in text and "WER" in text
+    assert "ground_truth/ocr" in text
+    assert "selección canónica vacía" in text.lower()
+    assert "Tesseract 5.3.4" in text
+    assert "Docling 2.114.0" in text
+    assert "Surya 0.22.1" in text
+    assert "CER 0.0000" in text and "WER 0.0000" in text
 
 def test_authority_dictionary_format_is_versioned_and_conservative() -> None:
     text = (
@@ -605,10 +614,11 @@ def test_pilot_guide_delegates_future_work_to_single_pending_ledger() -> None:
 def test_readme_points_only_to_current_documentation_map() -> None:
     text = (ROOT / "README.md").read_text(encoding="utf-8")
     citation = (ROOT / "CITATION.cff").read_text(encoding="utf-8")
-    assert "**Versión actual:** 0.82.0" in text
-    assert "La versión 0.82.0 incorpora y valida el dewarp conservador" in text
-    assert "(versión 0.82.0)" in text
-    assert 'version: "0.82.0"' in citation
+    assert "**Versión actual:** 0.83.0" in text
+    assert "La versión 0.83.0 incorpora y valida el benchmark con verdad terreno" in text
+    assert "queda cerrado el bloque OCR-01" in text
+    assert "(versión 0.83.0)" in text
+    assert 'version: "0.83.0"' in citation
     assert "orientación, deskew, dewarp y eliminación controlada de líneas" in text
     assert "confirmación explícita de casilleros" in text
     assert "Productores y gestión" in text
@@ -655,6 +665,9 @@ def test_pre_release_roadmap_includes_public_site_export_and_parallel_giar() -> 
     assert "GitHub Pages" in text
     assert "audio y video" in text
     assert "velocidad variable" in text
+    assert "`OCR-01` quedó implementado, validado y cerrado en 0.83.0" in text
+    assert "1. Implementar `AV-01`" in text
+    assert "Validar `OCR-01F`" not in text
 
 
 def test_giar_parallel_project_is_referential_and_preserves_provenance() -> None:
@@ -707,20 +720,26 @@ def test_ocr01c_assistant_guidance_update_is_idempotent(tmp_path: Path) -> None:
     assert "Crear una columna para un objeto" in interface
 
 
-def test_ocr01e_pending_and_architecture_are_conservative() -> None:
+def test_ocr01_is_closed_and_architecture_remains_conservative() -> None:
     pending = (OPERATIVE / "PENDIENTES_ACTIVOS.md").read_text(encoding="utf-8")
+    implemented = (OPERATIVE / "IMPLEMENTACIONES_REALIZADAS.md").read_text(encoding="utf-8")
     architecture = (DOCS / "referencia" / "ARQUITECTURA_Y_MODELO_ACTUAL.md").read_text(encoding="utf-8")
-    assert "La fase `OCR-01D` quedó implementada y validada en 0.81.0" in pending
-    assert "La fase `OCR-01E` quedó implementada y validada en 0.82.0" in pending
-    assert "`OCR-01E` queda cerrada" in pending
-    assert "validar manualmente `OCR-01E`" not in pending
-    assert "benchmark ampliado" in pending
+    assert "### OCR-01 —" not in pending
+    assert "| OCR-01 |" not in pending
+    assert "`OCR-01` quedó cerrado en 0.83.0" in pending
+    assert "OCR-01A–F implementadas, validadas y cerradas" in implemented
+    assert "OCR-01F — Tesseract, Docling y Surya — 0.83.0" in implemented
+    assert "CER 0.0000" in implemented and "WER 0.0000" in implemented
+    assert "`OCR-01F` y el bloque completo `OCR-01` quedan cerrados" in implemented
     assert "OCR regional" in architecture
     assert "selección canónica desactivada" in architecture
     assert "Una región manual no inventa" in architecture
     assert "Dewarp conservador de derivados OCR" in architecture
     assert "no reconstruye caracteres" in architecture
     assert "dewarp_diagnostic" in architecture
+    assert "Benchmark OCR con verdad terreno" in architecture
+    assert "Tesseract, Docling y Surya" in architecture
+    assert "CER/WER" in architecture
     assert "archivos locales de audio y video" in pending
     assert "velocidades de reproducción configurables" in pending
     assert "pantalla de transcripción y corrección poco cargada" in pending

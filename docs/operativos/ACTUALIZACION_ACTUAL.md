@@ -1,59 +1,55 @@
-# Actualización actual — Archive Workbench 0.82.0
+# Actualización actual — Archive Workbench 0.83.0
 
 **Fecha:** 2026-08-07
-**Bloque:** `OCR-01E` — dewarp conservador sobre derivados OCR
+**Bloque:** `OCR-01F` — benchmark Tesseract, Docling y Surya con verdad terreno
 **Revisión de base:** `0044_layout_structure_review`
 
-La versión agrega un modo geométrico que evalúa curvatura vertical suave en páginas escaneadas. El cálculo compara perfiles de tinta en franjas verticales, ajusta una curva cuadrática y aplica una malla de remapeo únicamente cuando existen soporte textual, desplazamiento suficiente, ajuste estable y confianza superior al umbral.
+La versión 0.83.0 cierra `OCR-01` con un benchmark reproducible que compara Tesseract, Docling y Surya sobre exactamente los mismos derivados OCR y páginas transcritas manualmente. Calcula CER y WER, conserva tiempo de ejecución, versiones, perfiles, salidas crudas y una copia con SHA-256 de la verdad terreno utilizada.
 
-## Estado de la versión
+## Estado validado
 
-La implementación y las validaciones confirman:
+La validación real confirmó:
 
-- detección y corrección de una página curva sintética controlada;
-- omisión del dewarp en una página plana;
-- conservación del original y de la previsualización;
-- derivado OCR, máscara de líneas y diagnóstico de curvatura separados;
-- registro por página de confianza, desplazamiento máximo, franjas con soporte, coeficientes y motivo de aplicación u omisión;
-- reutilización idempotente de una corrida equivalente;
-- ausencia de selección canónica automática.
+- Tesseract 5.3.4, Docling 2.114.0 y Surya 0.22.1 disponibles en el mismo entorno;
+- una página controlada evaluada por los tres motores sobre la misma verdad terreno;
+- CER 0.0000 y WER 0.0000 para los tres motores en ese caso;
+- tiempos registrados de 0.27 s para Tesseract, 23.07 s para Docling y 209.84 s para Surya;
+- conservación del texto comparado, salida cruda, versiones, perfiles y métricas;
+- copia exacta de la verdad terreno con SHA-256 verificable;
+- TIFF original intacto;
+- selección canónica vacía y ausencia de escrituras sobre la capa editable;
+- `project_data` sin modificaciones durante la validación;
+- ausencia de migración de base.
 
-La validación manual confirmó el dewarp de la página curva, la omisión de la página plana, los cuatro derivados trazables y la integridad de los originales. La validación específica de la corrección confirmó además que abrir el diagnóstico geométrico conserva los documentos seleccionados y las opciones de preparación.
+Los tiempos corresponden al caso controlado y no constituyen una comparación general de rendimiento entre motores.
 
-`OCR-01E` queda cerrada en 0.82.0. Dentro de `OCR-01` resta el benchmark ampliado de Tesseract, Docling y Surya con verdad terreno.
+## Verdad terreno
 
-## Alcance conservador
+Cada página de referencia se guarda como:
 
-- Solo se modela un desplazamiento vertical suave que varía a lo ancho de la página.
-- No se reconstruyen letras, trazos, perspectiva, pliegues locales ni superficies tridimensionales.
-- Un candidato con soporte o confianza insuficientes se registra y se omite.
-- El original y la previsualización no se transforman.
-- La corrección se aplica únicamente al derivado OCR reproducible.
-- El diagnóstico gráfico se conserva como un activo separado.
+```text
+ground_truth/ocr/<source_key>/page_0001.txt
+```
+
+El benchmark copia el archivo usado dentro de su salida y registra su SHA-256. La referencia describe el contenido correcto de la página y no reproduce convenciones ni errores de un motor específico.
+
+## Métricas
+
+- `CER`: distancia de Levenshtein entre caracteres dividida por la longitud de la referencia.
+- `WER`: distancia de Levenshtein entre palabras dividida por la cantidad de palabras de referencia.
+- Tiempo acumulado por motor y por página.
+
+CER/WER evalúan fidelidad textual. Layout, orden de lectura y estructuras visuales siguen requiriendo inspección humana de las salidas.
+
+## Comandos
+
+```text
+archive-workbench ocr-benchmark-truth-doctor
+archive-workbench ocr-benchmark-truth
+```
+
+La referencia técnica está en `docs/referencia/BENCHMARK_OCR_VERDAD_TERRENO.md`.
 
 ## Base de datos
 
-No hay migración. `PreprocessingRun`, `DerivativeAsset`, `options_json`, `analysis_json` y `transformations_json` ya conservan el perfil, los derivados y la decisión geométrica. La revisión continúa en `0044_layout_structure_review`.
-
-## Uso
-
-1. Abrir **Procesar documentos > Ejecutar**.
-2. Elegir **Preparar páginas**.
-3. Seleccionar los documentos.
-4. En **Corrección geométrica**, elegir **Orientación, inclinación, curvatura y líneas (conservador)**.
-5. Pulsar **Ejecutar tarea**.
-6. Activar **Mostrar diagnóstico geométrico vigente**.
-7. Comparar **Previsualización sin cambios**, **Derivado OCR**, **Máscara de líneas eliminadas** y **Diagnóstico de curvatura**.
-
-## Archivos principales
-
-```text
-src/archive_workbench/preprocessing_dewarp.py
-src/archive_workbench/preprocessing_geometry.py
-src/archive_workbench/preprocessing.py
-src/archive_workbench/processing.py
-src/archive_workbench/processing_app.py
-scripts/create_dewarp_validation_project.py
-scripts/verify_dewarp_validation_project.py
-tests/test_dewarp.py
-```
+No hay migración. El benchmark lee el catálogo y los derivados vigentes y escribe únicamente bajo `ocr_benchmarks/`. La revisión continúa en `0044_layout_structure_review`.

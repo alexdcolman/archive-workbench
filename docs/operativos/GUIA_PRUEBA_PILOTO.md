@@ -243,32 +243,22 @@ Comparar variantes solamente en páginas donde exista un problema observado.
 ## Diagnóstico previo
 
 ```bash
-archive-workbench extraction-doctor \
-  project_data \
-  --profile project_data/config/extraction_tesseract.yaml
+archive-workbench ocr-benchmark-truth-doctor \
+  project_data
 ```
 
-## Benchmark Tesseract
+## Benchmark con verdad terreno
+
+Crear primero `ground_truth/ocr/DOCUMENTO/page_NNNN.txt` y ejecutar:
 
 ```bash
-archive-workbench ocr-benchmark \
+archive-workbench ocr-benchmark-truth \
   project_data \
   --source-key DOCUMENTO \
   --page NUMERO
 ```
 
-El benchmark compara, según `ocr_benchmark.yaml`:
-
-- PSM 3, 4, 6 y 11;
-- imagen original;
-- escala de grises con autocontraste;
-- binarización Otsu.
-
-La salida principal es:
-
-```text
-artifacts/ocr_benchmarks/<benchmark>/summary.md
-```
+La corrida compara Tesseract, Docling y Surya sobre el mismo derivado, calcula CER/WER y conserva perfiles, versiones, tiempos, texto y salida cruda. La salida queda bajo `ocr_benchmarks/<digital_object_id>/truth_<benchmark_id>/`.
 
 ## Evaluación
 

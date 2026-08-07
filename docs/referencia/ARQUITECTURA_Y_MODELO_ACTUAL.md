@@ -164,3 +164,7 @@ La decisión queda en `analysis_json` y `transformations_json`. El activo `dewar
 `EXP-01` agregará una exportación trazable de imágenes de página, recortes regionales y figuras para consumo posterior por herramientas externas. La etapa `vision_describe` se diseñará en `AI-01` y no accederá directamente a originales fuera de un paquete exportado.
 
 `GIAR-01` usará un proyecto separado y persistente de Archive Workbench como base estructurada para investigadores, publicaciones, entidades, relaciones, conceptos y referencias archivísticas. El alcance se encuentra en [`PROYECTO_PARALELO_GIAR.md`](PROYECTO_PARALELO_GIAR.md). Todavía no forma parte del esquema vigente y cualquier ampliación se diseñará antes de crear tablas nuevas.
+
+## Benchmark OCR con verdad terreno
+
+`OCR-01F` mantiene la evaluación fuera de la selección canónica. La verdad terreno vive por `source_key` y página, cada corrida conserva una copia y su SHA-256, y Tesseract, Docling y Surya reciben el mismo derivado OCR vigente. CER/WER se calculan sobre una normalización declarada en el perfil; los textos, salidas crudas, logs, versiones y tiempos permanecen trazables. El benchmark no aplica fallback entre motores ni declara automáticamente un backend universalmente preferido.

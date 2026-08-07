@@ -127,6 +127,11 @@ from archive_workbench.ocr_benchmark import (
     load_ocr_benchmark_profile,
     run_ocr_benchmark,
 )
+from archive_workbench.ocr_truth_benchmark import (
+    benchmark_doctor as ocr_truth_benchmark_doctor,
+    load_ocr_truth_benchmark_profile,
+    run_ocr_truth_benchmark,
+)
 from archive_workbench.page_quality import assess_source_page_quality
 from archive_workbench.preprocessing import (
     GEOMETRY_MODE_LABELS,
@@ -950,6 +955,76 @@ def ocr_benchmark_command(
             f"{candidate.candidate_id} | score {candidate.heuristic_score:.3f} | "
             f"conf {confidence} | palabras {candidate.word_count} | "
             f"caracteres {candidate.character_count}"
+        )
+    typer.echo(f"Salida: {summary.output_root}/summary.md")
+
+
+@app.command("ocr-benchmark-truth-doctor")
+def ocr_benchmark_truth_doctor_command(
+    project_root: Path = typer.Argument(..., help="Raíz del proyecto operativo"),
+    profile_path: Path | None = typer.Option(
+        None,
+        "--profile",
+        help="Perfil YAML; por defecto config/ocr_benchmark_truth.yaml",
+    ),
+) -> None:
+    """Comprueba Tesseract, Docling y Surya sin ejecutar el benchmark."""
+    selected_profile = profile_path or (project_root / "config" / "ocr_benchmark_truth.yaml")
+    profile = load_ocr_truth_benchmark_profile(selected_profile)
+    rows = ocr_truth_benchmark_doctor(project_root=project_root, profile=profile)
+    ready = True
+    for row in rows:
+        marker = "OK" if row.ready else "ERROR"
+        typer.echo(
+            f"{marker:5} {row.engine_key}: {row.profile_key} ({row.backend}) · {row.profile_path}"
+        )
+        for name, ok, detail, required in row.checks:
+            if not required:
+                continue
+            check_marker = "OK" if ok else "ERROR"
+            typer.echo(f"      {check_marker:5} {name}: {detail}")
+        ready = ready and row.ready
+    if not ready:
+        raise typer.Exit(code=1)
+
+
+@app.command("ocr-benchmark-truth")
+def ocr_benchmark_truth_command(
+    project_root: Path = typer.Argument(..., help="Raíz del proyecto operativo"),
+    source_key: str = typer.Option(..., "--source-key", help="Identificador del documento"),
+    page: list[int] | None = typer.Option(
+        None, "--page", help="Página con verdad terreno; puede repetirse"
+    ),
+    profile_path: Path | None = typer.Option(
+        None,
+        "--profile",
+        help="Perfil YAML; por defecto config/ocr_benchmark_truth.yaml",
+    ),
+) -> None:
+    """Compara motores contra verdad terreno mediante CER/WER sin seleccionar OCR."""
+    selected_profile = profile_path or (project_root / "config" / "ocr_benchmark_truth.yaml")
+    profile = load_ocr_truth_benchmark_profile(selected_profile)
+    _require_current_database(project_root)
+    engine = create_sqlite_engine(database_path(project_root))
+    try:
+        with session_scope(engine) as session:
+            summary = run_ocr_truth_benchmark(
+                session,
+                project_root=project_root,
+                source_key=source_key,
+                profile=profile,
+                pages=set(page or []),
+            )
+    finally:
+        engine.dispose()
+    typer.echo(
+        f"OK: benchmark con verdad terreno {summary.benchmark_id} · "
+        f"{len(summary.references)} página(s) · {len(summary.candidates)} resultado(s)"
+    )
+    for item in summary.aggregates:
+        typer.echo(
+            f"{item.engine_key:10} | CER {item.cer:.4f} | WER {item.wer:.4f} | "
+            f"tiempo {item.elapsed_seconds:.2f}s | {item.profile_key}"
         )
     typer.echo(f"Salida: {summary.output_root}/summary.md")
 

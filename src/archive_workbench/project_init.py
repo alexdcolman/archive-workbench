@@ -11,6 +11,7 @@ PROJECT_DIRS = (
     "extraction",
     "derivatives",
     "ocr_benchmarks",
+    "ground_truth/ocr",
     "region_previews",
     "indexes",
     "exchange/incoming",
@@ -39,6 +40,7 @@ def initialize_project(destination: str | Path, template_root: str | Path | None
             "extraction_tesseract.yaml",
             "extraction_press_columns.yaml",
             "ocr_benchmark.yaml",
+            "ocr_benchmark_truth.yaml",
             "regions_leg_17_leg_15_a_c_6.yaml",
         ):
             completed = templates / target_name

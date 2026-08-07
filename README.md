@@ -6,7 +6,7 @@ Está pensada especialmente para equipos de archivos, bibliotecas, ciencias soci
 
 Los documentos y la base de datos permanecen en la computadora del equipo: la aplicación no necesita subir el corpus a un servicio externo.
 
-**Versión actual:** 0.82.0 — dewarp conservador de páginas curvas validado, con diagnóstico geométrico y persistencia del formulario.
+**Versión actual:** 0.83.0 — benchmark reproducible Tesseract/Docling/Surya sobre verdad terreno y CER/WER, validado con los tres motores.
 
 ## Qué permite hacer
 
@@ -18,6 +18,7 @@ Archive Workbench reúne en una misma interfaz:
 - preparación versionada de derivados para OCR, con opciones conservadoras de autocontraste, Otsu, reducción de ruido, orientación, deskew, dewarp y eliminación controlada de líneas;
 - extracción de texto y OCR versionados;
 - OCR regional visual sobre páginas preparadas, con zonas OCR o manuales y clasificación documental;
+- benchmark reproducible Tesseract/Docling/Surya con verdad terreno, CER/WER y salidas trazables;
 - Surya como backend OCR/layout preferido cuando está disponible, siempre como candidato revisable;
 - fallback automático a Docling/Tesseract si Surya no está instalado o una corrida falla;
 - comparación y selección humana de extracciones por página;
@@ -131,6 +132,17 @@ El servidor vLLM queda activo entre corridas para evitar repetir la carga y el c
 archive-workbench surya-server-status
 archive-workbench surya-server-stop
 ```
+
+Para comparar los tres motores contra una transcripción humana, prepará archivos `ground_truth/ocr/<source_key>/page_NNNN.txt` y usá:
+
+```bash
+archive-workbench ocr-benchmark-truth-doctor mi_proyecto
+archive-workbench ocr-benchmark-truth mi_proyecto \
+  --source-key DOCUMENTO \
+  --page 1
+```
+
+El benchmark calcula CER/WER y conserva perfiles, versiones, tiempos, textos y salidas crudas. No cambia la selección canónica. La referencia está en [`docs/referencia/BENCHMARK_OCR_VERDAD_TERRENO.md`](docs/referencia/BENCHMARK_OCR_VERDAD_TERRENO.md).
 
 La primera instalación puede demorar varios minutos. Algunas funciones pueden descargar modelos la primera vez que se utilizan.
 
@@ -258,7 +270,7 @@ pip install -e ".[dev,extraction,streamlit,semantic,tiff,discovery]"
 pytest
 ```
 
-La versión 0.82.0 incorpora y valida el dewarp conservador para detectar y corregir curvatura vertical controlada, omitir páginas planas, conservar originales y previsualizaciones y registrar diagnósticos reproducibles por página.
+La versión 0.83.0 incorpora y valida el benchmark con verdad terreno para Tesseract, Docling y Surya, y conserva el dewarp conservador para detectar y corregir curvatura vertical controlada, omitir páginas planas, conservar originales y previsualizaciones y registrar diagnósticos reproducibles por página. Con esta versión queda cerrado el bloque OCR-01.
 
 ## Licencia y cita
 
@@ -270,6 +282,6 @@ El desarrollo fue realizado por **Alex Colman** en el marco del **Grupo de Inves
 
 Cuando Archive Workbench sea utilizado en una investigación, publicación, informe, actividad docente o desarrollo derivado, solicitamos citar:
 
-> Colman, Alex, y Grupo de Investigación en Archivos de la Represión (GIAR). 2026. *Archive Workbench* (versión 0.82.0) [software]. https://github.com/alexdcolman/archive-workbench
+> Colman, Alex, y Grupo de Investigación en Archivos de la Represión (GIAR). 2026. *Archive Workbench* (versión 0.83.0) [software]. https://github.com/alexdcolman/archive-workbench
 
 El archivo [`CITATION.cff`](CITATION.cff) contiene los metadatos de cita reconocidos por GitHub y por distintos gestores bibliográficos.
