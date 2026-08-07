@@ -1,6 +1,6 @@
 # Implementaciones realizadas — Archive Workbench
 
-**Estado preparado:** 2026-08-06 · **versión:** 0.81.0
+**Estado preparado:** 2026-08-07 · **versión:** 0.82.0
 
 Este documento registra capacidades ya implementadas y, cuando corresponde, validadas. No deben volver a aparecer en `PENDIENTES_ACTIVOS.md` salvo evidencia de regresión o ampliación explícita del alcance.
 
@@ -11,7 +11,7 @@ Este documento registra capacidades ya implementadas y, cuando corresponde, vali
 | Catálogo, originales y estructura archivística | Implementado |
 | Extracciones versionadas y selección canónica | Implementado y validado |
 | Revisión, historial y rebase | Implementado y validado |
-| Calidad de página y derivados OCR | Implementación parcial; OCR-01A/B/C/D cerradas, quedan dewarp y benchmark ampliado |
+| Calidad de página y derivados OCR | Implementación parcial; OCR-01A/B/C/D/E cerradas, queda el benchmark ampliado |
 | Búsqueda literal y semántica | Implementado; calibración reproducible cerrada en 0.74.0 |
 | Autoridades, menciones y relaciones | Núcleo implementado y validado |
 | Exportaciones reproducibles | Implementado y validado |
@@ -33,6 +33,14 @@ Este documento registra capacidades ya implementadas y, cuando corresponde, vali
 | Capas archivísticas GRAPH-02 | Implementadas y validadas en 0.77.0 |
 
 ## Preprocesamiento geométrico para OCR
+
+### OCR-01E — Dewarp conservador — 0.82.0
+
+El nuevo modo `conservative_dewarp` extiende la preparación geométrica con una estimación de curvatura vertical suave. Divide la página en franjas, compara perfiles de tinta, ajusta una curva cuadrática y aplica una malla reproducible únicamente al derivado OCR. La decisión exige soporte suficiente, desplazamiento acotado, ajuste estable y confianza superior al umbral.
+
+Cada página conserva `dewarp_detected`, `dewarp_applied`, confianza, desplazamiento máximo, franjas con soporte, calidad de ajuste, coeficientes y motivo. Se genera un activo `dewarp_diagnostic` separado de la máscara de líneas. La previsualización y el original permanecen intactos. No requiere migración.
+
+**Estado:** implementada, validada y cerrada en 0.82.0. La validación específica de navegación confirmó que documentos y opciones permanecen seleccionados al abrir y recorrer el diagnóstico geométrico.
 
 ### OCR-01D — OCR regional visual y zonas documentales — 0.81.0
 

@@ -507,19 +507,19 @@ def test_automatic_analysis_quality_decision_is_preserved_and_auditable() -> Non
     assert "st.form" in text
 
 
-def test_current_update_guide_describes_closed_ocr01d_without_migration() -> None:
+def test_current_update_guide_describes_closed_ocr01e_without_migration() -> None:
     text = (OPERATIVE / "ACTUALIZACION_ACTUAL.md").read_text(encoding="utf-8")
-    assert "Archive Workbench 0.81.0" in text
-    assert "`OCR-01D`" in text
+    assert "Archive Workbench 0.82.0" in text
+    assert "`OCR-01E`" in text
     assert "0044_layout_structure_review" in text
     assert "No hay migración" in text
-    assert "OCR regional" in text
-    assert "Dibujar una zona" in text
-    assert "selection_policy=never" in text
-    assert "regions.jsonl" in text
-    assert "no cambia la selección canónica" in text.lower()
-    assert "quedó validada y cerrada" in text.lower()
-    assert "primer múltiplo de diez libre" in text
+    assert "dewarp conservador" in text
+    assert "curvatura vertical suave" in text
+    assert "Previsualización sin cambios" in text
+    assert "Diagnóstico de curvatura" in text
+    assert "la validación manual confirmó" in text.lower()
+    assert "conserva los documentos seleccionados y las opciones de preparación" in text.lower()
+    assert "no se reconstruyen letras" in text.lower()
 
 def test_authority_dictionary_format_is_versioned_and_conservative() -> None:
     text = (
@@ -605,11 +605,11 @@ def test_pilot_guide_delegates_future_work_to_single_pending_ledger() -> None:
 def test_readme_points_only_to_current_documentation_map() -> None:
     text = (ROOT / "README.md").read_text(encoding="utf-8")
     citation = (ROOT / "CITATION.cff").read_text(encoding="utf-8")
-    assert "**Versión actual:** 0.81.0" in text
-    assert "La versión 0.81.0 incorpora pruebas automatizadas" in text
-    assert "(versión 0.81.0)" in text
-    assert 'version: "0.81.0"' in citation
-    assert "orientación, deskew y eliminación controlada de líneas" in text
+    assert "**Versión actual:** 0.82.0" in text
+    assert "La versión 0.82.0 incorpora y valida el dewarp conservador" in text
+    assert "(versión 0.82.0)" in text
+    assert 'version: "0.82.0"' in citation
+    assert "orientación, deskew, dewarp y eliminación controlada de líneas" in text
     assert "confirmación explícita de casilleros" in text
     assert "Productores y gestión" in text
     assert "0041_catalog_authority_roles_graph_layers" in text
@@ -707,15 +707,20 @@ def test_ocr01c_assistant_guidance_update_is_idempotent(tmp_path: Path) -> None:
     assert "Crear una columna para un objeto" in interface
 
 
-def test_ocr01d_pending_and_architecture_are_conservative() -> None:
+def test_ocr01e_pending_and_architecture_are_conservative() -> None:
     pending = (OPERATIVE / "PENDIENTES_ACTIVOS.md").read_text(encoding="utf-8")
     architecture = (DOCS / "referencia" / "ARQUITECTURA_Y_MODELO_ACTUAL.md").read_text(encoding="utf-8")
     assert "La fase `OCR-01D` quedó implementada y validada en 0.81.0" in pending
-    assert "dewarp" in pending
+    assert "La fase `OCR-01E` quedó implementada y validada en 0.82.0" in pending
+    assert "`OCR-01E` queda cerrada" in pending
+    assert "validar manualmente `OCR-01E`" not in pending
     assert "benchmark ampliado" in pending
     assert "OCR regional" in architecture
     assert "selección canónica desactivada" in architecture
     assert "Una región manual no inventa" in architecture
+    assert "Dewarp conservador de derivados OCR" in architecture
+    assert "no reconstruye caracteres" in architecture
+    assert "dewarp_diagnostic" in architecture
     assert "archivos locales de audio y video" in pending
     assert "velocidades de reproducción configurables" in pending
     assert "pantalla de transcripción y corrección poco cargada" in pending

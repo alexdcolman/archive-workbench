@@ -696,7 +696,9 @@ def prepare_derivatives_command(
     geometry_mode: str = typer.Option(
         "none",
         "--geometry-mode",
-        help="Corrección geométrica: none o conservative",
+        help=(
+            "Corrección geométrica: none, conservative o conservative_dewarp"
+        ),
     ),
 ) -> None:
     """Genera PNG para OCR y previsualizaciones WebP/JPEG/PNG por página."""

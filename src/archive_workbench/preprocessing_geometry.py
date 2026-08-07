@@ -6,12 +6,19 @@ from typing import Any
 
 from PIL import Image, ImageOps
 
+from archive_workbench.preprocessing_dewarp import (
+    DewarpEstimate,
+    apply_estimated_dewarp,
+    estimate_vertical_dewarp,
+    render_dewarp_diagnostic,
+)
 from archive_workbench.tesseract_engine import otsu_threshold
 
 
 GEOMETRY_MODE_LABELS = {
     "none": "Sin corrección geométrica",
     "conservative": "Orientación, inclinación y líneas (conservador)",
+    "conservative_dewarp": "Orientación, inclinación, curvatura y líneas (conservador)",
 }
 
 
@@ -30,12 +37,14 @@ class GeometryResult:
     lines_detected: int = 0
     lines_removed: int = 0
     removed_pixels: int = 0
+    dewarp: DewarpEstimate | None = None
+    dewarp_diagnostic: Image.Image | None = None
     warnings: list[str] = field(default_factory=list)
 
     @property
     def analysis(self) -> dict[str, Any]:
         return {
-            "algorithm_version": "geometry_conservative_v1",
+            "algorithm_version": "geometry_conservative_v2",
             "orientation_detected": self.orientation_detected,
             "orientation_confidence": round(self.orientation_confidence, 6),
             "orientation_min_confidence": round(self.orientation_min_confidence, 6),
@@ -46,6 +55,21 @@ class GeometryResult:
             "lines_detected": self.lines_detected,
             "lines_removed": self.lines_removed,
             "removed_pixels": self.removed_pixels,
+            **(self.dewarp.analysis if self.dewarp is not None else {
+                "dewarp_detected": False,
+                "dewarp_applied": False,
+                "dewarp_confidence": 0.0,
+                "dewarp_support_strips": 0,
+                "dewarp_total_strips": 0,
+                "dewarp_max_displacement_px": 0.0,
+                "dewarp_max_displacement_ratio": 0.0,
+                "dewarp_fit_quality": 0.0,
+                "dewarp_median_improvement": 0.0,
+                "dewarp_curvature_ratio": 0.0,
+                "dewarp_coefficients": [0.0, 0.0, 0.0],
+                "dewarp_reason": "disabled",
+                "dewarp_strip_offsets": [],
+            }),
         }
 
     @property
@@ -83,6 +107,21 @@ class GeometryResult:
                     )
                 ),
             },
+            "dewarp": (
+                self.dewarp.transformation
+                if self.dewarp is not None
+                else {
+                    "applied": False,
+                    "detected": False,
+                    "confidence": 0.0,
+                    "max_displacement_px": 0.0,
+                    "support_strips": 0,
+                    "fit_quality": 0.0,
+                    "curvature_ratio": 0.0,
+                    "coefficients": [0.0, 0.0, 0.0],
+                    "reason": "disabled",
+                }
+            ),
             "line_removal": {
                 "applied": self.lines_removed > 0,
                 "lines_removed": self.lines_removed,
@@ -393,6 +432,11 @@ def apply_conservative_geometry(
     deskew_min_confidence: float,
     line_min_length_ratio: float,
     line_max_thickness_px: int,
+    enable_dewarp: bool = False,
+    dewarp_strips: int = 17,
+    dewarp_max_displacement_ratio: float = 0.035,
+    dewarp_min_displacement_px: float = 2.0,
+    dewarp_min_confidence: float = 0.45,
 ) -> GeometryResult:
     current = image.convert("RGB")
     result = GeometryResult(
@@ -441,6 +485,20 @@ def apply_conservative_geometry(
             f"Deskew candidato {deskew_angle:.1f}° omitido por confianza insuficiente "
             f"({deskew_confidence:.3f} < {deskew_min_confidence:.3f})."
         )
+
+    if enable_dewarp:
+        dewarp = estimate_vertical_dewarp(
+            current,
+            strips=dewarp_strips,
+            max_displacement_ratio=dewarp_max_displacement_ratio,
+            min_displacement_px=dewarp_min_displacement_px,
+            min_confidence=dewarp_min_confidence,
+        )
+        result.dewarp = dewarp
+        result.dewarp_diagnostic = render_dewarp_diagnostic(current, dewarp)
+        result.warnings.extend(dewarp.warnings)
+        if dewarp.applied:
+            current = apply_estimated_dewarp(current, dewarp)
 
     cleaned, mask, detected, removed, removed_pixels = remove_long_lines(
         current,

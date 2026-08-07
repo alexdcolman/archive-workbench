@@ -1,6 +1,6 @@
 # Pendientes activos — Archive Workbench
 
-**Estado preparado:** 2026-08-06 · **versión:** 0.81.0
+**Estado preparado:** 2026-08-07 · **versión:** 0.82.0
 
 Este archivo es la única fuente de verdad para trabajo abierto. Las capacidades cerradas se registran en `IMPLEMENTACIONES_REALIZADAS.md` y no deben reabrirse sin una regresión concreta o una ampliación explícita del alcance.
 
@@ -44,9 +44,10 @@ La fase `OCR-01C` quedó implementada y validada en 0.80.0: propuestas no canón
 
 La fase `OCR-01D` quedó implementada y validada en 0.81.0. La vista integra el OCR regional en un recorrido lineal, permite cargar plantillas o dibujar zonas sobre la página, clasifica portadas, encabezados, pies, números, sellos, firmas, manuscritos, ilustraciones y elementos preimpresos, y crea siempre corridas candidatas sin selección canónica automática. La RC2 corrigió la asignación del `reading_order` cuando una plantilla dejaba un hueco y la región manual coincidía con un orden existente. La validación confirmó seis zonas, tres regiones OCR, tres regiones manuales, seis recortes, al menos un objeto por zona, manifiesto regional 1.1, selección canónica vacía e integridad del PDF original. No requirió migración; reutiliza la revisión `0044_layout_structure_review`. `OCR-01D` queda cerrada.
 
+La fase `OCR-01E` quedó implementada y validada en 0.82.0. Agrega un dewarp conservador que estima desplazamientos verticales suaves por franjas, ajusta una curva reproducible y solo remapea el derivado OCR cuando supera umbrales de soporte, amplitud, ajuste y confianza. Conserva un diagnóstico gráfico separado y registra cada aplicación u omisión en `analysis_json` y `transformations_json`. La corrección final mantiene las selecciones de **Ejecutar** durante el rerun y al cambiar la página del diagnóstico. La validación confirmó la corrección de la página curva, la omisión de la plana, cuatro derivados trazables por documento, integridad de los originales y selección canónica vacía. No requiere migración; `OCR-01E` queda cerrada.
+
 Queda por completar y evaluar dentro de `OCR-01`:
 
-- dewarp;
 - benchmark ampliado de Tesseract, Docling y Surya con verdad terreno.
 
 Toda transformación debe producir un derivado reproducible y nunca inventar trazos.

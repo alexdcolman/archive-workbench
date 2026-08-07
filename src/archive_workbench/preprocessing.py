@@ -271,13 +271,22 @@ def _prepare_ocr_page(
 ) -> tuple[
     Image.Image,
     Image.Image | None,
+    Image.Image | None,
     dict[str, object],
     dict[str, object],
     int,
     list[str],
 ]:
     if profile.geometry_mode == "none":
-        return apply_ocr_treatment(image, profile.ocr_treatment), None, {}, {}, 0, []
+        return (
+            apply_ocr_treatment(image, profile.ocr_treatment),
+            None,
+            None,
+            {},
+            {},
+            0,
+            [],
+        )
     result = apply_conservative_geometry(
         image,
         orientation_min_confidence=profile.orientation_min_confidence,
@@ -285,11 +294,17 @@ def _prepare_ocr_page(
         deskew_min_confidence=profile.deskew_min_confidence,
         line_min_length_ratio=profile.line_min_length_ratio,
         line_max_thickness_px=profile.line_max_thickness_px,
+        enable_dewarp=profile.geometry_mode == "conservative_dewarp",
+        dewarp_strips=profile.dewarp_strips,
+        dewarp_max_displacement_ratio=profile.dewarp_max_displacement_ratio,
+        dewarp_min_displacement_px=profile.dewarp_min_displacement_px,
+        dewarp_min_confidence=profile.dewarp_min_confidence,
     )
     treated = apply_ocr_treatment(result.image, profile.ocr_treatment)
     return (
         treated,
         result.mask,
+        result.dewarp_diagnostic,
         result.analysis,
         result.transformations,
         result.orientation_applied,
@@ -318,6 +333,7 @@ def _render_pdf(
             (
                 ocr_image,
                 diagnostic_mask,
+                dewarp_diagnostic,
                 analysis_json,
                 transformations_json,
                 rotation_applied,
@@ -375,6 +391,38 @@ def _render_pdf(
                         fmt="png",
                         width=diagnostic_mask.width,
                         height=diagnostic_mask.height,
+                        dpi=profile.ocr_dpi,
+                        source_width=source_rect.width,
+                        source_height=source_rect.height,
+                        source_dpi=72.0,
+                        backend="pillow",
+                        rotation_applied=rotation_applied,
+                        analysis_json=analysis_json,
+                        transformations_json=transformations_json,
+                    )
+                )
+            if dewarp_diagnostic is not None:
+                dewarp_path = (
+                    output_dir / "diagnostic" / f"page_{page_number:04d}_dewarp.png"
+                )
+                _save_pillow(
+                    dewarp_diagnostic,
+                    dewarp_path,
+                    "png",
+                    quality=profile.preview_quality,
+                    dpi=profile.ocr_dpi,
+                )
+                assets.append(
+                    _asset_record(
+                        run_id=run_id,
+                        digital_object_id=digital_object_id,
+                        page=page_number,
+                        kind="dewarp_diagnostic",
+                        path=dewarp_path,
+                        project_root=project_root,
+                        fmt="png",
+                        width=dewarp_diagnostic.width,
+                        height=dewarp_diagnostic.height,
                         dpi=profile.ocr_dpi,
                         source_width=source_rect.width,
                         source_height=source_rect.height,
@@ -469,6 +517,7 @@ def _render_raster_pillow(
             (
                 ocr_image,
                 diagnostic_mask,
+                dewarp_diagnostic,
                 analysis_json,
                 transformations_json,
                 rotation_applied,
@@ -530,6 +579,38 @@ def _render_raster_pillow(
                         fmt="png",
                         width=diagnostic_mask.width,
                         height=diagnostic_mask.height,
+                        dpi=round(source_dpi) if source_dpi else None,
+                        source_width=source_width,
+                        source_height=source_height,
+                        source_dpi=source_dpi,
+                        backend="pillow",
+                        rotation_applied=rotation_applied,
+                        analysis_json=analysis_json,
+                        transformations_json=transformations_json,
+                    )
+                )
+            if dewarp_diagnostic is not None:
+                dewarp_path = (
+                    output_dir / "diagnostic" / f"page_{page_number:04d}_dewarp.png"
+                )
+                _save_pillow(
+                    dewarp_diagnostic,
+                    dewarp_path,
+                    "png",
+                    quality=profile.preview_quality,
+                    dpi=source_dpi,
+                )
+                assets.append(
+                    _asset_record(
+                        run_id=run_id,
+                        digital_object_id=digital_object_id,
+                        page=page_number,
+                        kind="dewarp_diagnostic",
+                        path=dewarp_path,
+                        project_root=project_root,
+                        fmt="png",
+                        width=dewarp_diagnostic.width,
+                        height=dewarp_diagnostic.height,
                         dpi=round(source_dpi) if source_dpi else None,
                         source_width=source_width,
                         source_height=source_height,
@@ -743,6 +824,10 @@ def _reusable_run(
         stored_options.setdefault("deskew_min_confidence", 0.08)
         stored_options.setdefault("line_min_length_ratio", 0.65)
         stored_options.setdefault("line_max_thickness_px", 8)
+        stored_options.setdefault("dewarp_strips", 17)
+        stored_options.setdefault("dewarp_max_displacement_ratio", 0.035)
+        stored_options.setdefault("dewarp_min_displacement_px", 2.0)
+        stored_options.setdefault("dewarp_min_confidence", 0.45)
         if stored_options != options:
             continue
         if not run.manifest_path:

@@ -1,6 +1,13 @@
 import ast
 from pathlib import Path
 
+from archive_workbench.processing_app import (
+    _remember_multi_widget_state,
+    _remember_single_widget_state,
+    _restore_multi_widget_state,
+    _restore_single_widget_state,
+)
+
 from archive_workbench.ui_navigation import (
     fragmented_view,
     isolated_view,
@@ -1143,3 +1150,42 @@ def test_ocr01d_assistant_guidance_update_is_idempotent(tmp_path: Path) -> None:
     assert "GitHub Pages" in public_policy
     assert "instrumento de investigación" in design_policy
     assert "SaaS genérico" in design_policy
+
+def test_processing_single_selection_survives_widget_state_cleanup() -> None:
+    st = _FakeStreamlit()
+
+    _remember_single_widget_state(
+        st, key="processing_geometry_mode", value="conservative_dewarp"
+    )
+    _restore_single_widget_state(
+        st,
+        key="processing_geometry_mode",
+        options=["none", "conservative", "conservative_dewarp"],
+        default="none",
+    )
+
+    assert st.session_state["processing_geometry_mode"] == "conservative_dewarp"
+
+
+def test_processing_document_selection_survives_diagnostic_rerun() -> None:
+    st = _FakeStreamlit()
+
+    _remember_multi_widget_state(
+        st, key="processing_source_keys", values=["curved", "flat"]
+    )
+    _restore_multi_widget_state(
+        st, key="processing_source_keys", options=["curved", "flat"]
+    )
+
+    assert st.session_state["processing_source_keys"] == ["curved", "flat"]
+
+
+def test_processing_document_restore_discards_missing_inventory_entries() -> None:
+    st = _FakeStreamlit()
+    st.session_state["processing_source_keys__remembered"] = ["curved", "missing"]
+
+    _restore_multi_widget_state(
+        st, key="processing_source_keys", options=["curved", "flat"]
+    )
+
+    assert st.session_state["processing_source_keys"] == ["curved"]

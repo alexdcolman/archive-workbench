@@ -149,6 +149,14 @@ Las extensiones abiertas se describen únicamente en `../operativos/PENDIENTES_A
 
 Cada extensión debe respetar los mismos contratos de identidad, procedencia, calidad, revisión y auditoría.
 
+## Dewarp conservador de derivados OCR
+
+`OCR-01E` agrega el modo `conservative_dewarp` al perfil de preparación. La estimación trabaja sobre una copia reducida, divide la página en franjas verticales y compara perfiles horizontales de tinta para estimar desplazamientos relativos. Los puntos con soporte se ajustan mediante una curva cuadrática.
+
+La corrección solo se aplica cuando la curva tiene amplitud suficiente y acotada, soporte textual mayoritario, calidad de ajuste estable y confianza superior al umbral. El remapeo mueve píxeles mediante una malla vertical suave; no reconstruye caracteres, perspectiva, pliegues locales ni contenido faltante. El original y la previsualización permanecen intactos.
+
+La decisión queda en `analysis_json` y `transformations_json`. El activo `dewarp_diagnostic` muestra la curva estimada y se conserva separado de `diagnostic_mask`, que continúa representando las líneas eliminadas. El modelo vigente de `DerivativeAsset` admite ambos tipos sin migración.
+
 ## Proyectos y extensiones planificados
 
 `AV-01` incorporará audio y video local mediante originales inmutables, metadatos técnicos, derivados de transcripción y segmentos temporales revisables. La interfaz prevista integrará reproducción con velocidades configurables y una pantalla de corrección deliberadamente simple. `AV-02` será un plugin opcional de incorporación autorizada desde plataformas y entregará sus archivos al mismo circuito local; no definirá un segundo modelo de transcripción.

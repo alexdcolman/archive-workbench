@@ -165,8 +165,8 @@ def test_version_docs_and_discovery_plan_are_packaged() -> None:
         / "0044_layout_structure_review.py"
     )
 
-    assert data["project"]["version"] == "0.81.0"
-    assert '__version__ = "0.81.0"' in version_source
+    assert data["project"]["version"] == "0.82.0"
+    assert '__version__ = "0.82.0"' in version_source
     assert migration.is_file()
     assert 'down_revision = "0043_form_structure_review"' in migration.read_text(
         encoding="utf-8"
@@ -184,6 +184,9 @@ def test_version_docs_and_discovery_plan_are_packaged() -> None:
     assert (root / "scripts" / "verify_regional_ocr_validation_project.py").is_file()
     assert (root / "scripts" / "update_assistant_guidance_0810.py").is_file()
     assert (root / "src" / "archive_workbench" / "preprocessing_geometry.py").is_file()
+    assert (root / "src" / "archive_workbench" / "preprocessing_dewarp.py").is_file()
+    assert (root / "scripts" / "create_dewarp_validation_project.py").is_file()
+    assert (root / "scripts" / "verify_dewarp_validation_project.py").is_file()
     processing_app = (root / "src" / "archive_workbench" / "processing_app.py").read_text(
         encoding="utf-8"
     )
@@ -343,4 +346,22 @@ def test_regional_ocr_validation_scripts_are_packaged_and_executable() -> None:
     assert "ocr01d_controlada_resume.yaml" in resume_source
     assert '"reading_order": 50' in resume_source
     assert "RESULTADO: validación OCR-01D completa y consistente." in verifier_source
+    assert "la selección canónica permanece vacía" in verifier_source
+
+
+def test_dewarp_validation_scripts_are_packaged_and_executable() -> None:
+    root = Path(__file__).parents[1]
+    creator = root / "scripts" / "create_dewarp_validation_project.py"
+    verifier = root / "scripts" / "verify_dewarp_validation_project.py"
+
+    for script in (creator, verifier):
+        assert script.is_file()
+        assert script.stat().st_mode & 0o111
+
+    creator_source = creator.read_text(encoding="utf-8")
+    verifier_source = verifier.read_text(encoding="utf-8")
+    assert "el script no elimina ni reemplaza proyectos" in creator_source
+    assert "project_data_touched" in creator_source
+    assert "expected_curved_applied" in creator_source
+    assert "RESULTADO: validación OCR-01E completa y consistente." in verifier_source
     assert "la selección canónica permanece vacía" in verifier_source

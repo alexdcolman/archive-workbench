@@ -101,6 +101,48 @@ _RUN_QUALITY_LABELS = {
 }
 
 
+def _restore_single_widget_state(
+    st,
+    *,
+    key: str,
+    options: list[str],
+    default: str,
+) -> None:
+    """Restaura una selección aunque Streamlit haya eliminado la clave del widget."""
+
+    remembered_key = f"{key}__remembered"
+    candidate = st.session_state.get(key)
+    if candidate not in options:
+        candidate = st.session_state.get(remembered_key)
+    if candidate not in options:
+        candidate = default
+    st.session_state[key] = candidate
+
+
+def _remember_single_widget_state(st, *, key: str, value: str) -> None:
+    st.session_state[f"{key}__remembered"] = value
+
+
+def _restore_multi_widget_state(
+    st,
+    *,
+    key: str,
+    options: list[str],
+) -> None:
+    """Restaura una selección múltiple y descarta opciones que ya no existen."""
+
+    remembered_key = f"{key}__remembered"
+    candidate = st.session_state.get(key)
+    if not isinstance(candidate, list):
+        candidate = st.session_state.get(remembered_key, [])
+    selected = [value for value in candidate if value in options]
+    st.session_state[key] = selected
+
+
+def _remember_multi_widget_state(st, *, key: str, values: list[str]) -> None:
+    st.session_state[f"{key}__remembered"] = list(values)
+
+
 def _rebase_text_occurrences(text: str, fragment: str) -> list[tuple[int, int]]:
     if not fragment:
         return []
@@ -591,6 +633,15 @@ def _render_geometry_diagnostics(
                         if row.deskew_confidence is not None
                         else "—"
                     ),
+                    "Dewarp detectado": "sí" if row.dewarp_detected else "no",
+                    "Dewarp aplicado": "sí" if row.dewarp_applied else "no",
+                    "Confianza dewarp": f"{row.dewarp_confidence:.3f}",
+                    "Desplazamiento máximo": (
+                        f"{row.dewarp_max_displacement_px:.1f}px"
+                        if row.dewarp_detected
+                        else "—"
+                    ),
+                    "Franjas con soporte": row.dewarp_support_strips,
                     "Líneas detectadas": row.lines_detected,
                     "Líneas eliminadas": row.lines_removed,
                 }
@@ -609,7 +660,7 @@ def _render_geometry_diagnostics(
             key="processing_geometry_diagnostic_page",
         )
         row = rows[selected]
-        preview_col, image_col, mask_col = st.columns(3)
+        preview_col, image_col, mask_col, dewarp_col = st.columns(4)
         with preview_col:
             st.write("**Previsualización sin cambios**")
             if row.preview_relative_path:
@@ -628,6 +679,15 @@ def _render_geometry_diagnostics(
                 st.image(str(project_root / row.mask_relative_path), use_container_width=True)
             else:
                 st.caption("Esta preparación no generó una máscara diagnóstica.")
+        with dewarp_col:
+            st.write("**Diagnóstico de curvatura**")
+            if row.dewarp_diagnostic_relative_path:
+                st.image(
+                    str(project_root / row.dewarp_diagnostic_relative_path),
+                    use_container_width=True,
+                )
+            else:
+                st.caption("Esta preparación no evaluó dewarp.")
         st.json(row.transformations, expanded=False)
 
 
@@ -1026,16 +1086,31 @@ def render_processing_view(
         if not inventory:
             st.info("No hay fuentes procesables registradas en el catálogo.")
         else:
+            operation_options = ["prepare", "extract", "retry_failed", "bootstrap"]
+            _restore_single_widget_state(
+                st,
+                key="processing_operation",
+                options=operation_options,
+                default="prepare",
+            )
             operation = st.radio(
                 "Qué querés hacer",
-                options=["prepare", "extract", "retry_failed", "bootstrap"],
+                options=operation_options,
                 format_func=lambda value: _OPERATION_LABELS[value],
                 horizontal=True,
                 key="processing_operation",
             )
+            _remember_single_widget_state(
+                st, key="processing_operation", value=operation
+            )
+
+            source_options = [row.source_key for row in inventory]
+            _restore_multi_widget_state(
+                st, key="processing_source_keys", options=source_options
+            )
             source_keys = st.multiselect(
                 "Documentos",
-                options=[row.source_key for row in inventory],
+                options=source_options,
                 format_func=lambda value: next(
                     f"{row.title} · {_STATUS_LABELS[row.status]} · {value}"
                     for row in inventory
@@ -1043,15 +1118,25 @@ def render_processing_view(
                 ),
                 key="processing_source_keys",
             )
+            _remember_multi_widget_state(
+                st, key="processing_source_keys", values=source_keys
+            )
             profile_rows = _profiles(project_root)
             profile_path = None
             selected_extraction_profile = None
             ocr_treatment = "original"
             geometry_mode = "none"
             if operation == "prepare":
+                treatment_options = list(OCR_TREATMENT_LABELS)
+                _restore_single_widget_state(
+                    st,
+                    key="processing_ocr_treatment",
+                    options=treatment_options,
+                    default="original",
+                )
                 ocr_treatment = st.selectbox(
                     "Tratamiento del derivado para OCR",
-                    options=list(OCR_TREATMENT_LABELS),
+                    options=treatment_options,
                     format_func=lambda value: OCR_TREATMENT_LABELS[value],
                     key="processing_ocr_treatment",
                     help=(
@@ -1059,16 +1144,31 @@ def render_processing_view(
                         "previsualización permanecen intactos."
                     ),
                 )
+                _remember_single_widget_state(
+                    st, key="processing_ocr_treatment", value=ocr_treatment
+                )
+
+                geometry_options = list(GEOMETRY_MODE_LABELS)
+                _restore_single_widget_state(
+                    st,
+                    key="processing_geometry_mode",
+                    options=geometry_options,
+                    default="none",
+                )
                 geometry_mode = st.selectbox(
                     "Corrección geométrica",
-                    options=list(GEOMETRY_MODE_LABELS),
+                    options=geometry_options,
                     format_func=lambda value: GEOMETRY_MODE_LABELS[value],
                     key="processing_geometry_mode",
                     help=(
-                        "Analiza orientación, inclinación y líneas largas sobre el "
-                        "derivado OCR. Solo aplica cambios cuando la confianza supera "
-                        "los umbrales conservadores."
+                        "Analiza orientación, inclinación, curvatura vertical y líneas "
+                        "largas sobre el derivado OCR. El modo con dewarp solo remapea "
+                        "una curva suave cuando la confianza supera los umbrales "
+                        "conservadores."
                     ),
+                )
+                _remember_single_widget_state(
+                    st, key="processing_geometry_mode", value=geometry_mode
                 )
                 st.caption(
                     "La preparación crea una versión reproducible. El original, la "

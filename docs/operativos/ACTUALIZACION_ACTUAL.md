@@ -1,68 +1,59 @@
-# Actualización actual — Archive Workbench 0.81.0
+# Actualización actual — Archive Workbench 0.82.0
 
-**Fecha:** 2026-08-06
-**Bloque:** `OCR-01D` — OCR regional y zonas documentales
+**Fecha:** 2026-08-07
+**Bloque:** `OCR-01E` — dewarp conservador sobre derivados OCR
 **Revisión de base:** `0044_layout_structure_review`
 
-La versión 0.81.0 integra **Procesar documentos > OCR regional** como un recorrido visual de seis pasos. Permite elegir documento y página, cargar una plantilla o dibujar zonas, clasificarlas, decidir entre OCR y conservación manual, revisar la lista y crear una extracción candidata.
+La versión agrega un modo geométrico que evalúa curvatura vertical suave en páginas escaneadas. El cálculo compara perfiles de tinta en franjas verticales, ajusta una curva cuadrática y aplica una malla de remapeo únicamente cuando existen soporte textual, desplazamiento suficiente, ajuste estable y confianza superior al umbral.
 
-## Estado de cierre
+## Estado de la versión
 
-`OCR-01D` quedó validada y cerrada. La prueba manual confirmó:
+La implementación y las validaciones confirman:
 
-- una corrida regional terminada;
-- una página y seis zonas;
-- encabezado, texto principal y número de página procesados con OCR;
-- sello, firma e ilustración conservados como regiones manuales;
-- seis recortes y al menos un objeto por zona;
-- `manifest.json` y `regions.jsonl` válidos bajo el contrato regional 1.1;
-- selección canónica vacía;
-- PDF original conservado por SHA-256;
-- `project_data` sin acceso ni modificaciones durante la validación.
+- detección y corrección de una página curva sintética controlada;
+- omisión del dewarp en una página plana;
+- conservación del original y de la previsualización;
+- derivado OCR, máscara de líneas y diagnóstico de curvatura separados;
+- registro por página de confianza, desplazamiento máximo, franjas con soporte, coeficientes y motivo de aplicación u omisión;
+- reutilización idempotente de una corrida equivalente;
+- ausencia de selección canónica automática.
 
-La RC2 corrigió la colisión de `reading_order` observada al agregar una región manual a una plantilla con huecos. La interfaz asigna el primer múltiplo de diez libre y normaliza borradores externos con órdenes repetidos.
+La validación manual confirmó el dewarp de la página curva, la omisión de la página plana, los cuatro derivados trazables y la integridad de los originales. La validación específica de la corrección confirmó además que abrir el diagnóstico geométrico conserva los documentos seleccionados y las opciones de preparación.
 
-## Invariantes
+`OCR-01E` queda cerrada en 0.82.0. Dentro de `OCR-01` resta el benchmark ampliado de Tesseract, Docling y Surya con verdad terreno.
 
-- El original y la previsualización no se modifican.
-- La plantilla completa queda dentro del manifiesto.
-- Se conservan recortes, archivos crudos y `regions.jsonl`.
-- Toda ejecución visual usa `selection_policy=never`.
-- La nueva corrida no cambia la selección canónica ni la capa editable.
-- Una región manual no inventa trazos ni transcripción.
+## Alcance conservador
+
+- Solo se modela un desplazamiento vertical suave que varía a lo ancho de la página.
+- No se reconstruyen letras, trazos, perspectiva, pliegues locales ni superficies tridimensionales.
+- Un candidato con soporte o confianza insuficientes se registra y se omite.
+- El original y la previsualización no se transforman.
+- La corrección se aplica únicamente al derivado OCR reproducible.
+- El diagnóstico gráfico se conserva como un activo separado.
 
 ## Base de datos
 
-No hay migración. La revisión continúa en `0044_layout_structure_review`, porque `ExtractionRun`, `ExtractionRegion`, los objetos extraídos y los manifiestos ya conservan geometría, modo, clasificación, procedencia y archivos derivados.
+No hay migración. `PreprocessingRun`, `DerivativeAsset`, `options_json`, `analysis_json` y `transformations_json` ya conservan el perfil, los derivados y la decisión geométrica. La revisión continúa en `0044_layout_structure_review`.
 
-## Audiovisual planificado
+## Uso
 
-`AV-01` incorporará archivos locales de audio y video en formatos habituales, reproducción integrada con velocidades configurables y transcripción segmentada revisable en una pantalla simple. `AV-02` agregará la incorporación opcional y autorizada desde YouTube y otras plataformas, pero reutilizará el mismo circuito local de reproducción, transcripción y corrección.
-
-## Uso cotidiano
-
-1. Preparar el documento en **Procesar documentos > Ejecutar**.
-2. Abrir **Procesar documentos > OCR regional**.
-3. Elegir documento y página.
-4. Cargar una plantilla guardada o pulsar **Dibujar una zona** sobre la imagen.
-5. Describir la zona y agregarla a la lista.
-6. Crear la candidata.
-7. Compararla en **Selección canónica**. La creación de la candidata no la selecciona.
+1. Abrir **Procesar documentos > Ejecutar**.
+2. Elegir **Preparar páginas**.
+3. Seleccionar los documentos.
+4. En **Corrección geométrica**, elegir **Orientación, inclinación, curvatura y líneas (conservador)**.
+5. Pulsar **Ejecutar tarea**.
+6. Activar **Mostrar diagnóstico geométrico vigente**.
+7. Comparar **Previsualización sin cambios**, **Derivado OCR**, **Máscara de líneas eliminadas** y **Diagnóstico de curvatura**.
 
 ## Archivos principales
 
 ```text
-src/archive_workbench/contracts/regions.py
-src/archive_workbench/regional_workflow.py
-src/archive_workbench/region_canvas.py
-src/archive_workbench/region_extraction.py
+src/archive_workbench/preprocessing_dewarp.py
+src/archive_workbench/preprocessing_geometry.py
+src/archive_workbench/preprocessing.py
+src/archive_workbench/processing.py
 src/archive_workbench/processing_app.py
-src/archive_workbench/cli.py
-scripts/create_regional_ocr_validation_project.py
-scripts/prepare_regional_ocr_validation_resume.py
-scripts/verify_regional_ocr_validation_project.py
-scripts/update_assistant_guidance_0810.py
-tests/test_regional_workflow.py
-tests/test_region_extraction.py
-tests/test_ui_navigation.py
+scripts/create_dewarp_validation_project.py
+scripts/verify_dewarp_validation_project.py
+tests/test_dewarp.py
 ```

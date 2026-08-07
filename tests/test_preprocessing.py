@@ -339,6 +339,10 @@ def test_pre_036_original_profile_is_reused_without_duplicate_run(tmp_path: Path
                 "deskew_min_confidence",
                 "line_min_length_ratio",
                 "line_max_thickness_px",
+                "dewarp_strips",
+                "dewarp_max_displacement_ratio",
+                "dewarp_min_displacement_px",
+                "dewarp_min_confidence",
             ):
                 legacy_options.pop(key, None)
             run.options_json = legacy_options

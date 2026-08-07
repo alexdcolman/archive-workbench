@@ -27,12 +27,16 @@ class DerivativeProfile(ContractModel):
     preview_max_long_edge_px: int = Field(default=2400, ge=512, le=10000)
     preserve_native_raster_for_ocr: bool = True
     auto_rotate: bool = False
-    geometry_mode: Literal["none", "conservative"] = "none"
+    geometry_mode: Literal["none", "conservative", "conservative_dewarp"] = "none"
     orientation_min_confidence: float = Field(default=0.12, ge=0.0, le=1.0)
     deskew_max_degrees: float = Field(default=5.0, ge=0.0, le=15.0)
     deskew_min_confidence: float = Field(default=0.08, ge=0.0, le=1.0)
     line_min_length_ratio: float = Field(default=0.65, ge=0.3, le=1.0)
     line_max_thickness_px: int = Field(default=8, ge=1, le=40)
+    dewarp_strips: int = Field(default=17, ge=9, le=41)
+    dewarp_max_displacement_ratio: float = Field(default=0.035, ge=0.005, le=0.10)
+    dewarp_min_displacement_px: float = Field(default=2.0, ge=0.5, le=40.0)
+    dewarp_min_confidence: float = Field(default=0.45, ge=0.0, le=1.0)
     pillow_megapixel_guard: float = Field(default=100.0, ge=10, le=1000)
     use_pyvips_when_available: bool = True
 
@@ -43,7 +47,7 @@ class DerivativeAssetRecord(ContractModel):
     preprocessing_run_id: str
     digital_object_id: str
     page: int = Field(ge=1)
-    kind: Literal["preview", "ocr", "diagnostic_mask"]
+    kind: Literal["preview", "ocr", "diagnostic_mask", "dewarp_diagnostic"]
     relative_path: str
     mime_type: str
     sha256: Sha256

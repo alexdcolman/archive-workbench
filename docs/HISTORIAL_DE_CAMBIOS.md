@@ -1,7 +1,3 @@
-## 0.81.0
-
-Integra el OCR regional en una pantalla visual de seis pasos, agrega clasificación controlada de zonas y conserva toda ejecución como candidata sin selección automática. La RC2 corrige una colisión de `reading_order` al agregar una zona manual en una plantilla con huecos. También incorpora la hoja de ruta pre-release, el piloto real persistente, `EXP-01`, `WEB-01`, la ampliación de `AI-01` y el proyecto paralelo `GIAR-01`. No modifica el esquema; la revisión continúa en `0044_layout_structure_review`. La validación manual confirmó seis zonas, recortes y objetos candidatos, clasificación semántica correcta, ausencia de selección canónica e integridad del original. `OCR-01D` queda cerrada. La planificación audiovisual incorpora archivos locales de audio y video, reproducción con velocidad variable y una interfaz de transcripción simple para la corrección humana.
-
 # Historial de cambios y mapa documental
 Este es el único documento en la raíz de `docs/`. Resume la evolución del proyecto y señala dónde encontrar el detalle sin duplicarlo.
 
@@ -20,6 +16,10 @@ Este es el único documento en la raíz de `docs/`. Resume la evolución del pro
 
 ## Versiones recientes — más reciente primero
 
+### 0.82.0 — 2026-08-07
+Implementa `OCR-01E` con dewarp conservador sobre derivados OCR. La página se analiza por franjas verticales, la curvatura se ajusta mediante una curva reproducible y el remapeo se aplica solo con soporte y confianza suficientes. Agrega un diagnóstico separado, trazabilidad completa y una base descartable con página curva y plana. No modifica el esquema. La validación manual confirmó la corrección de la página curva y la omisión de la plana; la corrección final conserva las selecciones del formulario al abrir el diagnóstico geométrico. `OCR-01E` queda cerrada.
+### 0.81.0 — 2026-08-06
+Integra y valida `OCR-01D` para OCR regional visual, plantillas o zonas dibujadas, clasificación documental y creación exclusiva de corridas candidatas. La RC2 corrige colisiones de `reading_order`. También incorpora la hoja de ruta pre-release, el piloto persistente, `EXP-01`, `WEB-01`, `GIAR-01` y la planificación audiovisual ampliada.
 ### 0.80.0 — 2026-08-06
 
 Implementa y valida `OCR-01C` para columnas y orden de lectura revisables, con diagnóstico de fragmentación y duplicaciones, migración `0044_layout_structure_review` y exportación `layout_structures.jsonl`. La RC2 agrega un recorrido numerado, selección visible, creación y asignación combinadas, historial legible, imagen de revisión desde el original cuando falta preview y verificación diagnóstica explícita. La RC3 corrige el uso de un atributo inexistente de `ReviewPageView` que interrumpía el render después del bloque 1. La RC4 distingue **Historial general** del historial específico de layout y muestra la columna actual del objeto. La validación final confirmó tres columnas activas, cinco objetos editables, combinación y archivo explícitos, deshacer/rehacer, exportación 1.4, conservación del PDF y de los siete objetos OCR de origen; `OCR-01C` queda cerrada.

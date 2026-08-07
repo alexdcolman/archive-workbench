@@ -1,13 +1,13 @@
 # Hoja de ruta pre-release y líneas paralelas — Archive Workbench
 
-**Estado preparado:** 2026-08-06
-**Versión de referencia:** 0.81.0
+**Estado preparado:** 2026-08-07
+**Versión de referencia:** 0.82.0
 
 Esta hoja ordena el trabajo restante hasta v1.0. El detalle y el estado de cada bloque se mantienen en [`PENDIENTES_ACTIVOS.md`](PENDIENTES_ACTIVOS.md). Las líneas paralelas no bloquean la publicación inicial salvo decisión explícita posterior.
 
 ## Secuencia principal hasta v1.0
 
-1. Completar el alcance restante de `OCR-01`: dewarp y benchmark ampliado con verdad terreno. `OCR-01D` quedó cerrada en 0.81.0.
+1. Completar el benchmark ampliado de `OCR-01` con Tesseract, Docling y Surya sobre verdad terreno. `OCR-01E` quedó cerrada en 0.82.0.
 2. Implementar `AV-01` para registro local de audio y video, reproducción con velocidad variable y transcripción segmentada revisable.
 3. Implementar `AV-02` como plugin opcional de incorporación autorizada de audio o video desde YouTube y otras plataformas, reutilizando el circuito local de `AV-01`.
 4. Implementar `INT-01` para transporte controlado mediante Google Drive.

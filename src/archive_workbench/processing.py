@@ -89,9 +89,15 @@ class PreprocessingGeometryRow:
     lines_detected: int
     lines_removed: int
     removed_pixels: int
+    dewarp_detected: bool
+    dewarp_applied: bool
+    dewarp_confidence: float
+    dewarp_max_displacement_px: float
+    dewarp_support_strips: int
     preview_relative_path: str | None
     ocr_relative_path: str
     mask_relative_path: str | None
+    dewarp_diagnostic_relative_path: str | None
     transformations: dict[str, Any]
 
 
@@ -682,6 +688,7 @@ def processing_geometry_rows(
                 continue
             analysis = dict(ocr.analysis_json or {})
             mask = page_assets.get("diagnostic_mask")
+            dewarp_diagnostic = page_assets.get("dewarp_diagnostic")
             rows.append(
                 PreprocessingGeometryRow(
                     source_key=str(registration.source_key),
@@ -716,9 +723,21 @@ def processing_geometry_rows(
                     lines_detected=int(analysis.get("lines_detected") or 0),
                     lines_removed=int(analysis.get("lines_removed") or 0),
                     removed_pixels=int(analysis.get("removed_pixels") or 0),
+                    dewarp_detected=bool(analysis.get("dewarp_detected", False)),
+                    dewarp_applied=bool(analysis.get("dewarp_applied", False)),
+                    dewarp_confidence=float(analysis.get("dewarp_confidence") or 0.0),
+                    dewarp_max_displacement_px=float(
+                        analysis.get("dewarp_max_displacement_px") or 0.0
+                    ),
+                    dewarp_support_strips=int(
+                        analysis.get("dewarp_support_strips") or 0
+                    ),
                     preview_relative_path=preview.relative_path if preview else None,
                     ocr_relative_path=ocr.relative_path,
                     mask_relative_path=mask.relative_path if mask else None,
+                    dewarp_diagnostic_relative_path=(
+                        dewarp_diagnostic.relative_path if dewarp_diagnostic else None
+                    ),
                     transformations=dict(ocr.transformations_json or {}),
                 )
             )

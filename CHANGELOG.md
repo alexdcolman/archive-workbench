@@ -1,3 +1,15 @@
+## 0.82.0 — 2026-08-07
+
+- Agrega `OCR-01E` con el modo geométrico `conservative_dewarp` para corregir curvatura vertical suave únicamente sobre derivados OCR.
+- Estima desplazamientos por franjas verticales, ajusta una curva cuadrática reproducible y aplica una malla solo cuando soporte, amplitud, calidad de ajuste y confianza superan los umbrales conservadores.
+- Registra por página detección, aplicación, confianza, desplazamiento máximo, franjas con soporte, coeficientes y motivo de aplicación u omisión.
+- Conserva un activo `dewarp_diagnostic` separado de la máscara de líneas, el derivado OCR y la previsualización sin cambios.
+- Amplía **Procesar documentos** con el modo de corrección y un diagnóstico visual que compara previsualización, derivado, máscara y mapa de curvatura.
+- Agrega `create_dewarp_validation_project.py`, `verify_dewarp_validation_project.py` y pruebas unitarias e integrales sobre una página curva y una página plana controladas.
+- La validación manual confirmó corrección de la página curva, omisión de la plana, cuatro derivados trazables por documento e integridad de los originales.
+- La RC2 conserva operación, documentos, tratamiento OCR y modo geométrico al activar el diagnóstico, incluso si Streamlit elimina temporalmente las claves nativas de los widgets durante el rerun.
+- No agrega migraciones; la revisión continúa en `0044_layout_structure_review`.
+
 ## 0.81.0 — 2026-08-06
 
 - Implementa `OCR-01D` con una pestaña visual **Procesar documentos > OCR regional** organizada en seis pasos lineales.
