@@ -200,7 +200,7 @@ def test_layout_validation_project_is_controlled_and_noncanonical(tmp_path: Path
 
     result = module.create_validation_project(tmp_path / "ocr01c_validation")
 
-    assert result["version"] == "0.84.0"
+    assert result["version"] == "0.85.0"
     assert result["revision"] == "0045_audiovisual_transcription"
     assert result["proposed_columns"] == 2
     assert result["fragment_candidates"] == 1

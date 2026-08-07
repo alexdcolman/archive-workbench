@@ -2,7 +2,9 @@ from __future__ import annotations
 
 from datetime import date
 from pathlib import Path
+from urllib.parse import urlparse
 
+from pydantic import ValidationError
 from sqlalchemy import select
 
 from archive_workbench.audiovisual import (
@@ -23,7 +25,13 @@ from archive_workbench.audiovisual import (
 )
 from archive_workbench.contracts.audiovisual import AudiovisualDescription, TranscriptionRequest
 from archive_workbench.db import create_sqlite_engine, session_scope
-from archive_workbench.db.models import AudiovisualMedia, AuthorityRecord, TranscriptionRun
+from archive_workbench.db.models import ArchivalUnit, AudiovisualMedia, AuthorityRecord, TranscriptionRun
+from archive_workbench.platform_import import (
+    import_platform_media,
+    platform_origin_for_digital_object,
+    platform_runtime_status,
+)
+from archive_workbench.contracts.platform import PlatformImportRequest
 from archive_workbench.ui_navigation import rerun_view
 
 _REVIEW_LABELS = {
@@ -32,6 +40,48 @@ _REVIEW_LABELS = {
     "approved": "Aprobado",
 }
 _SPEEDS = (0.5, 0.75, 1.0, 1.25, 1.5, 2.0)
+
+
+def _platform_import_form_error(
+    *,
+    url: str,
+    access_conditions: str,
+    authorization_confirmed: bool,
+) -> str | None:
+    cleaned_url = url.strip()
+    if not cleaned_url:
+        return "Pegá la dirección (URL) del audio o video que querés incorporar."
+    parsed = urlparse(cleaned_url)
+    if parsed.scheme not in {"http", "https"} or not parsed.netloc:
+        return (
+            "La dirección del material no parece válida. Copiá y pegá la URL completa, "
+            "por ejemplo https://www.youtube.com/watch?v=…"
+        )
+    if len(access_conditions.strip()) < 3:
+        return "Completá las condiciones de acceso o autorización antes de incorporar el material."
+    if not authorization_confirmed:
+        return (
+            "Marcá la casilla de confirmación para indicar que el proyecto está autorizado "
+            "a incorporar este material."
+        )
+    return None
+
+
+def _platform_request_validation_message(exc: ValidationError) -> str:
+    fields = {str(part) for error in exc.errors(include_url=False) for part in error.get("loc", ())}
+    if "url" in fields:
+        return (
+            "La dirección del material no parece válida. Copiá y pegá la URL completa, "
+            "por ejemplo https://www.youtube.com/watch?v=…"
+        )
+    if "access_conditions" in fields:
+        return "Completá las condiciones de acceso o autorización antes de incorporar el material."
+    if "authorization_confirmed" in fields:
+        return (
+            "Marcá la casilla de confirmación para indicar que el proyecto está autorizado "
+            "a incorporar este material."
+        )
+    return "Revisá los datos del formulario antes de incorporar el material."
 
 
 def _run_db_action(st, *, db_path: Path, callback) -> object | None:
@@ -147,6 +197,108 @@ def render_audiovisual_view(
     if flash:
         st.success(flash)
 
+    platform_open = st.toggle(
+        "Incorporar desde plataforma",
+        value=False,
+        key="av_platform_import_open",
+    )
+    if platform_open:
+        platform_engine = create_sqlite_engine(db_path)
+        try:
+            with session_scope(platform_engine) as session:
+                units = session.scalars(
+                    select(ArchivalUnit)
+                    .where(ArchivalUnit.project_id == project_id)
+                    .order_by(ArchivalUnit.title, ArchivalUnit.id)
+                ).all()
+        finally:
+            platform_engine.dispose()
+        unit_by_id = {row.id: row for row in units}
+        runtime = platform_runtime_status()
+        if not runtime.yt_dlp_available:
+            st.error(
+                "La extensión de incorporación desde plataformas no está instalada. "
+                "Instalá el extra `platform`."
+            )
+        elif not runtime.ffmpeg_available or not runtime.ffprobe_available:
+            st.error("AV-02 requiere FFmpeg y FFprobe disponibles en PATH.")
+        elif not (runtime.deno_available or runtime.node_available):
+            st.error(
+                "YouTube requiere un runtime JavaScript compatible. "
+                "El extra `platform` instala Deno; verificá que quede disponible en PATH."
+            )
+        elif not unit_by_id:
+            st.warning("El proyecto todavía no tiene una unidad archivística de destino.")
+        else:
+            st.caption(
+                "Incorpora un material autorizado y lo registra como archivo local de AV-01. "
+                "No inicia ninguna transcripción automáticamente."
+            )
+            with st.form("av_platform_import_form", enter_to_submit=False):
+                platform_url = st.text_input(
+                    "URL del audio o video",
+                    placeholder="https://www.youtube.com/watch?v=…",
+                )
+                platform_unit = st.selectbox(
+                    "Unidad archivística",
+                    options=list(unit_by_id),
+                    format_func=lambda value: unit_by_id[value].title,
+                )
+                platform_kind = st.radio(
+                    "Tipo de incorporación",
+                    options=("video", "audio"),
+                    format_func=lambda value: "Video" if value == "video" else "Solo audio",
+                    horizontal=True,
+                )
+                access_conditions = st.text_area(
+                    "Condiciones de acceso / autorización",
+                    placeholder="Indicá por qué este material puede incorporarse al proyecto.",
+                    height=90,
+                )
+                authorization = st.checkbox(
+                    "Confirmo que el proyecto está autorizado a incorporar este material"
+                )
+                submitted = st.form_submit_button("Incorporar desde plataforma", type="primary")
+            if submitted:
+                form_error = _platform_import_form_error(
+                    url=platform_url,
+                    access_conditions=access_conditions,
+                    authorization_confirmed=authorization,
+                )
+                if form_error is not None:
+                    st.error(form_error)
+                else:
+                    try:
+                        request = PlatformImportRequest(
+                            url=platform_url.strip(),
+                            archival_unit_id=platform_unit,
+                            media_kind=platform_kind,
+                            access_conditions=access_conditions,
+                            authorization_confirmed=authorization,
+                        )
+                    except ValidationError as exc:
+                        st.error(_platform_request_validation_message(exc))
+                    else:
+                        with st.spinner("Descargando y registrando el material…"):
+                            result = _run_db_action(
+                                st,
+                                db_path=db_path,
+                                callback=lambda session: import_platform_media(
+                                    session,
+                                    project_root=project_root,
+                                    project_id=project_id,
+                                    request=request,
+                                    actor=actor,
+                                ),
+                            )
+                        if result is not None:
+                            st.session_state["av_pending_media_id"] = result.media_id
+                            st.session_state["av_flash"] = (
+                                f"Material incorporado desde {result.platform}: {result.title}. "
+                                "El archivo quedó registrado en el circuito local de AV-01."
+                            )
+                            rerun_view(st)
+
     engine = create_sqlite_engine(db_path)
     try:
         with session_scope(engine) as session:
@@ -185,6 +337,13 @@ def render_audiovisual_view(
             playback_path = resolve_playback_path(
                 session, project_root=project_root, media_id=media_id
             )
+            platform_origin = None
+            if media is not None:
+                platform_origin = platform_origin_for_digital_object(
+                    session,
+                    project_id=project_id,
+                    digital_object_id=media.digital_object_id,
+                )
             latest_run = None
             if media is not None:
                 latest_run = session.scalar(
@@ -513,6 +672,21 @@ def render_audiovisual_view(
                         f"{media.width}×{media.height}" if media.width and media.height else None
                     ),
                     "fps": media.frame_rate,
+                }
+            )
+        if platform_origin:
+            st.write("**Procedencia de plataforma**")
+            st.write(
+                {
+                    "plataforma": platform_origin.get("platform"),
+                    "id": platform_origin.get("platform_id"),
+                    "url": platform_origin.get("webpage_url"),
+                    "canal": platform_origin.get("channel") or platform_origin.get("uploader"),
+                    "fecha_publicación": platform_origin.get("upload_date"),
+                    "formato_incorporado": platform_origin.get("incorporated_extension"),
+                    "sha256": platform_origin.get("incorporated_sha256"),
+                    "condiciones_acceso": platform_origin.get("access_conditions"),
+                    "yt_dlp": platform_origin.get("yt_dlp_version"),
                 }
             )
         if latest_run is not None:

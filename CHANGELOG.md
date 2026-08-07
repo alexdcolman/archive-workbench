@@ -1,3 +1,13 @@
+## 0.85.0 — 2026-08-07
+
+- Agrega `AV-02` como extensión opcional de incorporación autorizada desde YouTube y otras plataformas compatibles con `yt-dlp`.
+- El material descargado se registra mediante el mismo circuito local de `AV-01`; no existe una segunda ruta de transcripción.
+- Conserva en `SourceRegistration` URL solicitada/canónica, plataforma e identificador, canal/uploader, fecha de publicación, formatos seleccionados, versión de `yt-dlp`, ruta incorporada, SHA-256 y condiciones de acceso/autorización.
+- Agrega el panel cerrado **Incorporar desde plataforma** dentro de **Transcribir audio y video**, con unidad archivística, incorporación de video o audio y confirmación explícita de autorización.
+- Amplía la exportación de segmentos con procedencia remota (`source_origin`, `platform`, `platform_id`, `source_url`, `source_access_conditions`).
+- La extensión se instala con el extra opcional `platform`, basado en `yt-dlp[default,deno]`; AV-01 y los runtimes OCR no dependen de ella.
+- No agrega migración; la revisión continúa en `0045_audiovisual_transcription`. La validación real incorporó `RememorArte Horacio BAU` (`CwWKigBOfjQ`) del canal acordado, conservó SHA-256 y procedencia, confirmó reproducción y `transcription_run_count: 0`. RC2 reemplazó errores técnicos de Pydantic por mensajes comprensibles en el formulario. `AV-02` queda cerrado.
+
 ## 0.84.0 — 2026-08-07
 
 - Implementa `AV-01` para registro local de audio y video sobre `DigitalObject`/`FileInstance`, con SHA-256 y original inmutable.

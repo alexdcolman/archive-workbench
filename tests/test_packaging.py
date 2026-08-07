@@ -19,7 +19,9 @@ def test_surya_runtime_packaging_is_compatible_and_isolated() -> None:
     assert Version("12.3.0") in pillow_specifier
     assert surya_dependencies == ["surya-ocr==0.22.1"]
 
-    installer = (root / "scripts/install_surya_runtime.sh").read_text(encoding="utf-8")
+    installer_path = root / "scripts/install_surya_runtime.sh"
+    assert installer_path.stat().st_mode & 0o111
+    installer = installer_path.read_text(encoding="utf-8")
     assert ".venv-surya" in installer
     assert "--dry-run" in installer
     assert '"${PIP[@]}" check' in installer
@@ -165,8 +167,8 @@ def test_version_docs_and_discovery_plan_are_packaged() -> None:
         / "0045_audiovisual_transcription.py"
     )
 
-    assert data["project"]["version"] == "0.84.0"
-    assert '__version__ = "0.84.0"' in version_source
+    assert data["project"]["version"] == "0.85.0"
+    assert '__version__ = "0.85.0"' in version_source
     assert migration.is_file()
     assert 'down_revision = "0044_layout_structure_review"' in migration.read_text(
         encoding="utf-8"
@@ -181,6 +183,11 @@ def test_version_docs_and_discovery_plan_are_packaged() -> None:
     assert data["project"]["optional-dependencies"]["audiovisual"] == [
         "faster-whisper>=1.1,<2"
     ]
+    assert data["project"]["optional-dependencies"]["platform"] == [
+        "yt-dlp[default,deno]>=2026.7.4,<2027"
+    ]
+    assert (root / "src" / "archive_workbench" / "platform_import.py").is_file()
+    assert (root / "src" / "archive_workbench" / "contracts" / "platform.py").is_file()
     assert (root / "src" / "archive_workbench" / "contracts" / "forms.py").is_file()
     assert (root / "src" / "archive_workbench" / "form_structure.py").is_file()
     assert (root / "src" / "archive_workbench" / "contracts" / "layout.py").is_file()

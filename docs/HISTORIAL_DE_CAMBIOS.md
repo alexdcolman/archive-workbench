@@ -16,6 +16,13 @@ Este es el único documento en la raíz de `docs/`. Resume la evolución del pro
 
 ## Versiones recientes — más reciente primero
 
+### 0.85.0 — 2026-08-07
+
+- Incorpora una extensión opcional `platform` basada en `yt-dlp` para audio/video autorizado desde plataformas.
+- Conserva procedencia remota y SHA-256 en el registro de fuente existente y entrega el archivo al circuito AV-01.
+- Agrega un panel de incorporación cerrado por defecto y amplía la exportación audiovisual con campos de procedencia.
+- No agrega migración; continúa `0045_audiovisual_transcription`. La validación real con `RememorArte Horacio BAU` confirmó procedencia/SHA-256/reproducción y ausencia de transcripción automática; RC2 corrigió además la exposición de errores técnicos de validación en la UI. `AV-02` queda cerrado.
+
 ### 0.84.0 — 2026-08-07
 Implementa y valida `AV-01` para registro local de audio y video, inspección FFprobe, derivados FFmpeg trazables, transcripción segmentada con backend intercambiable y recorrido CPU, corrección append-only, reproducción con velocidad variable, salto a segmentos, búsqueda con navegación directa, entidades, exportación y transporte del estado audiovisual. Agrega la migración `0045_audiovisual_transcription` y excluye audio/video del circuito OCR. La validación manual confirmó ambos medios, persistencia de correcciones, mención, exportación y una corrida `faster-whisper` real en CPU. RC1 reveló fallos en salto temporal y navegación desde búsqueda; RC2 los corrigió y la revalidación fue satisfactoria. `AV-01` queda cerrado.
 

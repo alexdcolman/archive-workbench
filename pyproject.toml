@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "archive-workbench"
-version = "0.84.0"
+version = "0.85.0"
 description = "Aplicación local para registro, extracción, edición y anotación de archivos desclasificados."
 readme = "README.md"
 requires-python = ">=3.11"
@@ -39,6 +39,9 @@ surya = [
 ]
 audiovisual = [
   "faster-whisper>=1.1,<2",
+]
+platform = [
+  "yt-dlp[default,deno]>=2026.7.4,<2027",
 ]
 discovery = [
   "spacy>=3.8,<4",

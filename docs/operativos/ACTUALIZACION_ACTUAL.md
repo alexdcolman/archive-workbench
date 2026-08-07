@@ -1,38 +1,30 @@
-# Actualización actual — Archive Workbench 0.84.0
+# Actualización actual — Archive Workbench 0.85.0
 
 **Fecha:** 2026-08-07
-**Bloque:** `AV-01` — registro local de audio y video y transcripción segmentada
-**Revisión de base:** `0045_audiovisual_transcription`
-**Estado:** implementada, validada y cerrada.
+**Bloque cerrado:** `AV-02` — incorporación autorizada desde YouTube y otras plataformas
+**Próximo bloque:** `AV-03` — evaluación reproducible y optimización de transcripción de video real
+**Revisión de base:** `0045_audiovisual_transcription` (sin migración nueva en 0.85.0)
 
 ## Qué incorpora
 
-Archive Workbench registra archivos locales de audio y video mediante el mismo catálogo e identidad digital ya existentes, conservando original, ruta, SHA-256 y relación archivística. FFprobe registra formato, códecs, canales, frecuencia, resolución y duración. FFmpeg crea solamente derivados técnicos para transcripción o reproducción cuando son necesarios; el original no se modifica.
+La versión 0.85.0 agrega una extensión opcional basada en `yt-dlp` para descargar un audio o video autorizado y registrarlo inmediatamente mediante el circuito local de AV-01. No crea un sistema paralelo: el archivo incorporado pasa por `DigitalObject`, `FileInstance`, `SourceRegistration` y `AudiovisualMedia`, y desde allí usa la reproducción y la transcripción ya existentes.
 
-La transcripción usa corridas trazables y segmentos temporales con `start_time`, `end_time`, texto original, texto corregido, estado de revisión e historial append-only. La vista **Transcribir audio y video** mantiene como núcleo el reproductor, el segmento vigente y **Texto corregido**. **Velocidad de reproducción** e **Ir al inicio del segmento** están visibles; **Editar datos descriptivos**, **Opciones técnicas** y **Anotar entidades en este segmento** permanecen cerrados por defecto.
+`SourceRegistration.source_payload_json` conserva URL solicitada/canónica, plataforma e identificador, canal/uploader, fecha de publicación, formatos seleccionados, versión de `yt-dlp`, ruta y extensión incorporadas, SHA-256, tamaño, fecha de descarga y condiciones de acceso/autorización. La exportación audiovisual añade esos campos de procedencia a cada segmento.
 
-El backend es intercambiable. El recorrido local inicial usa `faster-whisper`; CPU usa `compute_type=int8` por defecto. La dependencia Python se instala con el extra `audiovisual`; FFmpeg y FFprobe son requisitos de sistema para AV-01. El runtime OCR existente no depende de `faster-whisper`.
+## Interfaz
 
-Los segmentos participan en búsqueda literal, exportación CSV/JSONL y menciones vinculables a autoridades existentes. Los paquetes de adopción de estado usan contrato 1.1 cuando existe contenido audiovisual y conservan corridas, segmentos, revisiones y menciones; un proyecto sin AV mantiene la huella histórica anterior.
+En **Transcribir audio y video** aparece el panel cerrado **Incorporar desde plataforma**. El recorrido visible pide URL, unidad archivística, tipo de incorporación, condiciones de acceso/autorización y confirmación explícita de que el proyecto puede incorporar el material. La incorporación no inicia una transcripción automáticamente. Los errores de campos obligatorios se muestran con mensajes legibles y no exponen errores internos de Pydantic.
 
-## Migración
+## Dependencias
 
-`0045_audiovisual_transcription` agrega las tablas `audiovisual_media`, `audiovisual_derivative_assets`, `transcription_runs`, `transcript_segments`, `transcript_segment_revisions` y `segment_entity_mentions`. No transforma las tablas OCR ni convierte tiempos en páginas.
+El extra opcional `platform` instala `yt-dlp[default,deno]>=2026.7.4,<2027`, incluido Deno para el recorrido de YouTube. FFmpeg/FFprobe continúan siendo requisitos de sistema. AV-01, OCR y los demás runtimes no dependen de este extra.
 
-La migración fue probada primero sobre una base descartable `0044 → 0045`, conservando conteos previos, con `PRAGMA quick_check: ok`, cero violaciones de claves foráneas y las seis tablas audiovisuales presentes. La migración de `project_data` se realiza solamente durante el cierre local de 0.84.0, después de crear y verificar un backup SQLite y antes del commit/tag.
+## Base de datos
+
+AV-02 no requiere migración. La revisión continúa en `0045_audiovisual_transcription`, publicada con 0.84.0.
 
 ## Validación real
 
-La validación descartable confirmó reproducción de audio y video, velocidades configurables, salto al inicio temporal del segmento, corrección persistente, mención de entidad, búsqueda con navegación directa al segmento, exportación JSONL y una corrida real `faster-whisper` `tiny` en CPU con `int8` sobre video.
+La validación manual se realizó sobre una base descartable fuera del repositorio con el video de YouTube `RememorArte Horacio BAU` (`CwWKigBOfjQ`) del canal `Centro Cultural por la Memoria Trelew` (`UCsZG_7l0cYIEtJNhajrFPYg`). La incorporación produjo un MP4 de 436.221 s y preservó procedencia, condiciones de acceso y SHA-256 `f187eaa71718ed2b016ec3af01e58102d19537d758fdc5c21df46f00378ec7ba`. El diagnóstico final informó `quick_check: ok`, cero violaciones de claves foráneas y `transcription_run_count: 0`; `project_data` permaneció en `0045_audiovisual_transcription` sin contenido audiovisual nuevo.
 
-RC1 reveló dos regresiones de interfaz: el botón **Ir al inicio del segmento** no movía efectivamente el reproductor y **Abrir** desde búsqueda no aplicaba el destino audiovisual. RC2 corrigió ambos problemas y la revalidación manual fue satisfactoria.
-
-El diagnóstico final informó `quick_check: ok`, cero violaciones de claves foráneas, SHA-256 intactos de `testimonio_controlado.wav` y `testimonio_controlado.mp4`, una corrección esperada, la mención `Memoria`, cinco segmentos exportables y una corrida CPU completada con dos segmentos de video. `AV-01` queda cerrado en 0.84.0.
-
-`OCR-01` continúa cerrado en 0.83.0 y no se reabrió durante esta validación.
-
-## Continuidad inmediata
-
-El siguiente bloque es `AV-02`, incorporación autorizada desde YouTube y otras plataformas al circuito local de AV-01. La prueba inicial prevista usará, si el video concreto resulta accesible y autorizado, material del canal `https://www.youtube.com/channel/UCsZG_7l0cYIEtJNhajrFPYg`.
-
-Después se ejecutará `AV-03`: evaluación reproducible de transcripción de video real para observar calidad, segmentación, tiempos y correcciones humanas y decidir optimizaciones sólo a partir de esa evidencia.
+RC1 mostró un error de presentación cuando faltaba un campo obligatorio: la UI exponía el `ValidationError` de Pydantic. RC2 lo reemplazó por mensajes comprensibles para una persona no técnica y la revalidación fue satisfactoria. `AV-02` queda cerrado. La transcripción del video real, su evaluación y cualquier optimización basada en evidencia corresponden a `AV-03`.

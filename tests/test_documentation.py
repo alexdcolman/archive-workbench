@@ -64,7 +64,6 @@ def test_active_pending_ledger_has_index_and_recovers_all_major_lines() -> None:
     implemented = (OPERATIVE / "IMPLEMENTACIONES_REALIZADAS.md").read_text(encoding="utf-8")
     assert "## Índice" in text
     for item in (
-        "AV-02 — Plugin opcional de incorporación desde YouTube",
         "AV-03 — Evaluación y optimización de transcripción de video real",
         "AI-01 — Pipeline CLI opcional de análisis con LLM",
         "AI-02 — Sistema RAG trazable",
@@ -77,6 +76,7 @@ def test_active_pending_ledger_has_index_and_recovers_all_major_lines() -> None:
         assert item in text
     assert "AV-01 — Registro local de audio y video y transcripción" not in text
     assert "AV-01 — audio/video local, segmentos y corrección — 0.84.0" in implemented
+    assert "AV-02 — incorporación autorizada desde plataformas — 0.85.0" in implemented
     assert "SEM-01 — Calibración reproducible de búsqueda semántica" not in text
     assert "GRAPH-01 — Grafo sin colisiones" not in text
     assert "QA-01 — Control estático y tipado" in text
@@ -276,7 +276,7 @@ def test_history_map_is_concise_and_references_historical_detail() -> None:
     assert text.index("### 0.74.0") < text.index("### 0.73.0")
     assert text.index("### 0.73.0") < text.index("### 0.72.0")
     assert text.index("### 0.72.0") < text.index("### 0.71.2")
-    assert len(text.splitlines()) < 270
+    assert len(text.splitlines()) < 280
 
 
 def test_current_architecture_is_separate_from_historical_design() -> None:
@@ -517,19 +517,19 @@ def test_automatic_analysis_quality_decision_is_preserved_and_auditable() -> Non
     assert "st.form" in text
 
 
-def test_current_update_guide_describes_closed_av01_and_migration_safety() -> None:
+def test_current_update_guide_describes_av02_candidate_without_new_migration() -> None:
     text = (OPERATIVE / "ACTUALIZACION_ACTUAL.md").read_text(encoding="utf-8")
-    assert "Archive Workbench 0.84.0" in text
-    assert "implementada, validada y cerrada" in text
-    assert "`AV-01`" in text
+    assert "Archive Workbench 0.85.0" in text
+    assert "candidata AV-02" not in text
+    assert "`AV-02`" in text
     assert "0045_audiovisual_transcription" in text
-    assert "FFmpeg" in text and "FFprobe" in text
-    assert "faster-whisper" in text and "CPU" in text
-    assert "Transcribir audio y video" in text
-    assert "Velocidad de reproducción" in text
+    assert "sin migración nueva" in text
+    assert "yt-dlp" in text and "Deno" in text
+    assert "Incorporar desde plataforma" in text
+    assert "SourceRegistration" in text
+    assert "no inicia una transcripción automáticamente" in text
     assert "project_data" in text
-    assert "backup SQLite" in text
-    assert "RC2" in text
+    assert "AV-03" in text
 
 def test_authority_dictionary_format_is_versioned_and_conservative() -> None:
     text = (
@@ -615,11 +615,12 @@ def test_pilot_guide_delegates_future_work_to_single_pending_ledger() -> None:
 def test_readme_points_only_to_current_documentation_map() -> None:
     text = (ROOT / "README.md").read_text(encoding="utf-8")
     citation = (ROOT / "CITATION.cff").read_text(encoding="utf-8")
-    assert "**Versión actual:** 0.84.0" in text
-    assert "La versión 0.84.0 incorpora AV-01" in text
-    assert "`AV-01` queda cerrado" in text
-    assert "(versión 0.84.0)" in text
-    assert 'version: "0.84.0"' in citation
+    assert "**Versión actual:** 0.85.0" in text
+    assert "AV-02 cerrado" in text
+    assert "AV-01" in text
+    assert "(versión 0.85.0)" in text
+    assert 'version: "0.85.0"' in citation
+    assert 'pip install -e ".[platform]"' in text
     assert "FFmpeg/FFprobe" in text
     assert "audio y video" in text
     assert "orientación, deskew, dewarp y eliminación controlada de líneas" in text
@@ -665,11 +666,12 @@ def test_pre_release_roadmap_includes_public_site_export_and_parallel_giar() -> 
     assert "GIAR-01" in text
     assert "vision_describe" in text
     assert "GitHub Pages" in text
-    assert "audio o video" in text
+    assert "transcripción de video real" in text
     assert "`OCR-01` quedó implementado, validado y cerrado en 0.83.0" in text
     assert "`AV-01` quedó implementado, validado y cerrado en 0.84.0" in text
-    assert "1. Implementar `AV-02`" in text
-    assert "2. Ejecutar `AV-03`" in text
+    assert "`AV-02` quedó implementado, validado y cerrado en 0.85.0" in text
+    assert "1. Ejecutar `AV-03`" in text
+    assert "Validar y cerrar `AV-02`" not in text
     assert "Validar y cerrar `AV-01`" not in text
     assert "Validar `OCR-01F`" not in text
 
@@ -748,9 +750,11 @@ def test_ocr01_is_closed_and_architecture_remains_conservative() -> None:
     assert "FFprobe" in implemented and "FFmpeg" in implemented
     assert "Velocidad de reproducción" in implemented
     assert "faster-whisper" in implemented and "CPU" in implemented
-    assert "audio o video" in pending
+    assert "video real autorizado" in pending
     assert "reproducción con velocidades configurables" in architecture
     assert "0045_audiovisual_transcription" in architecture
     assert "TranscriptSegmentRevision" in architecture
     assert "SegmentEntityMention" in architecture
-    assert "EN VALIDACIÓN" not in pending
+    assert "AV-02 — Plugin opcional de incorporación desde YouTube y otras plataformas — EN VALIDACIÓN" not in pending
+    assert "AV-02 — incorporación autorizada desde plataformas — 0.85.0" in implemented
+    assert "AV-01 —" not in pending

@@ -1002,9 +1002,17 @@ def _export_rows(session: Session, *, project_id: str) -> list[dict[str, Any]]:
         if segment.id in seen:
             continue
         seen.add(segment.id)
+        platform_payload = (registration.source_payload_json or {}).get("platform_import")
+        if not isinstance(platform_payload, dict):
+            platform_payload = {}
         result.append(
             {
                 "source_key": registration.source_key,
+                "source_origin": (registration.source_payload_json or {}).get("origin"),
+                "platform": platform_payload.get("platform"),
+                "platform_id": platform_payload.get("platform_id"),
+                "source_url": platform_payload.get("webpage_url"),
+                "source_access_conditions": platform_payload.get("access_conditions"),
                 "digital_object_id": digital.id,
                 "original_filename": digital.original_filename,
                 "original_sha256": digital.sha256,
@@ -1041,7 +1049,8 @@ def export_transcript_segments_bytes(
     if output_format == "csv":
         buffer = io.StringIO(newline="")
         fieldnames = list(rows[0]) if rows else [
-            "source_key", "digital_object_id", "original_filename", "original_sha256", "media_type",
+            "source_key", "source_origin", "platform", "platform_id", "source_url",
+            "source_access_conditions", "digital_object_id", "original_filename", "original_sha256", "media_type",
             "media_title", "transcription_run_id", "backend", "model_name", "device", "segment_id",
             "segment_index", "start_time", "end_time", "text", "original_text", "corrected_text",
             "review_status", "revision_number",

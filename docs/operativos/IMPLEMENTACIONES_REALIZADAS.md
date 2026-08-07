@@ -1,6 +1,6 @@
 # Implementaciones realizadas — Archive Workbench
 
-**Estado preparado:** 2026-08-07 · **versión de trabajo:** 0.84.0
+**Estado preparado:** 2026-08-07 · **versión de trabajo:** 0.85.0
 
 Este documento registra capacidades ya implementadas y, cuando corresponde, validadas. No deben volver a aparecer en `PENDIENTES_ACTIVOS.md` salvo evidencia de regresión o ampliación explícita del alcance.
 
@@ -32,6 +32,7 @@ Este documento registra capacidades ya implementadas y, cuando corresponde, vali
 | Productores y gestores CAT-02 | Implementados y validados en 0.77.0 |
 | Capas archivísticas GRAPH-02 | Implementadas y validadas en 0.77.0 |
 | Registro audiovisual y transcripción segmentada AV-01 | Implementado, validado y cerrado en 0.84.0 |
+| Incorporación autorizada desde plataformas AV-02 | Implementada, validada y cerrada en 0.85.0 |
 
 ## Registro audiovisual y transcripción segmentada
 
@@ -46,6 +47,14 @@ Los segmentos participan en búsqueda literal, navegación directa desde resulta
 **Validada manualmente en 0.84.0.** La prueba real confirmó audio y video, velocidades variables, salto temporal al segmento, corrección persistente, una mención `Memoria`, búsqueda con apertura directa, exportación y una corrida `faster-whisper` `tiny` completada en CPU sobre video. RC1 reveló dos regresiones de UI —salto temporal inefectivo y navegación audiovisual descartada desde búsqueda— que RC2 corrigió y revalidó. El diagnóstico final informó `quick_check: ok`, cero violaciones FK, originales intactos, cinco segmentos exportables y dos segmentos producidos por la corrida CPU. `AV-01` queda cerrado.
 
 El gate de cierre con la suite completa detectó además que la huella de intercambio intentaba leer tablas AV aun al ejercitar bases históricas anteriores a `0045`. La implementación final comprueba la presencia del esquema audiovisual antes de incorporarlo al estado, conservando el comportamiento histórico durante migraciones; también se actualizaron únicamente los fixtures y verificadores antiguos que habían quedado fijados a versiones o revisiones anteriores.
+
+### AV-02 — incorporación autorizada desde plataformas — 0.85.0
+
+Archive Workbench incorpora una extensión opcional `platform` basada en `yt-dlp` para descargar audio o video autorizado desde plataformas compatibles y registrarlo inmediatamente mediante el circuito local de `AV-01`. No agrega tablas ni migración: conserva la revisión `0045_audiovisual_transcription` y utiliza `SourceRegistration.source_payload_json` para almacenar URL solicitada y canónica, plataforma e identificador, canal/uploader, fecha de publicación, formatos seleccionados, versión de `yt-dlp`, ruta local, SHA-256, tamaño, fecha de descarga y condiciones de acceso/autorización.
+
+La vista **Transcribir audio y video** agrega el panel cerrado **Incorporar desde plataforma**, con URL, unidad archivística, incorporación como video o solo audio, condiciones de acceso/autorización y confirmación explícita. El material incorporado queda disponible para reproducción y para el circuito de transcripción de `AV-01`, pero la descarga no inicia una transcripción automáticamente. La exportación de segmentos conserva también la procedencia remota.
+
+**Validada manualmente en 0.85.0.** La prueba real incorporó desde YouTube el video `RememorArte Horacio BAU` (`CwWKigBOfjQ`) del canal `Centro Cultural por la Memoria Trelew` (`UCsZG_7l0cYIEtJNhajrFPYg`). El archivo quedó registrado como MP4 de 436.221 s, 1280×720, H.264 + Opus, con SHA-256 `f187eaa71718ed2b016ec3af01e58102d19537d758fdc5c21df46f00378ec7ba`; el verificador confirmó `quick_check: ok`, cero violaciones FK, procedencia y condiciones de acceso persistentes y `transcription_run_count: 0`. RC1 expuso además que un campo obligatorio vacío podía mostrar un `ValidationError` técnico de Pydantic; RC2 reemplazó esos fallos por mensajes comprensibles para personas no técnicas y la revalidación manual fue satisfactoria. `AV-02` queda cerrado.
 
 ## Benchmark OCR con verdad terreno
 

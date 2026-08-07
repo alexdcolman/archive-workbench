@@ -1,24 +1,23 @@
 # Hoja de ruta pre-release y líneas paralelas — Archive Workbench
 
 **Estado preparado:** 2026-08-07
-**Versión de referencia:** 0.84.0
+**Versión de referencia:** 0.85.0
 
 Esta hoja ordena el trabajo restante hasta v1.0. El detalle y el estado de cada bloque se mantienen en [`PENDIENTES_ACTIVOS.md`](PENDIENTES_ACTIVOS.md). Las líneas paralelas no bloquean la publicación inicial salvo decisión explícita posterior.
 
 ## Secuencia principal hasta v1.0
 
-`OCR-01` quedó implementado, validado y cerrado en 0.83.0. `AV-01` quedó implementado, validado y cerrado en 0.84.0.
+`OCR-01` quedó implementado, validado y cerrado en 0.83.0. `AV-01` quedó implementado, validado y cerrado en 0.84.0. `AV-02` quedó implementado, validado y cerrado en 0.85.0.
 
-1. Implementar `AV-02` como plugin opcional de incorporación autorizada de audio o video desde YouTube y otras plataformas, reutilizando el circuito local de `AV-01`.
-2. Ejecutar `AV-03` como evaluación reproducible de transcripción de video real y decidir optimizaciones a partir de la evidencia obtenida.
-3. Implementar `INT-01` para transporte controlado mediante Google Drive.
-4. Implementar `EXP-01` para exportar imágenes y recortes con manifiestos trazables, preparados para análisis visual posterior.
-5. Ejecutar `PILOT-01` sobre un proyecto real y persistente con materiales DIPPBA, APM-Chubut y testimonios audiovisuales.
-6. Ejecutar `UX-02` sobre la aplicación completa y el corpus real del piloto.
-7. Completar `WEB-01`: sitio público de Archive Workbench en GitHub Pages, tutorial, README ilustrado y referencia técnica pública.
-8. Ejecutar `QA-01` junto con `OPS-02`.
-9. Preparar `OPS-01` y verificar perfiles de instalación.
-10. Cerrar `OPS-03`, congelar contratos públicos y preparar la candidata a v1.0.
+1. Ejecutar `AV-03` como evaluación reproducible de transcripción de video real y decidir optimizaciones a partir de la evidencia obtenida.
+2. Implementar `INT-01` para transporte controlado mediante Google Drive.
+3. Implementar `EXP-01` para exportar imágenes y recortes con manifiestos trazables, preparados para análisis visual posterior.
+4. Ejecutar `PILOT-01` sobre un proyecto real y persistente con materiales DIPPBA, APM-Chubut y testimonios audiovisuales.
+5. Ejecutar `UX-02` sobre la aplicación completa y el corpus real del piloto.
+6. Completar `WEB-01`: sitio público de Archive Workbench en GitHub Pages, tutorial, README ilustrado y referencia técnica pública.
+7. Ejecutar `QA-01` junto con `OPS-02`.
+8. Preparar `OPS-01` y verificar perfiles de instalación.
+9. Cerrar `OPS-03`, congelar contratos públicos y preparar la candidata a v1.0.
 
 ## Línea paralela vinculada
 

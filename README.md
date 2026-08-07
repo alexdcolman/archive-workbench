@@ -6,7 +6,7 @@ Está pensada especialmente para equipos de archivos, bibliotecas, ciencias soci
 
 Los documentos y la base de datos permanecen en la computadora del equipo: la aplicación no necesita subir el corpus a un servicio externo.
 
-**Versión actual:** 0.84.0 — AV-01 implementado, validado y cerrado para audio/video local y transcripción segmentada.
+**Versión actual:** 0.85.0 — AV-02 cerrado para incorporación autorizada desde plataformas; AV-03 es el próximo bloque.
 
 ## Qué permite hacer
 
@@ -63,7 +63,7 @@ Se necesita:
 - Python 3.11 o posterior;
 - conexión a internet durante la instalación;
 - Tesseract OCR y el idioma español;
-- FFmpeg/FFprobe para las funciones audiovisuales de AV-01;
+- FFmpeg/FFprobe para las funciones audiovisuales de AV-01 y AV-02;
 - espacio suficiente para los documentos, derivados y modelos opcionales.
 
 Una placa gráfica no es obligatoria. Puede acelerar algunas funciones, pero Archive Workbench también funciona con CPU.
@@ -119,6 +119,14 @@ La búsqueda semántica es opcional. Para agregarla:
 ```bash
 pip install -e ".[semantic]"
 ```
+
+La incorporación autorizada desde YouTube y otras plataformas es opcional:
+
+```bash
+pip install -e ".[platform]"
+```
+
+Este extra instala `yt-dlp` con sus componentes recomendados para YouTube, incluido Deno. Los archivos incorporados entran después al mismo circuito audiovisual local de AV-01.
 
 Surya OCR es el backend preferido desde 0.38.0, pero sigue siendo opcional: si no está disponible, el perfil principal usa automáticamente el fallback Docling/Tesseract. Se instala en un runtime separado para no modificar Pillow, Torch ni Transformers del entorno principal:
 
@@ -269,11 +277,11 @@ La documentación cerrada y las guías de versiones anteriores están separadas 
 Para instalar también las herramientas de desarrollo:
 
 ```bash
-pip install -e ".[dev,extraction,streamlit,semantic,tiff,discovery,audiovisual]"
+pip install -e ".[dev,extraction,streamlit,semantic,tiff,discovery,audiovisual,platform]"
 pytest
 ```
 
-La versión 0.84.0 incorpora AV-01 para audio y video local: originales inmutables, inspección técnica, transcripción temporal revisable, reproducción con velocidad variable y salto temporal, búsqueda con navegación directa, entidades y exportación sobre segmentos. La validación manual confirmó también un recorrido `faster-whisper` funcional en CPU; `AV-01` queda cerrado y `OCR-01` permanece cerrado desde 0.83.0.
+La versión 0.85.0 mantiene AV-01 y cierra AV-02 para incorporar de forma autorizada audio o video desde plataformas compatibles. La validación real con YouTube confirmó descarga, reproducción y procedencia trazable sin iniciar transcripción automáticamente; los campos obligatorios del formulario fallan con mensajes comprensibles y no exponen errores internos. AV-03 queda como próximo bloque para evaluar una transcripción de video real y decidir optimizaciones a partir de evidencia. AV-01 permanece cerrado y `OCR-01` permanece cerrado desde 0.83.0.
 
 ## Licencia y cita
 
@@ -285,6 +293,6 @@ El desarrollo fue realizado por **Alex Colman** en el marco del **Grupo de Inves
 
 Cuando Archive Workbench sea utilizado en una investigación, publicación, informe, actividad docente o desarrollo derivado, solicitamos citar:
 
-> Colman, Alex, y Grupo de Investigación en Archivos de la Represión (GIAR). 2026. *Archive Workbench* (versión 0.84.0) [software]. https://github.com/alexdcolman/archive-workbench
+> Colman, Alex, y Grupo de Investigación en Archivos de la Represión (GIAR). 2026. *Archive Workbench* (versión 0.85.0) [software]. https://github.com/alexdcolman/archive-workbench
 
 El archivo [`CITATION.cff`](CITATION.cff) contiene los metadatos de cita reconocidos por GitHub y por distintos gestores bibliográficos.
