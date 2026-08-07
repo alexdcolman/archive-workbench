@@ -1,6 +1,6 @@
 # Implementaciones realizadas — Archive Workbench
 
-**Estado preparado:** 2026-08-07 · **versión:** 0.83.0
+**Estado preparado:** 2026-08-07 · **versión de trabajo:** 0.84.0
 
 Este documento registra capacidades ya implementadas y, cuando corresponde, validadas. No deben volver a aparecer en `PENDIENTES_ACTIVOS.md` salvo evidencia de regresión o ampliación explícita del alcance.
 
@@ -31,6 +31,21 @@ Este documento registra capacidades ya implementadas y, cuando corresponde, vali
 | Diccionarios de autoridades DISC-02 | Implementados y validados en 0.76.0 |
 | Productores y gestores CAT-02 | Implementados y validados en 0.77.0 |
 | Capas archivísticas GRAPH-02 | Implementadas y validadas en 0.77.0 |
+| Registro audiovisual y transcripción segmentada AV-01 | Implementado, validado y cerrado en 0.84.0 |
+
+## Registro audiovisual y transcripción segmentada
+
+### AV-01 — audio/video local, segmentos y corrección — 0.84.0
+
+Archive Workbench reutiliza `DigitalObject`, `FileInstance` y `SourceRegistration` para la identidad del original audiovisual y agrega una capa temporal propia mediante `AudiovisualMedia`, derivados trazables, corridas de transcripción, segmentos, revisiones append-only y menciones vinculadas a autoridades existentes. La migración aditiva `0045_audiovisual_transcription` no transforma las tablas OCR ni representa segundos como páginas.
+
+FFprobe registra formato, códecs, canales, frecuencia, resolución y duración; FFmpeg genera solamente derivados técnicos cuando son necesarios. La vista **Transcribir audio y video** integra reproducción, **Velocidad de reproducción**, **Ir al inicio del segmento**, corrección humana persistente y paneles secundarios cerrados por defecto. El backend es intercambiable y el recorrido local inicial usa `faster-whisper`, con CPU `int8` funcional.
+
+Los segmentos participan en búsqueda literal, navegación directa desde resultados, exportación CSV/JSONL y menciones de entidades. El intercambio adopta contrato audiovisual 1.1 únicamente cuando existe contenido AV, preservando la huella histórica de proyectos sin audio/video. El inventario OCR excluye explícitamente medios audiovisuales.
+
+**Validada manualmente en 0.84.0.** La prueba real confirmó audio y video, velocidades variables, salto temporal al segmento, corrección persistente, una mención `Memoria`, búsqueda con apertura directa, exportación y una corrida `faster-whisper` `tiny` completada en CPU sobre video. RC1 reveló dos regresiones de UI —salto temporal inefectivo y navegación audiovisual descartada desde búsqueda— que RC2 corrigió y revalidó. El diagnóstico final informó `quick_check: ok`, cero violaciones FK, originales intactos, cinco segmentos exportables y dos segmentos producidos por la corrida CPU. `AV-01` queda cerrado.
+
+El gate de cierre con la suite completa detectó además que la huella de intercambio intentaba leer tablas AV aun al ejercitar bases históricas anteriores a `0045`. La implementación final comprueba la presencia del esquema audiovisual antes de incorporarlo al estado, conservando el comportamiento histórico durante migraciones; también se actualizaron únicamente los fixtures y verificadores antiguos que habían quedado fijados a versiones o revisiones anteriores.
 
 ## Benchmark OCR con verdad terreno
 

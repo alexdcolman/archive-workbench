@@ -138,8 +138,8 @@ def test_resume_template_adds_manual_illustration_in_free_position(tmp_path: Pat
 
 def test_validation_project_starts_without_candidate_or_selection(tmp_path: Path) -> None:
     result = create_validation_project(tmp_path / "regional")
-    assert result["version"] == "0.81.0"
-    assert result["revision"] == "0044_layout_structure_review"
+    assert result["version"] == "0.84.0"
+    assert result["revision"] == "0045_audiovisual_transcription"
     assert result["template_regions"] == 5
     assert result["candidate_runs"] == 0
     assert result["canonical_selections"] == 0

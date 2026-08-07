@@ -1,55 +1,38 @@
-# Actualización actual — Archive Workbench 0.83.0
+# Actualización actual — Archive Workbench 0.84.0
 
 **Fecha:** 2026-08-07
-**Bloque:** `OCR-01F` — benchmark Tesseract, Docling y Surya con verdad terreno
-**Revisión de base:** `0044_layout_structure_review`
+**Bloque:** `AV-01` — registro local de audio y video y transcripción segmentada
+**Revisión de base:** `0045_audiovisual_transcription`
+**Estado:** implementada, validada y cerrada.
 
-La versión 0.83.0 cierra `OCR-01` con un benchmark reproducible que compara Tesseract, Docling y Surya sobre exactamente los mismos derivados OCR y páginas transcritas manualmente. Calcula CER y WER, conserva tiempo de ejecución, versiones, perfiles, salidas crudas y una copia con SHA-256 de la verdad terreno utilizada.
+## Qué incorpora
 
-## Estado validado
+Archive Workbench registra archivos locales de audio y video mediante el mismo catálogo e identidad digital ya existentes, conservando original, ruta, SHA-256 y relación archivística. FFprobe registra formato, códecs, canales, frecuencia, resolución y duración. FFmpeg crea solamente derivados técnicos para transcripción o reproducción cuando son necesarios; el original no se modifica.
 
-La validación real confirmó:
+La transcripción usa corridas trazables y segmentos temporales con `start_time`, `end_time`, texto original, texto corregido, estado de revisión e historial append-only. La vista **Transcribir audio y video** mantiene como núcleo el reproductor, el segmento vigente y **Texto corregido**. **Velocidad de reproducción** e **Ir al inicio del segmento** están visibles; **Editar datos descriptivos**, **Opciones técnicas** y **Anotar entidades en este segmento** permanecen cerrados por defecto.
 
-- Tesseract 5.3.4, Docling 2.114.0 y Surya 0.22.1 disponibles en el mismo entorno;
-- una página controlada evaluada por los tres motores sobre la misma verdad terreno;
-- CER 0.0000 y WER 0.0000 para los tres motores en ese caso;
-- tiempos registrados de 0.27 s para Tesseract, 23.07 s para Docling y 209.84 s para Surya;
-- conservación del texto comparado, salida cruda, versiones, perfiles y métricas;
-- copia exacta de la verdad terreno con SHA-256 verificable;
-- TIFF original intacto;
-- selección canónica vacía y ausencia de escrituras sobre la capa editable;
-- `project_data` sin modificaciones durante la validación;
-- ausencia de migración de base.
+El backend es intercambiable. El recorrido local inicial usa `faster-whisper`; CPU usa `compute_type=int8` por defecto. La dependencia Python se instala con el extra `audiovisual`; FFmpeg y FFprobe son requisitos de sistema para AV-01. El runtime OCR existente no depende de `faster-whisper`.
 
-Los tiempos corresponden al caso controlado y no constituyen una comparación general de rendimiento entre motores.
+Los segmentos participan en búsqueda literal, exportación CSV/JSONL y menciones vinculables a autoridades existentes. Los paquetes de adopción de estado usan contrato 1.1 cuando existe contenido audiovisual y conservan corridas, segmentos, revisiones y menciones; un proyecto sin AV mantiene la huella histórica anterior.
 
-## Verdad terreno
+## Migración
 
-Cada página de referencia se guarda como:
+`0045_audiovisual_transcription` agrega las tablas `audiovisual_media`, `audiovisual_derivative_assets`, `transcription_runs`, `transcript_segments`, `transcript_segment_revisions` y `segment_entity_mentions`. No transforma las tablas OCR ni convierte tiempos en páginas.
 
-```text
-ground_truth/ocr/<source_key>/page_0001.txt
-```
+La migración fue probada primero sobre una base descartable `0044 → 0045`, conservando conteos previos, con `PRAGMA quick_check: ok`, cero violaciones de claves foráneas y las seis tablas audiovisuales presentes. La migración de `project_data` se realiza solamente durante el cierre local de 0.84.0, después de crear y verificar un backup SQLite y antes del commit/tag.
 
-El benchmark copia el archivo usado dentro de su salida y registra su SHA-256. La referencia describe el contenido correcto de la página y no reproduce convenciones ni errores de un motor específico.
+## Validación real
 
-## Métricas
+La validación descartable confirmó reproducción de audio y video, velocidades configurables, salto al inicio temporal del segmento, corrección persistente, mención de entidad, búsqueda con navegación directa al segmento, exportación JSONL y una corrida real `faster-whisper` `tiny` en CPU con `int8` sobre video.
 
-- `CER`: distancia de Levenshtein entre caracteres dividida por la longitud de la referencia.
-- `WER`: distancia de Levenshtein entre palabras dividida por la cantidad de palabras de referencia.
-- Tiempo acumulado por motor y por página.
+RC1 reveló dos regresiones de interfaz: el botón **Ir al inicio del segmento** no movía efectivamente el reproductor y **Abrir** desde búsqueda no aplicaba el destino audiovisual. RC2 corrigió ambos problemas y la revalidación manual fue satisfactoria.
 
-CER/WER evalúan fidelidad textual. Layout, orden de lectura y estructuras visuales siguen requiriendo inspección humana de las salidas.
+El diagnóstico final informó `quick_check: ok`, cero violaciones de claves foráneas, SHA-256 intactos de `testimonio_controlado.wav` y `testimonio_controlado.mp4`, una corrección esperada, la mención `Memoria`, cinco segmentos exportables y una corrida CPU completada con dos segmentos de video. `AV-01` queda cerrado en 0.84.0.
 
-## Comandos
+`OCR-01` continúa cerrado en 0.83.0 y no se reabrió durante esta validación.
 
-```text
-archive-workbench ocr-benchmark-truth-doctor
-archive-workbench ocr-benchmark-truth
-```
+## Continuidad inmediata
 
-La referencia técnica está en `docs/referencia/BENCHMARK_OCR_VERDAD_TERRENO.md`.
+El siguiente bloque es `AV-02`, incorporación autorizada desde YouTube y otras plataformas al circuito local de AV-01. La prueba inicial prevista usará, si el video concreto resulta accesible y autorizado, material del canal `https://www.youtube.com/channel/UCsZG_7l0cYIEtJNhajrFPYg`.
 
-## Base de datos
-
-No hay migración. El benchmark lee el catálogo y los derivados vigentes y escribe únicamente bajo `ocr_benchmarks/`. La revisión continúa en `0044_layout_structure_review`.
+Después se ejecutará `AV-03`: evaluación reproducible de transcripción de video real para observar calidad, segmentación, tiempos y correcciones humanas y decidir optimizaciones sólo a partir de esa evidencia.

@@ -6,7 +6,7 @@ Está pensada especialmente para equipos de archivos, bibliotecas, ciencias soci
 
 Los documentos y la base de datos permanecen en la computadora del equipo: la aplicación no necesita subir el corpus a un servicio externo.
 
-**Versión actual:** 0.83.0 — benchmark reproducible Tesseract/Docling/Surya sobre verdad terreno y CER/WER, validado con los tres motores.
+**Versión actual:** 0.84.0 — AV-01 implementado, validado y cerrado para audio/video local y transcripción segmentada.
 
 ## Qué permite hacer
 
@@ -15,6 +15,7 @@ Archive Workbench reúne en una misma interfaz:
 - catálogo y descripción archivística jerárquica;
 - plantillas XLSX distribuibles con estructura configurable, simulación y aplicación transaccional;
 - registro de archivos originales sin modificarlos;
+- registro local de audio y video con metadatos técnicos, reproducción integrada y transcripción temporal revisable;
 - preparación versionada de derivados para OCR, con opciones conservadoras de autocontraste, Otsu, reducción de ruido, orientación, deskew, dewarp y eliminación controlada de líneas;
 - extracción de texto y OCR versionados;
 - OCR regional visual sobre páginas preparadas, con zonas OCR o manuales y clasificación documental;
@@ -62,6 +63,7 @@ Se necesita:
 - Python 3.11 o posterior;
 - conexión a internet durante la instalación;
 - Tesseract OCR y el idioma español;
+- FFmpeg/FFprobe para las funciones audiovisuales de AV-01;
 - espacio suficiente para los documentos, derivados y modelos opcionales.
 
 Una placa gráfica no es obligatoria. Puede acelerar algunas funciones, pero Archive Workbench también funciona con CPU.
@@ -76,7 +78,8 @@ sudo apt install -y \
   python3-venv \
   python3-pip \
   tesseract-ocr \
-  tesseract-ocr-spa
+  tesseract-ocr-spa \
+  ffmpeg
 ```
 
 ## Descargar Archive Workbench
@@ -266,11 +269,11 @@ La documentación cerrada y las guías de versiones anteriores están separadas 
 Para instalar también las herramientas de desarrollo:
 
 ```bash
-pip install -e ".[dev,extraction,streamlit,semantic,tiff,discovery]"
+pip install -e ".[dev,extraction,streamlit,semantic,tiff,discovery,audiovisual]"
 pytest
 ```
 
-La versión 0.83.0 incorpora y valida el benchmark con verdad terreno para Tesseract, Docling y Surya, y conserva el dewarp conservador para detectar y corregir curvatura vertical controlada, omitir páginas planas, conservar originales y previsualizaciones y registrar diagnósticos reproducibles por página. Con esta versión queda cerrado el bloque OCR-01.
+La versión 0.84.0 incorpora AV-01 para audio y video local: originales inmutables, inspección técnica, transcripción temporal revisable, reproducción con velocidad variable y salto temporal, búsqueda con navegación directa, entidades y exportación sobre segmentos. La validación manual confirmó también un recorrido `faster-whisper` funcional en CPU; `AV-01` queda cerrado y `OCR-01` permanece cerrado desde 0.83.0.
 
 ## Licencia y cita
 
@@ -282,6 +285,6 @@ El desarrollo fue realizado por **Alex Colman** en el marco del **Grupo de Inves
 
 Cuando Archive Workbench sea utilizado en una investigación, publicación, informe, actividad docente o desarrollo derivado, solicitamos citar:
 
-> Colman, Alex, y Grupo de Investigación en Archivos de la Represión (GIAR). 2026. *Archive Workbench* (versión 0.83.0) [software]. https://github.com/alexdcolman/archive-workbench
+> Colman, Alex, y Grupo de Investigación en Archivos de la Represión (GIAR). 2026. *Archive Workbench* (versión 0.84.0) [software]. https://github.com/alexdcolman/archive-workbench
 
 El archivo [`CITATION.cff`](CITATION.cff) contiene los metadatos de cita reconocidos por GitHub y por distintos gestores bibliográficos.

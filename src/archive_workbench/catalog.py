@@ -5,7 +5,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 from uuid import UUID
 
-from sqlalchemy import func, select
+from sqlalchemy import func, inspect as sa_inspect, select
 from sqlalchemy.orm import Session
 
 from archive_workbench.contracts.decisions import ProjectDecisions
@@ -13,6 +13,8 @@ from archive_workbench.contracts.test_corpus import TestCorpus, TestDocument
 from archive_workbench.db.models import (
     ArchivalUnit,
     ArchivalUnitRevision,
+    AudiovisualDerivativeAsset,
+    AudiovisualMedia,
     DigitalObject,
     DerivativeAsset,
     DigitalObjectUnitLink,
@@ -30,9 +32,13 @@ from archive_workbench.db.models import (
     ExtractionPage,
     ExtractionRegion,
     ExtractionRun,
+    SegmentEntityMention,
     PreprocessingRun,
     Project,
     SourceRegistration,
+    TranscriptSegment,
+    TranscriptSegmentRevision,
+    TranscriptionRun,
 )
 from archive_workbench.domain.enums import FilePresence
 from archive_workbench.identity import stable_id
@@ -373,10 +379,18 @@ def database_counts(session: Session) -> dict[str, int]:
         "editable_page_actions": EditablePageAction,
         "editable_object_comments": EditableObjectComment,
         "editable_object_tags": EditableObjectTag,
+        "audiovisual_media": AudiovisualMedia,
+        "audiovisual_derivative_assets": AudiovisualDerivativeAsset,
+        "transcription_runs": TranscriptionRun,
+        "transcript_segments": TranscriptSegment,
+        "transcript_segment_revisions": TranscriptSegmentRevision,
+        "segment_entity_mentions": SegmentEntityMention,
     }
+    inspector = sa_inspect(session.get_bind())
     return {
         key: int(session.scalar(select(func.count()).select_from(model)) or 0)
         for key, model in models.items()
+        if inspector.has_table(model.__tablename__)
     }
 
 

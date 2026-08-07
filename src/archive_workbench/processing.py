@@ -24,7 +24,7 @@ from archive_workbench.db.models import (
     utc_now,
 )
 from archive_workbench.identity import new_id
-from archive_workbench.sources import PROCESSABLE_SOURCE_TYPES
+from archive_workbench.sources import DOCUMENT_MEDIA_TYPES, PROCESSABLE_SOURCE_TYPES
 
 PROCESSING_OPERATIONS = ("prepare", "extract", "retry_failed", "bootstrap")
 PROCESSING_ITEM_STATUSES = ("queued", "running", "completed", "warning", "failed")
@@ -259,6 +259,7 @@ def failed_extraction_pages(session: Session, *, source_key: str) -> list[int]:
         .where(
             SourceRegistration.source_type.in_(PROCESSABLE_SOURCE_TYPES),
             SourceRegistration.source_key == source_key,
+            DigitalObject.media_type.in_(DOCUMENT_MEDIA_TYPES),
         )
     ).one_or_none()
     if row is None:
@@ -286,6 +287,7 @@ def processing_inventory_rows(
         .where(
             SourceRegistration.project_id == project_id,
             SourceRegistration.source_type.in_(PROCESSABLE_SOURCE_TYPES),
+            DigitalObject.media_type.in_(DOCUMENT_MEDIA_TYPES),
         )
         .order_by(ArchivalUnit.title, SourceRegistration.source_key)
     ).all()
@@ -477,10 +479,13 @@ def create_processing_job(
     if not ordered:
         raise ValueError("Debe seleccionar al menos un documento")
     registrations = session.execute(
-        select(SourceRegistration.source_key, SourceRegistration.digital_object_id).where(
+        select(SourceRegistration.source_key, SourceRegistration.digital_object_id)
+        .join(DigitalObject, SourceRegistration.digital_object_id == DigitalObject.id)
+        .where(
             SourceRegistration.project_id == project_id,
             SourceRegistration.source_type.in_(PROCESSABLE_SOURCE_TYPES),
             SourceRegistration.source_key.in_(ordered),
+            DigitalObject.media_type.in_(DOCUMENT_MEDIA_TYPES),
         )
     ).all()
     by_key = {row.source_key: row.digital_object_id for row in registrations}

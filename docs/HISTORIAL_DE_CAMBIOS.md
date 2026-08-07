@@ -16,6 +16,9 @@ Este es el único documento en la raíz de `docs/`. Resume la evolución del pro
 
 ## Versiones recientes — más reciente primero
 
+### 0.84.0 — 2026-08-07
+Implementa y valida `AV-01` para registro local de audio y video, inspección FFprobe, derivados FFmpeg trazables, transcripción segmentada con backend intercambiable y recorrido CPU, corrección append-only, reproducción con velocidad variable, salto a segmentos, búsqueda con navegación directa, entidades, exportación y transporte del estado audiovisual. Agrega la migración `0045_audiovisual_transcription` y excluye audio/video del circuito OCR. La validación manual confirmó ambos medios, persistencia de correcciones, mención, exportación y una corrida `faster-whisper` real en CPU. RC1 reveló fallos en salto temporal y navegación desde búsqueda; RC2 los corrigió y la revalidación fue satisfactoria. `AV-01` queda cerrado.
+
 ### 0.83.0 — 2026-08-07
 Implementa y valida `OCR-01F`: benchmark reproducible de Tesseract, Docling y Surya sobre los mismos derivados y verdad terreno. La ejecución real controlada obtuvo CER 0.0000 y WER 0.0000 con los tres motores, conservó tiempos, versiones, perfiles, textos, salidas crudas y copia verificable de la referencia, mantuvo intacto el TIFF original y no modificó la selección canónica. Con este cierre, `OCR-01A` a `OCR-01F` quedan implementadas y validadas. No hay migración; la revisión permanece en `0044_layout_structure_review`.
 

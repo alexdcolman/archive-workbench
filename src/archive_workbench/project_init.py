@@ -10,6 +10,8 @@ PROJECT_DIRS = (
     "data/other",
     "extraction",
     "derivatives",
+    "derivatives/audiovisual",
+    "transcripts",
     "ocr_benchmarks",
     "ground_truth/ocr",
     "region_previews",

@@ -1,16 +1,16 @@
 # Hoja de ruta pre-release y líneas paralelas — Archive Workbench
 
 **Estado preparado:** 2026-08-07
-**Versión de referencia:** 0.83.0
+**Versión de referencia:** 0.84.0
 
 Esta hoja ordena el trabajo restante hasta v1.0. El detalle y el estado de cada bloque se mantienen en [`PENDIENTES_ACTIVOS.md`](PENDIENTES_ACTIVOS.md). Las líneas paralelas no bloquean la publicación inicial salvo decisión explícita posterior.
 
 ## Secuencia principal hasta v1.0
 
-`OCR-01` quedó implementado, validado y cerrado en 0.83.0.
+`OCR-01` quedó implementado, validado y cerrado en 0.83.0. `AV-01` quedó implementado, validado y cerrado en 0.84.0.
 
-1. Implementar `AV-01` para registro local de audio y video, reproducción con velocidad variable y transcripción segmentada revisable.
-2. Implementar `AV-02` como plugin opcional de incorporación autorizada de audio o video desde YouTube y otras plataformas, reutilizando el circuito local de `AV-01`.
+1. Implementar `AV-02` como plugin opcional de incorporación autorizada de audio o video desde YouTube y otras plataformas, reutilizando el circuito local de `AV-01`.
+2. Ejecutar `AV-03` como evaluación reproducible de transcripción de video real y decidir optimizaciones a partir de la evidencia obtenida.
 3. Implementar `INT-01` para transporte controlado mediante Google Drive.
 4. Implementar `EXP-01` para exportar imágenes y recortes con manifiestos trazables, preparados para análisis visual posterior.
 5. Ejecutar `PILOT-01` sobre un proyecto real y persistente con materiales DIPPBA, APM-Chubut y testimonios audiovisuales.

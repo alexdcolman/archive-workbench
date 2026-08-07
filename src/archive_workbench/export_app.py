@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from datetime import date
 
+from archive_workbench.audiovisual import export_transcript_segments_bytes
 from archive_workbench.analysis_quality import (
     DEFAULT_AUTOMATIC_PAGE_REVIEW_STATUSES,
     analysis_quality_scope,
@@ -594,6 +595,48 @@ def render_export_view(
         actor=actor,
     )
     st.header("Exportar corpus")
+    export_surface = st.radio(
+        "Contenido",
+        options=("documentos", "audiovisual"),
+        format_func=lambda value: (
+            "Documentos revisados" if value == "documentos" else "Segmentos de audio y video"
+        ),
+        horizontal=True,
+        key="export_surface",
+    )
+    if export_surface == "audiovisual":
+        st.caption(
+            "Exportá la transcripción segmentada vigente con tiempos, revisión, backend e identidad verificable del original."
+        )
+        av_format = st.selectbox(
+            "Formato",
+            options=("jsonl", "csv"),
+            format_func=lambda value: _OUTPUT_FORMAT_LABELS[value],
+            key="export_av_format",
+        )
+        av_engine = create_sqlite_engine(db_path)
+        try:
+            with session_scope(av_engine) as session:
+                av_payload, av_rows = export_transcript_segments_bytes(
+                    session, project_id=project_id, output_format=av_format
+                )
+        finally:
+            av_engine.dispose()
+        st.metric("Segmentos", av_rows)
+        st.download_button(
+            "Descargar segmentos audiovisuales",
+            data=av_payload,
+            file_name=f"transcripciones_audiovisuales.{av_format}",
+            mime="application/x-ndjson" if av_format == "jsonl" else "text/csv",
+            type="primary",
+            key=f"export_av_download_{av_format}",
+        )
+        with st.expander("Campos incluidos", expanded=False):
+            st.write(
+                "Cada fila conserva source_key, objeto digital, nombre y SHA-256 del original, "
+                "corrida/backend/modelo/dispositivo, segmento, tiempos, texto, estado y revisión."
+            )
+        return
     st.caption(
         "Los perfiles definen qué contenido entra, cómo se agrupa y qué tipo de archivo se crea. "
         "Cada exportación conserva la configuración exacta y la huella verificable del corpus."

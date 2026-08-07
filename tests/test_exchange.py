@@ -125,6 +125,68 @@ def _corpus() -> CorpusDefinition:
     )
 
 
+
+def _add_historical_schema_compat_columns(engine) -> None:
+    additions = {
+        "editable_pages": {
+            "form_structure_json": "JSON",
+            "layout_structure_json": "JSON",
+        },
+        "editable_page_revisions": {
+            "form_structure_json": "JSON",
+            "layout_structure_json": "JSON",
+        },
+        "entity_relations": {
+            "relation_kind": "VARCHAR(32)",
+            "provenance_note": "TEXT",
+        },
+        "corpus_export_profiles": {
+            "lifecycle_status": "VARCHAR(32)",
+            "archived_by": "VARCHAR(200)",
+            "archived_at": "DATETIME",
+        },
+        "derivative_assets": {
+            "analysis_json": "JSON",
+            "transformations_json": "JSON",
+        },
+        "exchange_dry_runs": {
+            "lifecycle_status": "VARCHAR(32)",
+            "base_match_method": "VARCHAR(32)",
+            "archived_by": "VARCHAR(200)",
+            "archived_at": "DATETIME",
+            "archive_note": "TEXT",
+        },
+    }
+    with engine.begin() as connection:
+        for table, columns in additions.items():
+            for column, sql_type in columns.items():
+                connection.execute(
+                    text(f"ALTER TABLE {table} ADD COLUMN {column} {sql_type}")
+                )
+
+
+def _drop_historical_schema_compat_columns(root: Path) -> None:
+    additions = {
+        "exchange_dry_runs": [
+            "archive_note", "archived_at", "archived_by",
+            "base_match_method", "lifecycle_status",
+        ],
+        "derivative_assets": ["transformations_json", "analysis_json"],
+        "corpus_export_profiles": ["archived_at", "archived_by", "lifecycle_status"],
+        "entity_relations": ["provenance_note", "relation_kind"],
+        "editable_page_revisions": ["layout_structure_json", "form_structure_json"],
+        "editable_pages": ["layout_structure_json", "form_structure_json"],
+    }
+    engine = create_sqlite_engine(database_path(root))
+    try:
+        with engine.begin() as connection:
+            for table, columns in additions.items():
+                for column in columns:
+                    connection.execute(text(f"ALTER TABLE {table} DROP COLUMN {column}"))
+    finally:
+        engine.dispose()
+
+
 def _seed_project(
     root: Path, *, revision: str = "head"
 ) -> tuple[object, object, str]:
@@ -217,6 +279,17 @@ def _seed_project(
                 "source_language": source.language,
             },
         }
+
+    if revision in {
+        "0029_extraction_candidate_history",
+        "0030_source_replaced_exchange",
+    }:
+        # Estos tests reproducen operaciones históricas con el código actual.
+        # 0029/0030 todavía no tenían las columnas de estructura agregadas en
+        # 0043/0044, por lo que se añaden solo como compatibilidad temporal del
+        # fixture. Antes de ejecutar Alembic se eliminan para que las migraciones
+        # reales sigan probándose sobre el esquema histórico auténtico.
+        _add_historical_schema_compat_columns(engine)
 
     if revision in {
         "head",
@@ -352,7 +425,7 @@ def test_exchange_migration_upgrades_existing_0012_database(tmp_path: Path) -> N
     upgrade_database(root, revision="0012_editable_search_fts")
     assert current_revision(root) == "0012_editable_search_fts"
     upgrade_database(root)
-    assert current_revision(root) == "0044_layout_structure_review"
+    assert current_revision(root) == "0045_audiovisual_transcription"
     engine = create_sqlite_engine(database_path(root))
     try:
         tables = set(inspect(engine).get_table_names())
@@ -381,7 +454,7 @@ def test_dry_run_migration_upgrades_populated_0013_database(tmp_path: Path) -> N
         engine.dispose()
     assert current_revision(root) == "0013_offline_exchange_log"
     upgrade_database(root)
-    assert current_revision(root) == "0044_layout_structure_review"
+    assert current_revision(root) == "0045_audiovisual_transcription"
     engine = create_sqlite_engine(database_path(root))
     try:
         tables = set(inspect(engine).get_table_names())
@@ -1028,7 +1101,7 @@ def test_transactional_apply_migration_upgrades_populated_0014_database(tmp_path
         engine.dispose()
     assert current_revision(root) == "0014_exchange_dry_run"
     upgrade_database(root)
-    assert current_revision(root) == "0044_layout_structure_review"
+    assert current_revision(root) == "0045_audiovisual_transcription"
     engine = create_sqlite_engine(database_path(root))
     try:
         tables = set(inspect(engine).get_table_names())
@@ -1606,7 +1679,7 @@ def test_delete_precondition_migration_upgrades_populated_0015_database(tmp_path
         engine.dispose()
     assert current_revision(root) == "0015_exchange_transactional_apply"
     upgrade_database(root)
-    assert current_revision(root) == "0044_layout_structure_review"
+    assert current_revision(root) == "0045_audiovisual_transcription"
     engine = create_sqlite_engine(database_path(root))
     try:
         columns = {
@@ -1627,7 +1700,7 @@ def test_conflict_resolution_migration_upgrades_populated_0016_database(tmp_path
     engine.dispose()
     assert current_revision(root) == "0016_exchange_delete_preconditions"
     upgrade_database(root)
-    assert current_revision(root) == "0044_layout_structure_review"
+    assert current_revision(root) == "0045_audiovisual_transcription"
     engine = create_sqlite_engine(database_path(root))
     try:
         tables = set(inspect(engine).get_table_names())
@@ -2034,7 +2107,7 @@ def test_resolution_usability_migration_upgrades_populated_0017_database(tmp_pat
         engine.dispose()
     assert current_revision(root) == "0017_exchange_conflict_resolutions"
     upgrade_database(root)
-    assert current_revision(root) == "0044_layout_structure_review"
+    assert current_revision(root) == "0045_audiovisual_transcription"
     engine = create_sqlite_engine(database_path(root))
     try:
         columns = {
@@ -3562,12 +3635,17 @@ def test_0030_repairs_legacy_source_replaced_bundle_end_to_end(
         assert malformed.changed_fields_json["lifecycle_status"] == [None, "deleted"]
     source_engine.dispose()
 
+    # Se retiran las columnas temporales del fixture antes de Alembic para que
+    # 0043/0044 se apliquen sobre el esquema histórico real.
+    _drop_historical_schema_compat_columns(source_root)
+    _drop_historical_schema_compat_columns(receiver_root)
+
     # Ambas copias reciben 0030. La migración completa la revisión base sin
     # generar nuevos eventos y la exportación corrige el evento ya existente.
     upgrade_database(source_root)
     upgrade_database(receiver_root)
-    assert current_revision(source_root) == "0044_layout_structure_review"
-    assert current_revision(receiver_root) == "0044_layout_structure_review"
+    assert current_revision(source_root) == "0045_audiovisual_transcription"
+    assert current_revision(receiver_root) == "0045_audiovisual_transcription"
     source_engine = create_sqlite_engine(database_path(source_root))
     receiver_engine = create_sqlite_engine(database_path(receiver_root))
     try:
@@ -3940,10 +4018,12 @@ def test_0031_backfills_legacy_page_action_and_preserves_history_end_to_end(
         )
     source_engine.dispose()
 
+    _drop_historical_schema_compat_columns(source_root)
+    _drop_historical_schema_compat_columns(receiver_root)
     upgrade_database(source_root)
     upgrade_database(receiver_root)
-    assert current_revision(source_root) == "0044_layout_structure_review"
-    assert current_revision(receiver_root) == "0044_layout_structure_review"
+    assert current_revision(source_root) == "0045_audiovisual_transcription"
+    assert current_revision(receiver_root) == "0045_audiovisual_transcription"
 
     source_engine = create_sqlite_engine(database_path(source_root))
     receiver_engine = create_sqlite_engine(database_path(receiver_root))
@@ -4871,7 +4951,7 @@ def test_lineage_validation_script_creates_recoverable_discardable_pair(
         receiver,
         force=False,
     )
-    assert result["revision"] == "0044_layout_structure_review"
+    assert result["revision"] == "0045_audiovisual_transcription"
 
     engine = create_sqlite_engine(database_path(receiver))
     try:
@@ -5508,7 +5588,7 @@ def test_common_base_validation_script_creates_distinct_identical_copies(
         tmp_path / "common_base_b",
         force=False,
     )
-    assert result["revision"] == "0044_layout_structure_review"
+    assert result["revision"] == "0045_audiovisual_transcription"
     assert result["initiator_workspace_id"] != result["counterpart_workspace_id"]
     assert len(str(result["state_sha256"])) == 64
     assert Path(result["validation_path"]).is_file()
@@ -5820,7 +5900,7 @@ def test_state_adoption_validation_script_creates_divergent_copies_and_package(
         tmp_path / "state_adoption_target",
         force=False,
     )
-    assert result["revision"] == "0044_layout_structure_review"
+    assert result["revision"] == "0045_audiovisual_transcription"
     assert result["source_workspace_id"] != result["target_workspace_id"]
     assert result["source_state_sha256"] != result["target_state_sha256"]
     assert Path(result["package_path"]).is_file()

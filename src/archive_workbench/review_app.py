@@ -19,6 +19,7 @@ from archive_workbench.ui_navigation import (
 
 from archive_workbench.db import create_sqlite_engine, database_path, session_scope
 from archive_workbench.catalog_app import render_catalog_view
+from archive_workbench.audiovisual_app import render_audiovisual_view
 from archive_workbench.authority_app import render_authorities_view
 from archive_workbench.decisions import load_decisions
 from archive_workbench.authorities import (
@@ -94,6 +95,7 @@ from archive_workbench.review_parts import (
     assign_page_objects_to_part,
 )
 from archive_workbench.review_canvas import clickable_review_canvas
+from archive_workbench.audiovisual import search_transcript_segments, format_timestamp
 from archive_workbench.search import (
     MATCH_MODES,
     SEARCH_FIELDS,
@@ -189,6 +191,7 @@ _MENTION_STATUS_LABELS = {
 _VIEW_LABELS = {
     "home": "Inicio",
     "catalog": "Catálogo documental",
+    "audiovisual": "Transcribir audio y video",
     "processing": "Procesar documentos",
     "work": "Organizar trabajo",
     "review": "Revisar documentos",
@@ -204,6 +207,7 @@ _VIEW_LABELS = {
 _VIEW_DESCRIPTIONS = {
     "home": "Resumen del proyecto y accesos al recorrido recomendado.",
     "catalog": "Registrá documentos, archivos y datos descriptivos del corpus.",
+    "audiovisual": "Reproducí y corregí transcripciones segmentadas de audio y video.",
     "processing": "Generá y compará extracciones antes de adoptar una versión editable.",
     "work": "Planificá tareas, responsables y estados de avance.",
     "review": "Corregí texto, estructura, anotaciones y estados de calidad.",
@@ -218,6 +222,7 @@ _VIEW_DESCRIPTIONS = {
 
 _WORKFLOW_STEPS = (
     "catalog",
+    "audiovisual",
     "processing",
     "work",
     "review",
@@ -232,6 +237,7 @@ _WORKFLOW_STEPS = (
 
 _VIEW_PHASES = {
     "catalog": "1. Preparar el corpus",
+    "audiovisual": "1. Preparar el corpus",
     "processing": "1. Preparar el corpus",
     "work": "2. Organizar y revisar",
     "review": "2. Organizar y revisar",
@@ -248,7 +254,12 @@ _VIEW_GUIDANCE = {
     "catalog": (
         "Registrar los documentos y describir su procedencia antes de procesarlos.",
         "Tener los archivos originales identificados y una decisión básica sobre fondo, serie o colección.",
-        "Procesar los documentos y comparar las extracciones disponibles.",
+        "Procesar documentos o transcribir los medios audiovisuales registrados.",
+    ),
+    "audiovisual": (
+        "Reproducir y corregir transcripciones segmentadas sin alterar el medio original.",
+        "Haber registrado un archivo local de audio o video en el catálogo.",
+        "Buscar segmentos, anotar entidades o preparar resultados para exportación.",
     ),
     "processing": (
         "Generar, comparar y seleccionar una extracción candidata sin alterar el original.",
@@ -1363,7 +1374,7 @@ def _render_form_structure_tab(
 
 def _apply_pending_app_mode(st) -> None:
     pending = st.session_state.pop("review_pending_app_mode", None)
-    if pending in {"home", "catalog", "processing", "work", "review", "search", "semantic", "authorities", "graph", "export", "exchange", "admin"}:
+    if pending in {"home", "catalog", "audiovisual", "processing", "work", "review", "search", "semantic", "authorities", "graph", "export", "exchange", "admin"}:
         st.session_state["review_app_mode"] = pending
 
 
@@ -1396,8 +1407,70 @@ def _highlight_search_snippet(value: str) -> str:
     return escaped.replace("[[HIT]]", "<mark>").replace("[[/HIT]]", "</mark>")
 
 
-def _render_search_view(st, *, db_path: Path, document_map, type_labels: dict[str, str]) -> None:
+def _render_search_view(st, *, db_path: Path, project_id: str, document_map, type_labels: dict[str, str]) -> None:
     st.header("Buscar texto")
+    search_surface = st.radio(
+        "Contenido",
+        options=("documentos", "audiovisual"),
+        format_func=lambda value: (
+            "Documentos revisados" if value == "documentos" else "Transcripciones de audio y video"
+        ),
+        horizontal=True,
+        key="review_search_surface",
+    )
+    if search_surface == "audiovisual":
+        st.caption(
+            "Buscá en el texto vigente de los segmentos transcritos y abrí el resultado en su tiempo exacto."
+        )
+        with st.form("search_audiovisual_form", enter_to_submit=False):
+            av_query = st.text_input(
+                "Qué querés encontrar",
+                value=st.session_state.get("av_search_query", ""),
+                key="av_search_query_input",
+            )
+            av_limit = st.number_input(
+                "Máximo de resultados", min_value=10, max_value=500, value=50, step=10,
+                key="av_search_limit",
+            )
+            av_submitted = st.form_submit_button("Buscar", type="primary")
+        if av_submitted:
+            st.session_state["av_search_query"] = av_query
+        query_value = st.session_state.get("av_search_query", "").strip()
+        if not query_value:
+            st.info("Escribí una consulta para comenzar.")
+            return
+        av_engine = create_sqlite_engine(db_path)
+        try:
+            with session_scope(av_engine) as session:
+                av_results = search_transcript_segments(
+                    session, project_id=project_id, query=query_value, limit=int(av_limit)
+                )
+        finally:
+            av_engine.dispose()
+        st.subheader(f"Resultados audiovisuales · {len(av_results)}")
+        if not av_results:
+            st.warning("No se encontraron coincidencias en las transcripciones.")
+            return
+        for index, row in enumerate(av_results):
+            with st.container(border=True):
+                header, action = st.columns([5, 1])
+                with header:
+                    st.markdown(
+                        f"**{row.title}** · {format_timestamp(row.start_time)}–{format_timestamp(row.end_time)}"
+                    )
+                    st.caption(
+                        f"{row.source_key} · {_STATUS_LABELS.get(row.review_status, row.review_status)}"
+                    )
+                    st.write(row.text)
+                with action:
+                    if st.button(
+                        "Abrir", key=f"open_av_search_{index}_{row.segment_id}", use_container_width=True
+                    ):
+                        st.session_state["av_pending_media_id"] = row.media_id
+                        st.session_state["av_pending_segment_id"] = row.segment_id
+                        request_app_view(st, mode="audiovisual")
+                        rerun_app(st)
+        return
     st.caption(
         "Encontrá palabras o frases en todo el corpus. La búsqueda básica necesita solamente "
         "una consulta; los filtros opcionales permiten acotar documentos, estados y anotaciones."
@@ -2895,6 +2968,15 @@ def main() -> None:
                 actor=reviewer,
             )
             return
+        if app_mode == "audiovisual":
+            render_audiovisual_view(
+                st,
+                project_root=project_root,
+                db_path=db_path,
+                project_id=decisions.project_id,
+                actor=reviewer,
+            )
+            return
         if app_mode == "processing":
             render_processing_view(
                 st,
@@ -2954,12 +3036,10 @@ def main() -> None:
             )
             return
         if app_mode == "search":
-            if not documents:
-                st.info("No hay documentos inicializados en la capa editable para buscar.")
-                return
             _render_search_view(
                 st,
                 db_path=db_path,
+                project_id=decisions.project_id,
                 document_map=document_map,
                 type_labels=type_labels,
             )

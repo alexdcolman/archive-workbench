@@ -219,6 +219,177 @@ class SourceRegistration(Base):
     registered_by: Mapped[str] = mapped_column(String(200), nullable=False)
 
 
+class AudiovisualMedia(Base):
+    """Metadatos descriptivos y técnicos de un original de audio o video."""
+
+    __tablename__ = "audiovisual_media"
+    __table_args__ = (
+        UniqueConstraint("digital_object_id", name="uq_audiovisual_media_digital_object"),
+        Index("ix_audiovisual_media_digital_object", "digital_object_id"),
+    )
+
+    id: Mapped[str] = mapped_column(String(36), primary_key=True)
+    digital_object_id: Mapped[str] = mapped_column(
+        ForeignKey("digital_objects.id", ondelete="CASCADE"), nullable=False
+    )
+    title: Mapped[str | None] = mapped_column(Text, nullable=True)
+    producer: Mapped[str | None] = mapped_column(Text, nullable=True)
+    channel: Mapped[str | None] = mapped_column(Text, nullable=True)
+    responsible: Mapped[str | None] = mapped_column(Text, nullable=True)
+    provenance: Mapped[str | None] = mapped_column(Text, nullable=True)
+    recorded_date: Mapped[date | None] = mapped_column(Date, nullable=True)
+    rights: Mapped[str | None] = mapped_column(Text, nullable=True)
+    description: Mapped[str | None] = mapped_column(Text, nullable=True)
+    container_format: Mapped[str | None] = mapped_column(String(100), nullable=True)
+    duration_seconds: Mapped[float | None] = mapped_column(Float, nullable=True)
+    audio_codec: Mapped[str | None] = mapped_column(String(100), nullable=True)
+    video_codec: Mapped[str | None] = mapped_column(String(100), nullable=True)
+    channels: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    sample_rate_hz: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    width: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    height: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    frame_rate: Mapped[float | None] = mapped_column(Float, nullable=True)
+    technical_json: Mapped[dict[str, Any]] = mapped_column(JSON, nullable=False, default=dict)
+    inspected_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    updated_by: Mapped[str] = mapped_column(String(200), nullable=False)
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), default=utc_now, onupdate=utc_now, nullable=False
+    )
+
+
+class AudiovisualDerivativeAsset(Base):
+    __tablename__ = "audiovisual_derivative_assets"
+    __table_args__ = (
+        UniqueConstraint(
+            "audiovisual_media_id", "asset_kind", "sha256",
+            name="uq_audiovisual_derivative_asset",
+        ),
+        Index("ix_audiovisual_derivative_media", "audiovisual_media_id", "asset_kind"),
+    )
+
+    id: Mapped[str] = mapped_column(String(36), primary_key=True)
+    audiovisual_media_id: Mapped[str] = mapped_column(
+        ForeignKey("audiovisual_media.id", ondelete="CASCADE"), nullable=False
+    )
+    asset_kind: Mapped[str] = mapped_column(String(64), nullable=False)
+    relative_path: Mapped[str] = mapped_column(Text, nullable=False)
+    sha256: Mapped[str] = mapped_column(String(64), nullable=False)
+    byte_size: Mapped[int] = mapped_column(Integer, nullable=False)
+    mime_type: Mapped[str | None] = mapped_column(String(100), nullable=True)
+    container_format: Mapped[str | None] = mapped_column(String(100), nullable=True)
+    codec: Mapped[str | None] = mapped_column(String(100), nullable=True)
+    source_sha256: Mapped[str] = mapped_column(String(64), nullable=False)
+    ffmpeg_version: Mapped[str | None] = mapped_column(Text, nullable=True)
+    command_json: Mapped[list[str]] = mapped_column(JSON, nullable=False, default=list)
+    created_by: Mapped[str] = mapped_column(String(200), nullable=False)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utc_now, nullable=False)
+
+
+class TranscriptionRun(Base):
+    __tablename__ = "transcription_runs"
+    __table_args__ = (
+        Index("ix_transcription_runs_media_created", "audiovisual_media_id", "created_at"),
+    )
+
+    id: Mapped[str] = mapped_column(String(36), primary_key=True)
+    audiovisual_media_id: Mapped[str] = mapped_column(
+        ForeignKey("audiovisual_media.id", ondelete="CASCADE"), nullable=False
+    )
+    source_asset_id: Mapped[str | None] = mapped_column(
+        ForeignKey("audiovisual_derivative_assets.id", ondelete="SET NULL"), nullable=True
+    )
+    backend: Mapped[str] = mapped_column(String(100), nullable=False)
+    backend_version: Mapped[str | None] = mapped_column(String(100), nullable=True)
+    model_name: Mapped[str] = mapped_column(String(200), nullable=False)
+    device: Mapped[str] = mapped_column(String(32), nullable=False)
+    language: Mapped[str | None] = mapped_column(String(32), nullable=True)
+    options_json: Mapped[dict[str, Any]] = mapped_column(JSON, nullable=False, default=dict)
+    status: Mapped[str] = mapped_column(String(32), nullable=False, default="registered")
+    error_text: Mapped[str | None] = mapped_column(Text, nullable=True)
+    created_by: Mapped[str] = mapped_column(String(200), nullable=False)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utc_now, nullable=False)
+    completed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+
+
+class TranscriptSegment(Base):
+    __tablename__ = "transcript_segments"
+    __table_args__ = (
+        CheckConstraint("start_time >= 0", name="ck_transcript_segment_start_nonnegative"),
+        CheckConstraint("end_time >= start_time", name="ck_transcript_segment_time_order"),
+        UniqueConstraint(
+            "transcription_run_id", "segment_index", name="uq_transcript_segment_index"
+        ),
+        Index("ix_transcript_segments_run_time", "transcription_run_id", "start_time"),
+    )
+
+    id: Mapped[str] = mapped_column(String(36), primary_key=True)
+    transcription_run_id: Mapped[str] = mapped_column(
+        ForeignKey("transcription_runs.id", ondelete="CASCADE"), nullable=False
+    )
+    segment_index: Mapped[int] = mapped_column(Integer, nullable=False)
+    start_time: Mapped[float] = mapped_column(Float, nullable=False)
+    end_time: Mapped[float] = mapped_column(Float, nullable=False)
+    original_text: Mapped[str] = mapped_column(Text, nullable=False)
+    corrected_text: Mapped[str | None] = mapped_column(Text, nullable=True)
+    review_status: Mapped[str] = mapped_column(String(32), nullable=False, default="unreviewed")
+    revision_number: Mapped[int] = mapped_column(Integer, nullable=False, default=1)
+    updated_by: Mapped[str] = mapped_column(String(200), nullable=False)
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), default=utc_now, onupdate=utc_now, nullable=False
+    )
+
+
+class TranscriptSegmentRevision(Base):
+    __tablename__ = "transcript_segment_revisions"
+    __table_args__ = (
+        UniqueConstraint(
+            "segment_id", "revision_number", name="uq_transcript_segment_revision"
+        ),
+        Index("ix_transcript_segment_revisions_segment", "segment_id", "revision_number"),
+    )
+
+    id: Mapped[str] = mapped_column(String(36), primary_key=True)
+    segment_id: Mapped[str] = mapped_column(
+        ForeignKey("transcript_segments.id", ondelete="CASCADE"), nullable=False
+    )
+    revision_number: Mapped[int] = mapped_column(Integer, nullable=False)
+    operation: Mapped[str] = mapped_column(String(32), nullable=False)
+    snapshot_json: Mapped[dict[str, Any]] = mapped_column(JSON, nullable=False)
+    note: Mapped[str | None] = mapped_column(Text, nullable=True)
+    changed_by: Mapped[str] = mapped_column(String(200), nullable=False)
+    changed_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utc_now, nullable=False)
+
+
+class SegmentEntityMention(Base):
+    __tablename__ = "segment_entity_mentions"
+    __table_args__ = (
+        Index("ix_segment_entity_mentions_segment", "segment_id", "start_offset"),
+        Index("ix_segment_entity_mentions_authority", "authority_id"),
+    )
+
+    id: Mapped[str] = mapped_column(String(36), primary_key=True)
+    segment_id: Mapped[str] = mapped_column(
+        ForeignKey("transcript_segments.id", ondelete="CASCADE"), nullable=False
+    )
+    authority_id: Mapped[str | None] = mapped_column(
+        ForeignKey("authority_records.id", ondelete="SET NULL"), nullable=True
+    )
+    mention_text: Mapped[str] = mapped_column(Text, nullable=False)
+    normalized_text: Mapped[str] = mapped_column(Text, nullable=False)
+    start_offset: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    end_offset: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    segment_revision_number: Mapped[int] = mapped_column(Integer, nullable=False)
+    status: Mapped[str] = mapped_column(String(32), nullable=False, default="pending")
+    source: Mapped[str] = mapped_column(String(32), nullable=False, default="manual")
+    note: Mapped[str | None] = mapped_column(Text, nullable=True)
+    created_by: Mapped[str] = mapped_column(String(200), nullable=False)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utc_now, nullable=False)
+    updated_by: Mapped[str] = mapped_column(String(200), nullable=False)
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), default=utc_now, onupdate=utc_now, nullable=False
+    )
+
+
 class ExtractionRun(Base):
     __tablename__ = "extraction_runs"
     __table_args__ = (

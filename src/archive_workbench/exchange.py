@@ -9,7 +9,7 @@ from datetime import date, datetime, timezone
 from pathlib import Path
 from typing import Any, Iterable
 
-from sqlalchemy import delete, func, select
+from sqlalchemy import delete, func, inspect, select
 from sqlalchemy.orm import Session
 
 from archive_workbench.contracts.changes import (
@@ -29,11 +29,13 @@ from archive_workbench.db.models import (
     EditablePageRevision,
     EntityMention,
     EntityMentionRevision,
+    SegmentEntityMention,
     EntityRelation,
     EntityRelationRevision,
     DocumentPart,
     ArchivalFieldValue,
     ArchivalUnit,
+    AudiovisualMedia,
     ArchivalUnitRevision,
     AuthorityAlias,
     AuthorityRecord,
@@ -46,6 +48,9 @@ from archive_workbench.db.models import (
     ExtractionPageSelectionRevision,
     ExtractionRun,
     SourceRegistration,
+    TranscriptSegment,
+    TranscriptSegmentRevision,
+    TranscriptionRun,
     WorkAssignment,
     WorkAssignmentRevision,
     ExchangeBundleApplication,
@@ -291,13 +296,77 @@ def _editable_state_payload(session: Session, project_id: str) -> dict[str, Any]
         .order_by(WorkAssignment.id)
     ).all()
 
+    bind = session.get_bind()
+    has_audiovisual_schema = inspect(bind).has_table("audiovisual_media")
+    audiovisual_media = (
+        session.scalars(
+            select(AudiovisualMedia)
+            .join(DigitalObject, DigitalObject.id == AudiovisualMedia.digital_object_id)
+            .where(DigitalObject.project_id == project_id)
+            .order_by(AudiovisualMedia.digital_object_id, AudiovisualMedia.id)
+        ).all()
+        if has_audiovisual_schema
+        else []
+    )
+    audiovisual_media_ids = [row.id for row in audiovisual_media]
+    transcription_runs = (
+        session.scalars(
+            select(TranscriptionRun)
+            .where(TranscriptionRun.audiovisual_media_id.in_(audiovisual_media_ids))
+            .order_by(TranscriptionRun.created_at, TranscriptionRun.id)
+        ).all()
+        if audiovisual_media_ids
+        else []
+    )
+    transcription_run_ids = [row.id for row in transcription_runs]
+    transcript_segments = (
+        session.scalars(
+            select(TranscriptSegment)
+            .where(TranscriptSegment.transcription_run_id.in_(transcription_run_ids))
+            .order_by(
+                TranscriptSegment.transcription_run_id,
+                TranscriptSegment.segment_index,
+                TranscriptSegment.id,
+            )
+        ).all()
+        if transcription_run_ids
+        else []
+    )
+    transcript_segment_ids = [row.id for row in transcript_segments]
+    transcript_segment_revisions = (
+        session.scalars(
+            select(TranscriptSegmentRevision)
+            .where(TranscriptSegmentRevision.segment_id.in_(transcript_segment_ids))
+            .order_by(
+                TranscriptSegmentRevision.segment_id,
+                TranscriptSegmentRevision.revision_number,
+                TranscriptSegmentRevision.id,
+            )
+        ).all()
+        if transcript_segment_ids
+        else []
+    )
+    segment_entity_mentions = (
+        session.scalars(
+            select(SegmentEntityMention)
+            .where(SegmentEntityMention.segment_id.in_(transcript_segment_ids))
+            .order_by(
+                SegmentEntityMention.segment_id,
+                SegmentEntityMention.start_offset,
+                SegmentEntityMention.id,
+            )
+        ).all()
+        if transcript_segment_ids
+        else []
+    )
+
     links = session.execute(
         select(DigitalObjectUnitLink, DigitalObject)
         .join(DigitalObject, DigitalObject.id == DigitalObjectUnitLink.digital_object_id)
         .where(DigitalObject.project_id == project_id)
         .order_by(DigitalObjectUnitLink.id)
     ).all()
-    return {
+    payload = {
         "project_id": project_id,
         "selections": [
             {
@@ -519,6 +588,106 @@ def _editable_state_payload(session: Session, project_id: str) -> dict[str, Any]
             for link, digital in links
         ],
     }
+    # Mantener idéntica la huella histórica cuando el proyecto no contiene AV.
+    if audiovisual_media:
+        payload.update(
+            {
+                "audiovisual_media": [
+                    {
+                        "id": row.id,
+                        "digital_object_id": row.digital_object_id,
+                        "title": row.title,
+                        "producer": row.producer,
+                        "channel": row.channel,
+                        "responsible": row.responsible,
+                        "provenance": row.provenance,
+                        "recorded_date": row.recorded_date.isoformat() if row.recorded_date else None,
+                        "rights": row.rights,
+                        "description": row.description,
+                        "container_format": row.container_format,
+                        "duration_seconds": row.duration_seconds,
+                        "audio_codec": row.audio_codec,
+                        "video_codec": row.video_codec,
+                        "channels": row.channels,
+                        "sample_rate_hz": row.sample_rate_hz,
+                        "width": row.width,
+                        "height": row.height,
+                        "frame_rate": row.frame_rate,
+                        "technical": row.technical_json or {},
+                        "inspected_at": _iso_utc(row.inspected_at),
+                    }
+                    for row in audiovisual_media
+                ],
+                "transcription_runs": [
+                    {
+                        "id": row.id,
+                        "audiovisual_media_id": row.audiovisual_media_id,
+                        "backend": row.backend,
+                        "backend_version": row.backend_version,
+                        "model_name": row.model_name,
+                        "device": row.device,
+                        "language": row.language,
+                        "options": row.options_json or {},
+                        "status": row.status,
+                        "error_text": row.error_text,
+                        "created_by": row.created_by,
+                        "created_at": _iso_utc(row.created_at),
+                        "completed_at": _iso_utc(row.completed_at),
+                    }
+                    for row in transcription_runs
+                ],
+                "transcript_segments": [
+                    {
+                        "id": row.id,
+                        "transcription_run_id": row.transcription_run_id,
+                        "segment_index": row.segment_index,
+                        "start_time": row.start_time,
+                        "end_time": row.end_time,
+                        "original_text": row.original_text,
+                        "corrected_text": row.corrected_text,
+                        "review_status": row.review_status,
+                        "revision_number": row.revision_number,
+                        "updated_by": row.updated_by,
+                        "updated_at": _iso_utc(row.updated_at),
+                    }
+                    for row in transcript_segments
+                ],
+                "transcript_segment_revisions": [
+                    {
+                        "id": row.id,
+                        "segment_id": row.segment_id,
+                        "revision_number": row.revision_number,
+                        "operation": row.operation,
+                        "snapshot": row.snapshot_json or {},
+                        "note": row.note,
+                        "changed_by": row.changed_by,
+                        "changed_at": _iso_utc(row.changed_at),
+                    }
+                    for row in transcript_segment_revisions
+                ],
+                "segment_entity_mentions": [
+                    {
+                        "id": row.id,
+                        "segment_id": row.segment_id,
+                        "authority_id": row.authority_id,
+                        "mention_text": row.mention_text,
+                        "normalized_text": row.normalized_text,
+                        "start_offset": row.start_offset,
+                        "end_offset": row.end_offset,
+                        "segment_revision_number": row.segment_revision_number,
+                        "status": row.status,
+                        "source": row.source,
+                        "note": row.note,
+                        "created_by": row.created_by,
+                        "created_at": _iso_utc(row.created_at),
+                        "updated_by": row.updated_by,
+                        "updated_at": _iso_utc(row.updated_at),
+                    }
+                    for row in segment_entity_mentions
+                ],
+            }
+        )
+    return payload
 
 
 def current_editable_state_sha256(session: Session, project_id: str) -> str:

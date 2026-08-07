@@ -9,6 +9,7 @@ from PIL import Image, UnidentifiedImageError
 from archive_workbench.contracts.extraction import InputInspection, PageInspection
 from archive_workbench.domain.enums import MediaType
 from archive_workbench.identity import sha256_file
+from archive_workbench.audiovisual import AUDIO_EXTENSIONS, VIDEO_EXTENSIONS
 
 _TIFF_SIGNATURES = (b"II*\x00", b"MM\x00*", b"II+\x00", b"MM\x00+")
 _PDF_SIGNATURE = b"%PDF-"
@@ -22,8 +23,13 @@ def detect_media_type(path: str | Path) -> MediaType:
         return MediaType.PDF
     if any(signature.startswith(candidate) for candidate in _TIFF_SIGNATURES):
         return MediaType.TIFF
-    if source.suffix.lower() in {".png", ".jpg", ".jpeg", ".bmp", ".webp"}:
+    suffix = source.suffix.lower()
+    if suffix in {".png", ".jpg", ".jpeg", ".bmp", ".webp"}:
         return MediaType.IMAGE
+    if suffix in AUDIO_EXTENSIONS:
+        return MediaType.AUDIO
+    if suffix in VIDEO_EXTENSIONS:
+        return MediaType.VIDEO
     return MediaType.OTHER
 
 
@@ -42,6 +48,14 @@ def inspect_input(path: str | Path) -> InputInspection:
         return _inspect_pdf(source, common)
     if media_type in {MediaType.TIFF, MediaType.IMAGE}:
         return _inspect_image(source, common)
+    if media_type in {MediaType.AUDIO, MediaType.VIDEO}:
+        return InputInspection(
+            **common,
+            warnings=[],
+            recommendations=[
+                "Registrar el original y completar su inspección técnica audiovisual con FFprobe."
+            ],
+        )
     return InputInspection(
         **common,
         warnings=["Formato todavía no inspeccionable por el módulo inicial."],

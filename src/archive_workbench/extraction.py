@@ -17,7 +17,7 @@ import yaml
 from sqlalchemy import func, select, update
 from sqlalchemy.orm import Session
 
-from archive_workbench.sources import PROCESSABLE_SOURCE_TYPES
+from archive_workbench.sources import DOCUMENT_MEDIA_TYPES, PROCESSABLE_SOURCE_TYPES
 from archive_workbench.contracts.decisions import ProjectDecisions
 from archive_workbench.contracts.extraction import (
     ExtractedObjectRecord,
@@ -1179,7 +1179,10 @@ def _selected_registrations(
         select(SourceRegistration, DigitalObject, ArchivalUnit)
         .join(DigitalObject, SourceRegistration.digital_object_id == DigitalObject.id)
         .join(ArchivalUnit, SourceRegistration.archival_unit_id == ArchivalUnit.id)
-        .where(SourceRegistration.source_type.in_(PROCESSABLE_SOURCE_TYPES))
+        .where(
+            SourceRegistration.source_type.in_(PROCESSABLE_SOURCE_TYPES),
+            DigitalObject.media_type.in_(DOCUMENT_MEDIA_TYPES),
+        )
         .order_by(SourceRegistration.source_key)
     )
     if source_keys:
@@ -1481,7 +1484,10 @@ def extraction_history_rows(
         )
         .join(DigitalObject, ExtractionRun.digital_object_id == DigitalObject.id)
         .join(SourceRegistration, SourceRegistration.digital_object_id == DigitalObject.id)
-        .where(SourceRegistration.source_type.in_(PROCESSABLE_SOURCE_TYPES))
+        .where(
+            SourceRegistration.source_type.in_(PROCESSABLE_SOURCE_TYPES),
+            DigitalObject.media_type.in_(DOCUMENT_MEDIA_TYPES),
+        )
         .order_by(SourceRegistration.source_key, ExtractionRun.created_at.desc())
     )
     if source_key:
@@ -1513,7 +1519,10 @@ def selected_extraction_status_rows(session: Session) -> list[SelectedExtraction
         )
         .join(DigitalObject, SourceRegistration.digital_object_id == DigitalObject.id)
         .join(ArchivalUnit, SourceRegistration.archival_unit_id == ArchivalUnit.id)
-        .where(SourceRegistration.source_type.in_(PROCESSABLE_SOURCE_TYPES))
+        .where(
+            SourceRegistration.source_type.in_(PROCESSABLE_SOURCE_TYPES),
+            DigitalObject.media_type.in_(DOCUMENT_MEDIA_TYPES),
+        )
         .order_by(SourceRegistration.source_key)
     ).all()
     output: list[SelectedExtractionStatusRow] = []
@@ -2048,7 +2057,10 @@ def extraction_status_rows(session: Session) -> list[ExtractionStatusRow]:
             (ExtractionRun.digital_object_id == DigitalObject.id)
             & (ExtractionRun.is_current.is_(True)),
         )
-        .where(SourceRegistration.source_type.in_(PROCESSABLE_SOURCE_TYPES))
+        .where(
+            SourceRegistration.source_type.in_(PROCESSABLE_SOURCE_TYPES),
+            DigitalObject.media_type.in_(DOCUMENT_MEDIA_TYPES),
+        )
         .order_by(SourceRegistration.source_key)
     )
     return [

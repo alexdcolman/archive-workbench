@@ -1,3 +1,17 @@
+## 0.84.0 — 2026-08-07
+
+- Implementa `AV-01` para registro local de audio y video sobre `DigitalObject`/`FileInstance`, con SHA-256 y original inmutable.
+- Agrega inspección FFprobe, derivados FFmpeg trazables y la migración aditiva `0045_audiovisual_transcription`.
+- Incorpora corridas de transcripción con backend intercambiable, recorrido `faster-whisper` CPU, segmentos temporales y revisiones append-only.
+- Agrega la vista **Transcribir audio y video**, reproducción integrada, **Velocidad de reproducción**, salto al segmento, corrección humana y opciones técnicas cerradas por defecto.
+- Integra segmentos en búsqueda literal, menciones de entidades, exportación CSV/JSONL y adopción de estado audiovisual 1.1 sin alterar la huella histórica de proyectos que no contienen AV.
+- Excluye explícitamente audio y video del inventario OCR.
+- Incluye audio/video controlados, creador de base descartable y verificador de validación.
+- La validación manual real confirmó audio y video integrados, velocidad variable, salto temporal, corrección persistente, mención de entidad, navegación desde búsqueda, exportación JSONL y una corrida `faster-whisper` `tiny` en CPU con `int8` completada sobre video.
+- RC1 reveló dos regresiones de interfaz: **Ir al inicio del segmento** no movía efectivamente el reproductor y **Abrir** desde búsqueda descartaba el destino audiovisual. RC2 corrigió ambas y la revalidación manual las confirmó.
+- El verificador final sobre la base descartable informó `quick_check: ok`, cero violaciones de claves foráneas, SHA-256 intactos de los dos originales, cinco segmentos exportables y dos segmentos generados por la corrida CPU de video. `AV-01` queda cerrado en 0.84.0.
+- El gate de suite completa previo a migrar `project_data` detectó compatibilidad incompleta de la huella de intercambio con bases anteriores a `0045`; se corrigió para consultar el estado audiovisual solo cuando existe su esquema y se repararon fixtures/verificadores históricos que habían quedado atados a revisiones/versiones antiguas.
+
 ## 0.83.0 — 2026-08-07
 
 - Implementa `OCR-01F` con benchmark reproducible Tesseract/Docling/Surya sobre verdad terreno por página.

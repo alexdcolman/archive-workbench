@@ -1,6 +1,6 @@
 # Pendientes activos — Archive Workbench
 
-**Estado preparado:** 2026-08-07 · **versión:** 0.83.0
+**Estado preparado:** 2026-08-07 · **versión:** 0.84.0
 
 Este archivo es la única fuente de verdad para trabajo abierto. Las capacidades cerradas se registran en `IMPLEMENTACIONES_REALIZADAS.md` y no deben reabrirse sin una regresión concreta o una ampliación explícita del alcance.
 
@@ -8,7 +8,7 @@ Este archivo es la única fuente de verdad para trabajo abierto. Las capacidades
 
 `CAT-02` y `GRAPH-02` quedaron implementados, validados y cerrados en 0.77.0. La secuencia principal y las líneas paralelas se mantienen en [`HOJA_DE_RUTA_PRE_RELEASE.md`](HOJA_DE_RUTA_PRE_RELEASE.md).
 
-Antes de la candidata a v1.0 siguen, en este orden general: `AV-01`, `AV-02`, `INT-01`, `EXP-01`, `PILOT-01`, `UX-02`, `WEB-01`, `QA-01` junto con `OPS-02`, `OPS-01` y `OPS-03`. `OCR-01` quedó cerrado en 0.83.0.
+`AV-01` quedó implementado, validado y cerrado en 0.84.0. La secuencia abierta comienza en `AV-02`, sigue con `AV-03` y después con `INT-01`, `EXP-01`, `PILOT-01`, `UX-02`, `WEB-01`, `QA-01` junto con `OPS-02`, `OPS-01` y `OPS-03`. `OCR-01` quedó cerrado en 0.83.0.
 
 `GIAR-01` comienza como proyecto paralelo vinculado a `PILOT-01` y no bloquea por sí solo la v1.0. `AI-01` y `AI-02` quedan para después del release inicial.
 
@@ -16,8 +16,8 @@ Antes de la candidata a v1.0 siguen, en este orden general: `AV-01`, `AV-02`, `I
 
 | ID | Prioridad | Estado | Tarea |
 |---|---|---|---|
-| AV-01 | Media | Pendiente | Registro audiovisual local y transcripción segmentada |
 | AV-02 | Baja | Pendiente | Plugin opcional de descarga desde YouTube y otras plataformas |
+| AV-03 | Media | Pendiente | Evaluación reproducible y optimización de transcripción de video real |
 | INT-01 | Baja | Pendiente | Integración opcional con Google Drive como transporte |
 | EXP-01 | Alta | Pendiente pre-release | Exportación trazable de imágenes y recortes para análisis visual |
 | PILOT-01 | Alta | Parcial | Corpus real persistente, verdad terreno y cierre del piloto |
@@ -33,28 +33,19 @@ Antes de la candidata a v1.0 siguen, en este orden general: `AV-01`, `AV-02`, `I
 
 ## Mejora funcional
 
-### AV-01 — Registro local de audio y video y transcripción segmentada — PENDIENTE
-
-Agregar un módulo opcional para incorporar y transcribir archivos locales de audio y video en formatos habituales, con normalización técnica mediante FFmpeg cuando corresponda:
-
-- original inmutable, archivo local y SHA-256;
-- detección controlada de formato, códecs, canales, frecuencia, resolución y duración;
-- título, productor, canal o responsable, procedencia, fecha, derechos y descripción;
-- transcripción como derivado versionado;
-- segmentos con `start_time`, `end_time` y texto;
-- reproductor integrado para audio y video, con salto al segmento y velocidades de reproducción configurables;
-- pantalla de transcripción y corrección poco cargada, con el medio, el segmento vigente y el texto necesarios para la tarea inmediata;
-- revisión manual, búsqueda, entidades y exportación sobre segmentos;
-- backend intercambiable con recorrido CPU funcional;
-- identificación de hablantes como ampliación opcional posterior.
-
-La transcripción debe poder corregirse sin perder sincronización temporal. Las opciones de modelo, códecs, diagnóstico y ejecución avanzada permanecen cerradas por defecto. El módulo debe instalarse como dependencia opcional y evitar conflictos con el runtime OCR/CUDA.
-
 ### AV-02 — Plugin opcional de incorporación desde YouTube y otras plataformas — PENDIENTE
 
 Implementar fuera del núcleo un plugin prescindible, probablemente basado en `yt-dlp` y FFmpeg, para descargar materiales autorizados como audio o video. Debe conservar URL, identificador de plataforma, formato incorporado, metadatos, fecha, checksum y condiciones de acceso.
 
 El material descargado ingresa después al mismo circuito local de `AV-01`: reproducción, velocidad variable, transcripción segmentada y corrección humana. El plugin no será requisito para usar Archive Workbench y no contendrá una ruta paralela de transcripción.
+
+La validación inicial de `AV-02` usará, si el material concreto resulta accesible y autorizado para la prueba, un video del canal `https://www.youtube.com/channel/UCsZG_7l0cYIEtJNhajrFPYg`.
+
+### AV-03 — Evaluación y optimización de transcripción de video real — PENDIENTE
+
+Realizar después de `AV-02` una prueba específica y reproducible de transcripción sobre video real autorizado. Debe reutilizar el circuito de `AV-01` y conservar medio, corrida, backend/modelo, parámetros, segmentos, tiempos y correcciones humanas.
+
+La prueba servirá para observar primero el comportamiento real de la transcripción y recién después decidir optimizaciones concretas. Como mínimo debe permitir comparar calidad textual y segmentación temporal, tiempo de ejecución, consumo/recorrido CPU o GPU cuando corresponda y magnitud de las correcciones humanas, sin predeterminar de antemano qué optimización aplicar.
 
 ### INT-01 — Integración opcional con Google Drive como transporte — PENDIENTE
 

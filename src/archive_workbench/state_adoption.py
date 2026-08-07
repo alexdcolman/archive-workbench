@@ -17,6 +17,7 @@ from archive_workbench.db.migrations import current_revision, require_current_da
 from archive_workbench.db.models import (
     ArchivalFieldValue,
     ArchivalUnit,
+    AudiovisualMedia,
     AuthorityAlias,
     AuthorityRecord,
     DigitalObject,
@@ -28,6 +29,7 @@ from archive_workbench.db.models import (
     EditablePage,
     EditablePageAction,
     EntityMention,
+    SegmentEntityMention,
     EntityRelation,
     ExchangeChangeEvent,
     ExchangeCommonBaseAgreement,
@@ -40,6 +42,9 @@ from archive_workbench.db.models import (
     ExtractionPageSelection,
     ExtractionRun,
     Project,
+    TranscriptSegment,
+    TranscriptSegmentRevision,
+    TranscriptionRun,
     WorkAssignment,
     utc_now,
 )
@@ -57,8 +62,8 @@ from archive_workbench.project_admin import (
 from archive_workbench.version import __version__
 
 
-STATE_ADOPTION_SCHEMA_VERSION = "1.0"
-STATE_SECTIONS = (
+STATE_ADOPTION_SCHEMA_VERSION = "1.1"
+BASE_STATE_SECTIONS = (
     "selections",
     "pages",
     "objects",
@@ -72,12 +77,32 @@ STATE_SECTIONS = (
     "catalog_units",
     "digital_links",
 )
+AUDIOVISUAL_STATE_SECTIONS = (
+    "audiovisual_media",
+    "transcription_runs",
+    "transcript_segments",
+    "transcript_segment_revisions",
+    "segment_entity_mentions",
+)
+STATE_SECTIONS = BASE_STATE_SECTIONS + AUDIOVISUAL_STATE_SECTIONS
+
+
+def _sections_for_state(state: dict[str, Any]) -> tuple[str, ...]:
+    return (
+        STATE_SECTIONS
+        if any(section in state for section in AUDIOVISUAL_STATE_SECTIONS)
+        else BASE_STATE_SECTIONS
+    )
+
+
+def _sections_for_schema(schema_version: str) -> tuple[str, ...]:
+    return STATE_SECTIONS if schema_version == "1.1" else BASE_STATE_SECTIONS
 
 
 class StateAdoptionManifest(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
-    schema_version: Literal["1.0"] = STATE_ADOPTION_SCHEMA_VERSION
+    schema_version: Literal["1.0", "1.1"] = STATE_ADOPTION_SCHEMA_VERSION
     artifact_type: Literal["state_adoption_package"] = "state_adoption_package"
     adoption_id: str = Field(min_length=36, max_length=36)
     project_id: str
@@ -283,14 +308,15 @@ def _read_verified_package(
         raise ValueError("El paquete no cumple el contrato de estado 1.0") from exc
     if not isinstance(state, dict):
         raise ValueError("state.json debe contener un objeto JSON")
-    if set(state) != {"project_id", *STATE_SECTIONS}:
+    sections = _sections_for_schema(manifest.schema_version)
+    if set(state) != {"project_id", *sections}:
         raise ValueError("state.json no contiene exactamente las secciones esperadas")
     if state.get("project_id") != manifest.project_id:
         raise ValueError("El proyecto de state.json no coincide con el manifiesto")
     observed_state_sha = sha256_json(state)
     if observed_state_sha != manifest.state_sha256:
         raise ValueError("La huella del estado no coincide con el manifiesto")
-    observed_counts = {section: len(state.get(section) or []) for section in STATE_SECTIONS}
+    observed_counts = {section: len(state.get(section) or []) for section in sections}
     if observed_counts != manifest.section_counts:
         raise ValueError("Las cantidades declaradas no coinciden con state.json")
     return (
@@ -351,6 +377,8 @@ def _referenced_ids(state: dict[str, Any]) -> dict[str, set[str]]:
         if row.get("document_part_id"):
             part_ids.add(row["document_part_id"])
     for row in state["digital_links"]:
+        digital_ids.add(row["digital_object_id"])
+    for row in state.get("audiovisual_media", []):
         digital_ids.add(row["digital_object_id"])
     for row in state["entity_relations"]:
         if row.get("target_document_part_id"):
@@ -498,8 +526,11 @@ def create_state_adoption_package(
     foundation_sha = _foundation_sha256(session, state)
     adoption_id = new_id()
     sequence = _current_sequence(session, workspace.id)
-    section_counts = {section: len(state[section]) for section in STATE_SECTIONS}
+    sections = _sections_for_state(state)
+    schema_version = "1.1" if sections == STATE_SECTIONS else "1.0"
+    section_counts = {section: len(state[section]) for section in sections}
     manifest = StateAdoptionManifest(
+        schema_version=schema_version,
         adoption_id=adoption_id,
         project_id=project.id,
         source_workspace_id=workspace.id,
@@ -560,9 +591,9 @@ def _section_map(rows: list[dict[str, Any]]) -> dict[str, dict[str, Any]]:
 
 def _impact(local_state: dict[str, Any], incoming_state: dict[str, Any]) -> list[StateSectionImpact]:
     result: list[StateSectionImpact] = []
-    for section in STATE_SECTIONS:
-        local = _section_map(local_state[section])
-        incoming = _section_map(incoming_state[section])
+    for section in _sections_for_state(incoming_state):
+        local = _section_map(local_state.get(section, []))
+        incoming = _section_map(incoming_state.get(section, []))
         local_ids = set(local)
         incoming_ids = set(incoming)
         common = local_ids & incoming_ids
@@ -603,6 +634,12 @@ def preview_state_adoption(
             "La base documental u OCR de esta copia no coincide con la requerida por el paquete"
         )
     local_state = _editable_state_payload(session, project.id)
+    if manifest.schema_version == "1.0" and any(
+        section in local_state for section in AUDIOVISUAL_STATE_SECTIONS
+    ):
+        raise ValueError(
+            "El paquete de estado 1.0 no incluye el estado audiovisual que ya existe en esta copia"
+        )
     return StateAdoptionPreview(
         adoption_id=manifest.adoption_id,
         package_path=package_path.expanduser().resolve(),
@@ -769,6 +806,15 @@ def _synchronize_editable_state(
     for item in state["catalog_units"]:
         session.get(ArchivalUnit, item["id"]).parent_id = item.get("parent_id")
 
+    has_audiovisual_state = all(
+        section in state for section in AUDIOVISUAL_STATE_SECTIONS
+    )
+    audiovisual_media_ids: set[str] = set()
+    transcription_run_ids: set[str] = set()
+    transcript_segment_ids: set[str] = set()
+    transcript_segment_revision_ids: set[str] = set()
+    segment_mention_ids: set[str] = set()
+
     authority_ids = {row["id"] for row in state["authorities"]}
     for item in state["authorities"]:
         existing = session.get(AuthorityRecord, item["id"])
@@ -797,6 +843,126 @@ def _synchronize_editable_state(
                 "revision": item["revision"],
             },
         )
+
+    if has_audiovisual_state:
+        audiovisual_media_ids = {row["id"] for row in state["audiovisual_media"]}
+        for item in state["audiovisual_media"]:
+            _upsert(
+                session,
+                AudiovisualMedia,
+                item["id"],
+                {
+                    "digital_object_id": item["digital_object_id"],
+                    "title": item.get("title"),
+                    "producer": item.get("producer"),
+                    "channel": item.get("channel"),
+                    "responsible": item.get("responsible"),
+                    "provenance": item.get("provenance"),
+                    "recorded_date": _parse_date(item.get("recorded_date")),
+                    "rights": item.get("rights"),
+                    "description": item.get("description"),
+                    "container_format": item.get("container_format"),
+                    "duration_seconds": item.get("duration_seconds"),
+                    "audio_codec": item.get("audio_codec"),
+                    "video_codec": item.get("video_codec"),
+                    "channels": item.get("channels"),
+                    "sample_rate_hz": item.get("sample_rate_hz"),
+                    "width": item.get("width"),
+                    "height": item.get("height"),
+                    "frame_rate": item.get("frame_rate"),
+                    "technical_json": item.get("technical") or {},
+                    "inspected_at": _parse_datetime(item.get("inspected_at")),
+                    "updated_by": actor,
+                    "updated_at": now,
+                },
+            )
+
+        transcription_run_ids = {row["id"] for row in state["transcription_runs"]}
+        for item in state["transcription_runs"]:
+            _upsert(
+                session,
+                TranscriptionRun,
+                item["id"],
+                {
+                    "audiovisual_media_id": item["audiovisual_media_id"],
+                    # El paquete transporta el texto y su procedencia lógica, no binarios derivados.
+                    "source_asset_id": None,
+                    "backend": item["backend"],
+                    "backend_version": item.get("backend_version"),
+                    "model_name": item["model_name"],
+                    "device": item["device"],
+                    "language": item.get("language"),
+                    "options_json": item.get("options") or {},
+                    "status": item["status"],
+                    "error_text": item.get("error_text"),
+                    "created_by": item["created_by"],
+                    "created_at": _parse_datetime(item["created_at"]),
+                    "completed_at": _parse_datetime(item.get("completed_at")),
+                },
+            )
+
+        transcript_segment_ids = {row["id"] for row in state["transcript_segments"]}
+        for item in state["transcript_segments"]:
+            _upsert(
+                session,
+                TranscriptSegment,
+                item["id"],
+                {
+                    "transcription_run_id": item["transcription_run_id"],
+                    "segment_index": item["segment_index"],
+                    "start_time": item["start_time"],
+                    "end_time": item["end_time"],
+                    "original_text": item["original_text"],
+                    "corrected_text": item.get("corrected_text"),
+                    "review_status": item["review_status"],
+                    "revision_number": item["revision_number"],
+                    "updated_by": item["updated_by"],
+                    "updated_at": _parse_datetime(item["updated_at"]),
+                },
+            )
+
+        transcript_segment_revision_ids = {
+            row["id"] for row in state["transcript_segment_revisions"]
+        }
+        for item in state["transcript_segment_revisions"]:
+            _upsert(
+                session,
+                TranscriptSegmentRevision,
+                item["id"],
+                {
+                    "segment_id": item["segment_id"],
+                    "revision_number": item["revision_number"],
+                    "operation": item["operation"],
+                    "snapshot_json": item.get("snapshot") or {},
+                    "note": item.get("note"),
+                    "changed_by": item["changed_by"],
+                    "changed_at": _parse_datetime(item["changed_at"]),
+                },
+            )
+
+        segment_mention_ids = {row["id"] for row in state["segment_entity_mentions"]}
+        for item in state["segment_entity_mentions"]:
+            _upsert(
+                session,
+                SegmentEntityMention,
+                item["id"],
+                {
+                    "segment_id": item["segment_id"],
+                    "authority_id": item.get("authority_id"),
+                    "mention_text": item["mention_text"],
+                    "normalized_text": item["normalized_text"],
+                    "start_offset": item.get("start_offset"),
+                    "end_offset": item.get("end_offset"),
+                    "segment_revision_number": item["segment_revision_number"],
+                    "status": item["status"],
+                    "source": item["source"],
+                    "note": item.get("note"),
+                    "created_by": item["created_by"],
+                    "created_at": _parse_datetime(item["created_at"]),
+                    "updated_by": item["updated_by"],
+                    "updated_at": _parse_datetime(item["updated_at"]),
+                },
+            )
 
     assignment_ids = {row["id"] for row in state["work_assignments"]}
     for item in state["work_assignments"]:
@@ -1039,6 +1205,48 @@ def _synchronize_editable_state(
             select(DigitalObject).where(DigitalObject.project_id == project_id)
         ).all()
     }
+
+    if has_audiovisual_state:
+        project_av_media = session.scalars(
+            select(AudiovisualMedia).where(
+                AudiovisualMedia.digital_object_id.in_(project_digital_ids)
+            )
+        ).all() if project_digital_ids else []
+        project_av_media_ids = {row.id for row in project_av_media}
+        project_runs = session.scalars(
+            select(TranscriptionRun).where(
+                TranscriptionRun.audiovisual_media_id.in_(project_av_media_ids)
+            )
+        ).all() if project_av_media_ids else []
+        project_run_ids = {row.id for row in project_runs}
+        project_segments = session.scalars(
+            select(TranscriptSegment).where(
+                TranscriptSegment.transcription_run_id.in_(project_run_ids)
+            )
+        ).all() if project_run_ids else []
+        project_segment_ids = {row.id for row in project_segments}
+        _delete_missing(
+            session.scalars(
+                select(SegmentEntityMention).where(
+                    SegmentEntityMention.segment_id.in_(project_segment_ids)
+                )
+            ).all() if project_segment_ids else [],
+            segment_mention_ids,
+        )
+        _delete_missing(
+            session.scalars(
+                select(TranscriptSegmentRevision).where(
+                    TranscriptSegmentRevision.segment_id.in_(project_segment_ids)
+                )
+            ).all() if project_segment_ids else [],
+            transcript_segment_revision_ids,
+        )
+        _delete_missing(project_segments, transcript_segment_ids)
+        session.flush()
+        _delete_missing(project_runs, transcription_run_ids)
+        session.flush()
+        _delete_missing(project_av_media, audiovisual_media_ids)
+        session.flush()
 
     _delete_missing(
         session.scalars(

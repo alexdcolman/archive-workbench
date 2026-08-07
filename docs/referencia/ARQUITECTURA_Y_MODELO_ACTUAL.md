@@ -145,7 +145,7 @@ Los estados de página controlan qué contenido puede alimentar búsquedas, expo
 
 ## Extensiones previstas
 
-Las extensiones abiertas se describen únicamente en `../operativos/PENDIENTES_ACTIVOS.md`. El diseño vigente de descubrimiento abierto está en `DESCUBRIMIENTO_ABIERTO_DISC_01.md`; entre las extensiones restantes se encuentran audiovisual, herramientas LLM, RAG, Docker y transporte mediante Drive.
+Las extensiones abiertas se describen únicamente en `../operativos/PENDIENTES_ACTIVOS.md`. El diseño vigente de descubrimiento abierto está en `DESCUBRIMIENTO_ABIERTO_DISC_01.md`; entre las extensiones restantes se encuentran incorporación remota audiovisual, herramientas LLM, RAG, Docker y transporte mediante Drive.
 
 Cada extensión debe respetar los mismos contratos de identidad, procedencia, calidad, revisión y auditoría.
 
@@ -159,7 +159,9 @@ La decisión queda en `analysis_json` y `transformations_json`. El activo `dewar
 
 ## Proyectos y extensiones planificados
 
-`AV-01` incorporará audio y video local mediante originales inmutables, metadatos técnicos, derivados de transcripción y segmentos temporales revisables. La interfaz prevista integrará reproducción con velocidades configurables y una pantalla de corrección deliberadamente simple. `AV-02` será un plugin opcional de incorporación autorizada desde plataformas y entregará sus archivos al mismo circuito local; no definirá un segundo modelo de transcripción.
+`AV-01` está implementado, validado y cerrado en 0.84.0. `DigitalObject`, `FileInstance` y `SourceRegistration` siguen siendo la identidad del original; `AudiovisualMedia` agrega metadatos descriptivos y técnicos sin duplicar el archivo. `AudiovisualDerivativeAsset` conserva derivados reproducibles de FFmpeg. `TranscriptionRun` registra backend, versión, modelo, dispositivo y opciones; `TranscriptSegment` conserva tiempo y texto vigente, y `TranscriptSegmentRevision` su historial append-only. `SegmentEntityMention` vincula evidencia temporal con las autoridades canónicas existentes. La migración es `0045_audiovisual_transcription`.
+
+La UI se encuentra en **Transcribir audio y video** y no reutiliza las tablas ni la pantalla page-centric de OCR. Integra audio/video, salto al segmento y reproducción con velocidades configurables; la corrección queda visible y las opciones técnicas permanecen cerradas por defecto. Búsqueda y exportación tratan el segmento como unidad temporal. Cuando existe estado audiovisual, la adopción de estado usa contrato 1.1; sin contenido AV se conserva la huella histórica anterior. `AV-02` seguirá siendo un plugin opcional de incorporación autorizada desde plataformas y entregará sus archivos al mismo circuito local; no definirá un segundo modelo de transcripción. `AV-03` evaluará sobre video real el comportamiento de ese mismo circuito y cualquier optimización deberá justificarse con resultados reproducibles, sin crear un modelo paralelo.
 
 `EXP-01` agregará una exportación trazable de imágenes de página, recortes regionales y figuras para consumo posterior por herramientas externas. La etapa `vision_describe` se diseñará en `AI-01` y no accederá directamente a originales fuera de un paquete exportado.
 

@@ -317,13 +317,14 @@ def test_grouping_cli_rebuilds_lists_and_projects(tmp_path: Path) -> None:
     assert "Total: 1 continuidades" in result.output
 
 
-def test_grouping_ui_uses_persistent_secondary_panels() -> None:
+def test_grouping_ui_uses_persistent_secondary_navigation() -> None:
     source = (
         Path(__file__).parents[1] / "src/archive_workbench/discovery_app.py"
     ).read_text(encoding="utf-8")
-    assert 'key="open_discovery_grouping_continuity_panel"' in source
-    assert 'key="open_discovery_grouping_panel"' in source
-    assert 'key="open_discovery_continuity_panel"' in source
+    assert 'key="open_discovery_grouping_tasks"' in source
+    assert 'key="open_discovery_manual_group_panel"' in source
+    assert '"Revisar grupos"' in source
+    assert '"Continuidad textual"' in source
     assert '"Actualizar grupos propuestos"' in source
     assert '"Crear grupo manual"' in source
     assert '"Separar candidato"' in source

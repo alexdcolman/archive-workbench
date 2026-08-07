@@ -162,15 +162,25 @@ def test_version_docs_and_discovery_plan_are_packaged() -> None:
         / "archive_workbench"
         / "migrations"
         / "versions"
-        / "0044_layout_structure_review.py"
+        / "0045_audiovisual_transcription.py"
     )
 
-    assert data["project"]["version"] == "0.83.0"
-    assert '__version__ = "0.83.0"' in version_source
+    assert data["project"]["version"] == "0.84.0"
+    assert '__version__ = "0.84.0"' in version_source
     assert migration.is_file()
-    assert 'down_revision = "0043_form_structure_review"' in migration.read_text(
+    assert 'down_revision = "0044_layout_structure_review"' in migration.read_text(
         encoding="utf-8"
     )
+    assert (root / "src" / "archive_workbench" / "audiovisual.py").is_file()
+    assert (root / "src" / "archive_workbench" / "audiovisual_app.py").is_file()
+    assert (root / "src" / "archive_workbench" / "contracts" / "audiovisual.py").is_file()
+    assert (root / "scripts" / "create_audiovisual_validation_project.py").is_file()
+    assert (root / "scripts" / "verify_audiovisual_validation_project.py").is_file()
+    assert (root / "examples" / "av01_validation" / "testimonio_controlado.wav").is_file()
+    assert (root / "examples" / "av01_validation" / "testimonio_controlado.mp4").is_file()
+    assert data["project"]["optional-dependencies"]["audiovisual"] == [
+        "faster-whisper>=1.1,<2"
+    ]
     assert (root / "src" / "archive_workbench" / "contracts" / "forms.py").is_file()
     assert (root / "src" / "archive_workbench" / "form_structure.py").is_file()
     assert (root / "src" / "archive_workbench" / "contracts" / "layout.py").is_file()
@@ -289,6 +299,9 @@ def test_version_docs_and_discovery_plan_are_packaged() -> None:
         assert (assistant_root / "00_LEER_PRIMERO.md").is_file()
         assert (assistant_root / "05_CRITERIOS_INTERFAZ.md").is_file()
         assert (assistant_root / "06_RELEVO_NUEVA_CONVERSACION.md").is_file()
+        security = (assistant_root / "07_SEGURIDAD_ARCHIVOS_Y_REPOSITORIO.md").read_text(encoding="utf-8")
+        assert "incluye `.assistant` completa y vigente" in security
+        assert "se conserva y mantiene actualizada también en la copia local de trabajo" in security
     assert (
         root / "docs" / "referencia" / "RECUPERACION_LINAJE_EX_01.md"
     ).is_file()

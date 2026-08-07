@@ -25,7 +25,7 @@ from archive_workbench.db.models import (
     Project,
     SourceRegistration,
 )
-from archive_workbench.domain.enums import FilePresence
+from archive_workbench.domain.enums import FilePresence, MediaType
 from archive_workbench.identity import new_id, slugify, stable_id
 from archive_workbench.inspection import inspect_input
 from archive_workbench.sources import PROCESSABLE_SOURCE_TYPES
@@ -1054,6 +1054,15 @@ def register_local_file(
         )
         session.add(link)
         link_created = True
+    if inspection.media_type in {MediaType.AUDIO, MediaType.VIDEO}:
+        from archive_workbench.audiovisual import ensure_audiovisual_media
+
+        ensure_audiovisual_media(
+            session,
+            project_root=root,
+            digital_object_id=digital.id,
+            actor=registered_by.strip() or "local_user",
+        )
     session.flush()
     return RegisterFileResult(
         digital_object_id=digital.id,

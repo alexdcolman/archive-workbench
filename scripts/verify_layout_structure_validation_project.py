@@ -62,8 +62,8 @@ def verify(destination: Path) -> int:
 
     failures += not _check(quick_check == "ok", "PRAGMA quick_check: ok", actual=quick_check)
     failures += not _check(
-        revision == "0044_layout_structure_review",
-        "revisión 0044_layout_structure_review",
+        revision == "0045_audiovisual_transcription",
+        "revisión 0045_audiovisual_transcription",
         actual=revision,
     )
 
