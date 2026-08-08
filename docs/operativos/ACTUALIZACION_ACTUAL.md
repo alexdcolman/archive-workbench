@@ -1,36 +1,35 @@
-# Actualización actual — Archive Workbench 0.87.0
+# Actualización actual — Archive Workbench 0.88.0
 
-**Estado:** versión final preparada tras validar `INT-01` · **fecha:** 2026-08-08
+**Estado:** versión final · `EXP-01` cerrado · **fecha:** 2026-08-08
 
 ## Alcance
 
-La versión 0.87.0 agrega Google Drive como transporte opcional dentro de **Intercambiar cambios**. Drive mueve paquetes ZIP de intercambio ya existentes; no sincroniza la base del proyecto y no aplica cambios por sí solo.
+La versión 0.88.0 agrega a **Exportar corpus > Crear archivo** la opción **Exportar texto e imágenes (ZIP)**. El perfil conserva los registros textuales principales y el ZIP puede incluir páginas completas, recortes regionales y figuras. Cada recurso visual mantiene su relación con el documento, la página, la extracción que originó la capa editable, el estado de revisión y los registros textuales asociados.
 
-Durante la validación, RC2 corrigió el generador descartable: RC1 creaba las bases y el paquete correctamente, pero omitía `config/decisions.yaml`, de modo que `review-app` rechazaba la copia receptora antes de iniciar. La versión final conserva esa corrección y copia la configuración estándar y reemplaza su identidad por `int01-google-drive-validation`; no cambia el transporte Drive ni el esquema de base.
+La imagen de página se toma del derivado exacto registrado por `EditablePage.source_extraction_page_id`. Las figuras se recortan desde esa misma imagen con la geometría editable vigente y los recortes regionales reutilizan el `crop_path` registrado. Tamaños y SHA-256 se verifican antes de exportar; un recurso requerido ausente o modificado hace fallar la ejecución de forma explícita.
 
-El panel **Google Drive (opcional)** permanece cerrado por defecto. Permite conectar una cuenta mediante OAuth de escritorio con permiso `drive.file`, subir un paquete validado, elegir un ZIP mediante Google Picker, descargarlo a `exchange/drive_downloads/`, verificar su SHA-256 y comparar el manifiesto con la copia local. Sólo después queda disponible **Simular evaluación del paquete descargado**, que reutiliza el dry-run existente.
+El paquete contiene además contexto textual estructurado en `context/objects.jsonl`, `context/pages.jsonl` y `context/documents.jsonl`. Los objetos que sirven sólo como contexto se mantienen separados del contenido principal y conservan identidad, revisión y relación documental. Una futura etapa `vision_describe` podrá decidir cuánto contexto utilizar sin volver a consultar la base.
 
-Las credenciales y el token OAuth viven fuera del repositorio y fuera del proyecto, bajo `~/.config/archive-workbench/`. No deben copiarse a Git ni a los paquetes de intercambio.
+Las opciones secundarias de imágenes permanecen ocultas hasta activar **Elegir qué imágenes incluir**. Sin abrirlas se incluyen páginas completas, recortes regionales y figuras.
 
 ## Persistencia y migración
 
-`INT-01` no agrega tablas ni modifica contratos canónicos. La revisión de base continúa en `0046_audiovisual_timeline_annotations`.
+EXP-01 reutiliza `CorpusExportRun.profile_snapshot_json` para registrar las opciones de la ejecución visual. No agrega tablas ni columnas. La revisión de base continúa en `0046_audiovisual_timeline_annotations`.
 
-**0.87.0 no requiere `db-upgrade`.** La validación de Google Drive se realizó sobre una copia emisora y una receptora descartables creadas desde cero; `project_data` no participó en esa prueba.
+**0.88.0 no requiere `db-upgrade`. No ejecutar `db-upgrade` por esta versión.**
 
 ## Validación cerrada
 
-La validación real de RC2 se realizó sobre dos proyectos descartables creados desde cero. Confirmó:
+La validación manual sobre el proyecto descartable confirmó:
 
-1. conexión OAuth con el permiso `drive.file`;
-2. subida de un bundle válido desde la copia emisora;
-3. selección del mismo ZIP con Google Picker;
-4. descarga atómica y verificación local en la copia receptora;
-5. SHA-256 idéntico al bundle emitido (`9386824cb404cbba46b57152040ac1c0bbf74086d4729b7cda682c0957997beb`);
-6. mismo proyecto, otra identidad de copia, revisión `0046_audiovisual_timeline_annotations` y base común exacta;
-7. dry-run existente con `base_match_status: matched`, método `exact_checkpoint` y resultado `overall_status: empty`;
-8. `quick_check: ok`, cero violaciones de claves foráneas y ninguna descarga inválida.
+- 1 registro textual principal;
+- 1 página completa;
+- 1 recorte regional;
+- 1 figura;
+- 2 objetos textuales de contexto;
+- separación correcta entre contenido principal y contexto;
+- `quick_check: ok` y cero violaciones de claves foráneas;
+- SHA-256 del original y de la página fuente idénticos: `25d1d8b6b483ec915e547648708be185e6f9a193ef88615aff71b3a8f663f41c`;
+- huellas internas del ZIP válidas y fuentes sin modificaciones.
 
-La descarga no aplicó cambios. `project_data` quedó fuera del recorrido y continuó en `0046_audiovisual_timeline_annotations` con sus conteos previos. `INT-01` queda cerrado en 0.87.0.
-
-No hay migración de base para esta versión. **No ejecutar `db-upgrade` por 0.87.0.**
+`project_data` no participó de la validación y permaneció en `0046_audiovisual_timeline_annotations`. `EXP-01` queda cerrado en 0.88.0.

@@ -11,6 +11,7 @@ from archive_workbench.analysis_quality import (
 from archive_workbench.corpus_export import (
     AGGREGATION_LEVELS,
     OUTPUT_FORMATS,
+    RUN_OUTPUT_FORMATS,
     REVIEW_STATUSES,
     TEXT_POLICIES,
     ExportProfileValues,
@@ -25,6 +26,7 @@ from archive_workbench.corpus_export import (
 )
 from archive_workbench.db import create_sqlite_engine, session_scope
 from archive_workbench.ui_navigation import rerun_view, tracked_tabs
+from archive_workbench.visual_export import VisualExportOptions
 
 _AGGREGATION_LABELS = {
     "object": "Un registro por objeto textual",
@@ -47,6 +49,7 @@ _REVIEW_LABELS = {
 _OUTPUT_FORMAT_LABELS = {
     "jsonl": "JSONL · un registro por línea",
     "csv": "CSV · tabla",
+    "visual_zip": "Exportar texto e imágenes (ZIP)",
 }
 
 _EXPORT_SELECTION_KEY = "export_profile_selected_id"
@@ -252,11 +255,29 @@ def _render_export_result(st, *, project_root) -> None:
     if not isinstance(result, dict):
         return
 
-    st.success(
-        "Exportación creada correctamente: "
-        f"{result['row_count']} registros, {result['character_count']} caracteres, "
-        f"formato {str(result['format']).upper()}."
-    )
+    if str(result["format"]) == "visual_zip":
+        row_count = int(result["row_count"])
+        page_count = int(result.get("page_image_count", 0))
+        region_count = int(result.get("region_image_count", 0))
+        figure_count = int(result.get("figure_image_count", 0))
+        st.success(
+            "Exportación creada correctamente: "
+            f"{row_count} {'registro' if row_count == 1 else 'registros'} de texto · "
+            f"{page_count} {'página' if page_count == 1 else 'páginas'} · "
+            f"{region_count} {'recorte' if region_count == 1 else 'recortes'} · "
+            f"{figure_count} {'figura' if figure_count == 1 else 'figuras'}."
+        )
+        if result.get("context_object_count"):
+            st.caption(
+                f"El ZIP conserva {result['context_object_count']} objetos textuales de contexto "
+                "para las páginas y documentos incluidos."
+            )
+    else:
+        st.success(
+            "Exportación creada correctamente: "
+            f"{result['row_count']} registros, {result['character_count']} caracteres, "
+            f"formato {str(result['format']).upper()}."
+        )
     st.code(str(result["relative_path"]))
     st.caption(f"SHA-256: `{result['sha256']}` · {result['byte_size']} bytes")
 
@@ -270,7 +291,11 @@ def _render_export_result(st, *, project_root) -> None:
             mime=(
                 "application/x-ndjson"
                 if str(result["format"]) == "jsonl"
-                else "text/csv"
+                else (
+                    "application/zip"
+                    if str(result["format"]) == "visual_zip"
+                    else "text/csv"
+                )
             ),
             use_container_width=True,
             key=f"export_download_{result['run_id']}",
@@ -781,12 +806,54 @@ def render_export_view(
             st.info("Restaurá el perfil antes de crear una nueva exportación.")
         else:
             format_value = st.selectbox(
-                "Formato de esta ejecución",
-                options=list(OUTPUT_FORMATS),
-                index=list(OUTPUT_FORMATS).index(selected.output_format),
+                "Qué archivo querés crear",
+                options=list(RUN_OUTPUT_FORMATS),
+                index=list(RUN_OUTPUT_FORMATS).index(selected.output_format),
                 format_func=lambda value: _OUTPUT_FORMAT_LABELS.get(value, value.upper()),
                 key="export_run_format",
             )
+            visual_options = None
+            if format_value == "visual_zip":
+                st.caption(
+                    "El ZIP reúne el texto exportado con las imágenes relacionadas y un manifiesto "
+                    "que conserva su origen, relaciones y huellas de verificación."
+                )
+                customize_visual = st.toggle(
+                    "Elegir qué imágenes incluir",
+                    value=False,
+                    key=f"export_visual_customize_{selected.id}",
+                    help="Si lo dejás desactivado se incluyen páginas, recortes regionales y figuras.",
+                )
+                include_pages = True
+                include_regions = True
+                include_figures = True
+                if customize_visual:
+                    st.write("**Imágenes incluidas**")
+                    include_pages = st.checkbox(
+                        "Páginas completas",
+                        value=True,
+                        key=f"export_visual_pages_{selected.id}",
+                    )
+                    include_regions = st.checkbox(
+                        "Recortes regionales",
+                        value=True,
+                        key=f"export_visual_regions_{selected.id}",
+                    )
+                    include_figures = st.checkbox(
+                        "Figuras",
+                        value=True,
+                        key=f"export_visual_figures_{selected.id}",
+                    )
+                visual_options = VisualExportOptions(
+                    include_pages=include_pages,
+                    include_regions=include_regions,
+                    include_figures=include_figures,
+                    include_context=True,
+                )
+                st.caption(
+                    "También se incluye, como contexto, el texto de otros objetos de las páginas y "
+                    "documentos seleccionados. Ese texto queda separado del contenido principal."
+                )
             suggested = default_export_filename(selected.name, format_value)
             output_relative = st.text_input(
                 "Nombre o ruta del archivo dentro del proyecto",
@@ -812,6 +879,7 @@ def render_export_view(
                                 output_relative_path=output_relative,
                                 output_format=format_value,
                                 created_by=actor or "local_user",
+                                visual_options=visual_options,
                             )
                     finally:
                         engine.dispose()
@@ -826,6 +894,10 @@ def render_export_view(
                         "character_count": result.character_count,
                         "byte_size": result.byte_size,
                         "sha256": result.output_sha256,
+                        "page_image_count": result.page_image_count,
+                        "region_image_count": result.region_image_count,
+                        "figure_image_count": result.figure_image_count,
+                        "context_object_count": result.context_object_count,
                     }
                     rerun_view(st)
 
@@ -834,7 +906,10 @@ def render_export_view(
             st.info("Todavía no hay exportaciones registradas.")
         for row in runs:
             with st.container(border=True):
-                st.write(f"**{row.profile_name}** · {row.output_format.upper()}")
+                st.write(
+                    f"**{row.profile_name}** · "
+                    f"{_OUTPUT_FORMAT_LABELS.get(row.output_format, row.output_format.upper())}"
+                )
                 st.code(row.output_relative_path)
                 st.caption(
                     f"{row.row_count} registros · {row.character_count} caracteres · "

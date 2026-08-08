@@ -1,6 +1,6 @@
 # Implementaciones realizadas — Archive Workbench
 
-**Estado preparado:** 2026-08-08 · **versión de trabajo:** 0.87.0
+**Estado preparado:** 2026-08-08 · **versión de trabajo:** 0.88.0
 
 Este documento registra capacidades ya implementadas y, cuando corresponde, validadas. No deben volver a aparecer en `PENDIENTES_ACTIVOS.md` salvo evidencia de regresión o ampliación explícita del alcance.
 
@@ -14,7 +14,7 @@ Este documento registra capacidades ya implementadas y, cuando corresponde, vali
 | Calidad de página y derivados OCR | OCR-01A–F implementadas, validadas y cerradas |
 | Búsqueda literal y semántica | Implementado; calibración reproducible cerrada en 0.74.0 |
 | Autoridades, menciones y relaciones | Núcleo implementado y validado |
-| Exportaciones reproducibles | Implementado y validado |
+| Exportaciones reproducibles | CSV/JSONL y texto+imágenes ZIP implementados, validados; EXP-01 cerrado en 0.88.0 |
 | Backups y restauración | Implementado y validado |
 | Intercambio offline | Implementado y validado; EX-01 cerrado en 0.68.1 |
 | Transporte opcional por Google Drive INT-01 | Implementado, validado y cerrado en 0.87.0 |
@@ -35,6 +35,18 @@ Este documento registra capacidades ya implementadas y, cuando corresponde, vali
 | Registro audiovisual y transcripción segmentada AV-01 | Implementado, validado y cerrado en 0.84.0 |
 | Incorporación autorizada desde plataformas AV-02 | Implementada, validada y cerrada en 0.85.0 |
 | Evaluación y revisión audiovisual AV-03 | Implementada, validada y cerrada en 0.86.0 |
+
+## Exportación de texto e imágenes
+
+### EXP-01 — paquete visual con contexto estructurado — 0.88.0
+
+**Exportar corpus > Crear archivo** agrega la opción visible **Exportar texto e imágenes (ZIP)** sin crear un segundo sistema de exportación. El perfil continúa definiendo el contenido textual principal; la ejecución puede materializar además la imagen exacta de cada página vinculada a `EditablePage.source_extraction_page_id`, recortes regionales registrados y figuras recortadas desde la geometría editable vigente. Cada recurso conserva documento, página, extracción de origen, revisión, geometría cuando corresponde, tamaño y SHA-256.
+
+El ZIP incluye `manifest.json` y contexto textual estructurado en `context/objects.jsonl`, `context/pages.jsonl` y `context/documents.jsonl`. Los objetos que no pertenecen al perfil principal pueden viajar únicamente como contexto y quedan marcados como tales, preservando identidad y orden. Esto permite que una etapa futura `vision_describe` decida cuánto contexto consumir sin volver a consultar SQLite ni acceder de forma opaca a los originales. Si falta un recurso requerido o una huella no coincide, la exportación falla en vez de producir un paquete aparentemente válido.
+
+La interfaz mantiene una sola elección principal de salida. **Elegir qué imágenes incluir** permanece cerrado por defecto y, al activarse, permite decidir páginas completas, recortes regionales y figuras. La exportación no ejecuta modelos ni transforma resultados automáticos en datos revisados. No hay migración: continúa `0046_audiovisual_timeline_annotations`.
+
+**Validada manualmente en 0.88.0.** El proyecto descartable produjo 1 registro principal, 1 página, 1 recorte regional, 1 figura y 2 objetos textuales de contexto. El verificador confirmó `quick_check: ok`, cero violaciones FK, SHA-256 del original y de la página fuente idénticos (`25d1d8b6b483ec915e547648708be185e6f9a193ef88615aff71b3a8f663f41c`), huellas internas válidas, separación correcta del objeto contextual y ausencia de modificaciones en las imágenes fuente. `project_data` permaneció en `0046` y fuera del recorrido. `EXP-01` queda cerrado.
 
 ## Transporte opcional por Google Drive
 
@@ -596,6 +608,8 @@ Toda nueva versión debe releer y aplicar esta sección y `.assistant/05_CRITERI
 Los paneles que contienen controles reactivos deben conservar su apertura durante los reruns de Streamlit. Los `st.expander` quedan reservados para contenido informativo, historiales o detalles técnicos; un flujo interactivo usa un estado persistente con clave estable o un recorrido explícito por pasos. Cambiar una decisión, un destino o un filtro no debe cerrar el panel activo ni hacer perder el contexto.
 
 Esta obligación rige desde el diseño de cada cambio y se verifica en sus pruebas de navegación. `UX-02` realizará una revisión integral al final de los bloques funcionales activos y antes de la candidata a v1.0, sin postergar la corrección de regresiones concretas.
+
+En 0.88.0, **Exportar corpus > Crear archivo** conserva una sola elección principal de salida. **Exportar texto e imágenes (ZIP)** usa lenguaje orientado a la tarea; las variantes de páginas, recortes y figuras sólo aparecen al activar **Elegir qué imágenes incluir**, mediante un control persistente y cerrado por defecto. El contexto textual adicional no agrega controles técnicos a la pantalla.
 
 ### Orientación y lenguaje claro — fase 1, 0.51.0
 

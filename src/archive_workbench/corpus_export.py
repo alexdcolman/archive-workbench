@@ -43,6 +43,7 @@ from archive_workbench.temporal import format_temporal_range, temporal_overlap
 AGGREGATION_LEVELS = ("object", "page", "document_part", "document", "archival_unit")
 TEXT_POLICIES = ("corrected_fallback_original", "corrected_only", "original_only")
 OUTPUT_FORMATS = ("jsonl", "csv")
+RUN_OUTPUT_FORMATS = ("jsonl", "csv", "visual_zip")
 REVIEW_STATUSES = ("unreviewed", "needs_review", "reviewed", "approved")
 
 
@@ -110,6 +111,10 @@ class ExportRunResult:
     byte_size: int
     output_sha256: str
     corpus_state_sha256: str
+    page_image_count: int = 0
+    region_image_count: int = 0
+    figure_image_count: int = 0
+    context_object_count: int = 0
 
 
 @dataclass(slots=True)
@@ -757,7 +762,7 @@ def _safe_output_path(project_root: Path, relative_path: str, output_format: str
         relative = candidate.relative_to(project_root.resolve())
     except ValueError as exc:
         raise ValueError("La exportación debe quedar dentro de project_data") from exc
-    extension = f".{output_format}"
+    extension = ".zip" if output_format == "visual_zip" else f".{output_format}"
     if candidate.suffix.lower() != extension:
         candidate = candidate.with_suffix(extension)
         relative = candidate.relative_to(project_root.resolve())
@@ -800,6 +805,7 @@ def run_export(
     created_by: str,
     output_format: str | None = None,
     overwrite: bool = False,
+    visual_options=None,
 ) -> ExportRunResult:
     if profile.lifecycle_status != "active":
         raise ValueError("El perfil está archivado y no puede ejecutar exportaciones")
@@ -807,7 +813,7 @@ def run_export(
         session, project_id=project_id, profile=profile
     )
     selected_format = output_format or profile.output_format
-    if selected_format not in OUTPUT_FORMATS:
+    if selected_format not in RUN_OUTPUT_FORMATS:
         raise ValueError("Formato de salida inválido")
     rows = build_export_rows(session, project_id=project_id, profile=profile)
     output_path, relative = _safe_output_path(project_root, output_relative_path, selected_format)
@@ -816,23 +822,46 @@ def run_export(
             f"La salida ya existe: {relative}. Elegí otro nombre o habilitá sobrescritura explícita."
         )
     output_path.parent.mkdir(parents=True, exist_ok=True)
-    temporary = output_path.with_name(output_path.name + ".tmp")
-    try:
-        if selected_format == "jsonl":
-            _write_jsonl(temporary, rows)
-        else:
-            _write_csv(temporary, rows)
-        temporary.replace(output_path)
-    finally:
-        temporary.unlink(missing_ok=True)
-    digest = hashlib.sha256(output_path.read_bytes()).hexdigest()
     state_digest = current_editable_state_sha256(session, project_id)
+    visual_result = None
+    if selected_format == "visual_zip":
+        from archive_workbench.visual_export import VisualExportOptions, build_text_image_package
+
+        selected_visual_options = visual_options or VisualExportOptions()
+        visual_result = build_text_image_package(
+            session,
+            project_root=project_root,
+            project_id=project_id,
+            records=[_jsonable_record(row) for row in rows],
+            profile_snapshot=profile_snapshot(profile),
+            corpus_state_sha256=state_digest,
+            destination=output_path,
+            options=selected_visual_options,
+        )
+    else:
+        temporary = output_path.with_name(output_path.name + ".tmp")
+        try:
+            if selected_format == "jsonl":
+                _write_jsonl(temporary, rows)
+            else:
+                _write_csv(temporary, rows)
+            temporary.replace(output_path)
+        finally:
+            temporary.unlink(missing_ok=True)
+    digest = hashlib.sha256(output_path.read_bytes()).hexdigest()
+    snapshot = profile_snapshot(profile)
+    if visual_result is not None:
+        snapshot["execution"] = {
+            "format": "visual_zip",
+            "visual_options": visual_result.manifest["options"],
+            "manifest_schema_version": visual_result.manifest["schema_version"],
+        }
     run = CorpusExportRun(
         id=new_id(),
         project_id=project_id,
         profile_id=profile.id,
         profile_name=profile.name,
-        profile_snapshot_json=profile_snapshot(profile),
+        profile_snapshot_json=snapshot,
         corpus_state_sha256=state_digest,
         output_format=selected_format,
         output_relative_path=relative,
@@ -853,6 +882,10 @@ def run_export(
         byte_size=run.byte_size,
         output_sha256=digest,
         corpus_state_sha256=state_digest,
+        page_image_count=(visual_result.page_count if visual_result is not None else 0),
+        region_image_count=(visual_result.region_count if visual_result is not None else 0),
+        figure_image_count=(visual_result.figure_count if visual_result is not None else 0),
+        context_object_count=(visual_result.context_object_count if visual_result is not None else 0),
     )
 
 
@@ -884,4 +917,5 @@ def export_run_rows(session: Session, *, project_id: str) -> list[ExportRunRow]:
 def default_export_filename(profile_name: str, output_format: str, now: datetime | None = None) -> str:
     timestamp = (now or utc_now()).strftime("%Y%m%dT%H%M%SZ")
     slug = re.sub(r"[^a-z0-9]+", "_", profile_name.casefold()).strip("_") or "corpus"
-    return f"exports/{slug}_{timestamp}.{output_format}"
+    extension = "zip" if output_format == "visual_zip" else output_format
+    return f"exports/{slug}_{timestamp}.{extension}"

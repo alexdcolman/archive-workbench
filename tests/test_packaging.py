@@ -175,8 +175,8 @@ def test_version_docs_and_discovery_plan_are_packaged() -> None:
         / "0046_audiovisual_timeline_annotations.py"
     )
 
-    assert data["project"]["version"] == "0.87.0"
-    assert '__version__ = "0.87.0"' in version_source
+    assert data["project"]["version"] == "0.88.0"
+    assert '__version__ = "0.88.0"' in version_source
     assert migration.is_file()
     assert 'down_revision = "0044_layout_structure_review"' in migration.read_text(
         encoding="utf-8"
@@ -208,6 +208,12 @@ def test_version_docs_and_discovery_plan_are_packaged() -> None:
     for script in (drive_creator, drive_verifier):
         assert script.is_file()
         assert script.stat().st_mode & 0o111
+    visual_creator = root / "scripts" / "create_visual_export_validation_project.py"
+    visual_verifier = root / "scripts" / "verify_visual_export_validation_project.py"
+    for script in (visual_creator, visual_verifier):
+        assert script.is_file()
+        assert script.stat().st_mode & 0o111
+    assert (root / "src" / "archive_workbench" / "visual_export.py").is_file()
     av03_creator = root / "scripts" / "create_transcription_evaluation_validation_project.py"
     av03_verifier = root / "scripts" / "verify_transcription_evaluation_validation_project.py"
     for script in (av03_creator, av03_verifier):

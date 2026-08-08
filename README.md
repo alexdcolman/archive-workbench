@@ -6,7 +6,7 @@ Está pensada especialmente para equipos de archivos, bibliotecas, ciencias soci
 
 Los documentos y la base de datos permanecen en la computadora del equipo: la aplicación no necesita subir el corpus a un servicio externo.
 
-**Versión actual:** 0.87.0 — INT-01 agrega transporte opcional de paquetes de intercambio mediante Google Drive, sin convertir Drive en una base compartida.
+**Versión actual:** 0.88.0 — agrega exportación conjunta de texto, páginas, recortes regionales y figuras en **Exportar texto e imágenes (ZIP)**, con contexto textual estructurado y trazabilidad verificable.
 
 ## Qué permite hacer
 
@@ -36,6 +36,7 @@ Archive Workbench reúne en una misma interfaz:
 - descubrimiento abierto reproducible con candidatos, decisiones humanas append-only y evaluación por familia;
 - grafo documental con capas separadas para jerarquía, documentos, partes, menciones, relaciones analíticas, productores y gestores;
 - exportaciones reproducibles en CSV y JSONL;
+- exportación conjunta de texto e imágenes en ZIP, con páginas, recortes regionales, figuras, contexto textual estructurado y manifiesto verificable;
 - asignación de tareas entre integrantes del equipo;
 - intercambio offline de cambios entre distintas copias;
 - transporte opcional de esos paquetes mediante Google Drive, con selección por archivo, verificación local y simulación antes de cualquier aplicación;
@@ -43,7 +44,7 @@ Archive Workbench reúne en una misma interfaz:
 
 La extracción automática siempre produce candidatos revisables. La aplicación no reemplaza la lectura ni las decisiones del equipo de investigación.
 
-En 0.87.0, Google Drive puede usarse únicamente para transportar paquetes ZIP de intercambio. Cada copia conserva su propia base SQLite local: Drive no sincroniza `project_data`, no habilita edición simultánea de la base y una descarga nunca aplica cambios automáticamente. La recepción conserva la inspección del manifiesto y el dry-run ya usados por el intercambio local.
+Desde 0.87.0, Google Drive puede usarse únicamente para transportar paquetes ZIP de intercambio. Cada copia conserva su propia base SQLite local: Drive no sincroniza `project_data`, no habilita edición simultánea de la base y una descarga nunca aplica cambios automáticamente. La recepción conserva la inspección del manifiesto y el dry-run ya usados por el intercambio local.
 
 ## Estado del proyecto
 

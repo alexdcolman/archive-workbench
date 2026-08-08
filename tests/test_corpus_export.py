@@ -349,3 +349,235 @@ def test_export_execution_requires_current_quality_authorization(tmp_path: Path)
             assert preview.records[0].texto == "actividad subversiva"
     finally:
         engine.dispose()
+
+
+def _seed_visual_export_material(root: Path) -> tuple[str, str]:
+    import hashlib
+
+    from PIL import Image
+
+    from archive_workbench.db.models import (
+        DerivativeAsset,
+        ExtractionPage,
+        ExtractionRegion,
+        ExtractionRun,
+        PreprocessingRun,
+    )
+    from archive_workbench.identity import new_id
+
+    primary_id, page_id = _seed_search_project(root)
+    image_relative = Path("derived/preprocessing/visual_test/page_0001_ocr.png")
+    image_path = root / image_relative
+    image_path.parent.mkdir(parents=True, exist_ok=True)
+    image = Image.new("RGB", (400, 300), "white")
+    image.save(image_path, format="PNG")
+    image_sha = hashlib.sha256(image_path.read_bytes()).hexdigest()
+
+    crop_relative = Path("derived/extractions/visual_test/regions/page_0001/r1.png")
+    crop_path = root / crop_relative
+    crop_path.parent.mkdir(parents=True, exist_ok=True)
+    image.crop((40, 60, 200, 150)).save(crop_path, format="PNG")
+
+    engine = create_sqlite_engine(database_path(root))
+    try:
+        with session_scope(engine) as session:
+            page = session.get(EditablePage, page_id)
+            assert page is not None
+            run = session.get(ExtractionRun, page.source_extraction_run_id)
+            extraction_page = session.get(ExtractionPage, page.source_extraction_page_id)
+            assert run is not None and extraction_page is not None
+
+            prep = PreprocessingRun(
+                id=new_id(),
+                digital_object_id=page.digital_object_id,
+                source_sha256="a" * 64,
+                profile_key="visual-test",
+                options_json={},
+                options_hash="c" * 64,
+                backend="tests",
+                status="completed",
+                is_current=True,
+                output_root="derived/preprocessing/visual_test",
+                warnings_json=[],
+            )
+            session.add(prep)
+            session.flush()
+            asset = DerivativeAsset(
+                id=new_id(),
+                preprocessing_run_id=prep.id,
+                digital_object_id=page.digital_object_id,
+                page_number=1,
+                kind="ocr",
+                relative_path=image_relative.as_posix(),
+                mime_type="image/png",
+                sha256=image_sha,
+                byte_size=image_path.stat().st_size,
+                width=400,
+                height=300,
+                dpi=150,
+                rotation_applied=0,
+                analysis_json={},
+                transformations_json={},
+                backend="tests",
+            )
+            session.add(asset)
+            session.flush()
+            extraction_page.source_asset_id = asset.id
+            run.preprocessing_run_id = prep.id
+
+            session.add(
+                ExtractionRegion(
+                    id=new_id(),
+                    extraction_run_id=run.id,
+                    page_number=1,
+                    region_key="r1",
+                    label="Recuadro lateral",
+                    mode="ocr",
+                    object_type="paragraph",
+                    reading_order=0,
+                    bbox_json={"x": 0.1, "y": 0.2, "width": 0.4, "height": 0.3},
+                    profile_json={"semantic_role": "sidebar"},
+                    crop_path=crop_relative.as_posix(),
+                    object_count=1,
+                    character_count=10,
+                    status="completed",
+                )
+            )
+            figure_id = new_id()
+            session.add(
+                EditableObject(
+                    id=figure_id,
+                    editable_page_id=page.id,
+                    digital_object_id=page.digital_object_id,
+                    page_number=1,
+                    source_extracted_object_id=None,
+                    source_origin_id=None,
+                    current_text="",
+                    current_object_type="figure",
+                    current_order_index=1,
+                    current_geometry_json=[
+                        {
+                            "page": 1,
+                            "polygon": [[0.55, 0.2], [0.9, 0.2], [0.9, 0.7], [0.55, 0.7]],
+                            "coordinate_space": "normalized",
+                        }
+                    ],
+                    current_attributes_json={},
+                    lifecycle_status="active",
+                    review_status="approved",
+                    revision_number=1,
+                    created_by="tests",
+                    updated_by="tests",
+                )
+            )
+            session.add(
+                EditableObject(
+                    id=new_id(),
+                    editable_page_id=page.id,
+                    digital_object_id=page.digital_object_id,
+                    page_number=1,
+                    source_extracted_object_id=None,
+                    source_origin_id=None,
+                    current_text="Texto adicional que sirve solamente como contexto.",
+                    current_object_type="paragraph",
+                    current_order_index=2,
+                    current_geometry_json=[],
+                    current_attributes_json={},
+                    lifecycle_status="active",
+                    review_status="needs_review",
+                    revision_number=1,
+                    created_by="tests",
+                    updated_by="tests",
+                )
+            )
+            session.flush()
+            return primary_id, figure_id
+    finally:
+        engine.dispose()
+
+
+def test_visual_zip_exports_pages_regions_figures_and_structured_context(tmp_path: Path) -> None:
+    import zipfile
+
+    root = tmp_path / "project"
+    primary_id, figure_id = _seed_visual_export_material(root)
+    engine = create_sqlite_engine(database_path(root))
+    try:
+        with session_scope(engine) as session:
+            profile = _profile(
+                session,
+                aggregation="object",
+                include_review_statuses=("approved",),
+            )
+            result = run_export(
+                session,
+                project_root=root,
+                project_id="search_project",
+                profile=profile,
+                output_relative_path="exports/texto_imagenes",
+                output_format="visual_zip",
+                created_by="tests",
+            )
+    finally:
+        engine.dispose()
+
+    assert result.output_path.suffix == ".zip"
+    assert result.page_image_count == 1
+    assert result.region_image_count == 1
+    assert result.figure_image_count == 1
+    assert result.context_object_count == 2
+
+    with zipfile.ZipFile(result.output_path) as archive:
+        names = set(archive.namelist())
+        assert "manifest.json" in names
+        assert "text/records.jsonl" in names
+        assert "context/objects.jsonl" in names
+        assert any(name.startswith("images/pages/") for name in names)
+        assert any(name.startswith("images/regions/") for name in names)
+        assert any(name.startswith("images/figures/") for name in names)
+        manifest = json.loads(archive.read("manifest.json"))
+        context_rows = [
+            json.loads(line)
+            for line in archive.read("context/objects.jsonl").decode("utf-8").splitlines()
+        ]
+
+    assert manifest["package_type"] == "archive_workbench_text_and_images"
+    assert manifest["asset_counts"] == {"figures": 1, "pages": 1, "regions": 1}
+    assert manifest["text"]["record_count"] == 1
+    assert manifest["context"]["object_count"] == 2
+    assert {item["kind"] for item in manifest["assets"]} == {"page", "region", "figure"}
+    figure = next(item for item in manifest["assets"] if item["kind"] == "figure")
+    assert figure["editable_object_id"] == figure_id
+    assert figure["primary_record_ids"] == [f"object:{primary_id}"]
+    extra = next(item for item in context_rows if "Texto adicional" in item["text"])
+    assert extra["included_in_primary_export"] is False
+    assert extra["primary_record_ids"] == []
+
+
+def test_visual_zip_rejects_modified_registered_page_asset(tmp_path: Path) -> None:
+    root = tmp_path / "project"
+    _seed_visual_export_material(root)
+    image_path = root / "derived/preprocessing/visual_test/page_0001_ocr.png"
+    image_path.write_bytes(image_path.read_bytes() + b"tampered")
+    engine = create_sqlite_engine(database_path(root))
+    try:
+        with session_scope(engine) as session:
+            profile = _profile(
+                session,
+                aggregation="object",
+                include_review_statuses=("approved",),
+            )
+            import pytest
+
+            with pytest.raises(ValueError, match="modificado"):
+                run_export(
+                    session,
+                    project_root=root,
+                    project_id="search_project",
+                    profile=profile,
+                    output_relative_path="exports/texto_imagenes.zip",
+                    output_format="visual_zip",
+                    created_by="tests",
+                )
+    finally:
+        engine.dispose()

@@ -15,6 +15,9 @@ Este es el único documento en la raíz de `docs/`. Resume la evolución del pro
 - [Proyecto paralelo GIAR](referencia/PROYECTO_PARALELO_GIAR.md).
 
 ## Versiones recientes — más reciente primero
+### 0.88.0 — 2026-08-08
+EXP-01 RC1 agrega **Exportar texto e imágenes (ZIP)** al recorrido existente de exportación. El paquete incluye los registros del perfil, páginas fuente ancladas a la extracción que originó la capa editable, recortes regionales y figuras recortadas desde la geometría vigente. Un manifiesto conserva huellas, procedencia, revisión y vínculos. El contexto textual de página/documento se exporta por separado y distingue objetos principales de objetos usados sólo como contexto. No hay migración. La validación manual final confirmó 1 registro principal, 1 página, 1 recorte regional, 1 figura y 2 objetos de contexto; el verificador comprobó huellas internas, originales intactos, `quick_check: ok`, cero violaciones FK y la separación entre contenido principal y contexto. `project_data` permaneció fuera del recorrido y sin cambios. EXP-01 queda cerrado.
+
 ### 0.87.0 — 2026-08-08
 Implementa y valida `INT-01`: Google Drive actúa únicamente como transporte opcional de bundles del intercambio existente. La conexión usa OAuth de escritorio con `drive.file`; la subida valida el ZIP y registra SHA-256 e identidad del bundle; Google Picker selecciona un archivo concreto; la descarga es atómica, vuelve a verificar el paquete y compara su manifiesto antes de habilitar el dry-run existente. RC1 expuso una configuración incompleta en el generador descartable y RC2 la corrigió. La prueba real confirmó OAuth, subida, Picker, descarga con SHA-256 idéntico y dry-run `empty/matched` entre dos copias descartables, sin modificar `project_data`. No hay migración y la revisión continúa en `0046_audiovisual_timeline_annotations`. `INT-01` queda cerrado.
 ### 0.86.0 — 2026-08-07

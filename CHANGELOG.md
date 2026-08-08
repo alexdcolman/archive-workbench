@@ -1,3 +1,11 @@
+## 0.88.0 — 2026-08-08
+
+- RC1 agrega **Exportar texto e imágenes (ZIP)** dentro del recorrido existente de exportación.
+- Conserva registros textuales, páginas fuente, recortes regionales y figuras con manifiesto, SHA-256, geometría, procedencia, revisión y vínculos.
+- Agrega contexto textual estructurado de página/documento separado del contenido principal para consumo posterior por `vision_describe`.
+- No agrega migración; continúa `0046_audiovisual_timeline_annotations`.
+- La validación manual final confirmó 1 registro principal, 1 página, 1 recorte regional, 1 figura y 2 objetos textuales de contexto; el verificador informó `quick_check: ok`, cero violaciones FK, huellas internas válidas, originales intactos y separación correcta entre contenido principal y contexto. `project_data` permaneció fuera del recorrido y sin cambios. `EXP-01` queda cerrado en 0.88.0.
+
 ## 0.87.0 — 2026-08-08
 
 - Implementa `INT-01` como transporte opcional de paquetes de intercambio mediante Google Drive, sin usar Drive como base viva ni compartir SQLite.

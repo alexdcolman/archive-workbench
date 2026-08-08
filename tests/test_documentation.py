@@ -67,7 +67,6 @@ def test_active_pending_ledger_has_index_and_recovers_all_major_lines() -> None:
         "AI-01 — Pipeline CLI opcional de análisis con LLM",
         "AI-02 — Sistema RAG trazable",
         "OPS-01 — Imagen Docker",
-        "EXP-01 — Exportación trazable de imágenes y recortes",
         "WEB-01 — Sitio público y documentación de release",
         "GIAR-01 — Base de conocimiento y sitio",
     ):
@@ -77,6 +76,8 @@ def test_active_pending_ledger_has_index_and_recovers_all_major_lines() -> None:
     assert "AV-02 — incorporación autorizada desde plataformas — 0.85.0" in implemented
     assert "AV-03 — evaluación, revisión sincronizada y calidad de reconocimiento — 0.86.0" in implemented
     assert "INT-01 — Google Drive como transporte controlado — 0.87.0" in implemented
+    assert "EXP-01 — paquete visual con contexto estructurado — 0.88.0" in implemented
+    assert "EXP-01 — Exportación trazable de imágenes y recortes" not in text
     assert "INT-01 — Integración opcional con Google Drive" not in text
     assert "AV-03 — Evaluación y optimización de transcripción de video real" not in text
     assert "SEM-01 — Calibración reproducible de búsqueda semántica" not in text
@@ -278,7 +279,7 @@ def test_history_map_is_concise_and_references_historical_detail() -> None:
     assert text.index("### 0.74.0") < text.index("### 0.73.0")
     assert text.index("### 0.73.0") < text.index("### 0.72.0")
     assert text.index("### 0.72.0") < text.index("### 0.71.2")
-    assert len(text.splitlines()) < 280
+    assert len(text.splitlines()) < 285
 
 
 def test_current_architecture_is_separate_from_historical_design() -> None:
@@ -519,15 +520,13 @@ def test_automatic_analysis_quality_decision_is_preserved_and_auditable() -> Non
     assert "st.form" in text
 
 
-def test_current_update_guide_describes_int01_drive_transport() -> None:
+def test_current_update_guide_describes_exp01_text_and_images() -> None:
     text = (OPERATIVE / "ACTUALIZACION_ACTUAL.md").read_text(encoding="utf-8")
-    assert "Archive Workbench 0.87.0" in text
-    assert "`INT-01`" in text
-    assert "Google Drive" in text
-    assert "drive.file" in text
-    assert "Google Picker" in text
-    assert "exchange/drive_downloads/" in text
-    assert "Simular evaluación del paquete descargado" in text
+    assert "Archive Workbench 0.88.0" in text
+    assert "`EXP-01`" in text
+    assert "Exportar texto e imágenes (ZIP)" in text
+    assert "context/objects.jsonl" in text
+    assert "geometría editable vigente" in text
     assert "0046_audiovisual_timeline_annotations" in text
     assert "No ejecutar `db-upgrade`" in text
     assert "`project_data` no participó" in text
@@ -616,11 +615,11 @@ def test_pilot_guide_delegates_future_work_to_single_pending_ledger() -> None:
 def test_readme_points_only_to_current_documentation_map() -> None:
     text = (ROOT / "README.md").read_text(encoding="utf-8")
     citation = (ROOT / "CITATION.cff").read_text(encoding="utf-8")
-    assert "**Versión actual:** 0.87.0" in text
-    assert "INT-01 agrega transporte opcional" in text
+    assert "**Versión actual:** 0.88.0" in text
+    assert "Exportar texto e imágenes (ZIP)" in text
     assert "AV-01" in text
     assert "0.86.0" in text
-    assert 'version: "0.87.0"' in citation
+    assert 'version: "0.88.0"' in citation
     assert 'pip install -e ".[platform]"' in text
     assert "FFmpeg/FFprobe" in text
     assert "audio y video" in text
@@ -674,7 +673,10 @@ def test_pre_release_roadmap_includes_public_site_export_and_parallel_giar() -> 
     assert "`AV-03` quedó implementado, validado y cerrado en 0.86.0" in text
     assert "1. Completar `AV-03`" not in text
     assert "`INT-01` quedó implementado, validado y cerrado en 0.87.0" in text
-    assert "1. Implementar `EXP-01`" in text
+    assert "0.88.0" in text
+    assert "`EXP-01` quedó implementado, validado y cerrado en 0.88.0" in text
+    assert "1. Ejecutar `PILOT-01`" in text
+    assert "Validar y cerrar `EXP-01`" not in text
     assert "Validar y cerrar `INT-01`" not in text
     assert "Validar y cerrar `AV-02`" not in text
     assert "Validar y cerrar `AV-01`" not in text
@@ -775,6 +777,8 @@ def test_ocr01_is_closed_and_architecture_remains_conservative() -> None:
     assert "INT-01 — Integración opcional con Google Drive como transporte — EN VALIDACIÓN" not in pending
     assert "| INT-01 |" not in pending
     assert "INT-01 — Google Drive como transporte controlado — 0.87.0" in implemented
+    assert "EXP-01 — paquete visual con contexto estructurado — 0.88.0" in implemented
+    assert "EXP-01 — Exportación trazable de imágenes y recortes" not in pending
     assert "Google Drive (opcional)" in (ROOT / "src" / "archive_workbench" / "review_app.py").read_text(encoding="utf-8")
     assert "Transporte opcional por Google Drive — INT-01" in architecture
     assert "drive.file" in architecture

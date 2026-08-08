@@ -907,6 +907,9 @@ def test_work_and_export_finish_progressive_plain_language_hierarchy() -> None:
     assert '"Nombre o ruta del archivo dentro del proyecto"' in export
     assert 'st.expander("Detalles técnicos del registro", expanded=False)' in export
     assert 'st.expander("Detalles técnicos de la exportación", expanded=False)' in export
+    assert '"Exportar texto e imágenes (ZIP)"' in export
+    assert 'st.toggle(' in export and '"Elegir qué imágenes incluir"' in export
+    assert 'st.expander("Elegir qué imágenes incluir"' not in export
     assert '"Ruta de salida relativa a project_data"' not in export
 
 

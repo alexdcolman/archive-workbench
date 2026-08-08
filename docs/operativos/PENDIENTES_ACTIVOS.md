@@ -1,6 +1,6 @@
 # Pendientes activos — Archive Workbench
 
-**Estado preparado:** 2026-08-08 · **versión:** 0.87.0
+**Estado preparado:** 2026-08-08 · **versión:** 0.88.0
 
 Este archivo es la única fuente de verdad para trabajo abierto. Las capacidades cerradas se registran en `IMPLEMENTACIONES_REALIZADAS.md` y no deben reabrirse sin una regresión concreta o una ampliación explícita del alcance.
 
@@ -8,7 +8,7 @@ Este archivo es la única fuente de verdad para trabajo abierto. Las capacidades
 
 `CAT-02` y `GRAPH-02` quedaron implementados, validados y cerrados en 0.77.0. La secuencia principal y las líneas paralelas se mantienen en [`HOJA_DE_RUTA_PRE_RELEASE.md`](HOJA_DE_RUTA_PRE_RELEASE.md).
 
-`AV-01` quedó implementado, validado y cerrado en 0.84.0, `AV-02` en 0.85.0, `AV-03` en 0.86.0 e `INT-01` en 0.87.0. La secuencia principal continúa con `EXP-01`, `PILOT-01`, `UX-02`, `WEB-01`, `QA-01` junto con `OPS-02`, `OPS-01` y `OPS-03`. `OCR-01` quedó cerrado en 0.83.0.
+`AV-01` quedó implementado, validado y cerrado en 0.84.0, `AV-02` en 0.85.0, `AV-03` en 0.86.0, `INT-01` en 0.87.0 y `EXP-01` en 0.88.0. La secuencia principal continúa con `PILOT-01`, `UX-02`, `WEB-01`, `QA-01` junto con `OPS-02`, `OPS-01` y `OPS-03`. `OCR-01` quedó cerrado en 0.83.0.
 
 `GIAR-01` comienza como proyecto paralelo vinculado a `PILOT-01` y no bloquea por sí solo la v1.0. `AI-01` y `AI-02` quedan para después del release inicial.
 
@@ -16,7 +16,6 @@ Este archivo es la única fuente de verdad para trabajo abierto. Las capacidades
 
 | ID | Prioridad | Estado | Tarea |
 |---|---|---|---|
-| EXP-01 | Alta | Pendiente pre-release | Exportación trazable de imágenes y recortes para análisis visual |
 | PILOT-01 | Alta | Parcial | Corpus real persistente, verdad terreno y cierre del piloto |
 | GIAR-01 | Paralela | Planificado | Base de conocimiento y sitio del Grupo de Investigación en Archivos de la Represión |
 | UX-02 | Alta | Pendiente | Revisión final de complejidad acumulada de la interfaz |
@@ -27,14 +26,6 @@ Este archivo es la única fuente de verdad para trabajo abierto. Las capacidades
 | OPS-03 | Media | Parcial | Instalación limpia, rutas CPU/GPU y candidata a v1.0 |
 | AI-01 | Post-release | Pendiente | Pipeline CLI opcional de análisis con LLM |
 | AI-02 | Post-release | Pendiente | Sistema RAG trazable sobre corpus sistematizados |
-
-## Mejora funcional
-
-### EXP-01 — Exportación trazable de imágenes y recortes — PENDIENTE PRE-RELEASE
-
-Extender la exportación para incluir imágenes de página, recortes regionales y figuras seleccionadas junto con un manifiesto que conserve documento, página, región, geometría, checksum, procedencia, estado de revisión y relación con el texto exportado.
-
-La salida debe poder consumirse después desde `AI-01` por una etapa CLI `vision_describe`, sin acceder directamente a originales ni perder el vínculo con la fuente. La exportación no ejecutará modelos ni convertirá descripciones automáticas en datos revisados.
 
 ## Cierre pre-release
 

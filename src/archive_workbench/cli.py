@@ -112,6 +112,7 @@ from archive_workbench.graph import (
 from archive_workbench.corpus_export import (
     AGGREGATION_LEVELS,
     OUTPUT_FORMATS,
+    RUN_OUTPUT_FORMATS,
     REVIEW_STATUSES as EXPORT_REVIEW_STATUSES,
     TEXT_POLICIES,
     ExportProfileValues,
@@ -3922,7 +3923,7 @@ def corpus_export_command(
     created_by: str = typer.Option("local_user", "--created-by"),
 ) -> None:
     """Materializa una exportación y registra perfil, hash de estado y checksum."""
-    if output_format is not None and output_format not in OUTPUT_FORMATS:
+    if output_format is not None and output_format not in RUN_OUTPUT_FORMATS:
         raise typer.BadParameter("Formato inválido: " + output_format)
     project_root = project_root.expanduser().resolve()
     _require_current_database(project_root)
