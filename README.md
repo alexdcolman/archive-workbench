@@ -6,7 +6,7 @@ Está pensada especialmente para equipos de archivos, bibliotecas, ciencias soci
 
 Los documentos y la base de datos permanecen en la computadora del equipo: la aplicación no necesita subir el corpus a un servicio externo.
 
-**Versión actual:** 0.85.0 — AV-02 cerrado para incorporación autorizada desde plataformas; AV-03 es el próximo bloque.
+**Versión actual:** 0.86.0 — AV-03 cerrado con revisión continua y sincronizada, anotaciones temporales/hablantes y evaluación reproducible de reconocimiento.
 
 ## Qué permite hacer
 
@@ -16,6 +16,7 @@ Archive Workbench reúne en una misma interfaz:
 - plantillas XLSX distribuibles con estructura configurable, simulación y aplicación transaccional;
 - registro de archivos originales sin modificarlos;
 - registro local de audio y video con metadatos técnicos, reproducción integrada y transcripción temporal revisable;
+- evaluación reproducible de corridas audiovisuales con tiempo, factor tiempo-real, memoria observada y segmentación, junto con un editor continuo y revisión sincronizada: el video/audio acompaña la transcripción, permite saltar por texto y registrar hablantes o anotaciones desde el tiempo actual sin perder los anclajes temporales internos;
 - preparación versionada de derivados para OCR, con opciones conservadoras de autocontraste, Otsu, reducción de ruido, orientación, deskew, dewarp y eliminación controlada de líneas;
 - extracción de texto y OCR versionados;
 - OCR regional visual sobre páginas preparadas, con zonas OCR o manuales y clasificación documental;
@@ -281,7 +282,7 @@ pip install -e ".[dev,extraction,streamlit,semantic,tiff,discovery,audiovisual,p
 pytest
 ```
 
-La versión 0.85.0 mantiene AV-01 y cierra AV-02 para incorporar de forma autorizada audio o video desde plataformas compatibles. La validación real con YouTube confirmó descarga, reproducción y procedencia trazable sin iniciar transcripción automáticamente; los campos obligatorios del formulario fallan con mensajes comprensibles y no exponen errores internos. AV-03 queda como próximo bloque para evaluar una transcripción de video real y decidir optimizaciones a partir de evidencia. AV-01 permanece cerrado y `OCR-01` permanece cerrado desde 0.83.0.
+La versión 0.85.0 mantiene AV-01 y cierra AV-02 para incorporar de forma autorizada audio o video desde plataformas compatibles. La validación real con YouTube confirmó descarga, reproducción y procedencia trazable sin iniciar transcripción automáticamente; los campos obligatorios del formulario fallan con mensajes comprensibles y no exponen errores internos. La versión 0.86.0 cierra AV-03 después de una prueba real sobre `RememorArte Horacio BAU`: reemplaza la edición segmento por segmento por un editor continuo que conserva los anclajes temporales, agrega marcas estructuradas de hablante/anotación mediante `0046_audiovisual_timeline_annotations` y ofrece revisión sincronizada junto al reproductor. La evaluación usa siempre las salidas automáticas originales y sólo publica CER/WER cuando las fronteras temporales son comparables; con otra segmentación muestra el contexto original sin fabricar una puntuación. En la prueba realizada, el perfil `large-v3` + CUDA `float16` produjo una transcripción cualitativamente superior a `small` + CPU `int8`, aunque con mayor coste de ejecución y todavía con errores que requieren revisión humana. Ambas salidas completas permanecen visibles y descargables. AV-01, AV-02, AV-03 y `OCR-01` quedan cerrados.
 
 ## Licencia y cita
 

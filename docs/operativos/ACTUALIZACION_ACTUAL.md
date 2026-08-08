@@ -1,30 +1,49 @@
-# Actualización actual — Archive Workbench 0.85.0
+# Actualización actual — Archive Workbench 0.86.0
 
-**Fecha:** 2026-08-07
-**Bloque cerrado:** `AV-02` — incorporación autorizada desde YouTube y otras plataformas
-**Próximo bloque:** `AV-03` — evaluación reproducible y optimización de transcripción de video real
-**Revisión de base:** `0045_audiovisual_transcription` (sin migración nueva en 0.85.0)
+**Fecha:** 2026-08-08
+**Bloque cerrado:** `AV-03` — evaluación, revisión y anotación temporal de video real
+**Revisión de base:** `0046_audiovisual_timeline_annotations`
 
-## Qué incorpora
+## Estado acumulado de AV-03
 
-La versión 0.85.0 agrega una extensión opcional basada en `yt-dlp` para descargar un audio o video autorizado y registrarlo inmediatamente mediante el circuito local de AV-01. No crea un sistema paralelo: el archivo incorporado pasa por `DigitalObject`, `FileInstance`, `SourceRegistration` y `AudiovisualMedia`, y desde allí usa la reproducción y la transcripción ya existentes.
+La RC1 midió la línea de base real de `RememorArte Horacio BAU` con `faster_whisper` `small`, CPU `int8`: 202.21 s para 436.22 s (`RTF 0.464`), 2109.6 MiB de RAM máxima, 89 segmentos con mediana de 3.48 s y una muestra humana con CER 0.100 y WER 0.163. La revisión detectó errores de nombres propios —entre ellos Trelew— y mostró que editar segmento por segmento era inviable.
 
-`SourceRegistration.source_payload_json` conserva URL solicitada/canónica, plataforma e identificador, canal/uploader, fecha de publicación, formatos seleccionados, versión de `yt-dlp`, ruta y extensión incorporadas, SHA-256, tamaño, fecha de descarga y condiciones de acceso/autorización. La exportación audiovisual añade esos campos de procedencia a cada segmento.
+RC2–RC4 reemplazaron ese recorrido por un editor continuo con un solo **Guardar transcripción**, conservaron los segmentos como anclajes temporales internos y corrigieron las regresiones de estado de Streamlit y del reproductor. La validación de RC4 confirmó guardado continuo y navegación temporal sin traceback. Esa evidencia no se repite en RC5.
+
+## RC5–RC12 — anotaciones, revisión sincronizada y comparación de reconocimiento
+
+RC5 agrega una capa editorial estructurada que pertenece al medio audiovisual y no a una corrida concreta. La migración aditiva `0046_audiovisual_timeline_annotations` crea:
+
+- `AudiovisualTimelineAnnotation`: tipo `speaker` o `annotation`, inicio/fin, etiqueta, vínculo opcional a una autoridad, estado y revisión;
+- `AudiovisualTimelineAnnotationRevision`: historial append-only de creación y archivo.
+
+Una marca puede nacer tomando como referencia uno o varios segmentos de la corrida vigente, pero guarda tiempos propios del medio. Por eso se conserva si después se genera otra transcripción.
 
 ## Interfaz
 
-En **Transcribir audio y video** aparece el panel cerrado **Incorporar desde plataforma**. El recorrido visible pide URL, unidad archivística, tipo de incorporación, condiciones de acceso/autorización y confirmación explícita de que el proyecto puede incorporar el material. La incorporación no inicia una transcripción automáticamente. Los errores de campos obligatorios se muestran con mensajes legibles y no exponen errores internos de Pydantic.
+La transcripción continua sigue siendo la tarea principal. **Anotaciones y hablantes** pasa a resolverse en RC6 mediante una **Revisión sincronizada** junto al reproductor:
 
-## Dependencias
+- mientras el audio/video avanza, el segmento correspondiente se resalta y acompaña automáticamente el tiempo actual sin reruns continuos de Streamlit;
+- al pulsar un segmento en la transcripción sincronizada, el reproductor salta directamente a ese tiempo;
+- la marca **Hablante** se controla desde **Hablante actual**: permite elegir una **Autoridad** existente o escribir una etiqueta provisional y usar **Asignar hablante desde aquí**; al cambiar de hablante, se cierra automáticamente el turno anterior y comienza el nuevo en la posición actual;
+- la marca **Anotación** se crea con **Agregar anotación aquí**, que toma automáticamente el tiempo del reproductor y asocia la nota al tramo textual vigente;
+- ejemplos como `sonríe`, `se ríe` o `muestra una fotografía` permanecen estructurados y no se insertan dentro del texto corregible;
+- **Gestionar anotaciones y hablantes** queda como panel secundario para revisar/archivar marcas existentes y consultar la **Transcripción con hablantes y anotaciones** derivada.
 
-El extra opcional `platform` instala `yt-dlp[default,deno]>=2026.7.4,<2027`, incluido Deno para el recorrido de YouTube. FFmpeg/FFprobe continúan siendo requisitos de sistema. AV-01, OCR y los demás runtimes no dependen de este extra.
+Las marcas temporales viajan en adopción de estado 1.2 y se incluyen en la exportación de segmentos cuando se superponen con el intervalo exportado.
 
-## Base de datos
+## Validación
 
-AV-02 no requiere migración. La revisión continúa en `0045_audiovisual_transcription`, publicada con 0.84.0.
+La validación de RC5–RC6 partió de copias descartables y confirmó que la revisión sincronizada es usable. La exploración libre generó más marcas que el recorrido controlado, por lo que RC7 deja de exigir una secuencia literal de turnos en el verificador y diagnostica cierres automáticos reales.
 
-## Validación real
+RC7 inició la comparación sin pedir otra corrección humana y ejecutó `faster_whisper` `large-v3`, GPU CUDA `float16`, sobre el video completo. La corrida terminó en 914.92 s (`RTF 2.097`) con 5394 MiB de VRAM máxima observada. La primera tabla RC7 fue metodológicamente incorrecta: para la línea de base podía leer el texto ya corregido y compararlo contra la misma referencia humana, produciendo CER/WER 0; además proyectaba la corrida candidata mediante el centro temporal de segmentos con fronteras diferentes, inflando el error.
 
-La validación manual se realizó sobre una base descartable fuera del repositorio con el video de YouTube `RememorArte Horacio BAU` (`CwWKigBOfjQ`) del canal `Centro Cultural por la Memoria Trelew` (`UCsZG_7l0cYIEtJNhajrFPYg`). La incorporación produjo un MP4 de 436.221 s y preservó procedencia, condiciones de acceso y SHA-256 `f187eaa71718ed2b016ec3af01e58102d19537d758fdc5c21df46f00378ec7ba`. El diagnóstico final informó `quick_check: ok`, cero violaciones de claves foráneas y `transcription_run_count: 0`; `project_data` permaneció en `0045_audiovisual_transcription` sin contenido audiovisual nuevo.
+RC12 corrige la evaluación sin repetir inferencia y deja la optimización apoyada en evidencia visible y reproducible. Toda medición de reconocimiento usa exclusivamente `original_text`; la referencia sigue siendo la misma corrección humana. CER/WER sólo se calculan cuando las fronteras temporales de la hipótesis coinciden con las cinco ventanas humanas. Si otra corrida segmenta distinto y no existen timestamps por palabra, la UI muestra el contexto original de todos los segmentos que solapan cada ventana y deja CER/WER sin valor en lugar de recortar el candidato usando la propia referencia. También permite ver y descargar completas las dos transcripciones automáticas originales. El campo **Vocabulario esperado (opcional)** continúa transmitiéndose mediante `hotwords`, pero la detección de un término es informativa y no se interpreta por sí sola como calidad. RC12 no agrega migración; continúa en `0046_audiovisual_timeline_annotations` y `project_data` permanece sin modificar durante la validación.
 
-RC1 mostró un error de presentación cuando faltaba un campo obligatorio: la UI exponía el `ValidationError` de Pydantic. RC2 lo reemplazó por mensajes comprensibles para una persona no técnica y la revalidación fue satisfactoria. `AV-02` queda cerrado. La transcripción del video real, su evaluación y cualquier optimización basada en evidencia corresponden a `AV-03`.
+## Cierre de AV-03
+
+La validación final de RC12 confirmó el recorrido completo, el evaluador conservador y la inspección de ambas transcripciones sin volver a inferir. `small` conserva CER 0.100 / WER 0.163 sobre las cinco ventanas revisadas. `large-v3`, al usar fronteras diferentes y no disponer de timestamps por palabra persistidos, queda correctamente sin CER/WER comparable y se evalúa mediante el contexto temporal original y la salida completa.
+
+La revisión cualitativa de las dos transcripciones completas concluyó que el perfil probado `large-v3` + CUDA `float16` es globalmente superior a `small` + CPU `int8` para este material: recupera mejor frases, nombres propios y relaciones semánticas. También es considerablemente más costoso (914.92 s, `RTF 2.097`, frente a 202.21 s y `RTF 0.464`) y conserva errores que requieren revisión humana. Por tratarse de una evaluación sobre un único medio, 0.86.0 registra el perfil de mayor calidad pero no cambia silenciosamente el default portable `small` + CPU.
+
+`AV-03` queda implementado, validado y cerrado en 0.86.0. `project_data` debe migrarse de `0045_audiovisual_transcription` a `0046_audiovisual_timeline_annotations` únicamente durante el cierre local, después de backup y verificación explícitos.

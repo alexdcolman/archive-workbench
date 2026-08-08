@@ -36,6 +36,8 @@ from archive_workbench.db.models import (
     ArchivalFieldValue,
     ArchivalUnit,
     AudiovisualMedia,
+    AudiovisualTimelineAnnotation,
+    AudiovisualTimelineAnnotationRevision,
     ArchivalUnitRevision,
     AuthorityAlias,
     AuthorityRecord,
@@ -359,6 +361,39 @@ def _editable_state_payload(session: Session, project_id: str) -> dict[str, Any]
         if transcript_segment_ids
         else []
     )
+    has_timeline_schema = inspect(bind).has_table("audiovisual_timeline_annotations")
+    audiovisual_timeline_annotations = (
+        session.scalars(
+            select(AudiovisualTimelineAnnotation)
+            .where(AudiovisualTimelineAnnotation.audiovisual_media_id.in_(audiovisual_media_ids))
+            .order_by(
+                AudiovisualTimelineAnnotation.audiovisual_media_id,
+                AudiovisualTimelineAnnotation.start_time,
+                AudiovisualTimelineAnnotation.id,
+            )
+        ).all()
+        if has_timeline_schema and audiovisual_media_ids
+        else []
+    )
+    audiovisual_timeline_annotation_ids = [row.id for row in audiovisual_timeline_annotations]
+    audiovisual_timeline_annotation_revisions = (
+        session.scalars(
+            select(AudiovisualTimelineAnnotationRevision)
+            .where(
+                AudiovisualTimelineAnnotationRevision.annotation_id.in_(
+                    audiovisual_timeline_annotation_ids
+                )
+            )
+            .order_by(
+                AudiovisualTimelineAnnotationRevision.annotation_id,
+                AudiovisualTimelineAnnotationRevision.revision_number,
+                AudiovisualTimelineAnnotationRevision.id,
+            )
+        ).all()
+        if audiovisual_timeline_annotation_ids
+        else []
+    )
+
 
     links = session.execute(
         select(DigitalObjectUnitLink, DigitalObject)
@@ -684,6 +719,41 @@ def _editable_state_payload(session: Session, project_id: str) -> dict[str, Any]
                         "updated_at": _iso_utc(row.updated_at),
                     }
                     for row in segment_entity_mentions
+                ],
+            }
+        )
+    if audiovisual_timeline_annotations:
+        payload.update(
+            {
+                "audiovisual_timeline_annotations": [
+                    {
+                        "id": row.id,
+                        "audiovisual_media_id": row.audiovisual_media_id,
+                        "annotation_type": row.annotation_type,
+                        "start_time": row.start_time,
+                        "end_time": row.end_time,
+                        "label": row.label,
+                        "authority_id": row.authority_id,
+                        "status": row.status,
+                        "revision_number": row.revision_number,
+                        "created_by": row.created_by,
+                        "created_at": _iso_utc(row.created_at),
+                        "updated_by": row.updated_by,
+                        "updated_at": _iso_utc(row.updated_at),
+                    }
+                    for row in audiovisual_timeline_annotations
+                ],
+                "audiovisual_timeline_annotation_revisions": [
+                    {
+                        "id": row.id,
+                        "annotation_id": row.annotation_id,
+                        "revision_number": row.revision_number,
+                        "operation": row.operation,
+                        "snapshot": row.snapshot_json or {},
+                        "changed_by": row.changed_by,
+                        "changed_at": _iso_utc(row.changed_at),
+                    }
+                    for row in audiovisual_timeline_annotation_revisions
                 ],
             }
         )

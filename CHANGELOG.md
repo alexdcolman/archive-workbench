@@ -1,3 +1,20 @@
+## 0.86.0 — 2026-08-08
+
+- Inicia `AV-03` con una línea de base reproducible sobre video real autorizado antes de decidir optimizaciones.
+- Registra por corrida métricas de ejecución derivadas: tiempo de pared, tiempo CPU del proceso, núcleos CPU equivalentes, RAM máxima observada y, cuando corresponde, VRAM máxima observada mediante `nvidia-smi`.
+- Agrega selección de corridas cuando un medio tiene más de una transcripción y un panel cerrado **Evaluar transcripción**.
+- La evaluación resume factor tiempo-real, cantidad/duración/huecos de segmentos y una muestra determinista de hasta cinco segmentos distribuida a lo largo de la corrida.
+- La línea de base real sobre `RememorArte Horacio BAU` registró 202.21 s para 436.22 s (`RTF 0.464`), 2109.6 MiB de RAM máxima, 89 segmentos con mediana de 3.48 s y CER/WER de muestra 0.100/0.163; la revisión detectó errores de nombres propios como Trelew.
+- RC1 mostró que usar cada segmento temporal como unidad de edición hacía la revisión extenuante y que **Evaluar transcripción** podía cerrarse después de guardar. RC2 reemplaza ese recorrido por un editor continuo con un solo **Guardar transcripción**, mantiene los segmentos como anclajes internos y relega la navegación temporal a un panel secundario persistente.
+- Agrega exportación JSON del informe y scripts para copiar de forma no destructiva la base AV-02 validada y verificar la línea de base AV-03.
+- RC4 valida el editor continuo y la navegación temporal sin traceback.
+- RC5 agrega la migración aditiva `0046_audiovisual_timeline_annotations`: hablantes y anotaciones temporales pertenecen al medio, pueden vincularse a autoridades, sobreviven a nuevas corridas y se muestran en una vista integrada sin contaminar el texto corregible.
+- RC6 reemplaza la selección manual de tramos por una **Revisión sincronizada** junto al reproductor: el segmento vigente se resalta con el tiempo del medio, pulsar el texto hace seek sin rerun, `Asignar hablante desde aquí` abre/cierra turnos automáticamente y `Agregar anotación aquí` toma el tramo vigente. La gestión detallada de marcas queda secundaria.
+- RC7 ejecuta una comparación real con `large-v3` en GPU CUDA `float16`; la corrida completa queda preservada para evaluación sin volver a inferir.
+- RC8 separó correctamente `original_text` de la revisión humana, pero la alineación semiglobal podía recortar errores usando la propia referencia. RC12 elimina ese sesgo: CER/WER sólo se calculan cuando las fronteras temporales son comparables; con otra segmentación se muestra el contexto original solapado sin puntuación. La UI mantiene visibles/descargables las salidas completas de `small` y `large-v3` y las cinco referencias humanas lado a lado.
+- La validación final de RC12 confirmó el recorrido completo sin crash de navegador, `small` con CER 0.100 / WER 0.163 sobre las cinco referencias y `large-v3` sin una puntuación artificial cuando sus fronteras difieren. La revisión cualitativa de ambas transcripciones completas concluyó que el perfil probado `large-v3` + CUDA `float16` ofrece mayor calidad global que `small` + CPU `int8`, a cambio de mayor coste y sin eliminar la necesidad de revisión humana. `AV-03` queda cerrado en 0.86.0.
+- La adopción de estado pasa a 1.2 cuando existen marcas temporales y la exportación de segmentos incorpora las marcas superpuestas. La línea de base CPU se conserva como recorrido portable; la prueba de un único medio no cambia automáticamente el perfil general de transcripción.
+
 ## 0.85.0 — 2026-08-07
 
 - Agrega `AV-02` como extensión opcional de incorporación autorizada desde YouTube y otras plataformas compatibles con `yt-dlp`.

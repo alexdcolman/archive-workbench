@@ -245,8 +245,8 @@ def test_av02_validation_scripts_accept_one_authorized_youtube_import(tmp_path: 
 
     project_root = tmp_path / "av02_validation"
     summary = create_module.create_validation_project(project_root)
-    assert summary["version"] == "0.85.0"
-    assert summary["revision"] == "0045_audiovisual_transcription"
+    assert summary["version"] == "0.86.0"
+    assert summary["revision"] == "0046_audiovisual_timeline_annotations"
     assert summary["platform_import_count"] == 0
     assert summary["project_data_touched"] is False
 

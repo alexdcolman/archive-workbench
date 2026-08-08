@@ -1,6 +1,6 @@
 # Implementaciones realizadas — Archive Workbench
 
-**Estado preparado:** 2026-08-07 · **versión de trabajo:** 0.85.0
+**Estado preparado:** 2026-08-08 · **versión de trabajo:** 0.86.0
 
 Este documento registra capacidades ya implementadas y, cuando corresponde, validadas. No deben volver a aparecer en `PENDIENTES_ACTIVOS.md` salvo evidencia de regresión o ampliación explícita del alcance.
 
@@ -33,6 +33,7 @@ Este documento registra capacidades ya implementadas y, cuando corresponde, vali
 | Capas archivísticas GRAPH-02 | Implementadas y validadas en 0.77.0 |
 | Registro audiovisual y transcripción segmentada AV-01 | Implementado, validado y cerrado en 0.84.0 |
 | Incorporación autorizada desde plataformas AV-02 | Implementada, validada y cerrada en 0.85.0 |
+| Evaluación y revisión audiovisual AV-03 | Implementada, validada y cerrada en 0.86.0 |
 
 ## Registro audiovisual y transcripción segmentada
 
@@ -55,6 +56,16 @@ Archive Workbench incorpora una extensión opcional `platform` basada en `yt-dlp
 La vista **Transcribir audio y video** agrega el panel cerrado **Incorporar desde plataforma**, con URL, unidad archivística, incorporación como video o solo audio, condiciones de acceso/autorización y confirmación explícita. El material incorporado queda disponible para reproducción y para el circuito de transcripción de `AV-01`, pero la descarga no inicia una transcripción automáticamente. La exportación de segmentos conserva también la procedencia remota.
 
 **Validada manualmente en 0.85.0.** La prueba real incorporó desde YouTube el video `RememorArte Horacio BAU` (`CwWKigBOfjQ`) del canal `Centro Cultural por la Memoria Trelew` (`UCsZG_7l0cYIEtJNhajrFPYg`). El archivo quedó registrado como MP4 de 436.221 s, 1280×720, H.264 + Opus, con SHA-256 `f187eaa71718ed2b016ec3af01e58102d19537d758fdc5c21df46f00378ec7ba`; el verificador confirmó `quick_check: ok`, cero violaciones FK, procedencia y condiciones de acceso persistentes y `transcription_run_count: 0`. RC1 expuso además que un campo obligatorio vacío podía mostrar un `ValidationError` técnico de Pydantic; RC2 reemplazó esos fallos por mensajes comprensibles para personas no técnicas y la revalidación manual fue satisfactoria. `AV-02` queda cerrado.
+
+### AV-03 — evaluación, revisión sincronizada y calidad de reconocimiento — 0.86.0
+
+Archive Workbench evaluó el circuito audiovisual sobre el video real autorizado `RememorArte Horacio BAU`. La línea de base `faster-whisper small` + CPU `int8` completó 436.221 s de medio en 202.21 s (`RTF 0.464`) y produjo 89 segmentos. Cinco segmentos deterministas fueron corregidos una sola vez por una persona y dieron CER 0.100 / WER 0.163 sobre la salida automática original. La prueba mostró además que editar 89 segmentos como unidades independientes era demasiado costoso para una revisión normal.
+
+RC2–RC4 reemplazaron esa interacción por una transcripción continua editable sin perder los tiempos subyacentes. RC5 agregó `0046_audiovisual_timeline_annotations`, con hablantes y anotaciones temporales estructurados, vinculables opcionalmente a autoridades e independientes de cada corrida. RC6 incorporó la revisión sincronizada junto al reproductor: avance del segmento vigente, seek al pulsar texto y creación de hablantes/anotaciones desde el tiempo actual. La validación manual confirmó que este recorrido es usable.
+
+RC7 ejecutó una segunda corrida completa con el perfil `faster-whisper large-v3` + CUDA `float16` y `beam_size=5`: 914.92 s (`RTF 2.097`) y 5394 MiB de VRAM máxima observada. La comparación final conserva `original_text` como hipótesis y `corrected_text` sólo como referencia humana. Como `large-v3` usa otra segmentación y estas corridas no guardan timestamps por palabra, 0.86.0 no fabrica CER/WER mediante recortes guiados por la referencia: muestra el contexto automático temporalmente solapado y las dos transcripciones completas. La revisión cualitativa de ambas salidas concluyó que el perfil probado `large-v3` + CUDA ofrece mayor calidad global —mejor recuperación de frases, nombres y relaciones semánticas— que `small` + CPU, aunque con mayor coste de ejecución y errores residuales que mantienen necesaria la revisión humana. La línea de base CPU se conserva como recorrido portable y no se cambia el default general a partir de un único material.
+
+**Validada manualmente en 0.86.0.** RC12 confirmó el evaluador corregido, la visualización completa de ambas salidas y el recorrido de `Transcribir audio y video → Evaluar transcripción → Comparar reconocimiento` sin crash después de limpiar el estado problemático del perfil de Firefox. `AV-03` queda cerrado.
 
 ## Benchmark OCR con verdad terreno
 

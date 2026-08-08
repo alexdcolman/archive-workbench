@@ -166,15 +166,28 @@ def test_version_docs_and_discovery_plan_are_packaged() -> None:
         / "versions"
         / "0045_audiovisual_transcription.py"
     )
+    timeline_migration = (
+        root
+        / "src"
+        / "archive_workbench"
+        / "migrations"
+        / "versions"
+        / "0046_audiovisual_timeline_annotations.py"
+    )
 
-    assert data["project"]["version"] == "0.85.0"
-    assert '__version__ = "0.85.0"' in version_source
+    assert data["project"]["version"] == "0.86.0"
+    assert '__version__ = "0.86.0"' in version_source
     assert migration.is_file()
     assert 'down_revision = "0044_layout_structure_review"' in migration.read_text(
         encoding="utf-8"
     )
+    assert timeline_migration.is_file()
+    assert 'down_revision = "0045_audiovisual_transcription"' in timeline_migration.read_text(
+        encoding="utf-8"
+    )
     assert (root / "src" / "archive_workbench" / "audiovisual.py").is_file()
     assert (root / "src" / "archive_workbench" / "audiovisual_app.py").is_file()
+    assert (root / "src" / "archive_workbench" / "audiovisual_review_component.py").is_file()
     assert (root / "src" / "archive_workbench" / "contracts" / "audiovisual.py").is_file()
     assert (root / "scripts" / "create_audiovisual_validation_project.py").is_file()
     assert (root / "scripts" / "verify_audiovisual_validation_project.py").is_file()
@@ -188,6 +201,28 @@ def test_version_docs_and_discovery_plan_are_packaged() -> None:
     ]
     assert (root / "src" / "archive_workbench" / "platform_import.py").is_file()
     assert (root / "src" / "archive_workbench" / "contracts" / "platform.py").is_file()
+    assert (root / "src" / "archive_workbench" / "transcription_evaluation.py").is_file()
+    av03_creator = root / "scripts" / "create_transcription_evaluation_validation_project.py"
+    av03_verifier = root / "scripts" / "verify_transcription_evaluation_validation_project.py"
+    for script in (av03_creator, av03_verifier):
+        assert script.is_file()
+        assert script.stat().st_mode & 0o111
+    timeline_creator = root / "scripts" / "create_audiovisual_timeline_validation_project.py"
+    timeline_verifier = root / "scripts" / "verify_audiovisual_timeline_validation_project.py"
+    for script in (timeline_creator, timeline_verifier):
+        assert script.is_file()
+        assert script.stat().st_mode & 0o111
+    sync_creator = root / "scripts" / "create_synchronized_review_validation_project.py"
+    sync_verifier = root / "scripts" / "verify_synchronized_review_validation_project.py"
+    for script in (sync_creator, sync_verifier):
+        assert script.is_file()
+        assert script.stat().st_mode & 0o111
+    recognition_creator = root / "scripts" / "create_recognition_comparison_validation_project.py"
+    recognition_verifier = root / "scripts" / "verify_recognition_comparison_validation_project.py"
+    for script in (recognition_creator, recognition_verifier):
+        assert script.is_file()
+        assert script.stat().st_mode & 0o111
+    assert (root / "tests" / "test_audiovisual_timeline.py").is_file()
     assert (root / "src" / "archive_workbench" / "contracts" / "forms.py").is_file()
     assert (root / "src" / "archive_workbench" / "form_structure.py").is_file()
     assert (root / "src" / "archive_workbench" / "contracts" / "layout.py").is_file()

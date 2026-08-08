@@ -360,6 +360,75 @@ class TranscriptSegmentRevision(Base):
     changed_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utc_now, nullable=False)
 
 
+class AudiovisualTimelineAnnotation(Base):
+    """Marca temporal editorial independiente de una corrida de transcripción."""
+
+    __tablename__ = "audiovisual_timeline_annotations"
+    __table_args__ = (
+        CheckConstraint("start_time >= 0", name="ck_av_timeline_annotation_start_nonnegative"),
+        CheckConstraint("end_time >= start_time", name="ck_av_timeline_annotation_time_order"),
+        CheckConstraint(
+            "annotation_type IN ('speaker', 'annotation')",
+            name="ck_av_timeline_annotation_type",
+        ),
+        CheckConstraint(
+            "status IN ('active', 'archived')",
+            name="ck_av_timeline_annotation_status",
+        ),
+        Index(
+            "ix_av_timeline_annotation_media_time",
+            "audiovisual_media_id",
+            "start_time",
+            "end_time",
+        ),
+        Index("ix_av_timeline_annotation_authority", "authority_id"),
+    )
+
+    id: Mapped[str] = mapped_column(String(36), primary_key=True)
+    audiovisual_media_id: Mapped[str] = mapped_column(
+        ForeignKey("audiovisual_media.id", ondelete="CASCADE"), nullable=False
+    )
+    annotation_type: Mapped[str] = mapped_column(String(32), nullable=False)
+    start_time: Mapped[float] = mapped_column(Float, nullable=False)
+    end_time: Mapped[float] = mapped_column(Float, nullable=False)
+    label: Mapped[str] = mapped_column(Text, nullable=False)
+    authority_id: Mapped[str | None] = mapped_column(
+        ForeignKey("authority_records.id", ondelete="SET NULL"), nullable=True
+    )
+    status: Mapped[str] = mapped_column(String(32), nullable=False, default="active")
+    revision_number: Mapped[int] = mapped_column(Integer, nullable=False, default=1)
+    created_by: Mapped[str] = mapped_column(String(200), nullable=False)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utc_now, nullable=False)
+    updated_by: Mapped[str] = mapped_column(String(200), nullable=False)
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), default=utc_now, onupdate=utc_now, nullable=False
+    )
+
+
+class AudiovisualTimelineAnnotationRevision(Base):
+    __tablename__ = "audiovisual_timeline_annotation_revisions"
+    __table_args__ = (
+        UniqueConstraint(
+            "annotation_id", "revision_number", name="uq_av_timeline_annotation_revision"
+        ),
+        Index(
+            "ix_av_timeline_annotation_revision",
+            "annotation_id",
+            "revision_number",
+        ),
+    )
+
+    id: Mapped[str] = mapped_column(String(36), primary_key=True)
+    annotation_id: Mapped[str] = mapped_column(
+        ForeignKey("audiovisual_timeline_annotations.id", ondelete="CASCADE"), nullable=False
+    )
+    revision_number: Mapped[int] = mapped_column(Integer, nullable=False)
+    operation: Mapped[str] = mapped_column(String(32), nullable=False)
+    snapshot_json: Mapped[dict[str, Any]] = mapped_column(JSON, nullable=False)
+    changed_by: Mapped[str] = mapped_column(String(200), nullable=False)
+    changed_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utc_now, nullable=False)
+
+
 class SegmentEntityMention(Base):
     __tablename__ = "segment_entity_mentions"
     __table_args__ = (

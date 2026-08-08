@@ -18,6 +18,8 @@ from archive_workbench.db.models import (
     ArchivalFieldValue,
     ArchivalUnit,
     AudiovisualMedia,
+    AudiovisualTimelineAnnotation,
+    AudiovisualTimelineAnnotationRevision,
     AuthorityAlias,
     AuthorityRecord,
     DigitalObject,
@@ -62,7 +64,7 @@ from archive_workbench.project_admin import (
 from archive_workbench.version import __version__
 
 
-STATE_ADOPTION_SCHEMA_VERSION = "1.1"
+STATE_ADOPTION_SCHEMA_VERSION = "1.2"
 BASE_STATE_SECTIONS = (
     "selections",
     "pages",
@@ -84,25 +86,35 @@ AUDIOVISUAL_STATE_SECTIONS = (
     "transcript_segment_revisions",
     "segment_entity_mentions",
 )
-STATE_SECTIONS = BASE_STATE_SECTIONS + AUDIOVISUAL_STATE_SECTIONS
+TIMELINE_STATE_SECTIONS = (
+    "audiovisual_timeline_annotations",
+    "audiovisual_timeline_annotation_revisions",
+)
+STATE_SECTIONS_V11 = BASE_STATE_SECTIONS + AUDIOVISUAL_STATE_SECTIONS
+STATE_SECTIONS_V12 = STATE_SECTIONS_V11 + TIMELINE_STATE_SECTIONS
+STATE_SECTIONS = STATE_SECTIONS_V12
 
 
 def _sections_for_state(state: dict[str, Any]) -> tuple[str, ...]:
-    return (
-        STATE_SECTIONS
-        if any(section in state for section in AUDIOVISUAL_STATE_SECTIONS)
-        else BASE_STATE_SECTIONS
-    )
+    if any(section in state for section in TIMELINE_STATE_SECTIONS):
+        return STATE_SECTIONS_V12
+    if any(section in state for section in AUDIOVISUAL_STATE_SECTIONS):
+        return STATE_SECTIONS_V11
+    return BASE_STATE_SECTIONS
 
 
 def _sections_for_schema(schema_version: str) -> tuple[str, ...]:
-    return STATE_SECTIONS if schema_version == "1.1" else BASE_STATE_SECTIONS
+    if schema_version == "1.2":
+        return STATE_SECTIONS_V12
+    if schema_version == "1.1":
+        return STATE_SECTIONS_V11
+    return BASE_STATE_SECTIONS
 
 
 class StateAdoptionManifest(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
-    schema_version: Literal["1.0", "1.1"] = STATE_ADOPTION_SCHEMA_VERSION
+    schema_version: Literal["1.0", "1.1", "1.2"] = STATE_ADOPTION_SCHEMA_VERSION
     artifact_type: Literal["state_adoption_package"] = "state_adoption_package"
     adoption_id: str = Field(min_length=36, max_length=36)
     project_id: str
@@ -527,7 +539,13 @@ def create_state_adoption_package(
     adoption_id = new_id()
     sequence = _current_sequence(session, workspace.id)
     sections = _sections_for_state(state)
-    schema_version = "1.1" if sections == STATE_SECTIONS else "1.0"
+    schema_version = (
+        "1.2"
+        if sections == STATE_SECTIONS_V12
+        else "1.1"
+        if sections == STATE_SECTIONS_V11
+        else "1.0"
+    )
     section_counts = {section: len(state[section]) for section in sections}
     manifest = StateAdoptionManifest(
         schema_version=schema_version,
@@ -639,6 +657,12 @@ def preview_state_adoption(
     ):
         raise ValueError(
             "El paquete de estado 1.0 no incluye el estado audiovisual que ya existe en esta copia"
+        )
+    if manifest.schema_version in {"1.0", "1.1"} and any(
+        section in local_state for section in TIMELINE_STATE_SECTIONS
+    ):
+        raise ValueError(
+            "El paquete de estado no incluye las anotaciones audiovisuales que ya existen en esta copia"
         )
     return StateAdoptionPreview(
         adoption_id=manifest.adoption_id,
@@ -809,6 +833,9 @@ def _synchronize_editable_state(
     has_audiovisual_state = all(
         section in state for section in AUDIOVISUAL_STATE_SECTIONS
     )
+    has_timeline_state = all(
+        section in state for section in TIMELINE_STATE_SECTIONS
+    )
     audiovisual_media_ids: set[str] = set()
     transcription_run_ids: set[str] = set()
     transcript_segment_ids: set[str] = set()
@@ -961,6 +988,53 @@ def _synchronize_editable_state(
                     "created_at": _parse_datetime(item["created_at"]),
                     "updated_by": item["updated_by"],
                     "updated_at": _parse_datetime(item["updated_at"]),
+                },
+            )
+
+    timeline_annotation_ids: set[str] = set()
+    timeline_annotation_revision_ids: set[str] = set()
+    if has_timeline_state:
+        timeline_annotation_ids = {
+            row["id"] for row in state["audiovisual_timeline_annotations"]
+        }
+        for item in state["audiovisual_timeline_annotations"]:
+            existing = session.get(AudiovisualTimelineAnnotation, item["id"])
+            _upsert(
+                session,
+                AudiovisualTimelineAnnotation,
+                item["id"],
+                {
+                    "audiovisual_media_id": item["audiovisual_media_id"],
+                    "annotation_type": item["annotation_type"],
+                    "start_time": item["start_time"],
+                    "end_time": item["end_time"],
+                    "label": item["label"],
+                    "authority_id": item.get("authority_id"),
+                    "status": item["status"],
+                    "revision_number": item["revision_number"],
+                    "created_by": item["created_by"],
+                    "created_at": _parse_datetime(item["created_at"]),
+                    "updated_by": actor,
+                    "updated_at": _parse_datetime(item["updated_at"]) or now,
+                },
+            )
+
+        timeline_annotation_revision_ids = {
+            row["id"]
+            for row in state["audiovisual_timeline_annotation_revisions"]
+        }
+        for item in state["audiovisual_timeline_annotation_revisions"]:
+            _upsert(
+                session,
+                AudiovisualTimelineAnnotationRevision,
+                item["id"],
+                {
+                    "annotation_id": item["annotation_id"],
+                    "revision_number": item["revision_number"],
+                    "operation": item["operation"],
+                    "snapshot_json": item.get("snapshot") or {},
+                    "changed_by": item["changed_by"],
+                    "changed_at": _parse_datetime(item["changed_at"]),
                 },
             )
 
@@ -1243,6 +1317,25 @@ def _synchronize_editable_state(
         )
         _delete_missing(project_segments, transcript_segment_ids)
         session.flush()
+        if has_timeline_state:
+            project_timeline_annotations = session.scalars(
+                select(AudiovisualTimelineAnnotation).where(
+                    AudiovisualTimelineAnnotation.audiovisual_media_id.in_(project_av_media_ids)
+                )
+            ).all() if project_av_media_ids else []
+            project_timeline_annotation_ids = {row.id for row in project_timeline_annotations}
+            _delete_missing(
+                session.scalars(
+                    select(AudiovisualTimelineAnnotationRevision).where(
+                        AudiovisualTimelineAnnotationRevision.annotation_id.in_(
+                            project_timeline_annotation_ids
+                        )
+                    )
+                ).all() if project_timeline_annotation_ids else [],
+                timeline_annotation_revision_ids,
+            )
+            _delete_missing(project_timeline_annotations, timeline_annotation_ids)
+            session.flush()
         _delete_missing(project_runs, transcription_run_ids)
         session.flush()
         _delete_missing(project_av_media, audiovisual_media_ids)

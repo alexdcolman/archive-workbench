@@ -1,13 +1,17 @@
 from __future__ import annotations
 
 import csv
+import difflib
 import io
 import json
 import math
 import mimetypes
+import os
 import re
 import shutil
 import subprocess
+import threading
+import time
 from dataclasses import dataclass
 from datetime import date
 from pathlib import Path
@@ -27,6 +31,8 @@ from archive_workbench.db.models import (
     AuthorityRecord,
     AudiovisualDerivativeAsset,
     AudiovisualMedia,
+    AudiovisualTimelineAnnotation,
+    AudiovisualTimelineAnnotationRevision,
     DigitalObject,
     DigitalObjectUnitLink,
     FileInstance,
@@ -51,6 +57,101 @@ _BROWSER_AUDIO_EXTENSIONS = {".mp3", ".wav", ".ogg", ".m4a", ".aac", ".flac"}
 _BROWSER_VIDEO_EXTENSIONS = {".mp4", ".webm", ".mov", ".m4v"}
 MENTION_STATUSES = ("pending", "accepted", "rejected", "modified")
 REVIEW_STATUSES = ("unreviewed", "reviewed", "approved")
+
+
+def _process_rss_mib() -> float | None:
+    status = Path(f"/proc/{os.getpid()}/status")
+    try:
+        text = status.read_text(encoding="utf-8")
+    except OSError:
+        return None
+    for line in text.splitlines():
+        if line.startswith("VmRSS:"):
+            parts = line.split()
+            if len(parts) >= 2:
+                try:
+                    return float(parts[1]) / 1024.0
+                except ValueError:
+                    return None
+    return None
+
+
+def _gpu_memory_mib_for_pid(pid: int) -> float | None:
+    if shutil.which("nvidia-smi") is None:
+        return None
+    try:
+        result = subprocess.run(
+            [
+                "nvidia-smi",
+                "--query-compute-apps=pid,used_memory",
+                "--format=csv,noheader,nounits",
+            ],
+            capture_output=True,
+            text=True,
+            timeout=2,
+            check=False,
+        )
+    except (OSError, subprocess.TimeoutExpired):
+        return None
+    if result.returncode != 0:
+        return None
+    values: list[float] = []
+    for line in result.stdout.splitlines():
+        parts = [part.strip() for part in line.split(",", 1)]
+        if len(parts) != 2:
+            continue
+        try:
+            row_pid = int(parts[0])
+            memory = float(parts[1])
+        except ValueError:
+            continue
+        if row_pid == pid:
+            values.append(memory)
+    return sum(values) if values else None
+
+
+class _TranscriptionRuntimeMonitor:
+    def __init__(self, *, device: str, interval_seconds: float = 0.25) -> None:
+        self.device = device
+        self.interval_seconds = interval_seconds
+        self.pid = os.getpid()
+        self.peak_rss_mib: float | None = None
+        self.peak_gpu_memory_mib: float | None = None
+        self._stop = threading.Event()
+        self._thread: threading.Thread | None = None
+
+    def _sample(self) -> None:
+        rss = _process_rss_mib()
+        if rss is not None:
+            self.peak_rss_mib = rss if self.peak_rss_mib is None else max(self.peak_rss_mib, rss)
+        if self.device == "cuda":
+            gpu = _gpu_memory_mib_for_pid(self.pid)
+            if gpu is not None:
+                self.peak_gpu_memory_mib = (
+                    gpu
+                    if self.peak_gpu_memory_mib is None
+                    else max(self.peak_gpu_memory_mib, gpu)
+                )
+
+    def start(self) -> None:
+        self._sample()
+
+        def run() -> None:
+            while not self._stop.wait(self.interval_seconds):
+                self._sample()
+
+        self._thread = threading.Thread(target=run, name="aw-av-runtime-monitor", daemon=True)
+        self._thread.start()
+
+    def stop(self) -> dict[str, float | None]:
+        self._stop.set()
+        if self._thread is not None:
+            self._thread.join(timeout=max(1.0, self.interval_seconds * 4))
+        self._sample()
+        return {
+            "peak_rss_mib": self.peak_rss_mib,
+            "peak_gpu_memory_mib": self.peak_gpu_memory_mib,
+        }
 
 
 @dataclass(slots=True)
@@ -101,6 +202,20 @@ class SegmentSearchRow:
     end_time: float
     text: str
     review_status: str
+
+
+@dataclass(slots=True)
+class TimelineAnnotationRow:
+    annotation_id: str
+    media_id: str
+    annotation_type: str
+    start_time: float
+    end_time: float
+    label: str
+    authority_id: str | None
+    authority_name: str | None
+    status: str
+    revision_number: int
 
 
 @dataclass(slots=True)
@@ -178,6 +293,9 @@ class FasterWhisperBackend:
         }
         if language:
             transcribe_kwargs["language"] = language
+        hotwords = str(options.get("hotwords") or "").strip()
+        if hotwords:
+            transcribe_kwargs["hotwords"] = hotwords
         segments, _info = model.transcribe(str(source), **transcribe_kwargs)
         return [
             TranscriptSegmentInput(
@@ -694,6 +812,10 @@ def transcribe_audiovisual(
     )
     session.add(run)
     session.flush()
+    monitor = _TranscriptionRuntimeMonitor(device=request.device)
+    wall_started = time.perf_counter()
+    cpu_started = time.process_time()
+    monitor.start()
     try:
         segments = backend.transcribe(
             source,
@@ -743,6 +865,19 @@ def transcribe_audiovisual(
         run.status = "failed"
         run.error_text = str(exc)
         run.completed_at = utc_now()
+    finally:
+        sampled = monitor.stop()
+        wall_seconds = max(0.0, time.perf_counter() - wall_started)
+        process_cpu_seconds = max(0.0, time.process_time() - cpu_started)
+        runtime_metrics = {
+            "wall_seconds": wall_seconds,
+            "process_cpu_seconds": process_cpu_seconds,
+            "average_cpu_cores": (process_cpu_seconds / wall_seconds if wall_seconds > 0 else None),
+            **sampled,
+        }
+        stored_options = dict(run.options_json or {})
+        stored_options["_runtime_metrics"] = runtime_metrics
+        run.options_json = stored_options
     session.flush()
     return run
 
@@ -780,6 +915,212 @@ def transcript_segment_rows(session: Session, *, run_id: str) -> list[Transcript
         for row in rows
     ]
 
+
+
+@dataclass(slots=True)
+class TranscriptDocumentUpdate:
+    run_id: str
+    changed_segment_count: int
+    total_segment_count: int
+    review_status: str | None
+
+
+def _transcript_document_layout(
+    rows: list[TranscriptSegmentRow],
+) -> tuple[str, list[int]]:
+    """Construye texto legible y conserva el final textual de cada anclaje."""
+
+    chunks: list[str] = []
+    ends: list[int] = []
+    cursor = 0
+    paragraph_chars = 0
+    previous: TranscriptSegmentRow | None = None
+    for row in rows:
+        text = row.text.strip()
+        if not text:
+            ends.append(cursor)
+            previous = row
+            continue
+        if previous is not None and chunks:
+            gap = max(0.0, float(row.start_time) - float(previous.end_time))
+            previous_text = previous.text.rstrip()
+            paragraph_break = (
+                gap >= 1.5
+                or paragraph_chars >= 700
+                or (paragraph_chars >= 420 and previous_text.endswith((".", "?", "!", "…")))
+            )
+            separator = "\n\n" if paragraph_break else " "
+            chunks.append(separator)
+            cursor += len(separator)
+            paragraph_chars = 0 if paragraph_break else paragraph_chars + len(separator)
+        chunks.append(text)
+        cursor += len(text)
+        paragraph_chars += len(text)
+        ends.append(cursor)
+        previous = row
+    return "".join(chunks).strip(), ends
+
+
+def transcript_document_text(session: Session, *, run_id: str) -> str:
+    """Devuelve la transcripción vigente como un único texto editable."""
+
+    rows = transcript_segment_rows(session, run_id=run_id)
+    text, _ends = _transcript_document_layout(rows)
+    return text
+
+
+def _mapped_boundary(
+    matcher: difflib.SequenceMatcher,
+    *,
+    old_pos: int,
+    new_length: int,
+) -> int:
+    """Transfiere una frontera del texto anterior al texto editado."""
+
+    opcodes = matcher.get_opcodes()
+    last_new = 0
+    for tag, i1, i2, j1, j2 in opcodes:
+        if old_pos < i1:
+            return max(0, min(new_length, last_new))
+        if i1 <= old_pos <= i2:
+            if tag == "equal":
+                return max(0, min(new_length, j1 + (old_pos - i1)))
+            if i2 == i1:
+                return max(0, min(new_length, j2))
+            ratio = (old_pos - i1) / (i2 - i1)
+            mapped = round(j1 + ratio * (j2 - j1))
+            return max(0, min(new_length, mapped))
+        last_new = j2
+    return new_length
+
+
+def update_transcript_document(
+    session: Session,
+    *,
+    run_id: str,
+    corrected_text: str,
+    actor: str,
+    review_status: str | None = None,
+    note: str | None = None,
+) -> TranscriptDocumentUpdate:
+    """Guarda una edición continua conservando las fronteras temporales existentes.
+
+    Los segmentos siguen siendo los anclajes de tiempo. La interfaz no obliga a
+    editarlos uno por uno: las fronteras se transfieren al texto corregido mediante
+    una alineación textual y sólo los segmentos cuyo contenido cambió reciben una
+    nueva revisión.
+    """
+
+    if review_status is not None and review_status not in REVIEW_STATUSES:
+        raise ValueError(f"Estado de revisión inválido: {review_status}")
+    run = session.get(TranscriptionRun, run_id)
+    if run is None:
+        raise ValueError("La corrida de transcripción no existe")
+    rows = session.scalars(
+        select(TranscriptSegment)
+        .where(TranscriptSegment.transcription_run_id == run_id)
+        .order_by(TranscriptSegment.segment_index)
+    ).all()
+    if not rows:
+        raise ValueError("La corrida seleccionada no tiene segmentos")
+
+    new_text = corrected_text.strip()
+    if not new_text:
+        raise ValueError("La transcripción no puede quedar vacía")
+
+    current_parts = [
+        (row.corrected_text if row.corrected_text is not None else row.original_text).strip()
+        for row in rows
+    ]
+    row_views = [
+        TranscriptSegmentRow(
+            segment_id=row.id,
+            run_id=row.transcription_run_id,
+            segment_index=row.segment_index,
+            start_time=row.start_time,
+            end_time=row.end_time,
+            original_text=row.original_text,
+            corrected_text=row.corrected_text,
+            review_status=row.review_status,
+            revision_number=row.revision_number,
+        )
+        for row in rows
+    ]
+    old_text, old_ends = _transcript_document_layout(row_views)
+
+    if old_text == new_text and review_status is None:
+        return TranscriptDocumentUpdate(
+            run_id=run_id,
+            changed_segment_count=0,
+            total_segment_count=len(rows),
+            review_status=None,
+        )
+
+    # Se transfieren únicamente los finales de segmento. Así el texto editado
+    # queda cubierto de punta a punta, incluso cuando una inserción cae justo
+    # sobre una frontera temporal.
+    matcher = difflib.SequenceMatcher(a=old_text, b=new_text, autojunk=False)
+    new_ends: list[int] = []
+    previous_end = 0
+    for index, old_end in enumerate(old_ends):
+        mapped_end = (
+            len(new_text)
+            if index == len(old_ends) - 1
+            else _mapped_boundary(matcher, old_pos=old_end, new_length=len(new_text))
+        )
+        mapped_end = max(previous_end, min(len(new_text), mapped_end))
+        new_ends.append(mapped_end)
+        previous_end = mapped_end
+
+    redistributed: list[str] = []
+    previous_end = 0
+    for new_end in new_ends:
+        redistributed.append(new_text[previous_end:new_end].strip())
+        previous_end = new_end
+
+    # Evita que una coma o un punto insertados en una frontera queden como
+    # primer carácter del segmento siguiente y reaparezcan con un espacio
+    # artificial al reconstruir el texto continuo.
+    leading_punctuation = set(",.;:!?%)]}»”’")
+    for index in range(1, len(redistributed)):
+        while redistributed[index] and redistributed[index][0] in leading_punctuation:
+            redistributed[index - 1] = redistributed[index - 1].rstrip() + redistributed[index][0]
+            redistributed[index] = redistributed[index][1:].lstrip()
+
+    changed = 0
+    now = utc_now()
+    editor = actor or "local_user"
+    clean_note = _clean_optional(note)
+    for row, value, previous in zip(rows, redistributed, current_parts, strict=True):
+        next_status = review_status if review_status is not None else row.review_status
+        if value == previous and next_status == row.review_status:
+            continue
+        row.corrected_text = value
+        row.review_status = next_status
+        row.revision_number += 1
+        row.updated_by = editor
+        row.updated_at = now
+        session.flush()
+        session.add(
+            TranscriptSegmentRevision(
+                id=new_id(),
+                segment_id=row.id,
+                revision_number=row.revision_number,
+                operation="continuous_edit",
+                snapshot_json=_segment_snapshot(row),
+                note=clean_note,
+                changed_by=editor,
+                changed_at=now,
+            )
+        )
+        changed += 1
+    session.flush()
+    return TranscriptDocumentUpdate(
+        run_id=run_id,
+        changed_segment_count=changed,
+        total_segment_count=len(rows),
+        review_status=review_status,
+    )
 
 def update_transcript_segment(
     session: Session,
@@ -904,6 +1245,367 @@ def segment_mention_rows(session: Session, *, segment_id: str) -> list[SegmentMe
     ]
 
 
+def _timeline_annotation_snapshot(row: AudiovisualTimelineAnnotation) -> dict[str, Any]:
+    return {
+        "audiovisual_media_id": row.audiovisual_media_id,
+        "annotation_type": row.annotation_type,
+        "start_time": row.start_time,
+        "end_time": row.end_time,
+        "label": row.label,
+        "authority_id": row.authority_id,
+        "status": row.status,
+        "revision_number": row.revision_number,
+    }
+
+
+def create_timeline_annotation(
+    session: Session,
+    *,
+    media_id: str,
+    annotation_type: str,
+    start_time: float,
+    end_time: float,
+    label: str,
+    authority_id: str | None,
+    actor: str,
+) -> AudiovisualTimelineAnnotation:
+    media = session.get(AudiovisualMedia, media_id)
+    if media is None:
+        raise ValueError("No se encontró el medio audiovisual seleccionado.")
+    kind = annotation_type.strip().lower()
+    if kind not in {"speaker", "annotation"}:
+        raise ValueError("Elegí si querés registrar un hablante o una anotación.")
+    clean_label = " ".join(label.split()).strip()
+    if not clean_label:
+        if kind == "speaker":
+            raise ValueError("Escribí el nombre o la etiqueta del hablante.")
+        raise ValueError("Escribí la anotación que querés asociar al tramo.")
+    start = float(start_time)
+    end = float(end_time)
+    if start < 0 or end < start:
+        raise ValueError("El tramo temporal seleccionado no es válido.")
+    if media.duration_seconds is not None and end > float(media.duration_seconds) + 0.25:
+        raise ValueError("El tramo seleccionado supera la duración del medio.")
+
+    authority = None
+    if authority_id:
+        authority = session.get(AuthorityRecord, authority_id)
+        if authority is None:
+            raise ValueError("La autoridad seleccionada ya no existe.")
+        digital = session.get(DigitalObject, media.digital_object_id)
+        if digital is None or authority.project_id != digital.project_id:
+            raise ValueError("La autoridad seleccionada pertenece a otro proyecto.")
+
+    now = utc_now()
+    row = AudiovisualTimelineAnnotation(
+        id=new_id(),
+        audiovisual_media_id=media_id,
+        annotation_type=kind,
+        start_time=start,
+        end_time=end,
+        label=clean_label,
+        authority_id=authority.id if authority is not None else None,
+        status="active",
+        revision_number=1,
+        created_by=actor,
+        created_at=now,
+        updated_by=actor,
+        updated_at=now,
+    )
+    session.add(row)
+    session.flush()
+    session.add(
+        AudiovisualTimelineAnnotationRevision(
+            id=new_id(),
+            annotation_id=row.id,
+            revision_number=1,
+            operation="create",
+            snapshot_json=_timeline_annotation_snapshot(row),
+            changed_by=actor,
+            changed_at=now,
+        )
+    )
+    session.flush()
+    return row
+
+
+def _update_timeline_annotation(
+    session: Session,
+    *,
+    row: AudiovisualTimelineAnnotation,
+    start_time: float | None = None,
+    end_time: float | None = None,
+    label: str | None = None,
+    authority_id: str | None = None,
+    change_authority: bool = False,
+    actor: str,
+) -> AudiovisualTimelineAnnotation:
+    if start_time is not None:
+        row.start_time = float(start_time)
+    if end_time is not None:
+        row.end_time = float(end_time)
+    if row.start_time < 0 or row.end_time < row.start_time:
+        raise ValueError("El tramo temporal seleccionado no es válido.")
+    if label is not None:
+        clean_label = " ".join(label.split()).strip()
+        if not clean_label:
+            raise ValueError("Escribí el nombre o la etiqueta del hablante.")
+        row.label = clean_label
+    if change_authority:
+        row.authority_id = authority_id
+    row.revision_number += 1
+    row.updated_by = actor
+    row.updated_at = utc_now()
+    session.flush()
+    session.add(
+        AudiovisualTimelineAnnotationRevision(
+            id=new_id(),
+            annotation_id=row.id,
+            revision_number=row.revision_number,
+            operation="update",
+            snapshot_json=_timeline_annotation_snapshot(row),
+            changed_by=actor,
+            changed_at=row.updated_at,
+        )
+    )
+    session.flush()
+    return row
+
+
+def assign_speaker_from_time(
+    session: Session,
+    *,
+    media_id: str,
+    time_seconds: float,
+    label: str,
+    authority_id: str | None,
+    actor: str,
+) -> AudiovisualTimelineAnnotation:
+    """Abre un turno de hablante desde el tiempo actual y cierra el turno anterior."""
+
+    media = session.get(AudiovisualMedia, media_id)
+    if media is None:
+        raise ValueError("No se encontró el medio audiovisual seleccionado.")
+    duration = float(media.duration_seconds or 0.0)
+    current = max(0.0, float(time_seconds))
+    if duration > 0:
+        current = min(current, duration)
+
+    clean_label = " ".join(label.split()).strip()
+    if not clean_label:
+        raise ValueError("Elegí o escribí quién está hablando.")
+    if authority_id:
+        authority = session.get(AuthorityRecord, authority_id)
+        if authority is None:
+            raise ValueError("La autoridad seleccionada ya no existe.")
+        digital = session.get(DigitalObject, media.digital_object_id)
+        if digital is None or authority.project_id != digital.project_id:
+            raise ValueError("La autoridad seleccionada pertenece a otro proyecto.")
+
+    speakers = session.scalars(
+        select(AudiovisualTimelineAnnotation)
+        .where(
+            AudiovisualTimelineAnnotation.audiovisual_media_id == media_id,
+            AudiovisualTimelineAnnotation.annotation_type == "speaker",
+            AudiovisualTimelineAnnotation.status == "active",
+        )
+        .order_by(
+            AudiovisualTimelineAnnotation.start_time,
+            AudiovisualTimelineAnnotation.id,
+        )
+    ).all()
+    epsilon = 0.01
+    future_starts = [
+        float(row.start_time)
+        for row in speakers
+        if float(row.start_time) > current + epsilon
+    ]
+    next_boundary = min(future_starts) if future_starts else duration
+    if next_boundary < current:
+        next_boundary = current
+
+    same_start = next(
+        (row for row in speakers if abs(float(row.start_time) - current) <= epsilon),
+        None,
+    )
+    if same_start is not None:
+        return _update_timeline_annotation(
+            session,
+            row=same_start,
+            end_time=max(current, next_boundary),
+            label=clean_label,
+            authority_id=authority_id,
+            change_authority=True,
+            actor=actor,
+        )
+
+    covering = [
+        row
+        for row in speakers
+        if float(row.start_time) < current - epsilon and float(row.end_time) > current + epsilon
+    ]
+    if covering:
+        previous = max(covering, key=lambda row: float(row.start_time))
+        if previous.label == clean_label and previous.authority_id == authority_id:
+            return previous
+        _update_timeline_annotation(
+            session,
+            row=previous,
+            end_time=current,
+            actor=actor,
+        )
+
+    return create_timeline_annotation(
+        session,
+        media_id=media_id,
+        annotation_type="speaker",
+        start_time=current,
+        end_time=max(current, next_boundary),
+        label=clean_label,
+        authority_id=authority_id,
+        actor=actor,
+    )
+
+
+def timeline_annotation_rows(
+    session: Session,
+    *,
+    media_id: str,
+    include_archived: bool = False,
+) -> list[TimelineAnnotationRow]:
+    statement = (
+        select(AudiovisualTimelineAnnotation, AuthorityRecord.preferred_name)
+        .outerjoin(AuthorityRecord, AuthorityRecord.id == AudiovisualTimelineAnnotation.authority_id)
+        .where(AudiovisualTimelineAnnotation.audiovisual_media_id == media_id)
+        .order_by(
+            AudiovisualTimelineAnnotation.start_time,
+            AudiovisualTimelineAnnotation.end_time,
+            AudiovisualTimelineAnnotation.id,
+        )
+    )
+    if not include_archived:
+        statement = statement.where(AudiovisualTimelineAnnotation.status == "active")
+    rows = session.execute(statement).all()
+    return [
+        TimelineAnnotationRow(
+            annotation_id=row.id,
+            media_id=row.audiovisual_media_id,
+            annotation_type=row.annotation_type,
+            start_time=row.start_time,
+            end_time=row.end_time,
+            label=row.label,
+            authority_id=row.authority_id,
+            authority_name=authority_name,
+            status=row.status,
+            revision_number=row.revision_number,
+        )
+        for row, authority_name in rows
+    ]
+
+
+def archive_timeline_annotation(
+    session: Session,
+    *,
+    annotation_id: str,
+    actor: str,
+) -> AudiovisualTimelineAnnotation:
+    row = session.get(AudiovisualTimelineAnnotation, annotation_id)
+    if row is None:
+        raise ValueError("La marca temporal seleccionada ya no existe.")
+    if row.status == "archived":
+        return row
+    row.status = "archived"
+    row.revision_number += 1
+    row.updated_by = actor
+    row.updated_at = utc_now()
+    session.flush()
+    session.add(
+        AudiovisualTimelineAnnotationRevision(
+            id=new_id(),
+            annotation_id=row.id,
+            revision_number=row.revision_number,
+            operation="archive",
+            snapshot_json=_timeline_annotation_snapshot(row),
+            changed_by=actor,
+            changed_at=row.updated_at,
+        )
+    )
+    session.flush()
+    return row
+
+
+def _speaker_for_segment(
+    row: TranscriptSegmentRow,
+    annotations: list[TimelineAnnotationRow],
+) -> TimelineAnnotationRow | None:
+    candidates = [
+        mark
+        for mark in annotations
+        if mark.annotation_type == "speaker"
+        and mark.end_time > row.start_time
+        and mark.start_time < row.end_time
+    ]
+    if not candidates:
+        return None
+    return max(
+        candidates,
+        key=lambda mark: min(row.end_time, mark.end_time) - max(row.start_time, mark.start_time),
+    )
+
+
+def transcript_with_timeline_marks(
+    session: Session,
+    *,
+    run_id: str,
+) -> str:
+    run = session.get(TranscriptionRun, run_id)
+    if run is None:
+        raise ValueError("No se encontró la corrida de transcripción seleccionada.")
+    segments = transcript_segment_rows(session, run_id=run_id)
+    annotations = timeline_annotation_rows(session, media_id=run.audiovisual_media_id)
+    if not annotations:
+        return transcript_document_text(session, run_id=run_id)
+
+    notes = [mark for mark in annotations if mark.annotation_type == "annotation"]
+    note_index = 0
+    lines: list[str] = []
+    current_speaker: str | None = None
+    current_text: list[str] = []
+
+    def flush() -> None:
+        nonlocal current_text
+        if not current_text:
+            return
+        text = " ".join(part for part in current_text if part).strip()
+        if text:
+            lines.append(f"{current_speaker}: {text}" if current_speaker else text)
+        current_text = []
+
+    for segment in segments:
+        while note_index < len(notes) and notes[note_index].start_time < segment.end_time:
+            note = notes[note_index]
+            if note.start_time >= segment.start_time:
+                flush()
+                lines.append(f"[{format_timestamp(note.start_time)} · {note.label}]")
+            note_index += 1
+        speaker = _speaker_for_segment(segment, annotations)
+        speaker_label = None
+        if speaker is not None:
+            speaker_label = speaker.authority_name or speaker.label
+        if speaker_label != current_speaker:
+            flush()
+            current_speaker = speaker_label
+        text = segment.text.strip()
+        if text:
+            current_text.append(text)
+    flush()
+    while note_index < len(notes):
+        note = notes[note_index]
+        lines.append(f"[{format_timestamp(note.start_time)} · {note.label}]")
+        note_index += 1
+    return "\n\n".join(lines).strip()
+
+
 def search_transcript_segments(
     session: Session,
     *,
@@ -996,6 +1698,11 @@ def _export_rows(session: Session, *, project_id: str) -> list[dict[str, Any]]:
         )
         .order_by(DigitalObject.original_filename, TranscriptionRun.created_at, TranscriptSegment.segment_index)
     ).all()
+    media_ids = {media.id for _, _, media, _, _ in rows}
+    annotation_map: dict[str, list[TimelineAnnotationRow]] = {media_id: [] for media_id in media_ids}
+    for media_id in media_ids:
+        annotation_map[media_id] = timeline_annotation_rows(session, media_id=media_id)
+
     result: list[dict[str, Any]] = []
     seen: set[str] = set()
     for segment, run, media, digital, registration in rows:
@@ -1005,6 +1712,11 @@ def _export_rows(session: Session, *, project_id: str) -> list[dict[str, Any]]:
         platform_payload = (registration.source_payload_json or {}).get("platform_import")
         if not isinstance(platform_payload, dict):
             platform_payload = {}
+        overlapping_annotations = [
+            mark
+            for mark in annotation_map.get(media.id, [])
+            if mark.end_time > segment.start_time and mark.start_time < segment.end_time
+        ]
         result.append(
             {
                 "source_key": registration.source_key,
@@ -1031,6 +1743,17 @@ def _export_rows(session: Session, *, project_id: str) -> list[dict[str, Any]]:
                 "corrected_text": segment.corrected_text,
                 "review_status": segment.review_status,
                 "revision_number": segment.revision_number,
+                "timeline_annotations": [
+                    {
+                        "type": mark.annotation_type,
+                        "start_time": mark.start_time,
+                        "end_time": mark.end_time,
+                        "label": mark.label,
+                        "authority_id": mark.authority_id,
+                        "authority_name": mark.authority_name,
+                    }
+                    for mark in overlapping_annotations
+                ],
             }
         )
     return result

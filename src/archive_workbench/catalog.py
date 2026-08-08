@@ -15,6 +15,8 @@ from archive_workbench.db.models import (
     ArchivalUnitRevision,
     AudiovisualDerivativeAsset,
     AudiovisualMedia,
+    AudiovisualTimelineAnnotation,
+    AudiovisualTimelineAnnotationRevision,
     DigitalObject,
     DerivativeAsset,
     DigitalObjectUnitLink,
@@ -385,6 +387,8 @@ def database_counts(session: Session) -> dict[str, int]:
         "transcript_segments": TranscriptSegment,
         "transcript_segment_revisions": TranscriptSegmentRevision,
         "segment_entity_mentions": SegmentEntityMention,
+        "audiovisual_timeline_annotations": AudiovisualTimelineAnnotation,
+        "audiovisual_timeline_annotation_revisions": AudiovisualTimelineAnnotationRevision,
     }
     inspector = sa_inspect(session.get_bind())
     return {

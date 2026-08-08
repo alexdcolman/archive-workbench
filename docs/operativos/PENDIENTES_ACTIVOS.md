@@ -1,6 +1,6 @@
 # Pendientes activos — Archive Workbench
 
-**Estado preparado:** 2026-08-07 · **versión:** 0.85.0
+**Estado preparado:** 2026-08-08 · **versión:** 0.86.0
 
 Este archivo es la única fuente de verdad para trabajo abierto. Las capacidades cerradas se registran en `IMPLEMENTACIONES_REALIZADAS.md` y no deben reabrirse sin una regresión concreta o una ampliación explícita del alcance.
 
@@ -8,7 +8,7 @@ Este archivo es la única fuente de verdad para trabajo abierto. Las capacidades
 
 `CAT-02` y `GRAPH-02` quedaron implementados, validados y cerrados en 0.77.0. La secuencia principal y las líneas paralelas se mantienen en [`HOJA_DE_RUTA_PRE_RELEASE.md`](HOJA_DE_RUTA_PRE_RELEASE.md).
 
-`AV-01` quedó implementado, validado y cerrado en 0.84.0 y `AV-02` quedó implementado, validado y cerrado en 0.85.0. La secuencia abierta comienza en `AV-03` y después continúa con `INT-01`, `EXP-01`, `PILOT-01`, `UX-02`, `WEB-01`, `QA-01` junto con `OPS-02`, `OPS-01` y `OPS-03`. `OCR-01` quedó cerrado en 0.83.0.
+`AV-01` quedó implementado, validado y cerrado en 0.84.0, `AV-02` en 0.85.0 y `AV-03` en 0.86.0. La secuencia abierta comienza en `INT-01` y después continúa con `EXP-01`, `PILOT-01`, `UX-02`, `WEB-01`, `QA-01` junto con `OPS-02`, `OPS-01` y `OPS-03`. `OCR-01` quedó cerrado en 0.83.0.
 
 `GIAR-01` comienza como proyecto paralelo vinculado a `PILOT-01` y no bloquea por sí solo la v1.0. `AI-01` y `AI-02` quedan para después del release inicial.
 
@@ -16,7 +16,6 @@ Este archivo es la única fuente de verdad para trabajo abierto. Las capacidades
 
 | ID | Prioridad | Estado | Tarea |
 |---|---|---|---|
-| AV-03 | Media | Pendiente | Evaluación reproducible y optimización de transcripción de video real |
 | INT-01 | Baja | Pendiente | Integración opcional con Google Drive como transporte |
 | EXP-01 | Alta | Pendiente pre-release | Exportación trazable de imágenes y recortes para análisis visual |
 | PILOT-01 | Alta | Parcial | Corpus real persistente, verdad terreno y cierre del piloto |
@@ -31,12 +30,6 @@ Este archivo es la única fuente de verdad para trabajo abierto. Las capacidades
 | AI-02 | Post-release | Pendiente | Sistema RAG trazable sobre corpus sistematizados |
 
 ## Mejora funcional
-
-### AV-03 — Evaluación y optimización de transcripción de video real — PENDIENTE
-
-Realizar después de `AV-02` una prueba específica y reproducible de transcripción sobre video real autorizado. Debe reutilizar el circuito de `AV-01` y conservar medio, corrida, backend/modelo, parámetros, segmentos, tiempos y correcciones humanas.
-
-La prueba servirá para observar primero el comportamiento real de la transcripción y recién después decidir optimizaciones concretas. Como mínimo debe permitir comparar calidad textual y segmentación temporal, tiempo de ejecución, consumo/recorrido CPU o GPU cuando corresponda y magnitud de las correcciones humanas, sin predeterminar de antemano qué optimización aplicar.
 
 ### INT-01 — Integración opcional con Google Drive como transporte — PENDIENTE
 

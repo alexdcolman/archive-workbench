@@ -122,7 +122,7 @@ def test_audiovisual_migration_adds_temporal_tables(tmp_path: Path) -> None:
     upgrade_database(root, revision="0044_layout_structure_review")
     assert current_revision(root) == "0044_layout_structure_review"
     upgrade_database(root)
-    assert current_revision(root) == "0045_audiovisual_transcription"
+    assert current_revision(root) == "0046_audiovisual_timeline_annotations"
     engine = create_sqlite_engine(database_path(root))
     try:
         tables = set(inspect(engine).get_table_names())
@@ -135,6 +135,8 @@ def test_audiovisual_migration_adds_temporal_tables(tmp_path: Path) -> None:
         "transcript_segments",
         "transcript_segment_revisions",
         "segment_entity_mentions",
+        "audiovisual_timeline_annotations",
+        "audiovisual_timeline_annotation_revisions",
     } <= tables
 
 
@@ -255,13 +257,13 @@ def test_audiovisual_ui_exposes_simple_review_flow_and_hidden_technical_options(
     for literal in (
         "Transcribir audio y video",
         "Medio",
-        "Segmento",
         "Velocidad de reproducción",
+        "Transcripción",
+        "Transcripción completa",
+        "Guardar transcripción",
+        "Navegar por tiempos y segmentos",
+        "Segmento temporal",
         "Ir al inicio del segmento",
-        "Corrección del segmento",
-        "Texto corregido",
-        "Estado de revisión",
-        "Guardar corrección",
         "Editar datos descriptivos",
         "Opciones técnicas",
         "Anotar entidades en este segmento",
@@ -272,7 +274,8 @@ def test_audiovisual_ui_exposes_simple_review_flow_and_hidden_technical_options(
     assert '"Opciones técnicas",\n        value=False,' in audiovisual_ui
     assert '"Editar datos descriptivos",\n        value=False,' in audiovisual_ui
     assert '"Anotar entidades en este segmento",\n            value=False,' in audiovisual_ui
-    assert 'button_type = "primary" if selected_segment is None else "secondary"' in audiovisual_ui
+    assert "Corrección del segmento" not in audiovisual_ui
+    assert "Guardar corrección" not in audiovisual_ui
     assert '"Transcribir audio y video"' in review_ui
     assert '"Transcripciones de audio y video"' in review_ui
     assert '"Segmentos de audio y video"' in export_ui

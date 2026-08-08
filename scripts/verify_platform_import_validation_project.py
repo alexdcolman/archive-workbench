@@ -19,7 +19,7 @@ from archive_workbench.db.models import (
 )
 from archive_workbench.identity import sha256_file
 
-EXPECTED_REVISION = "0045_audiovisual_transcription"
+EXPECTED_REVISION = "0046_audiovisual_timeline_annotations"
 EXPECTED_CHANNEL_ID = "UCsZG_7l0cYIEtJNhajrFPYg"
 EXPECTED_ACCESS_CONDITIONS = "Material autorizado para prueba AV-02."
 
