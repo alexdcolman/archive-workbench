@@ -16,7 +16,7 @@ from archive_workbench.catalog_templates import (
     validate_catalog_template,
 )
 from archive_workbench.db import create_sqlite_engine, database_path, session_scope, upgrade_database
-from archive_workbench.db.models import ArchivalFieldValue, ArchivalUnit, ArchivalUnitRevision
+from archive_workbench.db.models import ArchivalFieldValue, ArchivalUnit, ArchivalUnitRevision, Project
 from archive_workbench.decisions import load_decisions
 
 
@@ -214,6 +214,63 @@ def test_apply_template_creates_hierarchy_and_preserves_field_provenance(tmp_pat
     finally:
         engine.dispose()
 
+
+
+def test_apply_template_registers_project_in_fresh_database(tmp_path: Path) -> None:
+    root = tmp_path / "fresh_project"
+    upgrade_database(root)
+    decisions = load_decisions(Path(__file__).parents[1] / "config" / "decisions.yaml")
+    engine = create_sqlite_engine(database_path(root))
+    try:
+        rows = [
+            {
+                "local_id": "archivo",
+                "level_key": "archivo",
+                "title": "Archivo inicial",
+                "registration_status": "incomplete",
+            },
+            {
+                "local_id": "fondo",
+                "parent_local_id": "archivo",
+                "level_key": "fondo",
+                "title": "Fondo inicial",
+                "registration_status": "incomplete",
+            },
+        ]
+        with session_scope(engine) as session:
+            assert session.get(Project, decisions.project_id) is None
+            content = export_catalog_template_bytes(
+                session,
+                decisions=decisions,
+                project_id=decisions.project_id,
+                seed_rows=rows,
+            )
+            report = validate_catalog_template(
+                session,
+                decisions=decisions,
+                project_id=decisions.project_id,
+                source=content,
+            )
+            assert report.valid
+            assert session.get(Project, decisions.project_id) is None
+
+        with session_scope(engine) as session:
+            result = apply_catalog_template(
+                session,
+                decisions=decisions,
+                project_id=decisions.project_id,
+                source=content,
+                changed_by="Alex",
+            )
+            assert result.created == 2
+
+        with session_scope(engine) as session:
+            project = session.get(Project, decisions.project_id)
+            assert project is not None
+            assert project.name == decisions.project_name
+            assert session.scalar(select(func.count()).select_from(ArchivalUnit)) == 2
+    finally:
+        engine.dispose()
 
 def test_exported_existing_catalog_roundtrip_is_valid_and_unchanged(tmp_path: Path) -> None:
     _, decisions, engine = _setup(tmp_path)

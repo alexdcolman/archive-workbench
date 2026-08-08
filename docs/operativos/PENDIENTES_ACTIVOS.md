@@ -1,6 +1,6 @@
 # Pendientes activos — Archive Workbench
 
-**Estado preparado:** 2026-08-08 · **versión:** 0.88.0
+**Estado preparado:** 2026-08-08 · **versión:** 0.88.1
 
 Este archivo es la única fuente de verdad para trabajo abierto. Las capacidades cerradas se registran en `IMPLEMENTACIONES_REALIZADAS.md` y no deben reabrirse sin una regresión concreta o una ampliación explícita del alcance.
 

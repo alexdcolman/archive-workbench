@@ -15,6 +15,7 @@ from openpyxl.worksheet.datavalidation import DataValidation
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
+from archive_workbench.catalog import ensure_project
 from archive_workbench.catalog_management import (
     REGISTRATION_STATUSES,
     archival_field_rows,
@@ -1207,6 +1208,7 @@ def apply_catalog_template(
         raise ValueError(f"La plantilla contiene errores ({location}): {first.message}")
 
     actor = changed_by.strip() or "local_user"
+    ensure_project(session, decisions)
     local_to_unit_id = {
         row.local_id: row.unit_id
         for row in report.rows

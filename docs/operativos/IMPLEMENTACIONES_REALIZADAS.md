@@ -1,8 +1,13 @@
 # Implementaciones realizadas — Archive Workbench
 
-**Estado preparado:** 2026-08-08 · **versión de trabajo:** 0.88.0
+**Estado preparado:** 2026-08-08 · **versión de trabajo:** 0.88.1
 
 Este documento registra capacidades ya implementadas y, cuando corresponde, validadas. No deben volver a aparecer en `PENDIENTES_ACTIVOS.md` salvo evidencia de regresión o ampliación explícita del alcance.
+
+## PILOT-01 — corrección de primera importación en proyecto nuevo — 0.88.1
+
+Durante el inicio real de `PILOT-01`, una plantilla APM Chubut con 9 filas fue validada correctamente sobre `pilot_data`, pero la aplicación falló en la primera unidad con `FOREIGN KEY constraint failed` porque la base recién inicializada tenía `projects: 0`. La transacción se revirtió por completo. 0.88.1 hace que `apply_catalog_template()` garantice la fila del proyecto sólo después de una validación válida y dentro de la transacción de aplicación. La simulación permanece no destructiva. Se agregó una regresión específica para una base nueva sin fila `Project`. **Validación manual cerrada:** después de instalar 0.88.1 se reintentó la misma plantilla; la simulación volvió a informar 9 creaciones y 0 errores, y la aplicación creó las 9 unidades con `projects: 1`, `archival_units: 9` y `digital_objects: 0`. `PILOT-01` continúa abierto con el catálogo APM Chubut ya iniciado desde cero.
+
 
 ## Índice de capacidades implementadas
 

@@ -1,3 +1,12 @@
+## 0.88.1 — 2026-08-08
+
+- Corrige la primera importación de catálogo XLSX en una base recién inicializada que todavía no contiene una fila en `projects`.
+- `apply_catalog_template()` registra/actualiza el proyecto después de validar y dentro de la misma transacción de aplicación; la simulación continúa sin modificar la base.
+- Agrega una regresión que reproduce `db-upgrade` + `projects: 0` + primera importación válida.
+- No agrega migración; continúa `0046_audiovisual_timeline_annotations`.
+- Corrección detectada durante `PILOT-01`; el piloto permanece abierto.
+- Validación real cerrada sobre `pilot_data`: 9 unidades APM Chubut creadas desde cero, `projects: 1`, `archival_units: 9`, `digital_objects: 0`.
+
 ## 0.88.0 — 2026-08-08
 
 - RC1 agrega **Exportar texto e imágenes (ZIP)** dentro del recorrido existente de exportación.

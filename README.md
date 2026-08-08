@@ -6,7 +6,7 @@ Está pensada especialmente para equipos de archivos, bibliotecas, ciencias soci
 
 Los documentos y la base de datos permanecen en la computadora del equipo: la aplicación no necesita subir el corpus a un servicio externo.
 
-**Versión actual:** 0.88.0 — agrega exportación conjunta de texto, páginas, recortes regionales y figuras en **Exportar texto e imágenes (ZIP)**, con contexto textual estructurado y trazabilidad verificable.
+**Versión actual:** 0.88.1 — corrige la primera importación de catálogo en proyectos recién inicializados, manteniendo la simulación no destructiva y la aplicación transaccional. Conserva la exportación **Exportar texto e imágenes (ZIP)** cerrada en 0.88.0.
 
 ## Qué permite hacer
 
