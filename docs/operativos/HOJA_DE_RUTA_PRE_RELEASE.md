@@ -1,22 +1,21 @@
 # Hoja de ruta pre-release y líneas paralelas — Archive Workbench
 
 **Estado preparado:** 2026-08-08
-**Versión de referencia:** 0.86.0
+**Versión de referencia:** 0.87.0
 
 Esta hoja ordena el trabajo restante hasta v1.0. El detalle y el estado de cada bloque se mantienen en [`PENDIENTES_ACTIVOS.md`](PENDIENTES_ACTIVOS.md). Las líneas paralelas no bloquean la publicación inicial salvo decisión explícita posterior.
 
 ## Secuencia principal hasta v1.0
 
-`OCR-01` quedó implementado, validado y cerrado en 0.83.0. `AV-01` quedó implementado, validado y cerrado en 0.84.0. `AV-02` quedó implementado, validado y cerrado en 0.85.0. `AV-03` quedó implementado, validado y cerrado en 0.86.0.
+`OCR-01` quedó implementado, validado y cerrado en 0.83.0. `AV-01` quedó implementado, validado y cerrado en 0.84.0. `AV-02` quedó implementado, validado y cerrado en 0.85.0. `AV-03` quedó implementado, validado y cerrado en 0.86.0. `INT-01` quedó implementado, validado y cerrado en 0.87.0.
 
-1. Implementar `INT-01` para transporte controlado mediante Google Drive.
-2. Implementar `EXP-01` para exportar imágenes y recortes con manifiestos trazables, preparados para análisis visual posterior.
-3. Ejecutar `PILOT-01` sobre un proyecto real y persistente con materiales DIPPBA, APM-Chubut y testimonios audiovisuales.
-4. Ejecutar `UX-02` sobre la aplicación completa y el corpus real del piloto.
-5. Completar `WEB-01`: sitio público de Archive Workbench en GitHub Pages, tutorial, README ilustrado y referencia técnica pública.
-6. Ejecutar `QA-01` junto con `OPS-02`.
-7. Preparar `OPS-01` y verificar perfiles de instalación.
-8. Cerrar `OPS-03`, congelar contratos públicos y preparar la candidata a v1.0.
+1. Implementar `EXP-01` para exportar imágenes y recortes con manifiestos trazables, preparados para análisis visual posterior.
+2. Ejecutar `PILOT-01` sobre un proyecto real y persistente con materiales DIPPBA, APM-Chubut y testimonios audiovisuales.
+3. Ejecutar `UX-02` sobre la aplicación completa y el corpus real del piloto.
+4. Completar `WEB-01`: sitio público de Archive Workbench en GitHub Pages, tutorial, README ilustrado y referencia técnica pública.
+5. Ejecutar `QA-01` junto con `OPS-02`.
+6. Preparar `OPS-01` y verificar perfiles de instalación.
+7. Cerrar `OPS-03`, congelar contratos públicos y preparar la candidata a v1.0.
 
 ## Línea paralela vinculada
 

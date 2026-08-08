@@ -1,3 +1,5 @@
+from pathlib import Path
+
 import pytest
 from pydantic import ValidationError
 
@@ -14,7 +16,7 @@ def test_absolute_file_path_is_rejected() -> None:
             id="instance",
             digital_object_id="object",
             storage_root="project",
-            relative_path="/home/user/file.pdf",
+            relative_path=str(Path.cwd() / "outside-project-file.pdf"),
         )
 
 

@@ -106,6 +106,25 @@ class BundleExportSummary:
     next_checkpoint_label: str
 
 
+@dataclass(slots=True)
+class BundleManifestComparisonRow:
+    field: str
+    local_value: str
+    incoming_value: str
+    status: str
+
+
+@dataclass(slots=True)
+class BundleManifestComparison:
+    bundle_id: str
+    bundle_sha256: str
+    rows: list[BundleManifestComparisonRow]
+    project_matches: bool
+    source_is_local_workspace: bool
+    base_checkpoint_known: bool
+    database_revision_known: bool
+
+
 def _iso_utc(value: datetime | None) -> str | None:
     if value is None:
         return None
@@ -1200,6 +1219,114 @@ def inspect_change_bundle(path: Path) -> BundleInspection:
         first_sequence=sequences[0] if sequences else None,
         last_sequence=sequences[-1] if sequences else None,
         warnings=warnings,
+    )
+
+
+def compare_change_bundle_manifest(
+    session: Session,
+    *,
+    project_root: Path,
+    bundle_path: Path,
+) -> BundleManifestComparison:
+    """Compara el manifiesto recibido con la copia local sin ejecutar un dry-run.
+
+    Es una comprobación informativa previa al dry-run. No reemplaza las reglas de
+    linaje ni de conflicto que aplica ``dry_run_change_bundle``.
+    """
+    inspection = inspect_change_bundle(bundle_path)
+    manifest = inspection.manifest
+    project = _project(session)
+    workspace = session.scalar(
+        select(ExchangeWorkspace).order_by(ExchangeWorkspace.created_at, ExchangeWorkspace.id)
+    )
+    from archive_workbench.db.migrations import current_revision
+
+    local_revision = current_revision(project_root) or "unknown"
+    project_matches = manifest.project_id == project.id
+    source_is_local = workspace is not None and manifest.source_workspace_id == workspace.id
+    known_revision = manifest.database_revision in _known_database_revisions()
+    matching_checkpoint = None
+    if workspace is not None:
+        matching_checkpoint = _matching_checkpoint(
+            session,
+            workspace_id=workspace.id,
+            state_sha256=manifest.base_checkpoint_state_sha256,
+        )
+    base_known = matching_checkpoint is not None
+
+    rows = [
+        BundleManifestComparisonRow(
+            field="Proyecto",
+            local_value=project.id,
+            incoming_value=manifest.project_id,
+            status="coincide" if project_matches else "diferente",
+        ),
+        BundleManifestComparisonRow(
+            field="Copia de origen",
+            local_value=(
+                f"{workspace.workspace_name} ({workspace.id})" if workspace is not None else "sin registrar"
+            ),
+            incoming_value=f"{manifest.source_workspace_name} ({manifest.source_workspace_id})",
+            status="misma copia" if source_is_local else "otra copia",
+        ),
+        BundleManifestComparisonRow(
+            field="Revisión de base",
+            local_value=local_revision,
+            incoming_value=manifest.database_revision,
+            status=(
+                "coincide"
+                if manifest.database_revision == local_revision
+                else ("conocida" if known_revision else "desconocida")
+            ),
+        ),
+        BundleManifestComparisonRow(
+            field="Base del paquete",
+            local_value=(
+                f"{matching_checkpoint.label} · sec. {matching_checkpoint.sequence_number}"
+                if matching_checkpoint is not None
+                else "sin coincidencia local exacta"
+            ),
+            incoming_value=(
+                f"{manifest.base_checkpoint_label} · sec. {manifest.base_sequence} · "
+                f"{manifest.base_checkpoint_state_sha256[:12]}…"
+            ),
+            status="coincide" if base_known else "requiere dry-run",
+        ),
+        BundleManifestComparisonRow(
+            field="Secuencias",
+            local_value=(
+                str(_current_sequence(session, workspace.id))
+                if workspace is not None
+                else "—"
+            ),
+            incoming_value=(
+                f"sin eventos · base {manifest.base_sequence}"
+                if manifest.event_count == 0
+                else f"{manifest.base_sequence + 1}–{manifest.last_sequence}"
+            ),
+            status="informativo",
+        ),
+        BundleManifestComparisonRow(
+            field="Eventos",
+            local_value="—",
+            incoming_value=str(manifest.event_count),
+            status="informativo",
+        ),
+        BundleManifestComparisonRow(
+            field="Archive Workbench",
+            local_value=__version__,
+            incoming_value=manifest.app_version,
+            status="coincide" if manifest.app_version == __version__ else "diferente",
+        ),
+    ]
+    return BundleManifestComparison(
+        bundle_id=manifest.bundle_id,
+        bundle_sha256=inspection.bundle_sha256,
+        rows=rows,
+        project_matches=project_matches,
+        source_is_local_workspace=source_is_local,
+        base_checkpoint_known=base_known,
+        database_revision_known=known_revision,
     )
 
 

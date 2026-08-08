@@ -129,6 +129,7 @@ from archive_workbench.state_adoption import (
 )
 from archive_workbench.exchange import (
     apply_change_bundle,
+    compare_change_bundle_manifest,
     bundle_application_rows,
     conflict_field_rows,
     dry_run_change_bundle,
@@ -141,6 +142,15 @@ from archive_workbench.exchange import (
     resolve_conflict_fields_bulk,
     save_conflict_resolution,
     set_incoming_bundle_archived,
+)
+from archive_workbench.google_drive_transport import (
+    authorize_google_drive,
+    connection_status as google_drive_connection_status,
+    default_client_secret_path as google_drive_default_client_secret_path,
+    default_token_path as google_drive_default_token_path,
+    download_exchange_bundle_from_drive,
+    pick_drive_exchange_bundle,
+    upload_exchange_bundle_to_drive,
 )
 
 _STATUS_LABELS = {
@@ -314,6 +324,7 @@ _VIEW_GUIDANCE = {
 }
 
 _EXCHANGE_STATUS_LABELS = {
+    "empty": "Vacío",
     "needs_review": "Requiere decisiones",
     "ready_to_apply": "Listo para aplicar",
     "ready_to_apply_resolved": "Listo para aplicar",
@@ -1678,6 +1689,33 @@ def _run_exchange_action(st, *, db_path: Path, callback: Callable) -> None:
     rerun_view(st)
 
 
+def _simulate_exchange_bundle_path(
+    st,
+    *,
+    project_root: Path,
+    db_path: Path,
+    bundle_path: Path,
+    reviewer: str,
+) -> None:
+    def callback(session):
+        summary = dry_run_change_bundle(
+            session,
+            project_root=project_root,
+            bundle_path=bundle_path,
+            assessed_by=reviewer or "local_user",
+        )
+        return (
+            f"Simulación {summary.bundle_id[:8]}: "
+            f"{_EXCHANGE_STATUS_LABELS.get(summary.overall_status, summary.overall_status)} · "
+            f"A {summary.counts.get('apply', 0)} · "
+            f"D {summary.counts.get('duplicate', 0)} · "
+            f"R {summary.counts.get('review', 0)} · "
+            f"C {summary.counts.get('conflict', 0)}"
+        )
+
+    _run_exchange_action(st, db_path=db_path, callback=callback)
+
+
 def _purge_exchange_entry(
     st,
     *,
@@ -1739,6 +1777,212 @@ def _exchange_event_summary(event) -> str:
     )
 
 
+def _render_google_drive_transport(
+    st,
+    *,
+    project_root: Path,
+    db_path: Path,
+    reviewer: str,
+) -> None:
+    st.caption(
+        "Drive sólo transporta paquetes ZIP. No sincroniza project_data, no abre SQLite "
+        "desde la nube y una descarga nunca aplica cambios por sí sola."
+    )
+    client_path_text = st.text_input(
+        "Credenciales OAuth de Google (aplicación de escritorio)",
+        value=str(google_drive_default_client_secret_path()),
+        key="exchange_drive_client_secret_path",
+        help=(
+            "Descargá el JSON del cliente OAuth de escritorio desde Google Cloud y guardalo "
+            "fuera del repositorio. Archive Workbench solicita únicamente drive.file."
+        ),
+    )
+    client_path = Path(client_path_text).expanduser()
+    token_path = google_drive_default_token_path()
+    status = google_drive_connection_status(token_path)
+    if status == "connected":
+        st.success("Google Drive conectado con permiso por archivo (drive.file).")
+    elif status == "expired":
+        st.info("Hay una autorización guardada. Se renovará al usar Google Drive.")
+    else:
+        st.info("Google Drive todavía no está conectado en este equipo.")
+
+    if st.button(
+        "Conectar Google Drive",
+        key="exchange_drive_connect",
+        help="Abre el navegador para autorizar únicamente el permiso drive.file.",
+    ):
+        try:
+            with st.spinner("Esperando autorización en el navegador…"):
+                authorize_google_drive(client_path, token_path=token_path)
+        except (ValueError, RuntimeError, OSError) as exc:
+            st.error(str(exc))
+        else:
+            st.session_state["exchange_flash"] = "Google Drive quedó conectado en este equipo."
+            rerun_view(st)
+
+    st.markdown("**Subir un paquete ya generado**")
+    outgoing = sorted(
+        (project_root / "exchange" / "outgoing").glob("*.zip"),
+        key=lambda path: path.stat().st_mtime if path.exists() else 0,
+        reverse=True,
+    )
+    default_upload = str(outgoing[0]) if outgoing else ""
+    upload_path_text = st.text_input(
+        "Ruta del paquete de intercambio",
+        value=default_upload,
+        key="exchange_drive_upload_path",
+        placeholder="/ruta/al/paquete.zip",
+    )
+    if st.button(
+        "Subir paquete a Google Drive",
+        type="primary",
+        key="exchange_drive_upload_button",
+    ):
+        if not upload_path_text.strip():
+            st.error("Indicá la ruta de un paquete de intercambio ZIP.")
+        else:
+            try:
+                with st.spinner("Verificando y subiendo el paquete…"):
+                    result = upload_exchange_bundle_to_drive(
+                        Path(upload_path_text),
+                        client_secret_path=client_path,
+                        token_path=token_path,
+                    )
+            except (ValueError, RuntimeError, OSError) as exc:
+                st.error(str(exc))
+            else:
+                st.session_state["exchange_drive_last_upload"] = result
+
+    upload_result = st.session_state.get("exchange_drive_last_upload")
+    if upload_result is not None:
+        metadata = upload_result.metadata
+        st.write(
+            f"Subido: **{metadata.name}** · ID `{metadata.file_id}` · "
+            f"SHA-256 `{upload_result.local_sha256}`"
+        )
+        if metadata.size is not None:
+            st.caption(f"Tamaño informado por Drive: {metadata.size} bytes")
+        if metadata.web_view_link:
+            st.link_button(
+                "Abrir archivo en Google Drive",
+                metadata.web_view_link,
+            )
+
+    st.divider()
+    st.markdown("**Recibir un paquete desde Google Drive**")
+    st.caption(
+        "El selector de Google permite elegir un ZIP concreto. Archive Workbench sólo obtiene "
+        "permiso para ese archivo mediante drive.file."
+    )
+    if st.button(
+        "Elegir ZIP en Google Drive",
+        key="exchange_drive_pick_button",
+    ):
+        try:
+            with st.spinner("Elegí el paquete en la pestaña de Google Drive…"):
+                file_id, metadata = pick_drive_exchange_bundle(
+                    client_path,
+                    token_path=token_path,
+                )
+        except (ValueError, RuntimeError, OSError) as exc:
+            st.error(str(exc))
+        else:
+            st.session_state["exchange_drive_selected_file"] = (file_id, metadata)
+            st.session_state.pop("exchange_drive_downloaded_bundle", None)
+
+    selected_file = st.session_state.get("exchange_drive_selected_file")
+    if selected_file is not None:
+        file_id, metadata = selected_file
+        st.write(f"Elegido: **{metadata.name}** · ID `{file_id}`")
+        if metadata.web_view_link:
+            st.link_button(
+                "Abrir selección en Google Drive",
+                metadata.web_view_link,
+            )
+        if st.button(
+            "Descargar y verificar paquete",
+            type="primary",
+            key="exchange_drive_download_button",
+        ):
+            try:
+                with st.spinner("Descargando y verificando checksums…"):
+                    result = download_exchange_bundle_from_drive(
+                        file_id,
+                        project_root=project_root,
+                        client_secret_path=client_path,
+                        token_path=token_path,
+                    )
+                    compare_engine = create_sqlite_engine(db_path)
+                    try:
+                        with session_scope(compare_engine) as session:
+                            comparison = compare_change_bundle_manifest(
+                                session,
+                                project_root=project_root,
+                                bundle_path=result.destination,
+                            )
+                    finally:
+                        compare_engine.dispose()
+            except (ValueError, RuntimeError, OSError, json.JSONDecodeError) as exc:
+                st.error(str(exc))
+            else:
+                st.session_state["exchange_drive_downloaded_bundle"] = (result, comparison)
+
+    downloaded = st.session_state.get("exchange_drive_downloaded_bundle")
+    if downloaded is None:
+        return
+    result, comparison = downloaded
+    if not result.destination.is_file():
+        st.warning("El ZIP descargado ya no está disponible en la ruta local registrada.")
+        return
+
+    st.success(
+        f"ZIP verificado localmente: {result.destination.name} · SHA-256 {result.local_sha256}"
+    )
+    st.markdown("**Comparación del manifiesto antes del dry-run**")
+    st.dataframe(
+        [
+            {
+                "Dato": row.field,
+                "Esta copia": row.local_value,
+                "Paquete": row.incoming_value,
+                "Resultado": row.status,
+            }
+            for row in comparison.rows
+        ],
+        hide_index=True,
+        use_container_width=True,
+    )
+    if not comparison.project_matches:
+        st.error("El paquete pertenece a otro proyecto y no puede simularse en esta copia.")
+        return
+    if comparison.source_is_local_workspace:
+        st.error("El paquete fue producido por esta misma copia y no puede recibirse como remoto.")
+        return
+    if not comparison.base_checkpoint_known:
+        st.warning(
+            "No hay una coincidencia local exacta para la base declarada. El dry-run puede "
+            "clasificar el paquete como revisión o intentar los mecanismos de linaje existentes."
+        )
+    if not comparison.database_revision_known:
+        st.warning(
+            "La revisión de base declarada por el paquete no es conocida por esta versión; "
+            "el dry-run la forzará a revisión."
+        )
+    if st.button(
+        "Simular evaluación del paquete descargado",
+        type="primary",
+        key="exchange_drive_dry_run_button",
+    ):
+        _simulate_exchange_bundle_path(
+            st,
+            project_root=project_root,
+            db_path=db_path,
+            bundle_path=result.destination,
+            reviewer=reviewer,
+        )
+
+
 def _render_exchange_view(st, *, project_root: Path, db_path: Path, reviewer: str) -> None:
     st.header("Intercambio entre copias")
     st.caption(
@@ -1774,6 +2018,20 @@ def _render_exchange_view(st, *, project_root: Path, db_path: Path, reviewer: st
     cols[1].metric("Secuencia local", workspace.current_sequence)
     cols[2].metric("Eventos pendientes", workspace.pending_event_count)
     cols[3].metric("Paquetes visibles", len(incoming))
+
+    drive_open = st.toggle(
+        "Google Drive (opcional)",
+        value=False,
+        key="exchange_drive_open",
+        help="Transporta paquetes ZIP sin convertir Drive en una base compartida.",
+    )
+    if drive_open:
+        _render_google_drive_transport(
+            st,
+            project_root=project_root,
+            db_path=db_path,
+            reviewer=reviewer,
+        )
 
     with st.expander("Reconciliar estados divergentes", expanded=False):
         st.caption(
@@ -2191,23 +2449,13 @@ def _render_exchange_view(st, *, project_root: Path, db_path: Path, reviewer: st
             temp_path = upload_dir / f"{digest}.zip"
             temp_path.write_bytes(payload)
 
-            def callback(session):
-                summary = dry_run_change_bundle(
-                    session,
-                    project_root=project_root,
-                    bundle_path=temp_path,
-                    assessed_by=reviewer or "local_user",
-                )
-                return (
-                    f"Simulación {summary.bundle_id[:8]}: "
-                    f"{_EXCHANGE_STATUS_LABELS.get(summary.overall_status, summary.overall_status)} · "
-                    f"A {summary.counts.get('apply', 0)} · "
-                    f"D {summary.counts.get('duplicate', 0)} · "
-                    f"R {summary.counts.get('review', 0)} · "
-                    f"C {summary.counts.get('conflict', 0)}"
-                )
-
-            _run_exchange_action(st, db_path=db_path, callback=callback)
+            _simulate_exchange_bundle_path(
+                st,
+                project_root=project_root,
+                db_path=db_path,
+                bundle_path=temp_path,
+                reviewer=reviewer,
+            )
 
     if not incoming:
         st.info("Todavía no hay paquetes recibidos con el filtro actual.")

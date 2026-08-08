@@ -15,10 +15,10 @@ Este es el único documento en la raíz de `docs/`. Resume la evolución del pro
 - [Proyecto paralelo GIAR](referencia/PROYECTO_PARALELO_GIAR.md).
 
 ## Versiones recientes — más reciente primero
-
+### 0.87.0 — 2026-08-08
+Implementa y valida `INT-01`: Google Drive actúa únicamente como transporte opcional de bundles del intercambio existente. La conexión usa OAuth de escritorio con `drive.file`; la subida valida el ZIP y registra SHA-256 e identidad del bundle; Google Picker selecciona un archivo concreto; la descarga es atómica, vuelve a verificar el paquete y compara su manifiesto antes de habilitar el dry-run existente. RC1 expuso una configuración incompleta en el generador descartable y RC2 la corrigió. La prueba real confirmó OAuth, subida, Picker, descarga con SHA-256 idéntico y dry-run `empty/matched` entre dos copias descartables, sin modificar `project_data`. No hay migración y la revisión continúa en `0046_audiovisual_timeline_annotations`. `INT-01` queda cerrado.
 ### 0.86.0 — 2026-08-07
 Inicia AV-03 con métricas reproducibles de rendimiento/segmentación, selección de corridas, muestra determinista de corrección humana y exportación JSON. Conserva tiempo, CPU, RAM y VRAM observada dentro de la corrida; RC2–RC4 estabilizan un editor continuo para revisión humana. RC5 agrega la migración aditiva `0046_audiovisual_timeline_annotations` para hablantes y anotaciones temporales independientes de la corrida, con autoridad opcional, historial y vista integrada. RC6 reemplaza la selección manual de tramos por una revisión sincronizada junto al reproductor, con avance automático del segmento, salto al pulsar el texto y creación de marcas desde el tiempo actual. RC7 ejecuta `large-v3` GPU sobre el video real; RC8 separa salida automática y corrección humana pero introduce una alineación local demasiado optimista. RC12 elimina ese sesgo: CER/WER sólo se publican con ventanas temporalmente comparables y las corridas con otra segmentación se inspeccionan mediante su contexto original y su transcripción completa. La validación final confirma el flujo completo y la lectura cualitativa de las dos salidas completas identifica al perfil probado `large-v3` + CUDA como superior a `small` + CPU para este material, aunque más costoso y todavía sujeto a revisión humana. AV-03 queda cerrado.
-
 ### 0.85.0 — 2026-08-07
 
 - Incorpora una extensión opcional `platform` basada en `yt-dlp` para audio/video autorizado desde plataformas.

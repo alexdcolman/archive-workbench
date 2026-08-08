@@ -1,6 +1,6 @@
 # Implementaciones realizadas — Archive Workbench
 
-**Estado preparado:** 2026-08-08 · **versión de trabajo:** 0.86.0
+**Estado preparado:** 2026-08-08 · **versión de trabajo:** 0.87.0
 
 Este documento registra capacidades ya implementadas y, cuando corresponde, validadas. No deben volver a aparecer en `PENDIENTES_ACTIVOS.md` salvo evidencia de regresión o ampliación explícita del alcance.
 
@@ -17,6 +17,7 @@ Este documento registra capacidades ya implementadas y, cuando corresponde, vali
 | Exportaciones reproducibles | Implementado y validado |
 | Backups y restauración | Implementado y validado |
 | Intercambio offline | Implementado y validado; EX-01 cerrado en 0.68.1 |
+| Transporte opcional por Google Drive INT-01 | Implementado, validado y cerrado en 0.87.0 |
 | Política de formularios explícitos | Implementada y validada |
 | Simplificación general de interfaz y léxico | Implementada y validada en 0.56.0 |
 | Reparación auditable de menciones históricas | Implementada y validada en 0.62.1 |
@@ -34,6 +35,16 @@ Este documento registra capacidades ya implementadas y, cuando corresponde, vali
 | Registro audiovisual y transcripción segmentada AV-01 | Implementado, validado y cerrado en 0.84.0 |
 | Incorporación autorizada desde plataformas AV-02 | Implementada, validada y cerrada en 0.85.0 |
 | Evaluación y revisión audiovisual AV-03 | Implementada, validada y cerrada en 0.86.0 |
+
+## Transporte opcional por Google Drive
+
+### INT-01 — Google Drive como transporte controlado — 0.87.0
+
+Archive Workbench agrega Google Drive como capa opcional de transporte sobre los paquetes ZIP del intercambio existente. La aplicación usa OAuth de escritorio con PKCE y solicita únicamente `drive.file`; Google Picker permite elegir un archivo concreto. La subida valida primero el bundle local y conserva como propiedades remotas su SHA-256, `bundle_id` y `project_id`. La descarga se escribe de forma atómica en `exchange/drive_downloads/`, vuelve a validar el ZIP y compara el manifiesto con el proyecto, la identidad de la copia, la revisión de base, la base común y las secuencias locales antes de habilitar el dry-run existente.
+
+Drive no se convierte en fuente de verdad ni en base compartida: cada copia conserva su SQLite local, esta función no sube ni descarga `project_data` u otra SQLite y una descarga jamás aplica cambios automáticamente. Las credenciales y tokens OAuth permanecen fuera del proyecto y del repositorio bajo la configuración local del usuario. `INT-01` no agrega migraciones; la revisión sigue siendo `0046_audiovisual_timeline_annotations`.
+
+**Validada manualmente en 0.87.0.** RC1 reveló que el generador descartable omitía `config/decisions.yaml`; RC2 corrigió esa preparación sin cambiar el transporte. La prueba real de RC2 confirmó conexión OAuth, subida, selección mediante Google Picker, descarga y SHA-256 idéntico (`9386824cb404cbba46b57152040ac1c0bbf74086d4729b7cda682c0957997beb`). El verificador registró `quick_check: ok`, cero violaciones FK, ninguna descarga inválida, otra identidad de copia, base común `matched` por `exact_checkpoint` y dry-run `empty` con A 0 / D 0 / R 0 / C 0. `project_data` quedó fuera del recorrido y sin cambios. `INT-01` queda cerrado.
 
 ## Registro audiovisual y transcripción segmentada
 

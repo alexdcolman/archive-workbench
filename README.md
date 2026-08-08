@@ -6,7 +6,7 @@ Está pensada especialmente para equipos de archivos, bibliotecas, ciencias soci
 
 Los documentos y la base de datos permanecen en la computadora del equipo: la aplicación no necesita subir el corpus a un servicio externo.
 
-**Versión actual:** 0.86.0 — AV-03 cerrado con revisión continua y sincronizada, anotaciones temporales/hablantes y evaluación reproducible de reconocimiento.
+**Versión actual:** 0.87.0 — INT-01 agrega transporte opcional de paquetes de intercambio mediante Google Drive, sin convertir Drive en una base compartida.
 
 ## Qué permite hacer
 
@@ -38,9 +38,12 @@ Archive Workbench reúne en una misma interfaz:
 - exportaciones reproducibles en CSV y JSONL;
 - asignación de tareas entre integrantes del equipo;
 - intercambio offline de cambios entre distintas copias;
+- transporte opcional de esos paquetes mediante Google Drive, con selección por archivo, verificación local y simulación antes de cualquier aplicación;
 - copias de seguridad y pruebas de recuperación.
 
 La extracción automática siempre produce candidatos revisables. La aplicación no reemplaza la lectura ni las decisiones del equipo de investigación.
+
+En 0.87.0, Google Drive puede usarse únicamente para transportar paquetes ZIP de intercambio. Cada copia conserva su propia base SQLite local: Drive no sincroniza `project_data`, no habilita edición simultánea de la base y una descarga nunca aplica cambios automáticamente. La recepción conserva la inspección del manifiesto y el dry-run ya usados por el intercambio local.
 
 ## Estado del proyecto
 

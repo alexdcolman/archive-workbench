@@ -1,3 +1,13 @@
+## 0.87.0 — 2026-08-08
+
+- Implementa `INT-01` como transporte opcional de paquetes de intercambio mediante Google Drive, sin usar Drive como base viva ni compartir SQLite.
+- Agrega OAuth de escritorio con PKCE y permiso `drive.file`, Google Picker para elegir un ZIP concreto, subida verificada y descarga atómica a `exchange/drive_downloads/`.
+- La subida conserva SHA-256, `bundle_id` y `project_id` como propiedades del archivo; la descarga vuelve a validar el bundle y el SHA registrado cuando está disponible.
+- Antes del dry-run se compara el manifiesto con proyecto, copia de origen, revisión de base, base común y secuencias locales. La simulación y cualquier aplicación posterior siguen usando el subsistema de intercambio existente.
+- Agrega generador y verificador de validación INT-01 sobre dos proyectos descartables creados desde cero. No hay migración de base; la revisión continúa en `0046_audiovisual_timeline_annotations`.
+- RC2 corrige el generador INT-01 para incluir `config/decisions.yaml` y alinear la identidad de esa configuración con el proyecto descartable; RC1 no podía abrir la receptora con `review-app`.
+- La validación real de RC2 confirmó OAuth, subida, Google Picker, descarga, SHA-256 idéntico, comparación de manifiesto y dry-run `empty/matched` entre dos copias descartables; `project_data` permaneció fuera del recorrido y sin cambios. `INT-01` queda cerrado en 0.87.0.
+
 ## 0.86.0 — 2026-08-08
 
 - Inicia `AV-03` con una línea de base reproducible sobre video real autorizado antes de decidir optimizaciones.
