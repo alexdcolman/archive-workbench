@@ -1,6 +1,6 @@
 # Pendientes activos — Archive Workbench
 
-**Estado preparado:** 2026-08-08 · **versión:** 0.88.1
+**Estado preparado:** 2026-08-08 · **versión:** 0.88.2
 
 Este archivo es la única fuente de verdad para trabajo abierto. Las capacidades cerradas se registran en `IMPLEMENTACIONES_REALIZADAS.md` y no deben reabrirse sin una regresión concreta o una ampliación explícita del alcance.
 
@@ -31,7 +31,7 @@ Este archivo es la única fuente de verdad para trabajo abierto. Las capacidades
 
 ### PILOT-01 — Corpus real persistente, verdad terreno y cierre del piloto — PARCIAL
 
-El piloto pre-release se ejecutará sobre un proyecto real y persistente destinado después al equipo de investigación. No será una base descartable ni se reinicializará entre pruebas. Antes de comenzar se acordarán su ruta, política de backups, responsables y reglas de acceso.
+El piloto pre-release se ejecuta sobre `pilot_data`, proyecto real y persistente destinado después al equipo de investigación. No es una base descartable ni se reinicializa entre pruebas. La ruta, política de backups, responsables y reglas de acceso ya fueron acordadas. El catálogo APM Chubut fue recreado y ampliado desde cero y, tras la validación real de 0.88.2, contiene 16 unidades archivísticas y todavía 0 objetos digitales; la siguiente etapa es la ingesta y el procesamiento nuevos de los originales del corpus.
 
 El corpus incluirá:
 

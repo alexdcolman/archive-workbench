@@ -520,13 +520,13 @@ def test_automatic_analysis_quality_decision_is_preserved_and_auditable() -> Non
     assert "st.form" in text
 
 
-def test_current_update_guide_describes_0881_catalog_fix() -> None:
+def test_current_update_guide_describes_0882_catalog_fix() -> None:
     text = (OPERATIVE / "ACTUALIZACION_ACTUAL.md").read_text(encoding="utf-8")
-    assert "Archive Workbench 0.88.1" in text
+    assert "Archive Workbench 0.88.2" in text
     assert "`PILOT-01`" in text
-    assert "projects: 0" in text
+    assert "parent_local_id" in text
+    assert "`omitir`" in text
     assert "apply_catalog_template()" in text
-    assert "simulación" in text
     assert "0046_audiovisual_timeline_annotations" in text
     assert "No ejecutar `db-upgrade`" in text
     assert "`project_data` no participó" in text
@@ -615,11 +615,11 @@ def test_pilot_guide_delegates_future_work_to_single_pending_ledger() -> None:
 def test_readme_points_only_to_current_documentation_map() -> None:
     text = (ROOT / "README.md").read_text(encoding="utf-8")
     citation = (ROOT / "CITATION.cff").read_text(encoding="utf-8")
-    assert "**Versión actual:** 0.88.1" in text
+    assert "**Versión actual:** 0.88.2" in text
     assert "Exportar texto e imágenes (ZIP)" in text
     assert "AV-01" in text
     assert "0.86.0" in text
-    assert 'version: "0.88.1"' in citation
+    assert 'version: "0.88.2"' in citation
     assert 'pip install -e ".[platform]"' in text
     assert "FFmpeg/FFprobe" in text
     assert "audio y video" in text

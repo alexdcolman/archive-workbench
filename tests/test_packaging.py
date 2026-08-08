@@ -175,8 +175,8 @@ def test_version_docs_and_discovery_plan_are_packaged() -> None:
         / "0046_audiovisual_timeline_annotations.py"
     )
 
-    assert data["project"]["version"] == "0.88.1"
-    assert '__version__ = "0.88.1"' in version_source
+    assert data["project"]["version"] == "0.88.2"
+    assert '__version__ = "0.88.2"' in version_source
     assert migration.is_file()
     assert 'down_revision = "0044_layout_structure_review"' in migration.read_text(
         encoding="utf-8"

@@ -15,6 +15,8 @@ Este es el único documento en la raíz de `docs/`. Resume la evolución del pro
 - [Proyecto paralelo GIAR](referencia/PROYECTO_PARALELO_GIAR.md).
 
 ## Versiones recientes — más reciente primero
+### 0.88.2 — 2026-08-08
+Corrige la aplicación de plantillas cuando una unidad existente marcada `omitir` se usa como contexto jerárquico por `parent_local_id`; agrega `/corpus/` al `.gitignore` para los originales locales de PILOT-01. 0.88.1 había corregido previamente la primera importación sobre una base con `projects: 0`. No hay migración.
 ### 0.88.0 — 2026-08-08
 EXP-01 RC1 agrega **Exportar texto e imágenes (ZIP)** al recorrido existente de exportación. El paquete incluye los registros del perfil, páginas fuente ancladas a la extracción que originó la capa editable, recortes regionales y figuras recortadas desde la geometría vigente. Un manifiesto conserva huellas, procedencia, revisión y vínculos. El contexto textual de página/documento se exporta por separado y distingue objetos principales de objetos usados sólo como contexto. No hay migración. La validación manual final confirmó 1 registro principal, 1 página, 1 recorte regional, 1 figura y 2 objetos de contexto; el verificador comprobó huellas internas, originales intactos, `quick_check: ok`, cero violaciones FK y la separación entre contenido principal y contexto. `project_data` permaneció fuera del recorrido y sin cambios. EXP-01 queda cerrado.
 

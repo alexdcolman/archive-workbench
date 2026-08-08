@@ -272,6 +272,87 @@ def test_apply_template_registers_project_in_fresh_database(tmp_path: Path) -> N
     finally:
         engine.dispose()
 
+
+def test_apply_template_resolves_existing_omitted_parent_local_id(tmp_path: Path) -> None:
+    _, decisions, engine = _setup(tmp_path)
+    try:
+        with session_scope(engine) as session:
+            archivo = create_archival_unit(
+                session,
+                decisions=decisions,
+                project_id=decisions.project_id,
+                parent_id=None,
+                level_key="archivo",
+                title="Archivo",
+                created_by="Alex",
+            )
+            fondo = create_archival_unit(
+                session,
+                decisions=decisions,
+                project_id=decisions.project_id,
+                parent_id=archivo.id,
+                level_key="fondo",
+                title="Fondo",
+                created_by="Alex",
+            )
+
+        with session_scope(engine) as session:
+            content = export_catalog_template_bytes(
+                session,
+                decisions=decisions,
+                project_id=decisions.project_id,
+                include_catalog=True,
+            )
+
+        workbook = load_workbook(BytesIO(content), data_only=False)
+        sheet = workbook["CATALOGO"]
+        headers = _header_map(sheet)
+        by_level = {
+            sheet.cell(row=row, column=headers["level_key"]).value: row
+            for row in range(2, sheet.max_row + 1)
+        }
+        archivo_row = by_level["archivo"]
+        fondo_row = by_level["fondo"]
+        sheet.cell(row=archivo_row, column=headers["action"]).value = "omitir"
+        sheet.cell(row=fondo_row, column=headers["title"]).value = "Fondo actualizado"
+        buffer = BytesIO()
+        workbook.save(buffer)
+        content = buffer.getvalue()
+
+        with session_scope(engine) as session:
+            report = validate_catalog_template(
+                session,
+                decisions=decisions,
+                project_id=decisions.project_id,
+                source=content,
+            )
+            assert report.valid
+            assert report.skip_count == 1
+            assert report.update_count == 1
+
+        with session_scope(engine) as session:
+            result = apply_catalog_template(
+                session,
+                decisions=decisions,
+                project_id=decisions.project_id,
+                source=content,
+                changed_by="Alex",
+            )
+            assert result.created == 0
+            assert result.updated == 1
+            assert result.skipped == 1
+
+        with session_scope(engine) as session:
+            refreshed_archivo = session.get(ArchivalUnit, archivo.id)
+            refreshed_fondo = session.get(ArchivalUnit, fondo.id)
+            assert refreshed_archivo is not None
+            assert refreshed_archivo.title == "Archivo"
+            assert refreshed_fondo is not None
+            assert refreshed_fondo.title == "Fondo actualizado"
+            assert refreshed_fondo.parent_id == archivo.id
+    finally:
+        engine.dispose()
+
 def test_exported_existing_catalog_roundtrip_is_valid_and_unchanged(tmp_path: Path) -> None:
     _, decisions, engine = _setup(tmp_path)
     try:

@@ -1,3 +1,12 @@
+## 0.88.2 — 2026-08-08
+
+- Corrige la aplicación de plantillas XLSX cuando una fila `actualizar` o `crear` referencia mediante `parent_local_id` una unidad existente marcada `omitir`.
+- Las unidades existentes omitidas pueden actuar como contexto jerárquico sin ser modificadas.
+- Agrega una regresión que reproduce el fallo detectado al ampliar el catálogo APM Chubut durante `PILOT-01`.
+- Agrega `/corpus/` al `.gitignore` existente para mantener fuera de Git los originales locales usados por el piloto.
+- No agrega migración; continúa `0046_audiovisual_timeline_annotations`.
+- Validación real cerrada sobre `pilot_data`: la plantilla de ampliación de 16 filas terminó con 7 creadas, 3 actualizadas, 6 omitidas y 0 errores; `archival_units: 16`, `digital_objects: 0`.
+
 ## 0.88.1 — 2026-08-08
 
 - Corrige la primera importación de catálogo XLSX en una base recién inicializada que todavía no contiene una fila en `projects`.

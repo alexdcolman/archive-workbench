@@ -1,8 +1,12 @@
 # Implementaciones realizadas — Archive Workbench
 
-**Estado preparado:** 2026-08-08 · **versión de trabajo:** 0.88.1
+**Estado preparado:** 2026-08-08 · **versión de trabajo:** 0.88.2
 
 Este documento registra capacidades ya implementadas y, cuando corresponde, validadas. No deben volver a aparecer en `PENDIENTES_ACTIVOS.md` salvo evidencia de regresión o ampliación explícita del alcance.
+
+## PILOT-01 — padres existentes omitidos en plantillas de catálogo — 0.88.2
+
+Durante la ampliación del catálogo APM Chubut, una plantilla válida de 16 filas falló en aplicación porque dos actualizaciones dependían por `parent_local_id` de unidades existentes marcadas `omitir`. La aplicación excluía esas filas del mapa jerárquico aunque la validación las aceptaba. 0.88.2 conserva como referencias de jerarquía todas las filas con `unit_id`, incluso si se omiten, sin modificarlas. La corrección no cambia persistencia ni interfaz. **Validación manual cerrada:** la misma plantilla real se reintentó sobre `pilot_data` y terminó con 7 unidades creadas, 3 actualizadas, 6 omitidas y 0 errores; el catálogo quedó en `archival_units: 16` y `digital_objects: 0`.
 
 ## PILOT-01 — corrección de primera importación en proyecto nuevo — 0.88.1
 

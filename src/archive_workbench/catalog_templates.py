@@ -1212,7 +1212,7 @@ def apply_catalog_template(
     local_to_unit_id = {
         row.local_id: row.unit_id
         for row in report.rows
-        if row.unit_id and _effective_action(row) != "omitir"
+        if row.unit_id
     }
     created = updated = moved = unchanged = skipped = 0
     pending = [row for row in report.rows if _effective_action(row) != "omitir"]

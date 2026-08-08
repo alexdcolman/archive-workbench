@@ -1,7 +1,7 @@
 # Hoja de ruta pre-release y líneas paralelas — Archive Workbench
 
 **Estado preparado:** 2026-08-08
-**Versión de referencia:** 0.88.1
+**Versión de referencia:** 0.88.2
 
 Esta hoja ordena el trabajo restante hasta v1.0. El detalle y el estado de cada bloque se mantienen en [`PENDIENTES_ACTIVOS.md`](PENDIENTES_ACTIVOS.md). Las líneas paralelas no bloquean la publicación inicial salvo decisión explícita posterior.
 

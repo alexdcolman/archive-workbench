@@ -73,3 +73,6 @@ Thumbs.db
 *.swp
 *.swo
 *~
+
+# Corpus documental local del piloto
+/corpus/

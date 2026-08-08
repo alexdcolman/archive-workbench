@@ -1,29 +1,32 @@
-# Actualización actual — Archive Workbench 0.88.1
+# Actualización actual — Archive Workbench 0.88.2
 
-**Estado:** corrección validada para cierre local · **fecha:** 2026-08-08
+**Estado:** candidata validada pendiente de cierre local · **fecha:** 2026-08-08
 
 ## Alcance
 
-La primera importación real de `PILOT-01` detectó una inconsistencia en el recorrido de proyecto nuevo. `init-project` crea la estructura de carpetas y `db-upgrade` crea o actualiza el esquema, pero una base recién creada todavía puede tener `projects: 0`. La simulación de una plantilla XLSX era válida, mientras que la aplicación fallaba al crear la primera unidad archivística por la clave foránea `archival_units.project_id -> projects.id`.
+Durante la ampliación real del catálogo APM Chubut en `PILOT-01`, una plantilla válida de 16 filas (`crear 7`, `actualizar 3`, `omitir 6`) falló al aplicarse con `No se pudo resolver el orden jerárquico de la importación`. La base permaneció sin cambios por rollback transaccional.
 
-0.88.1 corrige ese recorrido en `apply_catalog_template()`: después de completar una validación válida y antes de crear o actualizar unidades, registra o actualiza el proyecto mediante la configuración `decisions.yaml` dentro de la misma transacción. La simulación (`catalog-template-validate`) continúa sin escribir en la base.
+La causa estaba en `apply_catalog_template()`: el mapa usado para resolver `parent_local_id` excluía las filas marcadas `omitir`, aun cuando representaban unidades existentes con `unit_id`. La validación sí aceptaba correctamente esas filas como padres existentes, por lo que simulación y aplicación no compartían el mismo contrato.
 
-La regresión agregada reproduce explícitamente una base recién creada sin fila `Project`, comprueba que la validación no la modifica y verifica que la aplicación válida crea el proyecto y la jerarquía esperada.
+0.88.2 conserva en el mapa jerárquico toda fila que tenga `unit_id`, incluida una unidad existente marcada `omitir`. Esa fila sirve únicamente como referencia de padre: no se actualiza ni genera una revisión por estar omitida. Las filas omitidas nuevas, sin `unit_id`, continúan sin poder actuar como padres y la validación las rechaza.
+
+Se agrega una regresión que crea Archivo y Fondo existentes, marca el Archivo como `omitir`, actualiza el Fondo mediante `parent_local_id` y comprueba que la plantilla válida se aplica, el padre permanece intacto y solo el Fondo recibe la actualización.
 
 ## Persistencia y migración
 
 No hay cambios de esquema. La revisión continúa en `0046_audiovisual_timeline_annotations`.
 
-**0.88.1 no requiere `db-upgrade`. No ejecutar `db-upgrade` por esta versión.**
+**0.88.2 no requiere `db-upgrade`. No ejecutar `db-upgrade` por esta versión.**
 
-La importación fallida observada en `pilot_data` fue transaccional: después del error permanecieron `projects: 0`, `archival_units: 0` y `archival_unit_revisions: 0`. No es necesario restaurar el backup baseline antes de reintentar con la corrección.
+El intento fallido de ampliación de `pilot_data` fue transaccional: el árbol continuó con 9 unidades, `archival_units: 9` y `digital_objects: 0`. Además existe el backup previo `pilot_data_pre_ampliacion_catalogo_20260808_185514.zip`. No restaurar ni repetir trabajo ya cerrado.
+`project_data` no participó de este incidente ni debe usarse para la revalidación.
 
 ## Estado de PILOT-01
 
-`PILOT-01` continúa abierto. El catálogo APM Chubut preparado para el piloto contiene 9 unidades nuevas. La simulación previa informó 9 creaciones, 0 actualizaciones, 0 omisiones, 0 errores y 0 advertencias. Después de instalar 0.88.1, la aplicación real creó correctamente las 9 unidades: `projects: 1`, `archival_units: 9`, `digital_objects: 0`, sin migración y con UUID nuevos.
+`pilot_data` ya contiene el catálogo APM Chubut ampliado: `projects: 1`, `archival_units: 16` y `digital_objects: 0`. La plantilla real de 16 filas se aplicó correctamente con 0.88.2: 7 unidades creadas, 3 actualizadas y 6 omitidas. El catálogo quedó con `15 — Actividades culturales`, `Caso El Bolsón`, el título ampliado del Ejemplar 0619, seis documentos adicionales de la caja de Administración Pública y `22 — Agrupaciones empresarias y profesionales`.
 
-`project_data` no participó de esta corrección ni de su validación manual.
+Los originales del piloto están en `corpus/`; 0.88.2 agrega `/corpus/` al `.gitignore` existente. No se versionan ni se empaquetan esos materiales.
 
-## Validación cerrada
+## Validación de la candidata
 
-La candidata 0.88.1 pasó las regresiones acotadas de catálogo, documentación, empaquetado y módulos afectados por versionado. `pytest --collect-only -q` recopiló 537 tests. La validación manual reintentó exactamente la importación que había fallado sobre `pilot_data`: la simulación volvió a informar 9 creaciones y 0 errores, y la aplicación terminó con 9 creadas, 0 actualizadas, 0 movidas, 0 sin cambios y 0 omitidas. El árbol resultante contiene las 9 unidades APM Chubut y ningún objeto digital. No se repitió la suite completa ya cerrada de 0.88.0.
+La candidata quedó validada con las pruebas acotadas de catálogo, documentación, empaquetado y regresiones de versión afectadas (78 pruebas), `pytest --collect-only -q` con 538 pruebas recopiladas y construcción correcta del wheel. La validación manual real reintentó exactamente la misma plantilla de 16 filas y terminó con 7 creadas, 3 actualizadas, 6 omitidas y 0 errores. No repetir la suite completa de 0.88.0, la primera importación de 9 unidades ni esta ampliación ya cerrada, salvo un cambio posterior que invalide materialmente esa evidencia.

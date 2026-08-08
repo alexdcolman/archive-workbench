@@ -6,7 +6,7 @@ Está pensada especialmente para equipos de archivos, bibliotecas, ciencias soci
 
 Los documentos y la base de datos permanecen en la computadora del equipo: la aplicación no necesita subir el corpus a un servicio externo.
 
-**Versión actual:** 0.88.1 — corrige la primera importación de catálogo en proyectos recién inicializados, manteniendo la simulación no destructiva y la aplicación transaccional. Conserva la exportación **Exportar texto e imágenes (ZIP)** cerrada en 0.88.0.
+**Versión actual:** 0.88.2 — corrige la aplicación de plantillas de catálogo que usan unidades existentes omitidas como contexto jerárquico. Mantiene las correcciones de primera importación de 0.88.1 y la exportación **Exportar texto e imágenes (ZIP)** cerrada en 0.88.0.
 
 ## Qué permite hacer
 
