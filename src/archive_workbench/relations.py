@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from datetime import date, datetime
+from typing import Mapping
 from typing import Iterable
 
 from sqlalchemy import and_, or_, select
@@ -20,7 +21,7 @@ from archive_workbench.db.models import (
 )
 from archive_workbench.identity import new_id
 from archive_workbench.sources import PROCESSABLE_SOURCE_TYPES
-from archive_workbench.temporal import parse_temporal_expression
+from archive_workbench.temporal import parse_temporal_expression, temporal_expression_overlap
 
 RELATION_TARGET_KINDS = ("entity", "archival_unit", "document_part")
 RELATION_KINDS = ("analytical", "producer", "manager")
@@ -35,7 +36,10 @@ RELATION_KIND_EDGE_LABELS = {
     "manager": "gestionó",
 }
 RELATION_REVIEW_STATUSES = ("unreviewed", "reviewed", "approved")
-RELATION_LIFECYCLE_STATUSES = ("active", "inactive")
+RELATION_LIFECYCLE_STATUSES = ("active", "inactive", "deleted")
+RELATION_EDITABLE_LIFECYCLE_STATUSES = ("active", "inactive")
+RELATION_ARCHIVAL_CATEGORIES = ("hierarchical", "temporal_succession", "family", "associative", "other")
+_UNSET = object()
 
 
 @dataclass(slots=True)
@@ -65,6 +69,7 @@ class EntityRelationRow:
     temporal_precision: str | None
     temporal_approximate: bool
     temporal_note: str | None
+    profile: dict[str, object]
     lifecycle_status: str
     review_status: str
     revision: int
@@ -152,6 +157,7 @@ def _relation_snapshot(relation: EntityRelation) -> dict[str, object]:
         "temporal_precision": relation.temporal_precision,
         "temporal_approximate": relation.temporal_approximate,
         "temporal_note": relation.temporal_note,
+        "profile_json": relation.profile_json or {},
         "lifecycle_status": relation.lifecycle_status,
         "review_status": relation.review_status,
     }
@@ -228,6 +234,7 @@ def create_entity_relation(
     provenance_note: str | None = None,
     temporal_expression: str | None = None,
     temporal_note: str | None = None,
+    profile_json: Mapping[str, object] | None = None,
     review_status: str = "unreviewed",
     note: str | None = None,
 ) -> EntityRelation:
@@ -269,6 +276,7 @@ def create_entity_relation(
         temporal_precision=temporal.precision,
         temporal_approximate=temporal.approximate,
         temporal_note=_clean_optional(temporal_note),
+        profile_json=dict(profile_json or {}) or None,
         lifecycle_status="active",
         review_status=review_status,
         created_by=actor,
@@ -301,6 +309,7 @@ def update_entity_relation(
     provenance_note: str | None = None,
     temporal_expression: str | None = None,
     temporal_note: str | None = None,
+    profile_json: Mapping[str, object] | None | object = _UNSET,
     review_status: str | None = None,
     lifecycle_status: str | None = None,
     note: str | None = None,
@@ -373,6 +382,8 @@ def update_entity_relation(
         relation.temporal_approximate = temporal.approximate
     if temporal_note is not None:
         relation.temporal_note = _clean_optional(temporal_note)
+    if profile_json is not _UNSET:
+        relation.profile_json = dict(profile_json or {}) or None
     if review_status is not None:
         if review_status not in RELATION_REVIEW_STATUSES:
             raise ValueError(f"Estado de revisión inválido: {review_status}")
@@ -390,6 +401,39 @@ def update_entity_relation(
     )
     return relation
 
+
+
+def delete_entity_relation(
+    session: Session,
+    *,
+    relation_id: str,
+    expected_revision: int,
+    changed_by: str,
+    note: str | None = None,
+) -> EntityRelation:
+    """Retira un vínculo creado por error sin borrar su historial ni la entidad relacionada."""
+    relation = session.get(EntityRelation, relation_id)
+    if relation is None:
+        raise ValueError(f"Relación inexistente: {relation_id}")
+    if relation.revision != expected_revision:
+        raise ValueError(
+            f"La relación está en revisión {relation.revision}; se esperaba {expected_revision}"
+        )
+    if relation.lifecycle_status == "deleted":
+        raise ValueError("La relación ya está eliminada")
+    relation.lifecycle_status = "deleted"
+    relation.revision += 1
+    relation.updated_by = changed_by.strip() or "local_user"
+    relation.updated_at = utc_now()
+    session.flush()
+    _append_relation_revision(
+        session,
+        relation,
+        operation="delete",
+        changed_by=changed_by,
+        note=note or "Vínculo retirado porque fue registrado por error",
+    )
+    return relation
 
 def relation_target_choices(
     session: Session,
@@ -480,7 +524,9 @@ def entity_relation_rows(
         )
     if relation_kinds:
         statement = statement.where(EntityRelation.relation_kind.in_(relation_kinds))
-    if not include_inactive:
+    if include_inactive:
+        statement = statement.where(EntityRelation.lifecycle_status.in_(RELATION_EDITABLE_LIFECYCLE_STATUSES))
+    else:
         statement = statement.where(EntityRelation.lifecycle_status == "active")
     if temporal_start is not None or temporal_end is not None:
         if temporal_start is not None and temporal_end is not None and temporal_start > temporal_end:
@@ -500,6 +546,19 @@ def entity_relation_rows(
     relations = session.scalars(
         statement.order_by(EntityRelation.created_at, EntityRelation.id)
     ).all()
+    if temporal_start is not None or temporal_end is not None:
+        relations = [
+            row
+            for row in relations
+            if temporal_expression_overlap(
+                expression=row.temporal_expression,
+                item_start=row.temporal_start,
+                item_end=row.temporal_end,
+                query_start=temporal_start,
+                query_end=temporal_end,
+                include_undated=include_undated,
+            )
+        ]
     authority_ids = {
         row.source_authority_id for row in relations
     } | {row.target_authority_id for row in relations if row.target_authority_id}
@@ -556,6 +615,7 @@ def entity_relation_rows(
                 temporal_precision=relation.temporal_precision,
                 temporal_approximate=bool(relation.temporal_approximate),
                 temporal_note=relation.temporal_note,
+                profile=dict(relation.profile_json or {}),
                 lifecycle_status=relation.lifecycle_status,
                 review_status=relation.review_status,
                 revision=relation.revision,

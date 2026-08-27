@@ -1,0 +1,24 @@
+<!doctype html>
+<html lang="es-AR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Procesamiento · Archive Workbench</title>
+<meta name="description" content="Procesamiento documental, OCR, derivados versionados, selección de texto y OCR regional en Archive Workbench.">
+<meta name="theme-color" content="#f4f0e6">
+<link rel="stylesheet" href="assets/site.css">
+</head>
+<body>
+<a class="skip" href="#contenido">Saltar al contenido</a>
+<header class="site-head"><div class="head-inner"><div class="brand"><a href="index.html">Archive Workbench</a><span>documentación pública · 0.89.0</span></div><nav aria-label="Navegación principal"><ul><li><a href="index.html">Inicio</a></li><li><a href="instalacion.html">Instalación</a></li><li><a href="tutorial.html">Tutorial</a></li><li><a href="catalogo.html">Catálogo</a></li><li><a href="procesamiento.html" aria-current="page">Procesamiento</a></li><li><a href="revision.html">Revisión</a></li><li><a href="entidades.html">Entidades</a></li><li><a href="busquedas.html">Búsquedas</a></li><li><a href="relaciones.html">Relaciones</a></li><li><a href="audiovisual.html">Audio y video</a></li><li><a href="exportacion.html">Exportación</a></li><li><a href="intercambio.html">Intercambio</a></li><li><a href="resguardo.html">Resguardo</a></li><li><a href="conceptos.html">Conceptos</a></li><li><a href="referencia.html">Referencia</a></li><li><a href="problemas.html">Problemas frecuentes</a></li></ul></nav></div></header>
+<main id="contenido">
+<p class="kicker">OCR y preparación documental</p><h1>Procesar documentos sin reemplazar decisiones</h1><p class="lead">La preparación y la extracción producen resultados versionados que pueden compararse antes de elegir qué texto revisar.</p>
+<figure class="figure"><img src="assets/diagrams/trazabilidad-texto.svg" alt="Diagrama de trazabilidad entre original, derivados, extracciones candidatas, selección explícita y capa editable."><figcaption>La selección explícita separa la extracción automática de la capa que se corrige y revisa.</figcaption></figure>
+<h2>Preparar páginas</h2><p>Los derivados pueden aplicar transformaciones conservadoras de imagen y conservan su relación con el original.</p>
+<h2>Extraer texto</h2><p>Los perfiles de extracción pueden utilizar Surya, Docling/Tesseract u otros backends configurados. Cada corrida registra su perfil y su salida.</p>
+<h2>Elegir texto para revisar</h2><p>La selección canónica de cada página es una decisión explícita. Si cambia después de que la página ya fue editada, Archive Workbench no sobrescribe silenciosamente las correcciones existentes.</p>
+<h2>Leer una zona</h2><p>El OCR regional permite preparar una página, marcar una zona, ejecutar lectura localizada, revisar el resultado y decidir si debe incorporarse. La lectura localizada no se considera automáticamente mejor que el texto vigente.</p>
+</main>
+<footer class="site-foot"><p>Archive Workbench · software libre AGPL-3.0-or-later · <a href="https://github.com/alexdcolman/archive-workbench">repositorio</a> · <a href="https://github.com/alexdcolman/archive-workbench/blob/main/CITATION.cff">cita</a> · <a href="https://github.com/alexdcolman/archive-workbench/blob/main/CHANGELOG.md">cambios</a></p></footer>
+</body>
+</html>

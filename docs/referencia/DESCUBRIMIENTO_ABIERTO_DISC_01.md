@@ -12,7 +12,7 @@
 
 ## Objetivo
 
-Recorrer el corpus autorizado para proponer referencias todavía no registradas y someterlas a revisión humana. No es una ampliación de la búsqueda por nombres y alias conocidos: esa búsqueda parte de una autoridad existente; el descubrimiento abierto parte del texto y produce candidatos nuevos.
+Recorrer el corpus autorizado para proponer referencias todavía no registradas y someterlas a revisión manual. No es una ampliación de la búsqueda por nombres y alias conocidos: esa búsqueda parte de una autoridad existente; el descubrimiento abierto parte del texto y produce candidatos nuevos.
 
 La función debe poder proponer:
 
@@ -29,7 +29,7 @@ El descubrimiento abierto nunca debe:
 
 - crear autoridades aceptadas automáticamente;
 - fusionar autoridades o candidatos automáticamente;
-- crear relaciones definitivas sin una decisión humana;
+- crear relaciones definitivas sin una decisión explícita;
 - convertir toda clase de candidato en una única semántica de “entidad”;
 - trabajar sobre páginas fuera del alcance autorizado;
 - aceptar un candidato cuyo texto o revisión de origen ya cambió;
@@ -95,6 +95,16 @@ La implementación funcional usará registros separados:
 
 Los candidatos son sugerencias analíticas. Las autoridades, menciones, tiempos, acontecimientos y relaciones aceptadas continúan en sus estructuras canónicas actuales o en estructuras específicas posteriores. La tabla de candidatos no se convierte en una tabla canónica universal.
 
+## Simplificación de la interfaz de revisión durante PILOT-01 - RC19
+
+La implementación histórica de `DISC-01B` se conserva: la persistencia admite decisiones append-only `accept`, `reject`, `modify` y `defer`, y los datos existentes no se reescriben. La validación manual de PILOT-01 mostró, sin embargo, que exponer esas cuatro categorías como acciones equivalentes en la interfaz no coincide con la tarea que una persona intenta realizar. `modify` guardaba una corrección sin aceptar la referencia, y `defer` duplicaba en la práctica la posibilidad de dejar una referencia pendiente.
+
+Desde RC19, la interfaz normal de revisión presenta únicamente **Aceptar** y **Descartar**. Si el texto, la familia o el subtipo necesitan corrección, esos cambios se completan dentro de **Aceptar** y la misma confirmación crea o vincula el registro que corresponda. **Descartar** saca la referencia de la cola de trabajo pero conserva la decisión; una acción explícita **Restaurar** agrega una nueva decisión append-only y devuelve la referencia a pendientes. `modify` y `defer` permanecen disponibles sólo como compatibilidad histórica del dominio/CLI y no se generan desde la interfaz nueva.
+
+La interfaz permite además seleccionar varias referencias pendientes y, con confirmación explícita, crear una autoridad nueva con estado `unreviewed` por cada referencia compatible. La operación es transaccional y cada aceptación conserva su candidato y procedencia. El descarte también puede aplicarse en lote y mantiene la misma posibilidad de restauración individual posterior. Ninguna de estas acciones crea relaciones automáticamente.
+
+Esta simplificación no cambia el modelo persistente de DISC-01 ni requiere migración; cambia la forma en que la interfaz presenta y combina las decisiones ya soportadas.
+
 ## Proveedores
 
 El núcleo será independiente del motor. Cada proveedor deberá entregar el mismo contrato y declarar sus capacidades.
@@ -150,7 +160,7 @@ Criterio de cierre cumplido: se conservaron las ocho decisiones controladas, la 
 - interfaz secundaria, cerrada inicialmente y con estado persistente durante reruns;
 - comandos de terminal para reconstruir, listar, crear, separar, proyectar y auditar.
 
-Los grupos no son registros canónicos y no trasladan decisiones automáticamente. Un candidato separado conserva la pertenencia histórica con estado `removed`; las reconstrucciones automáticas posteriores no revierten esa separación. La continuidad crea una corrida y un candidato nuevos, conserva el candidato obsoleto y hereda únicamente las pertenencias activas de grupo como procedencia, no sus decisiones humanas.
+Los grupos no son registros canónicos y no trasladan decisiones automáticamente. Un candidato separado conserva la pertenencia histórica con estado `removed`; las reconstrucciones automáticas posteriores no revierten esa separación. La continuidad crea una corrida y un candidato nuevos, conserva el candidato obsoleto y hereda únicamente las pertenencias activas de grupo como procedencia, no sus decisiones explícitas.
 
 Criterio de cierre cumplido: el validador confirmó cuatro grupos —tres automáticos y uno manual—, nueve pertenencias conservadas, catorce acciones append-only, una continuidad textual desde un snapshot equivalente y los conteos canónicos exactos de `DISC-01B`. La revisión es `0040_discovery_grouping_continuity`, la integridad es correcta y las claves foráneas están vacías.
 
@@ -169,6 +179,19 @@ La versión 0.73.0 agrega:
 El corpus inicial es sintético y verifica el contrato, no representa la diversidad documental del piloto. Las reglas locales obtienen seis coincidencias exactas de siete y no cubren la familia `other`; ese límite queda visible en el informe. Ningún proveedor se declara mejor ni predeterminado por evidencia empírica. La revisión de base continúa en `0040_discovery_grouping_continuity`.
 
 Criterio de cierre cumplido: todos los proveedores usan el mismo contrato auditable y la comparación no permite mezclar corpus con huellas diferentes.
+
+## Afinado pre-release DISC-03 - RC66/RC69
+
+`DISC-03` no reabre `DISC-01`: conserva sus tablas, decisiones y contratos. RC66 introdujo `local_deterministic@local_rules_v2` y mantuvo `local_rules_v1` ejecutable. RC67 agrega `local_rules_v3` como versión vigente para perfiles nuevos y conserva v1/v2 como versiones históricas reproducibles. La continuidad por `local_redetection` recupera la versión local registrada en el candidato o en el snapshot de su corrida, en lugar de aplicar silenciosamente la versión vigente.
+
+El corpus `config/discovery_evaluation_corpus_disc03.jsonl` contiene 46 controles de géneros administrativos, archivísticos, testimoniales, académicos, periodísticos, técnicos y jurídicos. Incluye positivos, negativos y holdouts. Sobre las seis familias cubiertas por el proveedor local, v1 obtiene F1 micro `0.675676` y v2 `0.911765`. Los errores residuales de v2 se conservan en la auditoría y el corpus no se presenta como representativo del proyecto real.
+
+RC66 dejó `DISC-03` parcial hasta contrastar la versión nueva con material real del piloto. Ninguna evaluación crea autoridades, menciones o relaciones canónicas.
+
+
+RC67 audita v2 sobre exportaciones reales de 138 documentos y 78 segmentos audiovisuales sin incorporarlas al repositorio. A partir de esa evidencia agrega `local_rules_v3` y `config/discovery_evaluation_corpus_disc03_real_patterns.jsonl`, un corpus de 41 regresiones sintéticas derivadas de patrones reales. Los conteos externos describen diferencias, no precisión/recall; en RC67 `DISC-03` siguió parcial hasta revisión humana de candidatos v3 reales.
+
+RC68 partió de esa revisión humana y agregó `local_rules_v4` sin modificar v1/v2/v3. `config/discovery_evaluation_corpus_disc03_rc68.jsonl` conserva las regresiones sintéticas de precisión y límites reportados. La validación manual posterior reveló que una configuración persistida seguía conservando su `provider_version`, por lo que podía ejecutarse nuevamente con v3 sin que la UI lo hiciera suficientemente visible. RC69 agrega `local_rules_v5`, mantiene v1-v4 como versiones históricas y exige actualización explícita de una configuración local histórica antes de iniciar una búsqueda nueva desde la interfaz. v5 conserva los límites nominales completos y hace **Obra / publicación** más conservadora: las comillas sólo delimitan y se requiere una señal léxica inmediata; se elimina la propagación amplia de contexto de v4. La revisión muestra la versión usada por cada búsqueda y dibuja 500 referencias por defecto, aunque declara siempre los totales y permite elegir 100/250/500/1000/Todas. La validación manual posterior de una corrida v5 real confirmó una mejora material de la utilidad de las referencias; `DISC-03` queda cerrado desde RC70 y no debe reabrirse sin una regresión concreta.
 
 ## No regresión
 

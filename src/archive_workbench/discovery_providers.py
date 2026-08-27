@@ -5,7 +5,8 @@ import importlib.util
 from typing import Any, Iterable
 
 LOCAL_PROVIDER_KEY = "local_deterministic"
-LOCAL_PROVIDER_VERSION = "local_rules_v1"
+LOCAL_PROVIDER_VERSION = "local_rules_v5"
+LOCAL_PROVIDER_VERSIONS = ("local_rules_v1", "local_rules_v2", "local_rules_v3", "local_rules_v4", "local_rules_v5")
 SPACY_PROVIDER_KEY = "spacy_ner"
 
 
@@ -73,7 +74,7 @@ def provider_contract(
     require_available: bool = False,
 ) -> DiscoveryProviderContract:
     if key == LOCAL_PROVIDER_KEY:
-        if version != LOCAL_PROVIDER_VERSION:
+        if version not in LOCAL_PROVIDER_VERSIONS:
             raise ValueError(
                 f"Versión no admitida para {LOCAL_PROVIDER_KEY}: {version}"
             )
@@ -85,7 +86,11 @@ def provider_contract(
             model_version=None,
             supported_families=_LOCAL_FAMILIES,
             available=True,
-            availability_reason="Proveedor incluido en Archive Workbench.",
+            availability_reason=(
+                "Proveedor local vigente incluido en Archive Workbench."
+                if version == LOCAL_PROVIDER_VERSION
+                else "Versión histórica preservada para reproducibilidad de perfiles y corridas."
+            ),
         )
 
     if key == SPACY_PROVIDER_KEY:
@@ -117,6 +122,10 @@ def provider_contract(
 def provider_catalog() -> tuple[DiscoveryProviderContract, ...]:
     return (
         provider_contract(LOCAL_PROVIDER_KEY, LOCAL_PROVIDER_VERSION),
+        provider_contract(LOCAL_PROVIDER_KEY, "local_rules_v4"),
+        provider_contract(LOCAL_PROVIDER_KEY, "local_rules_v3"),
+        provider_contract(LOCAL_PROVIDER_KEY, "local_rules_v2"),
+        provider_contract(LOCAL_PROVIDER_KEY, "local_rules_v1"),
         DiscoveryProviderContract(
             key=SPACY_PROVIDER_KEY,
             version="modelo@versión",
@@ -255,7 +264,11 @@ def detect_with_provider(
     if provider_key == LOCAL_PROVIDER_KEY:
         from archive_workbench.open_discovery import detect_local_candidates
 
-        rows = detect_local_candidates(text, families=selected)
+        rows = detect_local_candidates(
+            text,
+            families=selected,
+            provider_version=provider_version,
+        )
         return contract, [
             ProviderDetection(
                 start=row.start,

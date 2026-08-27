@@ -8,6 +8,7 @@
           "enum": [
             "auto",
             "use_existing",
+            "update_existing",
             "create_new",
             "skip"
           ],
@@ -36,6 +37,8 @@
         "alias_type": {
           "default": "variant",
           "enum": [
+            "parallel",
+            "normalized_other_rules",
             "variant",
             "abbreviation",
             "acronym",
@@ -126,6 +129,7 @@
         "entity_type": {
           "enum": [
             "person",
+            "family",
             "organization",
             "place",
             "event",
@@ -144,6 +148,32 @@
           "minLength": 1,
           "title": "Preferred Name",
           "type": "string"
+        },
+        "profile": {
+          "additionalProperties": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "integer"
+              },
+              {
+                "type": "number"
+              },
+              {
+                "type": "boolean"
+              },
+              {
+                "items": {
+                  "type": "string"
+                },
+                "type": "array"
+              }
+            ]
+          },
+          "title": "Profile",
+          "type": "object"
         },
         "resolution": {
           "$ref": "#/$defs/AuthorityResolution"
@@ -213,6 +243,32 @@
           "minLength": 1,
           "title": "Local Id",
           "type": "string"
+        },
+        "profile": {
+          "additionalProperties": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "integer"
+              },
+              {
+                "type": "number"
+              },
+              {
+                "type": "boolean"
+              },
+              {
+                "items": {
+                  "type": "string"
+                },
+                "type": "array"
+              }
+            ]
+          },
+          "title": "Profile",
+          "type": "object"
         },
         "relation_label": {
           "minLength": 1,
@@ -442,18 +498,31 @@
           "default": "auto",
           "enum": [
             "auto",
+            "update_existing",
             "create_parallel",
             "skip"
           ],
           "title": "Action",
           "type": "string"
+        },
+        "relation_id": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Relation Id"
         }
       },
       "title": "RelationResolution",
       "type": "object"
     }
   },
-  "$id": "https://archive-workbench.local/schema/authority-dictionary-1.0.json",
+  "$id": "https://archive-workbench.local/schema/authority-dictionary-1.1.json",
   "additionalProperties": false,
   "properties": {
     "authorities": {
@@ -481,8 +550,11 @@
       "type": "array"
     },
     "schema_version": {
-      "const": "1.0",
-      "default": "1.0",
+      "default": "1.1",
+      "enum": [
+        "1.0",
+        "1.1"
+      ],
       "title": "Schema Version",
       "type": "string"
     },
@@ -507,6 +579,6 @@
     "dictionary_name",
     "source"
   ],
-  "title": "Archive Workbench authority dictionary 1.0",
+  "title": "Archive Workbench authority dictionary 1.1",
   "type": "object"
 }

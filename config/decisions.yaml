@@ -20,6 +20,7 @@ archival_levels:
     parent_keys: []
     required_fields: [title]
     optional: false
+    semantic_kind: custody_context
 
   - key: fondo
     label: Fondo
@@ -28,75 +29,100 @@ archival_levels:
     parent_keys: [archivo]
     required_fields: [title]
     optional: false
+    semantic_kind: record_set
+    record_set_type: fonds
+
+  - key: coleccion
+    label: Colección
+    plural_label: Colecciones
+    display_order: 2
+    parent_keys: [archivo]
+    required_fields: [title]
+    optional: true
+    semantic_kind: record_set
+    record_set_type: collection
 
   - key: seccion
     label: Sección
     plural_label: Secciones
-    display_order: 2
+    display_order: 3
     parent_keys: [fondo]
     required_fields: [title]
     optional: true
+    semantic_kind: record_set
+    record_set_type: other
 
   - key: subseccion
     label: Subsección
     plural_label: Subsecciones
-    display_order: 3
+    display_order: 4
     parent_keys: [fondo, seccion]
     required_fields: [title]
     optional: true
+    semantic_kind: record_set
+    record_set_type: other
 
   - key: serie
     label: Serie
     plural_label: Series
-    display_order: 4
+    display_order: 5
     parent_keys: [fondo, seccion, subseccion]
     required_fields: [title]
     optional: true
+    semantic_kind: record_set
+    record_set_type: series
 
   - key: subserie
     label: Subserie
     plural_label: Subseries
-    display_order: 5
+    display_order: 6
     parent_keys: [serie]
     required_fields: [title]
     optional: true
+    semantic_kind: record_set
+    record_set_type: series
 
   - key: caja
     label: Caja
     plural_label: Cajas
-    display_order: 6
+    display_order: 7
     parent_keys: [fondo, seccion, subseccion, serie, subserie]
     required_fields: [title]
     optional: true
+    semantic_kind: container
 
   - key: legajo
     label: Legajo
     plural_label: Legajos
-    display_order: 7
+    display_order: 8
     parent_keys: [fondo, seccion, subseccion, serie, subserie, caja]
     required_fields: [title]
     optional: true
+    semantic_kind: record_set
+    record_set_type: file
 
   - key: tomo
     label: Tomo
     plural_label: Tomos
-    display_order: 8
+    display_order: 9
     parent_keys: [legajo]
     required_fields: [title]
     optional: true
+    semantic_kind: container
 
   - key: documento
     label: Documento
     plural_label: Documentos
-    display_order: 9
-    parent_keys: [fondo, seccion, subseccion, serie, subserie, caja, legajo, tomo]
+    display_order: 10
+    parent_keys: [fondo, seccion, subseccion, serie, subserie, caja, legajo, tomo, coleccion]
     required_fields: [title]
     optional: true
+    semantic_kind: record
 
 descriptive_fields:
   - key: reference_code
     label: Código de referencia
-    applies_to_levels: [seccion, subseccion, serie, subserie, caja, legajo]
+    applies_to_levels: [seccion, subseccion, serie, subserie, caja, legajo, coleccion]
     required: false
     repeatable: false
     data_type: text
@@ -104,7 +130,7 @@ descriptive_fields:
 
   - key: attributed_title
     label: Título atribuido
-    applies_to_levels: [seccion, subseccion, serie, subserie, caja, legajo, documento]
+    applies_to_levels: [seccion, subseccion, serie, subserie, caja, legajo, documento, coleccion]
     required: false
     repeatable: true
     data_type: text
@@ -112,7 +138,7 @@ descriptive_fields:
 
   - key: extreme_dates
     label: Fechas extremas
-    applies_to_levels: [seccion, subseccion, serie, subserie, caja, legajo]
+    applies_to_levels: [seccion, subseccion, serie, subserie, caja, legajo, coleccion]
     required: false
     repeatable: true
     data_type: date_range
@@ -136,7 +162,7 @@ descriptive_fields:
 
   - key: extent
     label: Cantidad o extensión
-    applies_to_levels: [seccion, subseccion, serie, subserie, caja, legajo, tomo, documento]
+    applies_to_levels: [seccion, subseccion, serie, subserie, caja, legajo, tomo, documento, coleccion]
     required: false
     repeatable: true
     data_type: text
@@ -144,7 +170,7 @@ descriptive_fields:
 
   - key: scope_content
     label: Alcance y contenido
-    applies_to_levels: [seccion, subseccion, serie, subserie, caja, legajo]
+    applies_to_levels: [seccion, subseccion, serie, subserie, caja, legajo, coleccion]
     required: false
     repeatable: true
     data_type: text
@@ -152,14 +178,14 @@ descriptive_fields:
 
   - key: archivist_note
     label: Nota del archivero
-    applies_to_levels: [seccion, subseccion, serie, subserie, caja, legajo]
+    applies_to_levels: [seccion, subseccion, serie, subserie, caja, legajo, coleccion]
     required: false
     repeatable: true
     data_type: text
 
   - key: description_date
     label: Fecha de descripción
-    applies_to_levels: [seccion, subseccion, serie, subserie, caja, legajo]
+    applies_to_levels: [seccion, subseccion, serie, subserie, caja, legajo, coleccion]
     required: false
     repeatable: true
     data_type: date

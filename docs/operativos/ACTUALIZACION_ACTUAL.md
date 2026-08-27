@@ -1,32 +1,41 @@
-# Actualización actual — Archive Workbench 0.88.2
+# Actualización actual - Archive Workbench 0.89.0 RC79
 
-**Estado:** candidata validada pendiente de cierre local · **fecha:** 2026-08-08
+## Alcance de RC79
 
-## Alcance
+RC79 continúa `OPS-01` después de la validación material de la transcripción audiovisual GPU en la imagen RC77. No cambia el backend `faster-whisper`, la segmentación ni la interfaz. Corrige la medición de VRAM máxima cuando Archive Workbench se ejecuta dentro de Docker.
 
-Durante la ampliación real del catálogo APM Chubut en `PILOT-01`, una plantilla válida de 16 filas (`crear 7`, `actualizar 3`, `omitir 6`) falló al aplicarse con `No se pudo resolver el orden jerárquico de la importación`. La base permaneció sin cambios por rollback transaccional.
+La corrida real `large-v3` + CUDA `float16`, VAD activado y `beam_size=5` completó el medio autorizado `RememorArte Horacio BAU` con `faster-whisper 1.2.1`, produjo 64 segmentos y persistió como `completed`. La primera ejecución dentro del espacio administrado incluyó la descarga inicial del modelo `Systran/faster-whisper-large-v3` al caché persistente de `ArchiveWorkbenchData/Settings`; por eso el tiempo total de esa primera corrida no se interpreta como benchmark puro de inferencia.
 
-La causa estaba en `apply_catalog_template()`: el mapa usado para resolver `parent_local_id` excluía las filas marcadas `omitir`, aun cuando representaban unidades existentes con `unit_id`. La validación sí aceptaba correctamente esas filas como padres existentes, por lo que simulación y aplicación no compartían el mismo contrato.
+El defecto observado fue sólo de instrumentación: `nvidia-smi --query-compute-apps` informa PIDs del anfitrión, mientras `os.getpid()` dentro del contenedor pertenece al espacio de nombres de PID del contenedor. El monitor anterior comparaba ambos valores y registraba `peak_gpu_memory_mib=null` aunque CTranslate2 estuviera ejecutando CUDA. RC79 mantiene la coincidencia directa de PID para instalaciones nativas y, en runtime administrado, usa como fallback el único proceso de cómputo cuyo nombre ejecutable coincide con el proceso Python actual. Si hay más de un candidato, deja la métrica sin medir antes que atribuir VRAM ajena.
 
-0.88.2 conserva en el mapa jerárquico toda fila que tenga `unit_id`, incluida una unidad existente marcada `omitir`. Esa fila sirve únicamente como referencia de padre: no se actualiza ni genera una revisión por estar omitida. Las filas omitidas nuevas, sin `unit_id`, continúan sin poder actuar como padres y la validación las rechaza.
+La validación material anterior de Surya CPU/GPU, el cierre automático de `llama-server` y la corrección de `extraction-doctor` de RC78 no cambian.
 
-Se agrega una regresión que crea Archivo y Fondo existentes, marca el Archivo como `omitir`, actualiza el Fondo mediante `parent_local_id` y comprueba que la plantilla válida se aplica, el padre permanece intacto y solo el Fondo recibe la actualización.
+## Tags de esta candidata
 
-## Persistencia y migración
+- CPU: `ghcr.io/alexdcolman/archive-workbench:0.89.0-rc79-cpu`;
+- NVIDIA GPU: `ghcr.io/alexdcolman/archive-workbench:0.89.0-rc79-gpu`.
 
-No hay cambios de esquema. La revisión continúa en `0046_audiovisual_timeline_annotations`.
+## Persistencia y base
 
-**0.88.2 no requiere `db-upgrade`. No ejecutar `db-upgrade` por esta versión.**
+No cambia SQLite ni el modelo de proyecto. Continúa `0047_authority_relation_profiles` y no hay migración. **No ejecutar `db-upgrade`.**
 
-El intento fallido de ampliación de `pilot_data` fue transaccional: el árbol continuó con 9 unidades, `archival_units: 9` y `digital_objects: 0`. Además existe el backup previo `pilot_data_pre_ampliacion_catalogo_20260808_185514.zip`. No restaurar ni repetir trabajo ya cerrado.
-`project_data` no participó de este incidente ni debe usarse para la revalidación.
+`WEB-01` permanece parcial y queda pausado hasta terminar la distribución multiplataforma; RC79 no modifica el sitio público. No se incorporan capturas hasta realizar esa reescritura para lectores sin conocimiento previo.
 
-## Estado de PILOT-01
+## Gate automatizado focal
 
-`pilot_data` ya contiene el catálogo APM Chubut ampliado: `projects: 1`, `archival_units: 16` y `digital_objects: 0`. La plantilla real de 16 filas se aplicó correctamente con 0.88.2: 7 unidades creadas, 3 actualizadas y 6 omitidas. El catálogo quedó con `15 — Actividades culturales`, `Caso El Bolsón`, el título ampliado del Ejemplar 0619, seis documentos adicionales de la caja de Administración Pública y `22 — Agrupaciones empresarias y profesionales`.
+La suite completa corresponde exclusivamente a Alex. Para RC79 el gate se limita a la medición audiovisual modificada, distribución, documentación, empaquetado y recopilación completa sin ejecución:
 
-Los originales del piloto están en `corpus/`; 0.88.2 agrega `/corpus/` al `.gitignore` existente. No se versionan ni se empaquetan esos materiales.
+```bash
+pytest -q \
+  tests/test_transcription_evaluation.py \
+  tests/test_container_distribution.py \
+  tests/test_documentation.py \
+  tests/test_packaging.py \
+&& pytest --collect-only -q
+```
 
-## Validación de la candidata
+## Validación manual específica
 
-La candidata quedó validada con las pruebas acotadas de catálogo, documentación, empaquetado y regresiones de versión afectadas (78 pruebas), `pytest --collect-only -q` con 538 pruebas recopiladas y construcción correcta del wheel. La validación manual real reintentó exactamente la misma plantilla de 16 filas y terminó con 7 creadas, 3 actualizadas, 6 omitidas y 0 errores. No repetir la suite completa de 0.88.0, la primera importación de 9 unidades ni esta ampliación ya cerrada, salvo un cambio posterior que invalide materialmente esa evidencia.
+No repetir la transcripción audiovisual completa de `RememorArte Horacio BAU`, ni las extracciones Surya CPU/GPU, ni la prueba de pestañas: esos recorridos ya quedaron materialmente verdes y RC79 no modifica sus backends. La corrección de `peak_gpu_memory_mib` puede confirmarse en una corrida GPU corta futura, incluida una prueba multiplataforma pendiente, sin volver a procesar ahora el material completo.
+
+El siguiente gate material de `OPS-01` es comprobar persistencia al detener y volver a abrir la distribución y luego continuar con los hosts Windows/macOS previstos. También siguen pendientes la publicación real de imágenes y las comprobaciones limpias de las carpetas de importación/creación administrada.

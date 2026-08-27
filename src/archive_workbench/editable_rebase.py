@@ -311,7 +311,7 @@ def _validated_text_resolution(
         return None, None, "La candidata cambió desde que se eligió la resolución textual."
     expected_human = resolution.get("expected_human_text")
     if expected_human is not None and str(expected_human) != human_text:
-        return None, None, "La edición humana cambió desde que se eligió la resolución textual."
+        return None, None, "La edición revisada cambió desde que se eligió la resolución textual."
     if action == "keep_candidate":
         return [], {
             "conflict_id": conflict_id,
@@ -417,7 +417,7 @@ def _merge_human_changes(
                 conflict_id=conflict_id,
                 reason_code="overlapping_text_change",
                 reason=(
-                    "La corrección humana y la candidata modificaron de manera distinta "
+                    "La corrección revisada y la candidata modificaron de manera distinta "
                     "el mismo tramo. Elegí cuál conservar o escribí el texto resultante."
                 ),
                 base_text=base_segment,
@@ -431,7 +431,7 @@ def _merge_human_changes(
     for previous, current in zip(replacements, replacements[1:]):
         if current[0] < previous[1]:
             conflicts.append(
-                "Dos correcciones humanas resueltas se proyectan sobre el mismo tramo de la candidata."
+                "Dos correcciones revisadas resueltas se proyectan sobre el mismo tramo de la candidata."
             )
             break
     if conflicts or text_conflicts:
@@ -873,6 +873,7 @@ def preview_editable_rebase(
     source_key: str,
     page: int,
     candidate_run_id: str,
+    digital_object_id: str | None = None,
     mention_resolutions: dict[str, dict[str, Any]] | None = None,
     text_resolutions: dict[str, dict[str, Any]] | None = None,
     projection_resolutions: dict[str, dict[str, Any]] | None = None,
@@ -889,7 +890,7 @@ def preview_editable_rebase(
     projection_resolution_map = projection_resolutions or {}
     metadata_resolution_map = metadata_resolutions or {}
     attribute_resolution_map = attribute_resolutions or {}
-    _registration_row, digital, _unit = _registration(session, source_key)
+    _registration_row, digital, _unit = _registration(session, source_key, digital_object_id=digital_object_id)
     run, candidate_page = _candidate_page(
         session,
         digital_object_id=digital.id,
@@ -1356,7 +1357,7 @@ def preview_editable_rebase(
                 values=type_values,
                 labels={value: value for value in type_values},
                 reason=(
-                    "La clasificación humana del bloque no coincide con la clasificación de la "
+                    "La clasificación revisada del bloque no coincide con la clasificación de la "
                     "candidata. Elegí el tipo que debe quedar."
                 ),
                 source_object_ids=source_ids,
@@ -1430,7 +1431,7 @@ def preview_editable_rebase(
                     RebaseAttributeOption(
                         option_key=f"human_{position}_{hashlib.sha256(signature.encode('utf-8')).hexdigest()[:10]}",
                         label=(
-                            "Conservar el valor humano "
+                            "Conservar el valor registrado "
                             f"({len(entry['source_object_ids'])} objeto/s): {signature[:240]}"
                         ),
                         action="set",
@@ -1473,7 +1474,7 @@ def preview_editable_rebase(
                     "para el mismo atributo especializado."
                     if len(human_signatures) > 1
                     else (
-                        "El atributo especializado de la edición humana no coincide con el "
+                        "El atributo especializado de la edición revisada no coincide con el "
                         "valor producido por la candidata."
                     )
                 )
@@ -1662,6 +1663,7 @@ def apply_editable_rebase(
     page: int,
     candidate_run_id: str,
     expected_page_revision: int,
+    digital_object_id: str | None = None,
     rebased_by: str,
     note: str | None = None,
     mention_resolutions: dict[str, dict[str, Any]] | None = None,
@@ -1675,6 +1677,7 @@ def apply_editable_rebase(
         source_key=source_key,
         page=page,
         candidate_run_id=candidate_run_id,
+        digital_object_id=digital_object_id,
         mention_resolutions=mention_resolutions,
         text_resolutions=text_resolutions,
         projection_resolutions=projection_resolutions,
@@ -1690,7 +1693,7 @@ def apply_editable_rebase(
 
     from archive_workbench.candidate_review import _candidate_page, _editable_attributes, _registration
 
-    _registration_row, digital, _unit = _registration(session, source_key)
+    _registration_row, digital, _unit = _registration(session, source_key, digital_object_id=digital_object_id)
     run, candidate_page = _candidate_page(
         session,
         digital_object_id=digital.id,
@@ -1716,7 +1719,8 @@ def apply_editable_rebase(
         selected_by=rebased_by,
         run_id=run.id,
         pages={page},
-        note=note or "Candidata seleccionada para rebasar la edición existente.",
+        note=note or "Extracción seleccionada para trasladar la edición existente.",
+        digital_object_id=digital.id,
     )
     selection = session.scalar(
         select(ExtractionPageSelection).where(
@@ -1725,7 +1729,7 @@ def apply_editable_rebase(
         )
     )
     if selection is None:
-        raise RuntimeError("No pudo materializarse la selección canónica.")
+        raise RuntimeError("No pudo guardarse la extracción elegida para la página.")
 
     new_objects: list[EditableObject] = []
     for source, preview_object in zip(candidate_rows, preview.candidate_objects):
@@ -1785,7 +1789,7 @@ def apply_editable_rebase(
             obj,
             operation="rebase_import",
             created_by=rebased_by,
-            note="Objeto creado desde la candidata y las correcciones humanas rebasadas.",
+            note="Objeto creado desde la candidata y las correcciones revisadas rebasadas.",
             base_revision_number=None,
         )
         new_objects.append(obj)
@@ -1899,7 +1903,7 @@ def apply_editable_rebase(
         editable_page,
         operation="rebase",
         created_by=rebased_by,
-        note=note or "Edición humana rebasada sobre una nueva extracción candidata.",
+        note=note or "Edición revisada rebasada sobre una nueva extracción candidata.",
         details={
             "strategy": "three_way_text_rebase",
             "previous_extraction_run_id": previous_run_id,

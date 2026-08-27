@@ -25,9 +25,18 @@ PROJECT_DIRS = (
 )
 
 
-def initialize_project(destination: str | Path, template_root: str | Path | None = None) -> Path:
+def initialize_project(
+    destination: str | Path,
+    template_root: str | Path | None = None,
+    *,
+    allow_existing: bool = False,
+) -> Path:
     root = Path(destination)
-    root.mkdir(parents=True, exist_ok=True)
+    if root.exists() and not allow_existing:
+        raise FileExistsError(
+            f"La ruta ya existe: {root}. Elegí otra carpeta o usá la operación explícita para completar un proyecto existente."
+        )
+    root.mkdir(parents=True, exist_ok=allow_existing)
     for relative in PROJECT_DIRS:
         (root / relative).mkdir(parents=True, exist_ok=True)
 

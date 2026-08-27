@@ -9,7 +9,7 @@ from sqlalchemy import and_, bindparam, select, text
 from sqlalchemy.orm import Session
 
 from archive_workbench.sources import PROCESSABLE_SOURCE_TYPES
-from archive_workbench.temporal import temporal_overlap
+from archive_workbench.temporal import temporal_expression_overlap
 from archive_workbench.db.models import (
     ArchivalUnit,
     AuthorityAlias,
@@ -63,8 +63,49 @@ class SearchResultRow:
     document_part_key: str | None
     document_part_title: str | None
     snippet: str
+    match_text: str
     match_scope: str
     rank: float
+
+
+@dataclass(slots=True)
+class ConcordanceOccurrence:
+    left_context: str
+    hit: str
+    right_context: str
+
+
+def concordance_occurrences(
+    marked_text: str, *, context_chars: int = 90
+) -> list[ConcordanceOccurrence]:
+    """Convierte texto con marcadores [[HIT]] en filas KWIC compactas."""
+
+    if context_chars < 1:
+        raise ValueError("context_chars debe ser positivo")
+    marker_pattern = re.compile(r"\[\[HIT\]\](.*?)\[\[/HIT\]\]", re.DOTALL)
+    occurrences: list[ConcordanceOccurrence] = []
+
+    def clean(value: str) -> str:
+        value = value.replace("[[HIT]]", "").replace("[[/HIT]]", "")
+        return re.sub(r"\s+", " ", value).strip()
+
+    for match in marker_pattern.finditer(marked_text or ""):
+        left_full = clean(marked_text[: match.start()])
+        right_full = clean(marked_text[match.end() :])
+        left = left_full[-context_chars:]
+        right = right_full[:context_chars]
+        if len(left_full) > len(left):
+            left = "… " + left
+        if len(right_full) > len(right):
+            right = right + " …"
+        occurrences.append(
+            ConcordanceOccurrence(
+                left_context=left,
+                hit=clean(match.group(1)),
+                right_context=right,
+            )
+        )
+    return occurrences
 
 
 def search_index_status(session: Session) -> SearchIndexStatus:
@@ -428,6 +469,22 @@ def _partial_highlight(value: str, needles: list[str], *, window: int = 220) -> 
     return fragment
 
 
+def _partial_mark_all(value: str, needles: list[str]) -> str:
+    if not value:
+        return ""
+    unique = [item for item in dict.fromkeys(needles) if item]
+    if not unique:
+        return value
+    pattern = re.compile(
+        "|".join(re.escape(item) for item in sorted(unique, key=len, reverse=True)),
+        flags=re.IGNORECASE,
+    )
+    return pattern.sub(
+        lambda match: f"[[HIT]]{match.group(0)}[[/HIT]]",
+        value,
+    )
+
+
 def _expanding_clause(
     clauses: list[str], params: dict[str, object], name: str, column: str, values: Iterable[str]
 ) -> None:
@@ -466,7 +523,8 @@ def object_ids_matching_temporal(
     matched: set[str] = set()
     for object_id, authority in mention_rows:
         authority_to_objects.setdefault(authority.id, set()).add(object_id)
-        if temporal_overlap(
+        if temporal_expression_overlap(
+            expression=authority.temporal_expression,
             item_start=authority.temporal_start,
             item_end=authority.temporal_end,
             query_start=temporal_start,
@@ -485,7 +543,8 @@ def object_ids_matching_temporal(
             )
         ).all()
         for relation in relations:
-            if not temporal_overlap(
+            if not temporal_expression_overlap(
+                expression=relation.temporal_expression,
                 item_start=relation.temporal_start,
                 item_end=relation.temporal_end,
                 query_start=temporal_start,
@@ -648,6 +707,16 @@ def search_editable_objects(
                 snippet({table}, 20, '[[HIT]]', '[[/HIT]]', ' … ', 24) AS authority_alias_snippet,
                 snippet({table}, 21, '[[HIT]]', '[[/HIT]]', ' … ', 24) AS mention_snippet,
                 snippet({table}, 22, '[[HIT]]', '[[/HIT]]', ' … ', 24) AS relation_snippet,
+                current_text, original_text, comments, all_tags,
+                authority_names, authority_aliases, mention_texts, relation_texts,
+                highlight({table}, 11, '[[HIT]]', '[[/HIT]]') AS current_highlight,
+                highlight({table}, 12, '[[HIT]]', '[[/HIT]]') AS original_highlight,
+                highlight({table}, 13, '[[HIT]]', '[[/HIT]]') AS comment_highlight,
+                highlight({table}, 18, '[[HIT]]', '[[/HIT]]') AS tag_highlight,
+                highlight({table}, 19, '[[HIT]]', '[[/HIT]]') AS authority_name_highlight,
+                highlight({table}, 20, '[[HIT]]', '[[/HIT]]') AS authority_alias_highlight,
+                highlight({table}, 21, '[[HIT]]', '[[/HIT]]') AS mention_highlight,
+                highlight({table}, 22, '[[HIT]]', '[[/HIT]]') AS relation_highlight,
                 bm25({table}) AS rank
             FROM {table}
             WHERE {' AND '.join(clauses)}
@@ -658,40 +727,56 @@ def search_editable_objects(
     for name in expanding:
         statement = statement.bindparams(bindparam(name, expanding=True))
     rows = session.execute(statement, params).mappings().all()
+    if temporal_start is not None or temporal_end is not None:
+        matching_ids = object_ids_matching_temporal(
+            session,
+            object_ids=(str(row["object_id"]) for row in rows),
+            temporal_start=temporal_start,
+            temporal_end=temporal_end,
+            include_undated=temporal_include_undated,
+        )
+        rows = [row for row in rows if str(row["object_id"]) in matching_ids]
     result: list[SearchResultRow] = []
     scopes = (
-        ("Texto revisado", "current_snippet", "current_text"),
-        ("OCR original", "original_snippet", "original_text"),
-        ("Comentario", "comment_snippet", "comments"),
-        ("Etiqueta", "tag_snippet", "all_tags"),
-        ("Nombre de entidad", "authority_name_snippet", "authority_names"),
-        ("Alias de entidad", "authority_alias_snippet", "authority_aliases"),
-        ("Mención de entidad", "mention_snippet", "mention_texts"),
-        ("Relación analítica", "relation_snippet", "relation_texts"),
+        ("Texto revisado", "current_snippet", "current_text", "current_highlight"),
+        ("OCR original", "original_snippet", "original_text", "original_highlight"),
+        ("Comentario", "comment_snippet", "comments", "comment_highlight"),
+        ("Etiqueta", "tag_snippet", "all_tags", "tag_highlight"),
+        ("Nombre de entidad", "authority_name_snippet", "authority_names", "authority_name_highlight"),
+        ("Alias de entidad", "authority_alias_snippet", "authority_aliases", "authority_alias_highlight"),
+        ("Mención de entidad", "mention_snippet", "mention_texts", "mention_highlight"),
+        ("Relación analítica", "relation_snippet", "relation_texts", "relation_highlight"),
     )
     highlight_terms = [query.strip()] if match_mode == "phrase" else fragments
     for row in rows:
         match_scope = "Texto revisado"
         snippet = ""
+        match_text = ""
         if partial_words:
-            for label, _snippet_key, raw_key in scopes:
+            for label, _snippet_key, raw_key, _highlight_key in scopes:
                 if raw_key not in selected_columns:
                     continue
-                candidate = _partial_highlight(str(row[raw_key] or ""), highlight_terms)
+                raw_value = str(row[raw_key] or "")
+                candidate = _partial_highlight(raw_value, highlight_terms)
                 if candidate:
                     match_scope = label
                     snippet = candidate
+                    match_text = _partial_mark_all(raw_value, highlight_terms)
                     break
         else:
             snippet = str(row["current_snippet"] or "")
-            for label, snippet_key, _raw_key in scopes:
+            match_text = str(row["current_highlight"] or "")
+            for label, snippet_key, _raw_key, highlight_key in scopes:
                 candidate = str(row[snippet_key] or "")
                 if "[[HIT]]" in candidate:
                     match_scope = label
                     snippet = candidate
+                    match_text = str(row[highlight_key] or "")
                     break
         if not snippet:
             snippet = "[sin fragmento disponible]"
+        if "[[HIT]]" not in match_text:
+            match_text = snippet
         result.append(
             SearchResultRow(
                 object_id=str(row["object_id"]),
@@ -706,6 +791,7 @@ def search_editable_objects(
                 document_part_key=row["document_part_key"],
                 document_part_title=row["document_part_title"],
                 snippet=snippet,
+                match_text=match_text,
                 match_scope=match_scope,
                 rank=float(row["rank"]),
             )

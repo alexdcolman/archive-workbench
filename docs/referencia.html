@@ -1,0 +1,29 @@
+<!doctype html>
+<html lang="es-AR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Referencia técnica · Archive Workbench</title>
+<meta name="description" content="Referencia técnica pública de Archive Workbench: arquitectura, SQLite, originales, revisiones, catálogo, procesamiento, intercambio y extensiones.">
+<meta name="theme-color" content="#f4f0e6">
+<link rel="stylesheet" href="assets/site.css">
+</head>
+<body>
+<a class="skip" href="#contenido">Saltar al contenido</a>
+<header class="site-head"><div class="head-inner"><div class="brand"><a href="index.html">Archive Workbench</a><span>documentación pública · 0.89.0</span></div><nav aria-label="Navegación principal"><ul><li><a href="index.html">Inicio</a></li><li><a href="instalacion.html">Instalación</a></li><li><a href="tutorial.html">Tutorial</a></li><li><a href="catalogo.html">Catálogo</a></li><li><a href="procesamiento.html">Procesamiento</a></li><li><a href="revision.html">Revisión</a></li><li><a href="entidades.html">Entidades</a></li><li><a href="busquedas.html">Búsquedas</a></li><li><a href="relaciones.html">Relaciones</a></li><li><a href="audiovisual.html">Audio y video</a></li><li><a href="exportacion.html">Exportación</a></li><li><a href="intercambio.html">Intercambio</a></li><li><a href="resguardo.html">Resguardo</a></li><li><a href="conceptos.html">Conceptos</a></li><li><a href="referencia.html" aria-current="page">Referencia</a></li><li><a href="problemas.html">Problemas frecuentes</a></li></ul></nav></div></header>
+<main id="contenido">
+<p class="kicker">Arquitectura pública</p><h1>Referencia técnica</h1><p class="lead">La aplicación combina una interfaz Streamlit y un CLI sobre servicios de dominio. SQLite conserva el estado canónico del proyecto; originales, derivados e índices viven en rutas separadas.</p>
+<figure class="figure"><img src="assets/diagrams/arquitectura-local.svg" alt="Arquitectura local con interfaz y CLI sobre servicios de dominio, SQLite, originales, derivados e intercambio."><figcaption>Arquitectura local simplificada. Los índices y derivados son reconstruibles; SQLite conserva el estado canónico y los originales mantienen identidad propia.</figcaption></figure>
+<h2>Persistencia</h2><p>SQLite registra catálogo, archivos, corridas, selecciones, revisiones, autoridades, menciones, relaciones, tareas, auditorías e intercambio. Las migraciones son explícitas y se ejecutan después de un backup verificado.</p>
+<h2>Originales y derivados</h2><p>Los originales se registran con identidad y huellas. Los derivados de preparación, OCR y visualización se relacionan con su fuente y pueden reconstruirse cuando el contrato lo permite.</p>
+<h2>Revisiones e historial</h2><p>Las operaciones de edición conservan revisiones e historial. Deshacer, rehacer o adoptar una nueva candidata no deben destruir la procedencia de estados anteriores.</p>
+<h2>Catálogo y autoridades</h2><p>Las unidades de catálogo, autoridades, menciones y relaciones son contratos distintos. El árbol principal facilita navegación, pero la interfaz distingue custodia, jerarquía documental y ubicación física.</p>
+<h2>Procesamiento y selección</h2><p>La extracción crea candidatas versionadas. Una selección explícita decide qué candidata alimenta la capa editable. Cambiar la selección no debe borrar correcciones sin un procedimiento de rebase o conflicto.</p>
+<h2>Intercambio y backups</h2><p>El intercambio usa paquetes con manifiestos y simulación. Google Drive es sólo un transporte opcional de ZIP. Backups y pruebas de recuperación se administran dentro del proyecto y no se confunden con intercambio.</p>
+<h2>Exportaciones</h2><p>Las exportaciones públicas incluyen configuración y huellas cuando corresponden, de modo que puedan relacionarse con el estado del corpus que las produjo.</p>
+<h2>Extensiones opcionales</h2><p>Surya, búsqueda semántica, incorporación desde plataformas y transcripción audiovisual son extensiones instalables. La ausencia de una extensión no cambia la identidad del proyecto ni su SQLite.</p>
+<p>Para detalles de implementación y contratos vigentes, consultá <a href="https://github.com/alexdcolman/archive-workbench/blob/main/docs/referencia/ARQUITECTURA_Y_MODELO_ACTUAL.md">Arquitectura y modelo actual</a> en el repositorio.</p>
+</main>
+<footer class="site-foot"><p>Archive Workbench · software libre AGPL-3.0-or-later · <a href="https://github.com/alexdcolman/archive-workbench">repositorio</a> · <a href="https://github.com/alexdcolman/archive-workbench/blob/main/CITATION.cff">cita</a> · <a href="https://github.com/alexdcolman/archive-workbench/blob/main/CHANGELOG.md">cambios</a></p></footer>
+</body>
+</html>

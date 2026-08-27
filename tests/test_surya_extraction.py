@@ -236,6 +236,90 @@ def test_surya_runner_uses_vllm_for_cuda_and_maps_pages(tmp_path: Path, monkeypa
     assert "SURYA_INFERENCE_KEEP_ALIVE=1" in log
 
 
+def test_managed_container_forces_bundled_llamacpp_backend(
+    tmp_path: Path, monkeypatch
+) -> None:
+    import archive_workbench.surya_engine as module
+
+    source = tmp_path / "source.png"
+    source.write_bytes(b"image")
+    captured_env: dict[str, str] = {}
+
+    def fake_run(command, **kwargs):
+        captured_env.update(kwargs["env"])
+        output_dir = Path(command[command.index("--output_dir") + 1])
+        output_dir.mkdir(parents=True, exist_ok=True)
+        (output_dir / "results.json").write_text(
+            json.dumps({"page_0001": [_payload()]}), encoding="utf-8"
+        )
+        return subprocess.CompletedProcess(command, 0, stdout="done", stderr="")
+
+    monkeypatch.setattr(module.subprocess, "run", fake_run)
+    monkeypatch.setattr(module, "surya_version", lambda _command: "0.22.1")
+    monkeypatch.setenv("ARCHIVE_WORKBENCH_SURYA_BACKEND", "llamacpp")
+    monkeypatch.setenv("LLAMA_CPP_BINARY", "/opt/llama/llama-server")
+    monkeypatch.setenv("LD_LIBRARY_PATH", "/opt/llama")
+
+    outputs, _version, log = run_surya_cli_batch(
+        [(1, source)],
+        tmp_path / "work",
+        ExtractionProfile(
+            backend="surya_cli",
+            device="cuda",
+            surya_torch_device="cpu",
+            surya_clean_library_path=True,
+        ),
+    )
+
+    assert outputs[1].is_file()
+    assert captured_env["SURYA_INFERENCE_BACKEND"] == "llamacpp"
+    assert captured_env["TORCH_DEVICE"] == "cpu"
+    assert captured_env["LD_LIBRARY_PATH"] == "/opt/llama"
+    assert captured_env["SURYA_INFERENCE_TIMEOUT_SECONDS"] == "900"
+    assert captured_env["SURYA_MAX_TOKENS_FULL_PAGE"] == "8192"
+    assert "SURYA_INFERENCE_BACKEND=llamacpp" in log
+    assert "SURYA_INFERENCE_TIMEOUT_SECONDS=900" in log
+    assert "SURYA_MAX_TOKENS_FULL_PAGE=8192" in log
+    assert "ARCHIVE_WORKBENCH_CLEAN_LD_LIBRARY_PATH=0" in log
+
+
+def test_managed_llamacpp_respects_explicit_surya_limits(
+    tmp_path: Path, monkeypatch
+) -> None:
+    import archive_workbench.surya_engine as module
+
+    source = tmp_path / "source.png"
+    source.write_bytes(b"image")
+    captured_env: dict[str, str] = {}
+
+    def fake_run(command, **kwargs):
+        captured_env.update(kwargs["env"])
+        output_dir = Path(command[command.index("--output_dir") + 1])
+        output_dir.mkdir(parents=True, exist_ok=True)
+        (output_dir / "results.json").write_text(
+            json.dumps({"page_0001": [_payload()]}), encoding="utf-8"
+        )
+        return subprocess.CompletedProcess(command, 0, stdout="done", stderr="")
+
+    monkeypatch.setattr(module.subprocess, "run", fake_run)
+    monkeypatch.setattr(module, "surya_version", lambda _command: "0.22.1")
+    monkeypatch.setenv("ARCHIVE_WORKBENCH_SURYA_BACKEND", "llamacpp")
+    monkeypatch.setenv("SURYA_INFERENCE_TIMEOUT_SECONDS", "1200")
+    monkeypatch.setenv("SURYA_MAX_TOKENS_FULL_PAGE", "6144")
+
+    outputs, _version, log = run_surya_cli_batch(
+        [(1, source)],
+        tmp_path / "work",
+        ExtractionProfile(backend="surya_cli", device="cpu"),
+    )
+
+    assert outputs[1].is_file()
+    assert captured_env["SURYA_INFERENCE_TIMEOUT_SECONDS"] == "1200"
+    assert captured_env["SURYA_MAX_TOKENS_FULL_PAGE"] == "6144"
+    assert "SURYA_INFERENCE_TIMEOUT_SECONDS=1200" in log
+    assert "SURYA_MAX_TOKENS_FULL_PAGE=6144" in log
+
+
 def test_surya_runner_cpu_profile_sets_auxiliary_cpu_when_auto(
     tmp_path: Path, monkeypatch
 ) -> None:
@@ -256,6 +340,9 @@ def test_surya_runner_cpu_profile_sets_auxiliary_cpu_when_auto(
 
     monkeypatch.setattr(module.subprocess, "run", fake_run)
     monkeypatch.setattr(module, "surya_version", lambda _command: "0.22.0")
+    monkeypatch.delenv("ARCHIVE_WORKBENCH_SURYA_BACKEND", raising=False)
+    monkeypatch.delenv("SURYA_INFERENCE_TIMEOUT_SECONDS", raising=False)
+    monkeypatch.delenv("SURYA_MAX_TOKENS_FULL_PAGE", raising=False)
 
     outputs, _version, log = run_surya_cli_batch(
         [(1, source)],
@@ -266,6 +353,8 @@ def test_surya_runner_cpu_profile_sets_auxiliary_cpu_when_auto(
     assert outputs[1].is_file()
     assert captured_env["SURYA_INFERENCE_BACKEND"] == "llamacpp"
     assert captured_env["TORCH_DEVICE"] == "cpu"
+    assert "SURYA_INFERENCE_TIMEOUT_SECONDS" not in captured_env
+    assert "SURYA_MAX_TOKENS_FULL_PAGE" not in captured_env
     assert "TORCH_DEVICE=cpu" in log
 
 
@@ -340,6 +429,76 @@ def test_surya_doctor_does_not_require_tesseract(tmp_path: Path, monkeypatch) ->
     assert checks["Modelos auxiliares Surya"].ok is True
     assert "dispositivo auxiliar cpu" in checks["Modelos auxiliares Surya"].detail
     assert checks["Tesseract"].required is False
+
+
+def test_managed_gpu_surya_doctor_does_not_require_nested_docker(monkeypatch) -> None:
+    import archive_workbench.extraction as module
+
+    calls: list[list[str]] = []
+
+    def fake_probe(command, timeout=30):
+        del timeout
+        calls.append(list(command))
+        if command[0] == "/opt/llama/llama-server":
+            return True, "llama.cpp CUDA"
+        if command[0] == "nvidia-smi":
+            return True, "NVIDIA GeForce RTX 3090, 24576 MiB"
+        if command[0] == "surya_ocr":
+            return True, "surya"
+        if command[0] == "docker":
+            raise AssertionError("el runtime administrado no debe requerir Docker anidado")
+        return True, "ok"
+
+    monkeypatch.setattr(module, "_run_probe", fake_probe)
+    monkeypatch.setattr(module, "surya_version", lambda _command: "0.22.1")
+    monkeypatch.setattr(
+        module,
+        "_surya_auxiliary_torch_check",
+        lambda _profile: (True, "torch cpu; CUDA disponible"),
+    )
+    monkeypatch.setenv("ARCHIVE_WORKBENCH_SURYA_BACKEND", "llamacpp")
+    monkeypatch.setenv("ARCHIVE_WORKBENCH_RUNTIME_VARIANT", "gpu")
+    monkeypatch.setenv("LLAMA_CPP_BINARY", "/opt/llama/llama-server")
+
+    report = extraction_doctor(
+        ExtractionProfile(backend="surya_cli", device="auto", surya_command="surya_ocr")
+    )
+
+    assert report.ready is True
+    checks = {check.name: check for check in report.checks}
+    backend = checks["Backend de inferencia Surya"]
+    assert backend.ok is True
+    assert "ruta GPU administrada" in backend.detail
+    assert "NVIDIA GeForce RTX 3090" in backend.detail
+    assert not any(call[0] == "docker" for call in calls)
+
+
+def test_managed_surya_doctor_probes_configured_bundled_llama_binary(monkeypatch) -> None:
+    import archive_workbench.extraction as module
+
+    calls: list[list[str]] = []
+
+    def fake_probe(command, timeout=30):
+        del timeout
+        calls.append(list(command))
+        return True, "ok"
+
+    monkeypatch.setattr(module, "_run_probe", fake_probe)
+    monkeypatch.setattr(module, "surya_version", lambda _command: "0.22.1")
+    monkeypatch.setattr(
+        module,
+        "_surya_auxiliary_torch_check",
+        lambda _profile: (True, "torch cpu"),
+    )
+    monkeypatch.setenv("ARCHIVE_WORKBENCH_SURYA_BACKEND", "llamacpp")
+    monkeypatch.setenv("LLAMA_CPP_BINARY", "/opt/llama/llama-server")
+
+    report = extraction_doctor(
+        ExtractionProfile(backend="surya_cli", device="cpu", surya_command="surya_ocr")
+    )
+
+    assert report.ready is True
+    assert ["/opt/llama/llama-server", "--version"] in calls
 
 
 def test_surya_extraction_is_persisted_as_candidate(tmp_path: Path) -> None:

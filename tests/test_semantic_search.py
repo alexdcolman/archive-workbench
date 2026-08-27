@@ -115,6 +115,31 @@ def test_semantic_index_build_search_and_staleness(tmp_path: Path) -> None:
             )
             assert results[0].object_ids == [cultural_id]
             assert results[1].object_ids == [economic_id]
+            assert "teatral" in results[0].query_text.casefold()
+            without_seed = semantic_search(
+                session,
+                project_root=root,
+                project_id="search_project",
+                profile=profile,
+                query=results[0].query_text,
+                top_k=2,
+                exclude_chunk_ids=(results[0].chunk_id,),
+                backend=backend,
+            )
+            assert all(row.chunk_id != results[0].chunk_id for row in without_seed)
+            assert without_seed[0].object_ids == [economic_id]
+            without_seed_object = semantic_search(
+                session,
+                project_root=root,
+                project_id="search_project",
+                profile=profile,
+                query=results[0].query_text,
+                top_k=2,
+                exclude_object_ids=(cultural_id,),
+                backend=backend,
+            )
+            assert all(cultural_id not in row.object_ids for row in without_seed_object)
+            assert without_seed_object[0].object_ids == [economic_id]
             row = session.get(EditableObject, cultural_id)
             row.current_text += " y censurada"
             row.revision_number += 1

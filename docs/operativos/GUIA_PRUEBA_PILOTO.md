@@ -19,6 +19,10 @@ La v0.33.0 es una **beta operativa de extremo a extremo**. La aplicación ya per
 
 La finalidad del piloto no es demostrar que todas las funciones existen. Es comprobar que el recorrido completo funciona con documentos reales, detectar errores y producir evidencia para decidir perfiles de extracción y requisitos de la v1.0.
 
+Desde RC12, esta comprobación incluye una prueba de referente explícito: no dar por comprensible una frase sólo porque su título, tarjeta o pestaña permitan adivinar a qué se refiere. Cada texto operativo debe nombrar el objeto o tarea concreta que describe. Las guardas automáticas ayudan a impedir regresiones, pero no reemplazan la lectura manual ni la experiencia de uso sin explicación externa.
+
+Una parte central de esa validación es la **comprensión sin guía externa**. El piloto debe observar si una persona que llega a cada sección desde la navegación puede reconocer qué tarea ofrece, para qué sirve, qué control debe usar y qué resultado producirá. Si hace falta que el asistente traduzca la interfaz o explique un paso que la pantalla no permite inferir, registrar esa dependencia como problema de usabilidad antes de continuar la prueba. La guía puede destrabar el recorrido después del registro, pero no convierte por sí sola una pantalla confusa en una pantalla validada.
+
 ## Alcance pendiente
 
 Las capacidades todavía abiertas no se mantienen en esta guía para evitar listas divergentes. El inventario único y vigente está en [`PENDIENTES_ACTIVOS.md`](PENDIENTES_ACTIVOS.md).
@@ -101,7 +105,7 @@ Guardar la salida completa con fecha. Registrar:
 - cantidad de páginas por documento;
 - perfil y estado de cada extracción;
 - páginas procesadas;
-- páginas canónicas seleccionadas;
+- páginas con un texto elegido para revisar;
 - páginas sin selección;
 - corridas marcadas `accepted`, `rejected`, `needs_review` o `unreviewed`;
 - advertencias operativas de Inicio.
@@ -118,7 +122,7 @@ Determinar si cada extracción es utilizable y localizar problemas por página.
 
 ## Procedimiento por documento
 
-1. Abrir **Procesamiento → Selección canónica** y revisar las corridas disponibles.
+1. Abrir **Procesar documentos → Elegir texto** y revisar los resultados de extracción disponibles.
 2. Abrir el documento en **Revisión**.
 3. Comparar imagen y texto página por página.
 4. No corregir todavía todos los errores. Primero clasificar su naturaleza.
@@ -200,7 +204,7 @@ No seleccionar como canónica una corrida solo porque tenga mayor puntaje autom�
 
 ## Objetivo
 
-Crear una referencia humana pequeña que permita comparar motores y perfiles.
+Crear una referencia revisada pequeña que permita comparar motores y perfiles.
 
 No hace falta transcribir documentos enteros. Seleccionar páginas representativas.
 
@@ -270,7 +274,7 @@ Leer el resumen y los candidatos. Elegir por:
 4. ausencia de ruido grave;
 5. facilidad de corrección.
 
-El puntaje heurístico no reemplaza la lectura humana.
+El puntaje heurístico no reemplaza la revisión manual.
 
 ## Nueva extracción experimental
 
@@ -305,6 +309,12 @@ archive-workbench select-extraction \
 
 # Fase 5 — Piloto funcional de extremo a extremo
 
+## Punto actual del PILOT-01 - 2026-08-24
+
+El recorrido funcional extremo a extremo ya está verde y no debe repetirse salvo regresión concreta. La validación manual de RC64 cerró `PILOT-01AE`, incluida la reparación transversal de comportamiento Streamlit.
+
+RC65 retoma únicamente `PILOT-01A`. La validación nueva se limita al modelo descriptivo: comprobar en el `pilot_data` existente que `Archivo` se entiende como contexto de custodia cuando corresponda, que `Colección` se presenta como conjunto documental construido distinto de Fondo y que el audiovisual real incorporado desde plataforma distingue publicación remota de copia local. No reimportar materiales, no repetir transcripciones, OCR, búsquedas, exportaciones, intercambio ni backup. La revisión vigente sigue siendo `0047_authority_relation_profiles` y RC65 no agrega migración.
+
 ## Objetivo
 
 Completar al menos un documento a través de todo el sistema.
@@ -324,7 +334,7 @@ Catálogo
 → grafo
 → exportación
 → asignación y revisión cruzada
-→ checkpoint y bundle
+→ preparar copia / enviar y recibir cambios
 → backup y prueba de recuperación
 ```
 
@@ -342,8 +352,15 @@ Catálogo
 - ejecutar una consulta semántica y abrir el original;
 - exportar el documento mediante un perfil;
 - crear y completar una asignación;
-- exportar un bundle e inspeccionarlo en la copia receptora;
+- preparar una copia compartible, intercambiar un paquete incremental e inspeccionarlo en la copia receptora;
 - crear un backup y ejecutar la prueba no destructiva de recuperación.
+
+
+## Regla de avance durante el extremo a extremo
+
+Después de validar las acciones básicas de `Revisar documentos`, continuar sobre el mismo documento con entidades y menciones, luego relaciones, búsqueda literal, búsqueda semántica, grafo y exportación. No repetir las acciones de revisión ya cerradas salvo que una modificación posterior afecte ese subsistema. En cada sección, intentar primero comprender la tarea desde la propia interfaz; si la persona necesita una explicación externa para saber qué hace un control o qué resultado produce, registrar el problema antes de destrabar el recorrido.
+
+En `Entidades y menciones`, la prueba debe distinguir la ficha canónica de una entidad, sus menciones en documentos, sus relaciones analíticas y los roles archivísticos que provienen de Catálogo. Los roles de productor o responsable de gestión pueden consultarse desde la entidad, pero su edición se valida únicamente en Catálogo. Para las referencias encontradas automáticamente, comprobar aceptar con corrección opcional, descartar y restaurar, y una acción masiva acotada; no es necesario procesar todas las sugerencias para validar el recorrido.
 
 ## Criterio de cierre
 
@@ -410,7 +427,7 @@ Antes de publicar la v1.0 deben cumplirse estas condiciones:
 - contratos y `schema_version` congelados;
 - documentación utilizable por otra persona;
 - limitaciones OCR y semánticas explícitas;
-- sugerencias automáticas incapaces de sobrescribir decisiones humanas.
+- sugerencias automáticas incapaces de sobrescribir decisiones explícitas.
 
 ---
 
@@ -452,7 +469,7 @@ Antes de publicar la v1.0 deben cumplirse estas condiciones:
 
 ## Corridas evaluadas
 
-| run_id | perfil | páginas | estado técnico | veredicto humano | nota |
+| run_id | perfil | páginas | estado técnico | veredicto de revisión | nota |
 |---|---|---:|---|---|---|
 
 ## Páginas de ground truth
@@ -465,7 +482,7 @@ Antes de publicar la v1.0 deben cumplirse estas condiciones:
 | página | severidad | categoría | descripción | acción posterior |
 |---:|---|---|---|---|
 
-## Selección canónica
+## Texto elegido para revisar
 
 | página | run_id elegido | motivo |
 |---:|---|---|

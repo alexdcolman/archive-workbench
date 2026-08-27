@@ -10,7 +10,7 @@ from pathlib import Path
 from typing import Any, Iterable
 
 from sqlalchemy import delete, func, inspect, select
-from sqlalchemy.orm import Session
+from sqlalchemy.orm import Session, defer
 
 from archive_workbench.contracts.changes import (
     BundleInspection,
@@ -283,11 +283,19 @@ def _editable_state_payload(session: Session, project_id: str) -> dict[str, Any]
                 "source_note": row.source_note,
             }
         )
-    authorities = session.scalars(
+    bind = session.get_bind()
+    inspector = inspect(bind)
+    authority_has_profile = "profile_json" in {
+        column["name"] for column in inspector.get_columns("authority_records")
+    }
+    authority_query = (
         select(AuthorityRecord)
         .where(AuthorityRecord.project_id == project_id)
         .order_by(AuthorityRecord.id)
-    ).all()
+    )
+    if not authority_has_profile:
+        authority_query = authority_query.options(defer(AuthorityRecord.profile_json))
+    authorities = session.scalars(authority_query).all()
     authority_ids = [row.id for row in authorities]
     authority_aliases = session.scalars(
         select(AuthorityAlias)
@@ -306,19 +314,24 @@ def _editable_state_payload(session: Session, project_id: str) -> dict[str, Any]
         .where(DigitalObject.project_id == project_id)
         .order_by(EntityMention.editable_object_id, EntityMention.start_offset, EntityMention.id)
     ).all()
-    relations = session.scalars(
+    relation_has_profile = "profile_json" in {
+        column["name"] for column in inspector.get_columns("entity_relations")
+    }
+    relation_query = (
         select(EntityRelation)
         .where(EntityRelation.project_id == project_id)
         .order_by(EntityRelation.id)
-    ).all()
+    )
+    if not relation_has_profile:
+        relation_query = relation_query.options(defer(EntityRelation.profile_json))
+    relations = session.scalars(relation_query).all()
     assignments = session.scalars(
         select(WorkAssignment)
         .where(WorkAssignment.project_id == project_id)
         .order_by(WorkAssignment.id)
     ).all()
 
-    bind = session.get_bind()
-    has_audiovisual_schema = inspect(bind).has_table("audiovisual_media")
+    has_audiovisual_schema = inspector.has_table("audiovisual_media")
     audiovisual_media = (
         session.scalars(
             select(AudiovisualMedia)
@@ -523,6 +536,7 @@ def _editable_state_payload(session: Session, project_id: str) -> dict[str, Any]
                 "temporal_precision": row.temporal_precision,
                 "temporal_approximate": bool(row.temporal_approximate),
                 "temporal_note": row.temporal_note,
+                "profile_json": row.profile_json or {} if authority_has_profile else {},
                 "lifecycle_status": row.lifecycle_status,
                 "review_status": row.review_status,
                 "revision": row.revision,
@@ -576,6 +590,7 @@ def _editable_state_payload(session: Session, project_id: str) -> dict[str, Any]
                 "temporal_precision": row.temporal_precision,
                 "temporal_approximate": bool(row.temporal_approximate),
                 "temporal_note": row.temporal_note,
+                "profile_json": row.profile_json or {} if relation_has_profile else {},
                 "lifecycle_status": row.lifecycle_status,
                 "review_status": row.review_status,
                 "revision": row.revision,
@@ -936,7 +951,7 @@ def _closest_revision_by_time(rows: list[Any], timestamp: datetime) -> Any | Non
 
 
 def _enrich_candidate_exchange_event(session: Session, event: ChangeEvent) -> ChangeEvent:
-    """Agrega al bundle la decisión humana que originó un evento OCR.
+    """Agrega al bundle la decisión explícita que originó un evento OCR.
 
     Los triggers de 0029 registran las referencias mínimas necesarias para
     detectar un cambio de base. Durante la exportación se completa ese evento
@@ -1158,18 +1173,30 @@ def inspect_change_bundle(path: Path) -> BundleInspection:
     if not bundle_path.is_file():
         raise ValueError(f"No existe el bundle: {bundle_path}")
     allowed = {"README.txt", "changes.jsonl", "checksums.sha256", "manifest.json"}
-    with zipfile.ZipFile(bundle_path, "r") as archive:
-        names = set(archive.namelist())
-        unsafe = [name for name in names if Path(name).is_absolute() or ".." in Path(name).parts]
-        if unsafe:
-            raise ValueError("El ZIP contiene rutas inseguras")
-        missing = {"manifest.json", "changes.jsonl", "checksums.sha256"} - names
-        if missing:
-            raise ValueError("Faltan archivos obligatorios: " + ", ".join(sorted(missing)))
-        extra = names - allowed
-        manifest_bytes = archive.read("manifest.json")
-        changes_bytes = archive.read("changes.jsonl")
-        checksums_bytes = archive.read("checksums.sha256")
+    try:
+        with zipfile.ZipFile(bundle_path, "r") as archive:
+            names = set(archive.namelist())
+            unsafe = [
+                name
+                for name in names
+                if Path(name).is_absolute() or ".." in Path(name).parts
+            ]
+            if unsafe:
+                raise ValueError("El ZIP contiene rutas inseguras")
+            missing = {"manifest.json", "changes.jsonl", "checksums.sha256"} - names
+            if missing:
+                raise ValueError(
+                    "Faltan archivos obligatorios: " + ", ".join(sorted(missing))
+                )
+            extra = names - allowed
+            manifest_bytes = archive.read("manifest.json")
+            changes_bytes = archive.read("changes.jsonl")
+            checksums_bytes = archive.read("checksums.sha256")
+    except zipfile.BadZipFile as exc:
+        raise ValueError(
+            "El archivo existe, pero no es un ZIP válido de Archive Workbench. "
+            "Volvé a elegir el paquete creado desde Enviar cambios."
+        ) from exc
     manifest = ChangeBundleManifest.model_validate_json(manifest_bytes)
     actual_changes_sha = hashlib.sha256(changes_bytes).hexdigest()
     if actual_changes_sha != manifest.changes_sha256:
@@ -1683,6 +1710,7 @@ def _authority_values(session: Session, authority: AuthorityRecord) -> dict[str,
         "temporal_precision": authority.temporal_precision,
         "temporal_approximate": bool(authority.temporal_approximate),
         "temporal_note": authority.temporal_note,
+        "profile_json": authority.profile_json or {},
         "lifecycle_status": authority.lifecycle_status,
         "review_status": authority.review_status,
         "aliases": [
@@ -1731,6 +1759,7 @@ def _entity_relation_values(relation: EntityRelation) -> dict[str, Any]:
         "temporal_precision": relation.temporal_precision,
         "temporal_approximate": bool(relation.temporal_approximate),
         "temporal_note": relation.temporal_note,
+        "profile_json": relation.profile_json or {},
         "lifecycle_status": relation.lifecycle_status,
         "review_status": relation.review_status,
     }
@@ -2426,7 +2455,7 @@ def _parent_reference_problem(
         if any(values[field] is None for field in required):
             return (
                 "La creación del objeto no incluye contexto de página suficiente; "
-                "requiere revisión humana."
+                "requiere revisión manual."
             )
         source_object_id = _new_value(event.changed_fields, "source_extracted_object_id")
         if source_object_id is not None:
@@ -2575,7 +2604,7 @@ def _combine_pair_assessments(
     if strongest.disposition == MergeDisposition.CONFLICT:
         reason = "Existe al menos un cambio local concurrente incompatible."
     elif strongest.disposition == MergeDisposition.REVIEW:
-        reason = "La combinación requiere revisión humana antes de aplicar."
+        reason = "La combinación requiere revisión manual antes de aplicar."
     elif all(row.disposition == MergeDisposition.DUPLICATE for row in pair_rows):
         reason = "El mismo cambio ya está representado en la copia local."
         strongest = pair_rows[0]
@@ -3449,7 +3478,7 @@ def _event_fields_requiring_decision(session: Session, event: ChangeEvent) -> li
     """Devuelve solo campos donde el valor local difiere del recibido.
 
     Un campo puede tener una base ausente o antigua y, sin embargo, estar ya
-    representado de forma idéntica en ambas copias. Pedir una decisión humana
+    representado de forma idéntica en ambas copias. Pedir una decisión explícita
     en ese caso es ruido y puede producir resoluciones engañosas.
     """
     result: list[str] = []
@@ -3684,7 +3713,7 @@ def resolve_conflict_fields_bulk(
     """Resuelve en bloque los campos que realmente difieren.
 
     Los campos cuyo valor local ya coincide con el recibido se contabilizan
-    como coincidencias automáticas y nunca requieren una decisión humana.
+    como coincidencias automáticas y nunca requieren una decisión explícita.
     """
     from archive_workbench.db.models import ExchangeIncomingEventAssessment
 
@@ -4978,7 +5007,7 @@ def _apply_authority_event(
     fields = (
         "entity_type", "preferred_name", "normalized_name", "description",
         "temporal_expression", "temporal_start", "temporal_end",
-        "temporal_precision", "temporal_approximate", "temporal_note",
+        "temporal_precision", "temporal_approximate", "temporal_note", "profile_json",
         "lifecycle_status", "review_status", "aliases",
     )
     if event.operation.value == "create":
@@ -5012,6 +5041,7 @@ def _apply_authority_event(
             temporal_precision=values["temporal_precision"],
             temporal_approximate=bool(values["temporal_approximate"]),
             temporal_note=values["temporal_note"],
+            profile_json=dict(values["profile_json"] or {}) or None,
             lifecycle_status=values["lifecycle_status"],
             review_status=values["review_status"],
             created_by=event.actor,
@@ -5054,6 +5084,7 @@ def _apply_authority_event(
         "temporal_precision": "temporal_precision",
         "temporal_approximate": "temporal_approximate",
         "temporal_note": "temporal_note",
+        "profile_json": "profile_json",
         "lifecycle_status": "lifecycle_status",
         "review_status": "review_status",
     }
@@ -5323,7 +5354,7 @@ def _apply_entity_relation_event(
         "source_authority_id", "relation_kind", "relation_label", "target_authority_id",
         "target_archival_unit_id", "target_document_part_id", "evidence_note",
         "provenance_note", "temporal_expression", "temporal_start", "temporal_end",
-        "temporal_precision", "temporal_approximate", "temporal_note",
+        "temporal_precision", "temporal_approximate", "temporal_note", "profile_json",
         "lifecycle_status", "review_status",
     )
     if event.operation.value == "create":
@@ -5377,6 +5408,7 @@ def _apply_entity_relation_event(
             temporal_precision=values["temporal_precision"],
             temporal_approximate=bool(values["temporal_approximate"]),
             temporal_note=values["temporal_note"],
+            profile_json=dict(values["profile_json"] or {}) or None,
             lifecycle_status=values["lifecycle_status"],
             review_status=values["review_status"],
             created_by=event.actor,

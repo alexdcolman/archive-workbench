@@ -117,8 +117,8 @@ def operational_readiness(
     missing_files = _count(session, FileInstance, FileInstance.presence == "missing")
     if source_count == 0:
         items.append(ReadinessItem(
-            "catalog", "Catálogo", "pending", "Todavía no hay documentos procesables registrados.",
-            "Registrá una unidad y asociá al menos un archivo local.", "catalog",
+            "catalog", "Catálogo", "pending", "Todavía no hay archivos vinculados con unidades del catálogo.",
+            "Creá o importá unidades del catálogo y vinculá al menos un archivo digital para continuar.", "catalog",
         ))
     elif file_count == 0:
         items.append(ReadinessItem(
@@ -151,19 +151,19 @@ def operational_readiness(
     stale_pages = _count(session, EditablePage, EditablePage.status == "stale")
     if source_count == 0:
         processing_status = "pending"
-        processing_summary = "Procesamiento espera documentos registrados."
+        processing_summary = "Procesar documentos todavía no puede comenzar porque no hay documentos registrados en el catálogo."
     elif editable_pages == 0:
         processing_status = "pending"
-        processing_summary = f"Hay {source_count} documentos, pero todavía no hay páginas editables."
+        processing_summary = f"Hay {source_count} documentos registrados, pero todavía no hay páginas preparadas para revisión."
     elif stale_pages:
         processing_status = "attention"
-        processing_summary = f"Hay {stale_pages} páginas editables desactualizadas respecto del OCR seleccionado."
+        processing_summary = f"Hay {stale_pages} páginas cuya base de revisión quedó desactualizada respecto del resultado de extracción elegido."
     else:
         processing_status = "ready"
-        processing_summary = f"{editable_pages} páginas editables; {approved_pages} aprobadas."
+        processing_summary = f"{editable_pages} páginas preparadas para revisión; {approved_pages} páginas aprobadas."
     items.append(ReadinessItem(
-        "processing", "Procesamiento y revisión", processing_status, processing_summary,
-        f"Trabajos coordinados registrados: {processing_count}.",
+        "processing", "Procesar documentos", processing_status, processing_summary,
+        "En Procesar documentos podés preparar imágenes de página, extraer texto y elegir qué resultado de extracción usar como base para revisar cada página.",
         "processing" if editable_pages == 0 or stale_pages else "review",
     ))
 
@@ -183,21 +183,34 @@ def operational_readiness(
         work_status = "optional" if editable_pages == 0 else "pending"
         work_summary = "No hay asignaciones activas."
     items.append(ReadinessItem(
-        "work", "Trabajo colectivo", work_status, work_summary,
-        "Las asignaciones coordinan responsabilidades y no cambian el estado canónico.", "work",
+        "work", "Organizar trabajo", work_status, work_summary,
+        "En Organizar trabajo podés asignar documentos o páginas a integrantes del equipo y registrar el avance de cada tarea.", "work",
     ))
 
     try:
         lexical = search_index_status(session)
         lexical_status = "ready" if lexical.is_current else "attention"
-        lexical_summary = "El índice literal está actualizado." if lexical.is_current else "El índice literal requiere reconstrucción."
-        lexical_detail = (f"generación {lexical.indexed_generation}/{lexical.dirty_generation}" if not lexical.is_current else None)
+        if lexical.is_current:
+            lexical_summary = "La búsqueda textual está actualizada."
+            lexical_detail = "Podés buscar sobre la versión más reciente del contenido revisado."
+        elif lexical.indexed_generation == 0:
+            lexical_summary = "La búsqueda textual todavía no está preparada para este proyecto."
+            lexical_detail = (
+                "Abrí Búsqueda textual y construí el índice antes de realizar la primera búsqueda."
+            )
+        else:
+            lexical_summary = (
+                "La búsqueda textual necesita actualizarse porque el contenido cambió desde la última indexación."
+            )
+            lexical_detail = (
+                "Abrí Búsqueda textual y reconstruí el índice para incluir los cambios más recientes."
+            )
     except RuntimeError as exc:
         lexical_status = "attention"
         lexical_summary = "El índice literal no está disponible."
         lexical_detail = str(exc)
     items.append(ReadinessItem(
-        "search", "Búsqueda literal", lexical_status, lexical_summary, lexical_detail, "search",
+        "search", "Búsqueda textual", lexical_status, lexical_summary, lexical_detail, "search",
     ))
 
     semantic_profiles = session.scalars(
@@ -206,8 +219,8 @@ def operational_readiness(
     if not semantic_profiles or project is None:
         items.append(ReadinessItem(
             "semantic", "Búsqueda semántica", "optional",
-            "No hay perfiles semánticos configurados.",
-            "Es una función opcional y su calidad sigue pendiente de evaluación sobre corpus ampliado.",
+            "Todavía no se configuró una búsqueda por significado para este proyecto.",
+            "Podés configurarla cuando necesites encontrar fragmentos relacionados aunque no compartan las mismas palabras.",
             "semantic",
         ))
     else:
@@ -221,10 +234,10 @@ def operational_readiness(
         items.append(ReadinessItem(
             "semantic", "Búsqueda semántica", "attention" if stale else "ready",
             (
-                f"{len(stale)} perfiles requieren reconstrucción."
-                if stale else f"{len(semantic_profiles)} perfiles con índice vigente."
+                f"{len(stale)} configuraciones de búsqueda semántica necesitan reconstruir su índice."
+                if stale else f"{len(semantic_profiles)} configuraciones de búsqueda semántica tienen un índice vigente."
             ),
-            ", ".join(stale) if stale else "La evaluación analítica sigue siendo experimental.",
+            ", ".join(stale) if stale else "Los índices de búsqueda semántica configurados están disponibles para buscar fragmentos por significado.",
             "semantic",
         ))
 
@@ -232,24 +245,24 @@ def operational_readiness(
     mention_count = _count(session, EntityMention, EntityMention.status != "rejected")
     relation_count = _count(session, EntityRelation, EntityRelation.lifecycle_status == "active")
     items.append(ReadinessItem(
-        "entities", "Entidades y relaciones", "ready" if entity_count else "optional",
+        "entities", "Entidades y menciones", "ready" if entity_count else "optional",
         f"{entity_count} entidades, {mention_count} menciones y {relation_count} relaciones activas.",
-        "La ausencia de entidades no impide revisar ni exportar el corpus.", "authorities",
+        "Podés registrar personas, organizaciones, lugares u otras entidades cuando aparezcan durante la revisión.", "authorities",
     ))
 
     export_profiles = _count(session, CorpusExportProfile)
     export_runs = _count(session, CorpusExportRun)
     items.append(ReadinessItem(
-        "export", "Exportación", "ready" if export_runs else ("pending" if editable_pages else "optional"),
-        f"{export_profiles} perfiles y {export_runs} exportaciones materializadas.",
-        "Una exportación registrada conserva el perfil y el estado del corpus usados.", "export",
+        "export", "Exportar corpus", "ready" if export_runs else ("pending" if editable_pages else "optional"),
+        f"{export_profiles} configuraciones de exportación guardadas y {export_runs} archivos de exportación creados.",
+        "En Exportar corpus podés elegir qué textos revisados y datos descriptivos incluir y crear un archivo reproducible para análisis u otros usos.", "export",
     ))
 
     checkpoints = _count(session, ExchangeCheckpoint)
     items.append(ReadinessItem(
-        "exchange", "Intercambio offline", "ready" if checkpoints else "pending",
-        f"{checkpoints} checkpoints de intercambio registrados.",
-        "Creá un checkpoint común antes de empezar a intercambiar cambios entre copias.", "exchange",
+        "exchange", "Intercambiar cambios", "ready" if checkpoints else "pending",
+        f"{checkpoints} referencias de sincronización registradas entre copias del proyecto.",
+        "En Intercambiar cambios podés enviar y recibir modificaciones entre copias del mismo proyecto mediante paquetes verificables, sin compartir la base de datos activa.", "exchange",
     ))
 
     backups = list_project_backups(root)
@@ -258,11 +271,11 @@ def operational_readiness(
     ).first()
     if not backups:
         recovery_status = "attention"
-        recovery_summary = "No hay backups verificables del proyecto."
-        recovery_detail = "Creá una copia antes de continuar con trabajo sustantivo."
+        recovery_summary = "No hay copias de seguridad verificables del proyecto."
+        recovery_detail = "Creá una copia de seguridad antes de continuar con cambios sustantivos en el proyecto."
     elif latest_check is None:
         recovery_status = "attention"
-        recovery_summary = f"Hay {len(backups)} backups, pero ninguno tiene una prueba de recuperación registrada."
+        recovery_summary = f"Hay {len(backups)} copias de seguridad, pero ninguna tiene una prueba de recuperación registrada."
         recovery_detail = "La verificación de checksums no demuestra por sí sola que la base pueda migrarse y abrirse."
     elif latest_check.status != "completed":
         recovery_status = "attention"
@@ -270,14 +283,14 @@ def operational_readiness(
         recovery_detail = str((latest_check.details_json or {}).get("error") or "Sin detalle")
     elif latest_check.backup_sha256 != backups[0].backup_sha256:
         recovery_status = "attention"
-        recovery_summary = "El backup más reciente todavía no fue probado."
+        recovery_summary = "La copia de seguridad más reciente todavía no fue probada mediante una recuperación temporal."
         recovery_detail = f"Última prueba exitosa: {latest_check.tested_at.isoformat(timespec='minutes')}"
     else:
         recovery_status = "ready"
-        recovery_summary = "El backup más reciente fue verificado y migrado en un entorno temporal."
+        recovery_summary = "La copia de seguridad más reciente fue verificada y pudo abrirse en una recuperación temporal."
         recovery_detail = f"Prueba: {latest_check.tested_at.isoformat(timespec='minutes')}"
     items.append(ReadinessItem(
-        "recovery", "Recuperación", recovery_status, recovery_summary, recovery_detail, "admin",
+        "recovery", "Administrar y recuperar", recovery_status, recovery_summary, recovery_detail, "admin",
     ))
 
     return OperationalReadinessReport(

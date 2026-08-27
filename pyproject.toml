@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "archive-workbench"
-version = "0.88.2"
+version = "0.89.0"
 description = "Aplicación local para registro, extracción, edición y anotación de archivos desclasificados."
 readme = "README.md"
 requires-python = ">=3.11"
@@ -69,4 +69,4 @@ line-length = 100
 target-version = "py311"
 
 [tool.setuptools.package-data]
-archive_workbench = ["migrations/*", "migrations/versions/*.py"]
+archive_workbench = ["migrations/*", "migrations/versions/*.py", "default_config/*.yaml"]

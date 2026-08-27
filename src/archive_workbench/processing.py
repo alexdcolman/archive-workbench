@@ -61,6 +61,7 @@ class ProcessingInventoryRow:
     file_presence: str
     status: str
     preprocessing_status: str | None
+    preprocessing_ready: bool
     preprocessing_profile: str | None
     preprocessing_ocr_treatment: str | None
     preprocessing_geometry_mode: str | None
@@ -105,6 +106,7 @@ class PreprocessingGeometryRow:
 class ExtractionCandidateRun:
     run_id: str
     profile_key: str | None
+    engine: str
     status: str
     quality_status: str
     is_current: bool
@@ -302,6 +304,15 @@ def processing_inventory_rows(
         preprocessing = _latest_run(
             session, PreprocessingRun, digital_object_id=digital.id
         )
+        preprocessing_ready = session.scalar(
+            select(PreprocessingRun.id)
+            .where(
+                PreprocessingRun.digital_object_id == digital.id,
+                PreprocessingRun.is_current.is_(True),
+                PreprocessingRun.status.in_(_SUCCESS_RUN_STATUSES),
+            )
+            .limit(1)
+        ) is not None
         extraction = _latest_run(session, ExtractionRun, digital_object_id=digital.id)
         successful_runs = session.scalars(
             select(ExtractionRun.id).where(
@@ -394,6 +405,7 @@ def processing_inventory_rows(
                 file_presence=file_presence,
                 status=status,
                 preprocessing_status=preprocessing.status if preprocessing else None,
+                preprocessing_ready=preprocessing_ready,
                 preprocessing_profile=preprocessing.profile_key if preprocessing else None,
                 preprocessing_ocr_treatment=(
                     str((preprocessing.options_json or {}).get("ocr_treatment", "original"))
@@ -420,19 +432,27 @@ def processing_inventory_rows(
 
 
 def extraction_candidate_runs(
-    session: Session, *, source_key: str
+    session: Session, *, source_key: str, digital_object_id: str | None = None
 ) -> list[ExtractionCandidateRun]:
-    row = session.execute(
+    statement = (
         select(SourceRegistration, DigitalObject)
         .join(DigitalObject, SourceRegistration.digital_object_id == DigitalObject.id)
         .where(
             SourceRegistration.source_type.in_(PROCESSABLE_SOURCE_TYPES),
             SourceRegistration.source_key == source_key,
         )
-    ).one_or_none()
-    if row is None:
+    )
+    if digital_object_id is not None:
+        statement = statement.where(DigitalObject.id == digital_object_id)
+    rows = session.execute(statement).all()
+    if not rows:
         raise ValueError(f"source_key no registrado: {source_key}")
-    digital = row[1]
+    if len(rows) > 1 and digital_object_id is None:
+        raise ValueError(
+            "Ese identificador de origen corresponde a más de un documento. "
+            "Elegí el documento concreto antes de consultar sus extracciones."
+        )
+    digital = rows[0][1]
     runs = session.scalars(
         select(ExtractionRun)
         .where(ExtractionRun.digital_object_id == digital.id)
@@ -449,6 +469,7 @@ def extraction_candidate_runs(
             ExtractionCandidateRun(
                 run_id=run.id,
                 profile_key=run.profile_key,
+                engine=run.engine,
                 status=run.status,
                 quality_status=run.quality_status,
                 is_current=bool(run.is_current),

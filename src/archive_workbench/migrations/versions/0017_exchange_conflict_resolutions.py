@@ -1,4 +1,4 @@
-"""Resoluciones humanas campo por campo para bundles conflictivos.
+"""Resoluciones manuales campo por campo para bundles conflictivos.
 
 Revision ID: 0017_exchange_conflict_resolutions
 Revises: 0016_exchange_delete_preconditions

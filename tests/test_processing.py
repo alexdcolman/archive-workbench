@@ -342,7 +342,7 @@ def test_processing_migration_upgrades_an_existing_029_database(tmp_path: Path) 
     assert current_revision(root) == "0024_semantic_search"
 
     upgrade_database(root)
-    assert current_revision(root) == "0046_audiovisual_timeline_annotations"
+    assert current_revision(root) == "0047_authority_relation_profiles"
     engine = create_sqlite_engine(database_path(root))
     try:
         tables = set(inspect(engine).get_table_names())
@@ -371,6 +371,9 @@ def test_quality_panel_explains_indicators_without_presenting_accuracy_percentag
             self.tables: list[list[dict[str, str]]] = []
 
         def success(self, message):
+            self.messages.append(str(message))
+
+        def badge(self, message, **_kwargs):
             self.messages.append(str(message))
 
         def warning(self, message):
@@ -431,7 +434,8 @@ def test_processing_ui_distinguishes_derivative_treatment_from_profile_variant()
         / "processing_app.py"
     ).read_text(encoding="utf-8")
 
-    assert "Tratamiento del derivado vigente" in source
-    assert "Transformación adicional del perfil" in source
-    assert "`original` no significa que se use el archivo original sin " in source
-    assert "preparación. Significa que el perfil no agrega otra transformación" in source
+    assert '"Tratamiento"' in source
+    assert '"Geometría"' in source
+    assert '"Transformación del método"' in source
+    assert "row.preprocessing_ready" in source
+    assert "aplicará otra transformación durante la extracción" in source

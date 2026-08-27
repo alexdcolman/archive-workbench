@@ -55,3 +55,36 @@ def test_temporal_overlap_respects_open_ranges_and_undated() -> None:
         query_end=date(1975, 12, 31),
         include_undated=True,
     )
+
+
+def test_discontinuous_periods_keep_the_gap_outside_the_match() -> None:
+    from archive_workbench.temporal import parse_temporal_periods, temporal_expression_overlap
+
+    periods = parse_temporal_periods("1946 - 2015; desde 2024")
+    assert len(periods) == 2
+    assert periods[0].start == date(1946, 1, 1)
+    assert periods[0].end == date(2015, 12, 31)
+    assert periods[1].start == date(2024, 1, 1)
+    assert periods[1].end is None
+    assert not temporal_expression_overlap(
+        expression="1946 - 2015; desde 2024",
+        item_start=date(1946, 1, 1),
+        item_end=None,
+        query_start=date(2018, 1, 1),
+        query_end=date(2018, 12, 31),
+    )
+    assert temporal_expression_overlap(
+        expression="1946 - 2015; desde 2024",
+        item_start=date(1946, 1, 1),
+        item_end=None,
+        query_start=date(2025, 1, 1),
+        query_end=date(2025, 12, 31),
+    )
+
+
+def test_bracketed_period_remains_filterable() -> None:
+    from archive_workbench.temporal import parse_temporal_periods
+
+    period = parse_temporal_periods("[1969]-[1989]")[0]
+    assert period.start == date(1969, 1, 1)
+    assert period.end == date(1989, 12, 31)

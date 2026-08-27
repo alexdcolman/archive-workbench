@@ -24,7 +24,7 @@ from archive_workbench.transcription_evaluation import (
 from archive_workbench.version import __version__
 
 SOURCE_REVISION = "0045_audiovisual_transcription"
-TARGET_REVISION = "0046_audiovisual_timeline_annotations"
+TARGET_REVISION = "0047_authority_relation_profiles"
 QUALITY_PROFILE = "av03_quality_gpu_large_v3_v1"
 
 

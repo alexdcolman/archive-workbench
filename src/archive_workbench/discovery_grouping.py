@@ -21,6 +21,11 @@ from archive_workbench.db.models import (
     EditablePage,
     utc_now,
 )
+from archive_workbench.discovery_providers import (
+    LOCAL_PROVIDER_KEY,
+    LOCAL_PROVIDER_VERSION,
+    LOCAL_PROVIDER_VERSIONS,
+)
 from archive_workbench.discovery_review import (
     candidate_is_stale,
     effective_candidate_values,
@@ -501,12 +506,20 @@ def _unique_exact_position(text: str, needle: str) -> tuple[int, int]:
 
 
 def _redetected_position(
-    text: str, *, family: str, source_text: str
+    text: str,
+    *,
+    family: str,
+    source_text: str,
+    provider_version: str,
 ) -> tuple[int, int, str]:
     normalized = normalize_group_text(source_text)
     matches = [
         item
-        for item in detect_local_candidates(text, families=(family,))
+        for item in detect_local_candidates(
+            text,
+            families=(family,),
+            provider_version=provider_version,
+        )
         if normalize_group_text(item.exact_text) == normalized
     ]
     if len(matches) != 1:
@@ -515,6 +528,24 @@ def _redetected_position(
         raise ValueError("El proveedor local detectó más de un anclaje posible")
     item = matches[0]
     return item.start, item.end, item.exact_text
+
+
+def _continuity_local_provider_version(
+    source: DiscoveryCandidate,
+    source_run: DiscoveryRun,
+) -> str:
+    if (
+        source.provider_key == LOCAL_PROVIDER_KEY
+        and source.provider_version in LOCAL_PROVIDER_VERSIONS
+    ):
+        return source.provider_version
+    snapshot = dict(source_run.profile_snapshot_json or {})
+    if (
+        snapshot.get("provider_key") == LOCAL_PROVIDER_KEY
+        and snapshot.get("provider_version") in LOCAL_PROVIDER_VERSIONS
+    ):
+        return str(snapshot["provider_version"])
+    return LOCAL_PROVIDER_VERSION
 
 
 def project_discovery_candidate(
@@ -551,10 +582,12 @@ def project_discovery_candidate(
         start, end = _unique_exact_position(current.current_text, source.exact_text)
         exact_text = current.current_text[start:end]
     else:
+        local_provider_version = _continuity_local_provider_version(source, source_run)
         start, end, exact_text = _redetected_position(
             current.current_text,
             family=effective.semantic_family,
             source_text=source.exact_text,
+            provider_version=local_provider_version,
         )
 
     parameters = {
@@ -565,6 +598,11 @@ def project_discovery_candidate(
         "source_text": source.exact_text,
         "family": effective.semantic_family,
         "subtype": effective.subtype,
+        "source_local_provider_version": (
+            _continuity_local_provider_version(source, source_run)
+            if method == "local_redetection"
+            else None
+        ),
     }
     parameters_sha256 = sha256(
         json.dumps(parameters, ensure_ascii=False, sort_keys=True, separators=(",", ":")).encode(

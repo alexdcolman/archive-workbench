@@ -42,6 +42,7 @@ from archive_workbench.db.models import (
 )
 from archive_workbench.domain.enums import ExtractionStatus, MediaType
 from archive_workbench.identity import new_id, sha256_file, sha256_json, stable_id
+from archive_workbench.runtime_environment import managed_runtime_variant
 from archive_workbench.io.jsonl import write_models_atomic
 from archive_workbench.page_quality import assess_extraction_page_quality
 from archive_workbench.tesseract_engine import (
@@ -53,9 +54,11 @@ from archive_workbench.tesseract_engine import (
 )
 from archive_workbench.surya_engine import (
     normalize_surya_page,
+    resolve_llama_cpp_binary,
     resolve_surya_command,
     resolve_surya_torch_device,
     run_surya_cli_batch,
+    should_clean_surya_library_path,
     surya_version,
 )
 
@@ -268,14 +271,34 @@ def _surya_url_check(url: str) -> tuple[bool, str]:
 
 
 def _surya_local_backend_check(profile: ExtractionProfile) -> tuple[bool, str]:
+    llama_binary = resolve_llama_cpp_binary()
+    managed_backend = str(
+        os.environ.get("ARCHIVE_WORKBENCH_SURYA_BACKEND", "")
+    ).strip().casefold()
+    runtime_variant = managed_runtime_variant()
+
+    if managed_backend == "llamacpp" and runtime_variant in {"cpu", "gpu"}:
+        llama_ok, llama_detail = _run_probe([llama_binary, "--version"])
+        if not llama_ok:
+            return False, f"llama.cpp administrado no disponible: {llama_detail}"
+        if runtime_variant == "cpu":
+            return True, f"ruta CPU administrada; llama.cpp: {llama_detail}"
+
+        nvidia_ok, nvidia_detail = _run_probe(
+            ["nvidia-smi", "--query-gpu=name,memory.total", "--format=csv,noheader"]
+        )
+        if not nvidia_ok:
+            return False, f"ruta GPU administrada sin acceso NVIDIA: {nvidia_detail}"
+        return True, f"ruta GPU administrada ({nvidia_detail}); llama.cpp: {llama_detail}"
+
     if profile.device == "cpu":
-        ok, detail = _run_probe(["llama-server", "--version"])
+        ok, detail = _run_probe([llama_binary, "--version"])
         return ok, f"llama.cpp: {detail}"
 
     nvidia_ok, nvidia_detail = _run_probe(
         ["nvidia-smi", "--query-gpu=name,memory.total", "--format=csv,noheader"]
     )
-    docker_ok, docker_detail = _run_probe(["docker", "info", "--format", "{{json .Runtimes}}"])
+    docker_ok, docker_detail = _run_probe(["docker", "info", "--format", "{{json .Runtimes}}"] )
     nvidia_runtime = docker_ok and "nvidia" in docker_detail.lower()
     gpu_ready = nvidia_ok and docker_ok and nvidia_runtime
     if profile.device == "cuda":
@@ -285,7 +308,7 @@ def _surya_local_backend_check(profile: ExtractionProfile) -> tuple[bool, str]:
             f"runtime nvidia {'disponible' if nvidia_runtime else 'no detectado'}",
         )
 
-    cpu_ok, cpu_detail = _run_probe(["llama-server", "--version"])
+    cpu_ok, cpu_detail = _run_probe([llama_binary, "--version"])
     if gpu_ready:
         return True, f"ruta GPU disponible ({nvidia_detail})"
     if cpu_ok:
@@ -303,7 +326,7 @@ def _surya_auxiliary_torch_check(profile: ExtractionProfile) -> tuple[bool, str]
     runtime_python = sibling_python if sibling_python.is_file() else Path(sys.executable)
 
     env = os.environ.copy()
-    if profile.surya_clean_library_path:
+    if should_clean_surya_library_path(profile):
         env.pop("LD_LIBRARY_PATH", None)
     torch_device = resolve_surya_torch_device(profile)
     if torch_device != "auto":
@@ -1366,6 +1389,7 @@ def select_extraction_pages(
     profile_key: str | None = None,
     pages: set[int] | None = None,
     note: str | None = None,
+    digital_object_id: str | None = None,
 ) -> tuple[ExtractionRun, int]:
     statement = (
         select(ExtractionRun)
@@ -1378,6 +1402,8 @@ def select_extraction_pages(
         )
         .order_by(ExtractionRun.created_at.desc())
     )
+    if digital_object_id is not None:
+        statement = statement.where(ExtractionRun.digital_object_id == digital_object_id)
     if run_id:
         statement = statement.where(ExtractionRun.id == run_id)
     if profile_key:

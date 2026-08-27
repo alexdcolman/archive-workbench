@@ -364,7 +364,7 @@ def test_form_structure_validation_project_is_controlled_and_noncanonical(
     destination = tmp_path / "ocr01b_validation"
     result = module.create_validation_project(destination)
 
-    assert result["revision"] == "0046_audiovisual_timeline_annotations"
+    assert result["revision"] == "0047_authority_relation_profiles"
     assert result["documents"] == 1
     assert result["candidate_count"] == 3
     assert result["candidate_states"] == ["marked", "unmarked", "marked"]

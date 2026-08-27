@@ -131,6 +131,28 @@ def test_run_export_writes_jsonl_and_registers_hashes(tmp_path: Path) -> None:
     payload = json.loads(result.output_path.read_text(encoding="utf-8").splitlines()[0])
     assert payload["codigo"].startswith("document:")
     assert payload["texto"] == "La actividad teatral fue investigada"
+    assert payload["export_schema_version"] == "1.1"
+    assert payload["record_type"] == "archive_workbench.corpus_export_record"
+    assert payload["project_id"] == "search_project"
+    assert payload["export_run_id"] == result.run_id
+    assert payload["exported_at"]
+    assert payload["corpus_state_sha256"] == result.corpus_state_sha256
+    assert payload["export_profile_name"] == profile.name
+    assert payload["export_configuration"]["aggregation_level"] == "document"
+    assert payload["text_policy"] == "corrected_fallback_original"
+    assert payload["original_filenames"]
+    assert payload["original_sha256s"]
+    assert payload["media_types"]
+    assert payload["source_documents"][0]["digital_object_id"] == payload["digital_object_id"]
+    assert payload["source_documents"][0]["original_filename"] in payload["original_filenames"]
+    assert payload["source_documents"][0]["sha256"] in payload["original_sha256s"]
+    assert payload["archival_unit_title"]
+    assert payload["archival_unit_level"]
+    assert payload["page_numbers"] == [1]
+    assert payload["object_provenance"][0]["object_id"] == payload["object_ids"][0]
+    assert payload["object_provenance"][0]["digital_object_id"] == payload["digital_object_id"]
+    assert payload["object_provenance"][0]["source_key"] == payload["source_key"]
+    assert payload["object_provenance"][0]["text_source"] == "corrected"
     assert history[0].output_sha256 == result.output_sha256
     assert len(result.corpus_state_sha256) == 64
 
@@ -155,6 +177,7 @@ def test_run_export_writes_csv_lists_as_json(tmp_path: Path) -> None:
     with result.output_path.open(encoding="utf-8") as handle:
         row = next(csv.DictReader(handle))
     assert json.loads(row["tags"]) == ["teatro", "vigilancia"]
+    assert json.loads(row["source_documents"])[0]["original_filename"]
 
 
 def test_preview_does_not_write_or_register_run(tmp_path: Path) -> None:

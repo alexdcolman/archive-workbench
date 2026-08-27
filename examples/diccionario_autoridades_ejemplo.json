@@ -1,5 +1,5 @@
 {
-  "schema_version": "1.0",
+  "schema_version": "1.1",
   "dictionary_id": "ejemplo_autoridades_v1",
   "dictionary_name": "Diccionario de autoridades de ejemplo",
   "target_project_id": "*",

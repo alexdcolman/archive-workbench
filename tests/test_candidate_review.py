@@ -1101,3 +1101,191 @@ def test_rebase_can_return_to_a_previously_used_candidate(tmp_path: Path) -> Non
             )
     finally:
         engine.dispose()
+
+
+def test_bulk_prepare_candidate_run_initializes_only_pending_page(tmp_path: Path) -> None:
+    root, decisions, engine, _old_run_id, new_run_id = _project(tmp_path)
+    from archive_workbench.candidate_review import prepare_candidate_run_for_review
+
+    try:
+        with session_scope(engine) as session:
+            result = prepare_candidate_run_for_review(
+                session,
+                decisions=decisions,
+                source_key="doc_candidates",
+                run_id=new_run_id,
+                created_by="Alex",
+            )
+            assert result.pages_available == 1
+            assert result.pages_initialized == 1
+            assert result.pages_already_initialized == 0
+            assert result.selections_changed == 1
+            assert result.objects_created == 1
+
+        with session_scope(engine) as session:
+            page = session.scalar(select(EditablePage))
+            selection = session.scalar(select(ExtractionPageSelection))
+            assert page is not None
+            assert selection is not None
+            assert page.source_extraction_run_id == new_run_id
+            assert selection.extraction_run_id == new_run_id
+            repeated = prepare_candidate_run_for_review(
+                session,
+                decisions=decisions,
+                source_key="doc_candidates",
+                run_id=new_run_id,
+                created_by="Alex",
+            )
+            assert repeated.pages_initialized == 0
+            assert repeated.pages_already_initialized == 1
+            assert repeated.selections_changed == 0
+    finally:
+        engine.dispose()
+
+
+def test_regional_text_replacement_changes_one_editable_object_and_keeps_page_source(
+    tmp_path: Path,
+) -> None:
+    root, decisions, engine, old_run_id, _new_run_id = _project(tmp_path)
+    from archive_workbench.candidate_review import (
+        replace_editable_object_text_from_regional_candidate,
+    )
+
+    try:
+        with session_scope(engine) as session:
+            bootstrap_editable_layer(
+                session,
+                decisions=decisions,
+                created_by="Alex",
+                source_keys={"doc_candidates"},
+            )
+            regional_run = _seed_run(
+                session,
+                profile="regional_test",
+                text_rows=[("paragraph", "DR. GUILLERMO A. BELGRANO RAWSON")],
+                options_hash="c" * 64,
+            )
+            regional_run.engine = "tesseract_regions"
+            regional_object = session.scalar(
+                select(ExtractedObject).where(
+                    ExtractedObject.extraction_run_id == regional_run.id
+                )
+            )
+            assert regional_object is not None
+            editable_page = session.scalar(select(EditablePage))
+            editable_objects = session.scalars(
+                select(EditableObject)
+                .where(EditableObject.editable_page_id == editable_page.id)
+                .order_by(EditableObject.current_order_index)
+            ).all()
+            target = editable_objects[1]
+            untouched = editable_objects[0]
+            untouched_text = untouched.current_text
+            result = replace_editable_object_text_from_regional_candidate(
+                session,
+                source_key="doc_candidates",
+                page=1,
+                candidate_run_id=regional_run.id,
+                editable_object_id=target.id,
+                regional_object_id=regional_object.id,
+                changed_by="Alex",
+            )
+            assert result.previous_text == "Texto viejo"
+            assert result.replacement_text == "DR. GUILLERMO A. BELGRANO RAWSON"
+            assert editable_page.source_extraction_run_id == old_run_id
+            assert target.current_text == "DR. GUILLERMO A. BELGRANO RAWSON"
+            assert untouched.current_text == untouched_text
+            assert target.current_attributes_json["regional_ocr_text_replacements"][-1][
+                "regional_run_id"
+            ] == regional_run.id
+
+        with session_scope(engine) as session:
+            timeline = page_history_rows(session, source_key="doc_candidates", page=1)
+            assert any(item.operation == "regional_ocr_replace" for item in timeline)
+    finally:
+        engine.dispose()
+
+
+def test_regional_text_can_be_added_as_new_editable_object_with_provenance(
+    tmp_path: Path,
+) -> None:
+    root, decisions, engine, old_run_id, _new_run_id = _project(tmp_path)
+    from archive_workbench.candidate_review import (
+        add_editable_object_from_regional_candidate,
+    )
+
+    try:
+        with session_scope(engine) as session:
+            bootstrap_editable_layer(
+                session,
+                decisions=decisions,
+                created_by="Alex",
+                source_keys={"doc_candidates"},
+            )
+            regional_run = _seed_run(
+                session,
+                profile="regional_add_test",
+                text_rows=[("paragraph", "SUBSECRETARIO DEL INTERIOR")],
+                options_hash="d" * 64,
+            )
+            regional_run.engine = "tesseract_regions"
+            regional_object = session.scalar(
+                select(ExtractedObject).where(
+                    ExtractedObject.extraction_run_id == regional_run.id
+                )
+            )
+            assert regional_object is not None
+            editable_page = session.scalar(select(EditablePage))
+            before = session.scalars(
+                select(EditableObject)
+                .where(
+                    EditableObject.editable_page_id == editable_page.id,
+                    EditableObject.lifecycle_status == "active",
+                )
+                .order_by(EditableObject.current_order_index)
+            ).all()
+            anchor = before[0]
+            placement_geometry = [
+                {
+                    "page": 1,
+                    "coordinate_space": "normalized",
+                    "polygon": [[0.10, 0.10], [0.35, 0.10], [0.35, 0.18], [0.10, 0.18]],
+                }
+            ]
+            result = add_editable_object_from_regional_candidate(
+                session,
+                decisions=decisions,
+                source_key="doc_candidates",
+                page=1,
+                candidate_run_id=regional_run.id,
+                regional_object_id=regional_object.id,
+                object_type="paragraph",
+                changed_by="Alex",
+                after_object_id=anchor.id,
+                geometry=placement_geometry,
+            )
+            added = session.get(EditableObject, result.editable_object_id)
+            assert added is not None
+            assert added.current_text == "SUBSECRETARIO DEL INTERIOR"
+            assert added.source_extracted_object_id is None
+            assert added.current_attributes_json["regional_ocr_added"] is True
+            assert added.current_attributes_json["regional_ocr_source"][
+                "regional_run_id"
+            ] == regional_run.id
+            assert added.current_geometry_json == placement_geometry
+            assert added.current_attributes_json["regional_ocr_source"]["source_geometry"] == regional_object.geometry_json
+            assert added.current_attributes_json["regional_ocr_source"]["placement_geometry_defined_by_user"] is True
+            assert editable_page.source_extraction_run_id == old_run_id
+            active = session.scalars(
+                select(EditableObject).where(
+                    EditableObject.editable_page_id == editable_page.id,
+                    EditableObject.lifecycle_status == "active",
+                )
+            ).all()
+            assert len(active) == len(before) + 1
+
+        with session_scope(engine) as session:
+            timeline = page_history_rows(session, source_key="doc_candidates", page=1)
+            assert any(item.operation == "regional_ocr_add" for item in timeline)
+    finally:
+        engine.dispose()

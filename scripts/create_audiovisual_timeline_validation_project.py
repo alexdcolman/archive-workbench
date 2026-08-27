@@ -14,7 +14,7 @@ from archive_workbench.identity import new_id, sha256_file
 from archive_workbench.version import __version__
 
 SOURCE_REVISION = "0045_audiovisual_transcription"
-TARGET_REVISION = "0046_audiovisual_timeline_annotations"
+TARGET_REVISION = "0047_authority_relation_profiles"
 
 
 def create_validation_project(source_root: Path, destination: Path) -> dict[str, object]:

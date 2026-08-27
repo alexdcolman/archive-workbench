@@ -18,6 +18,7 @@ from archive_workbench.authorities import (
     add_authority_alias,
     create_authority,
     normalize_authority_text,
+    update_authority,
 )
 from archive_workbench.db.models import (
     ArchivalUnit,
@@ -27,17 +28,17 @@ from archive_workbench.db.models import (
     DocumentPart,
     EntityRelation,
 )
-from archive_workbench.relations import create_entity_relation
+from archive_workbench.relations import create_entity_relation, update_entity_relation
 from archive_workbench.temporal import parse_temporal_expression
 
-DICTIONARY_SCHEMA_VERSION = "1.0"
-DICTIONARY_SCHEMA_ID = "https://archive-workbench.local/schema/authority-dictionary-1.0.json"
+DICTIONARY_SCHEMA_VERSION = "1.1"
+DICTIONARY_SCHEMA_ID = "https://archive-workbench.local/schema/authority-dictionary-1.1.json"
 
-AuthorityType = Literal["person", "organization", "place", "event", "work", "other"]
+AuthorityType = Literal["person", "family", "organization", "place", "event", "work", "other"]
 AuthorityReviewStatus = Literal["unreviewed", "reviewed", "approved"]
-AliasType = Literal["variant", "abbreviation", "acronym", "former_name", "title", "other"]
-AuthorityResolutionAction = Literal["auto", "use_existing", "create_new", "skip"]
-RelationResolutionAction = Literal["auto", "create_parallel", "skip"]
+AliasType = Literal["parallel", "normalized_other_rules", "variant", "abbreviation", "acronym", "former_name", "title", "other"]
+AuthorityResolutionAction = Literal["auto", "use_existing", "update_existing", "create_new", "skip"]
+RelationResolutionAction = Literal["auto", "update_existing", "create_parallel", "skip"]
 RelationTargetKind = Literal["authority", "archival_unit", "document_part"]
 CharacteristicValue = str | int | float | bool | list[str]
 
@@ -64,10 +65,10 @@ class AuthorityResolution(StrictModel):
 
     @model_validator(mode="after")
     def validate_authority_id(self) -> AuthorityResolution:
-        if self.action == "use_existing" and not self.authority_id:
-            raise ValueError("use_existing requiere authority_id")
-        if self.action != "use_existing" and self.authority_id:
-            raise ValueError("authority_id solo se usa con use_existing")
+        if self.action in {"use_existing", "update_existing"} and not self.authority_id:
+            raise ValueError(f"{self.action} requiere authority_id")
+        if self.action not in {"use_existing", "update_existing"} and self.authority_id:
+            raise ValueError("authority_id solo se usa con use_existing o update_existing")
         return self
 
 
@@ -86,6 +87,7 @@ class DictionaryAuthority(StrictModel):
     characteristics: dict[str, CharacteristicValue] = Field(default_factory=dict)
     temporal_expression: str | None = None
     temporal_note: str | None = None
+    profile: dict[str, CharacteristicValue] = Field(default_factory=dict)
     review_status: AuthorityReviewStatus = "unreviewed"
     aliases: list[DictionaryAlias] = Field(default_factory=list)
     source_note: str | None = None
@@ -105,14 +107,6 @@ class RelationEvidence(StrictModel):
     source_url: str | None = None
     source_reference: str | None = None
 
-    @model_validator(mode="after")
-    def require_evidence(self) -> RelationEvidence:
-        if not any((self.note, self.source_url, self.source_reference)):
-            raise ValueError(
-                "Cada relación necesita evidencia: note, source_url o source_reference"
-            )
-        return self
-
     def render(self) -> str:
         parts: list[str] = []
         if self.note:
@@ -126,6 +120,15 @@ class RelationEvidence(StrictModel):
 
 class RelationResolution(StrictModel):
     action: RelationResolutionAction = "auto"
+    relation_id: str | None = None
+
+    @model_validator(mode="after")
+    def validate_relation_id(self) -> RelationResolution:
+        if self.action == "update_existing" and not self.relation_id:
+            raise ValueError("update_existing requiere relation_id")
+        if self.action != "update_existing" and self.relation_id:
+            raise ValueError("relation_id solo se usa con update_existing")
+        return self
 
 
 class DictionaryRelation(StrictModel):
@@ -138,11 +141,18 @@ class DictionaryRelation(StrictModel):
     evidence: RelationEvidence
     temporal_expression: str | None = None
     temporal_note: str | None = None
+    profile: dict[str, CharacteristicValue] = Field(default_factory=dict)
     review_status: AuthorityReviewStatus = "unreviewed"
     resolution: RelationResolution = Field(default_factory=RelationResolution)
 
     @model_validator(mode="after")
     def validate_target(self) -> DictionaryRelation:
+        if self.resolution.action != "update_existing" and not any(
+            (self.evidence.note, self.evidence.source_url, self.evidence.source_reference)
+        ):
+            raise ValueError(
+                "Cada relación necesita evidencia: note, source_url o source_reference"
+            )
         if not _LOCAL_ID_PATTERN.fullmatch(self.local_id):
             raise ValueError(
                 "local_id debe comenzar con letra o número y usar solo letras, números, . _ : -"
@@ -161,7 +171,7 @@ class DictionaryRelation(StrictModel):
 
 
 class AuthorityDictionary(StrictModel):
-    schema_version: Literal["1.0"] = DICTIONARY_SCHEMA_VERSION
+    schema_version: Literal["1.0", "1.1"] = DICTIONARY_SCHEMA_VERSION
     dictionary_id: str = Field(min_length=1)
     dictionary_name: str = Field(min_length=1)
     target_project_id: str | None = None
@@ -204,6 +214,7 @@ class RelationImportPlan:
     target_local_id: str | None
     target_id: str | None
     duplicate_relation_id: str | None = None
+    existing_relation_id: str | None = None
 
 
 @dataclass(slots=True)
@@ -239,6 +250,10 @@ class AuthorityDictionaryReport:
         return sum(plan.action == "skip" for plan in self.authority_plans)
 
     @property
+    def authority_update_count(self) -> int:
+        return sum(plan.action == "update" for plan in self.authority_plans)
+
+    @property
     def alias_add_count(self) -> int:
         return sum(len(plan.aliases_to_add) for plan in self.authority_plans)
 
@@ -249,6 +264,10 @@ class AuthorityDictionaryReport:
     @property
     def relation_skip_count(self) -> int:
         return sum(plan.action in {"skip", "skip_duplicate"} for plan in self.relation_plans)
+
+    @property
+    def relation_update_count(self) -> int:
+        return sum(plan.action == "update" for plan in self.relation_plans)
 
     def as_dict(self) -> dict[str, Any]:
         return {
@@ -263,10 +282,12 @@ class AuthorityDictionaryReport:
                 "authorities_create": self.authority_create_count,
                 "authorities_reuse": self.authority_reuse_count,
                 "authorities_skip": self.authority_skip_count,
+                "authorities_update": self.authority_update_count,
                 "aliases_add": self.alias_add_count,
                 "relations": len(self.relation_plans),
                 "relations_create": self.relation_create_count,
                 "relations_skip": self.relation_skip_count,
+                "relations_update": self.relation_update_count,
                 "errors": self.error_count,
                 "warnings": self.warning_count,
             },
@@ -294,6 +315,7 @@ class AuthorityDictionaryReport:
                     "target_local_id": plan.target_local_id,
                     "target_id": plan.target_id,
                     "duplicate_relation_id": plan.duplicate_relation_id,
+                    "existing_relation_id": plan.existing_relation_id,
                 }
                 for plan in self.relation_plans
             ],
@@ -317,9 +339,11 @@ class AuthorityDictionaryApplyResult:
     authorities_created: int
     authorities_reused: int
     authorities_skipped: int
+    authorities_updated: int
     aliases_added: int
     relations_created: int
     relations_skipped: int
+    relations_updated: int
     local_to_authority_id: dict[str, str] = field(default_factory=dict)
 
 
@@ -348,7 +372,7 @@ def load_authority_dictionary(source: Path | bytes | bytearray | BinaryIO) -> Au
 def authority_dictionary_schema() -> dict[str, Any]:
     schema = AuthorityDictionary.model_json_schema()
     schema["$id"] = DICTIONARY_SCHEMA_ID
-    schema["title"] = "Archive Workbench authority dictionary 1.0"
+    schema["title"] = "Archive Workbench authority dictionary 1.1"
     return schema
 
 
@@ -578,7 +602,7 @@ def _authority_action(
     resolution = authority.resolution
     if resolution.action == "skip":
         return "skip", None, candidates
-    if resolution.action == "use_existing":
+    if resolution.action in {"use_existing", "update_existing"}:
         existing = by_id.get(resolution.authority_id or "")
         if existing is None:
             _issue(
@@ -591,6 +615,8 @@ def _authority_action(
                 "La autoridad indicada no existe en este proyecto.",
             )
             return "error", None, candidates
+        if resolution.action == "update_existing":
+            return "update", existing.id, candidates
         surfaces = {normalize_authority_text(authority.preferred_name)}
         surfaces.update(normalize_authority_text(alias.value) for alias in authority.aliases)
         existing_surfaces = {existing.normalized_name}
@@ -737,7 +763,7 @@ def _plan_aliases(
                 f"El alias ambiguo {alias.value!r} se importará por autorización explícita.",
                 tuple(sorted(other_ids)),
             )
-        if action in {"create", "reuse"}:
+        if action in {"create", "reuse", "update"}:
             to_add.append(alias)
     return tuple(to_add), tuple(unchanged)
 
@@ -1047,6 +1073,36 @@ def validate_authority_dictionary(
             action = "error"
 
         duplicate_relation_id: str | None = None
+        existing_relation_id: str | None = None
+        if relation.resolution.action == "update_existing":
+            existing_relation = session.get(EntityRelation, relation.resolution.relation_id or "")
+            if existing_relation is None or existing_relation.project_id != project_id:
+                _issue(
+                    issues,
+                    "error",
+                    "unknown_existing_relation",
+                    "relations",
+                    relation.local_id,
+                    "resolution.relation_id",
+                    "La relación indicada no existe en este proyecto.",
+                )
+                action = "error"
+            elif existing_relation.relation_kind != "analytical":
+                _issue(
+                    issues,
+                    "error",
+                    "relation_not_analytical",
+                    "relations",
+                    relation.local_id,
+                    "resolution.relation_id",
+                    "La plantilla de relaciones entre entidades solo actualiza relaciones analíticas.",
+                    (existing_relation.id,),
+                )
+                action = "error"
+            else:
+                action = "update"
+                existing_relation_id = existing_relation.id
+
         target_key = resolved_target_id or f"local:{target_local_id}"
         source_key = source_authority_id or f"local:{relation.source_local_id}"
         signature = (
@@ -1057,7 +1113,7 @@ def validate_authority_dictionary(
             _normalized_optional(relation.temporal_expression),
             _normalized_optional(relation.evidence.render()),
         )
-        if signature in imported_relation_signatures:
+        if action != "update" and signature in imported_relation_signatures:
             _issue(
                 issues,
                 "error",
@@ -1068,7 +1124,8 @@ def validate_authority_dictionary(
                 "La misma relación ya aparece en este diccionario.",
             )
             action = "error"
-        imported_relation_signatures.add(signature)
+        if action != "update":
+            imported_relation_signatures.add(signature)
 
         if action == "create" and source_authority_id and resolved_target_id:
             base_key = (
@@ -1132,6 +1189,7 @@ def validate_authority_dictionary(
                 target_local_id=target_local_id,
                 target_id=resolved_target_id,
                 duplicate_relation_id=duplicate_relation_id,
+                existing_relation_id=existing_relation_id,
             )
         )
 
@@ -1168,14 +1226,38 @@ def apply_authority_dictionary(
     authority_input = {item.local_id: item for item in dictionary.authorities}
     authority_plan = {item.local_id: item for item in report.authority_plans}
     local_to_authority_id: dict[str, str] = {}
-    created = reused = skipped = aliases_added = 0
+    created = reused = skipped = updated = aliases_added = 0
 
     for local_id, plan in authority_plan.items():
         item = authority_input[local_id]
         if plan.action == "skip":
             skipped += 1
             continue
-        if plan.action == "reuse":
+        if plan.action == "update":
+            authority_id = plan.existing_authority_id
+            if authority_id is None:
+                raise RuntimeError(f"Plan de actualización sin authority_id: {local_id}")
+            current = session.get(AuthorityRecord, authority_id)
+            if current is None:
+                raise RuntimeError(f"Autoridad a actualizar inexistente: {authority_id}")
+            update_authority(
+                session,
+                authority_id=authority_id,
+                expected_revision=current.revision,
+                changed_by=actor,
+                entity_type=item.entity_type,
+                preferred_name=item.preferred_name,
+                description=_composed_description(item) or "",
+                temporal_expression=item.temporal_expression or "",
+                temporal_note=item.temporal_note or "",
+                profile_json=item.profile,
+                review_status=item.review_status,
+                note=_provenance_note(
+                    dictionary, item_id=item.local_id, item_note=item.source_note
+                ),
+            )
+            updated += 1
+        elif plan.action == "reuse":
             authority_id = plan.existing_authority_id
             if authority_id is None:
                 raise RuntimeError(f"Plan de reutilización sin authority_id: {local_id}")
@@ -1189,6 +1271,7 @@ def apply_authority_dictionary(
                 description=_composed_description(item),
                 temporal_expression=item.temporal_expression,
                 temporal_note=item.temporal_note,
+                profile_json=item.profile,
                 review_status=item.review_status,
                 created_by=actor,
                 note=_provenance_note(
@@ -1218,13 +1301,11 @@ def apply_authority_dictionary(
             aliases_added += 1
 
     relation_input = {item.local_id: item for item in dictionary.relations}
-    relations_created = relations_skipped = 0
+    relations_created = relations_skipped = relations_updated = 0
     for plan in report.relation_plans:
         if plan.action in {"skip", "skip_duplicate"}:
             relations_skipped += 1
             continue
-        if plan.action != "create":
-            raise RuntimeError(f"Plan de relación no aplicable: {plan.local_id} ({plan.action})")
         item = relation_input[plan.local_id]
         source_id = local_to_authority_id[item.source_local_id]
         if item.target_kind == "authority" and item.target_local_id:
@@ -1233,6 +1314,34 @@ def apply_authority_dictionary(
             target_id = item.target_id
         if target_id is None:
             raise RuntimeError(f"Relación sin destino resuelto: {item.local_id}")
+        if plan.action == "update":
+            relation_id = plan.existing_relation_id
+            if relation_id is None:
+                raise RuntimeError(f"Plan de actualización sin relation_id: {plan.local_id}")
+            current = session.get(EntityRelation, relation_id)
+            if current is None:
+                raise RuntimeError(f"Relación a actualizar inexistente: {relation_id}")
+            update_entity_relation(
+                session,
+                relation_id=relation_id,
+                expected_revision=current.revision,
+                changed_by=actor,
+                source_authority_id=source_id,
+                relation_kind="analytical",
+                relation_label=item.relation_label,
+                target_kind="entity" if item.target_kind == "authority" else item.target_kind,
+                target_id=target_id,
+                evidence_note=item.evidence.render(),
+                temporal_expression=item.temporal_expression or "",
+                temporal_note=item.temporal_note or "",
+                profile_json=item.profile,
+                review_status=item.review_status,
+                note=_provenance_note(dictionary, item_id=item.local_id),
+            )
+            relations_updated += 1
+            continue
+        if plan.action != "create":
+            raise RuntimeError(f"Plan de relación no aplicable: {plan.local_id} ({plan.action})")
         create_entity_relation(
             session,
             project_id=project_id,
@@ -1245,6 +1354,7 @@ def apply_authority_dictionary(
             provenance_note=_provenance_note(dictionary, item_id=item.local_id),
             temporal_expression=item.temporal_expression,
             temporal_note=item.temporal_note,
+            profile_json=item.profile,
             review_status=item.review_status,
             created_by=actor,
             note=_provenance_note(dictionary, item_id=item.local_id),
@@ -1255,11 +1365,147 @@ def apply_authority_dictionary(
         authorities_created=created,
         authorities_reused=reused,
         authorities_skipped=skipped,
+        authorities_updated=updated,
         aliases_added=aliases_added,
         relations_created=relations_created,
         relations_skipped=relations_skipped,
+        relations_updated=relations_updated,
         local_to_authority_id=local_to_authority_id,
     )
+
+
+def export_authority_dictionary(
+    session: Session,
+    *,
+    project_id: str,
+    dictionary_name: str = "Fichas de entidades y relaciones de Archive Workbench",
+) -> dict[str, Any]:
+    authorities = session.scalars(
+        select(AuthorityRecord)
+        .where(AuthorityRecord.project_id == project_id)
+        .order_by(AuthorityRecord.normalized_name, AuthorityRecord.id)
+    ).all()
+    aliases = session.scalars(
+        select(AuthorityAlias)
+        .join(AuthorityRecord, AuthorityRecord.id == AuthorityAlias.authority_id)
+        .where(AuthorityRecord.project_id == project_id)
+        .order_by(AuthorityAlias.authority_id, AuthorityAlias.normalized_alias, AuthorityAlias.id)
+    ).all()
+    aliases_by_authority: dict[str, list[AuthorityAlias]] = {}
+    surface_owners: dict[str, set[str]] = {}
+    for row in authorities:
+        surface_owners.setdefault(row.normalized_name, set()).add(row.id)
+    for alias in aliases:
+        aliases_by_authority.setdefault(alias.authority_id, []).append(alias)
+        surface_owners.setdefault(alias.normalized_alias, set()).add(alias.authority_id)
+
+    local_id_by_authority = {row.id: f"authority:{row.id}" for row in authorities}
+    authority_payload: list[dict[str, Any]] = []
+    for row in authorities:
+        payload: dict[str, Any] = {
+            "local_id": local_id_by_authority[row.id],
+            "entity_type": row.entity_type,
+            "preferred_name": row.preferred_name,
+            "profile": dict(row.profile_json or {}),
+            "review_status": row.review_status,
+            "aliases": [
+                {
+                    "value": alias.alias,
+                    "alias_type": alias.alias_type,
+                    **({"note": alias.note} if alias.note else {}),
+                    **(
+                        {"allow_ambiguous": True}
+                        if len(surface_owners.get(alias.normalized_alias, set())) > 1
+                        else {}
+                    ),
+                }
+                for alias in aliases_by_authority.get(row.id, [])
+            ],
+            "resolution": {
+                "action": "update_existing",
+                "authority_id": row.id,
+            },
+        }
+        if row.description is not None:
+            payload["description"] = row.description
+        if row.temporal_expression is not None:
+            payload["temporal_expression"] = row.temporal_expression
+        if row.temporal_note is not None:
+            payload["temporal_note"] = row.temporal_note
+        authority_payload.append(payload)
+
+    relations = session.scalars(
+        select(EntityRelation)
+        .where(
+            EntityRelation.project_id == project_id,
+            EntityRelation.relation_kind == "analytical",
+            EntityRelation.target_authority_id.is_not(None),
+        )
+        .order_by(EntityRelation.created_at, EntityRelation.id)
+    ).all()
+    relation_payload: list[dict[str, Any]] = []
+    for row in relations:
+        target_id = row.target_authority_id
+        if target_id is None:
+            continue
+        if row.source_authority_id not in local_id_by_authority or target_id not in local_id_by_authority:
+            continue
+        payload = {
+            "local_id": f"relation:{row.id}",
+            "source_local_id": local_id_by_authority[row.source_authority_id],
+            "relation_label": row.relation_label or "relación",
+            "target_kind": "authority",
+            "target_local_id": local_id_by_authority[target_id],
+            "evidence": ({"note": row.evidence_note} if row.evidence_note else {}),
+            "profile": dict(row.profile_json or {}),
+            "review_status": row.review_status,
+            "resolution": {
+                "action": "update_existing",
+                "relation_id": row.id,
+            },
+        }
+        if row.temporal_expression is not None:
+            payload["temporal_expression"] = row.temporal_expression
+        if row.temporal_note is not None:
+            payload["temporal_note"] = row.temporal_note
+        relation_payload.append(payload)
+
+    return {
+        "schema_version": DICTIONARY_SCHEMA_VERSION,
+        "dictionary_id": f"export:{project_id}",
+        "dictionary_name": dictionary_name,
+        "target_project_id": project_id,
+        "source": {
+            "title": "Exportación editable de Archive Workbench",
+            "organization": "Archive Workbench",
+            "created_by": "archive_workbench",
+            "note": (
+                "Plantilla bidireccional: los registros exportados conservan identificadores estables "
+                "para actualizar sus campos descriptivos al reimportar. Los alias ausentes no se eliminan "
+                "automáticamente; los alias nuevos se incorporan después de la simulación."
+            ),
+        },
+        "authorities": authority_payload,
+        "relations": relation_payload,
+    }
+
+
+def export_authority_dictionary_bytes(
+    session: Session,
+    *,
+    project_id: str,
+    dictionary_name: str = "Fichas de entidades y relaciones de Archive Workbench",
+) -> bytes:
+    return (
+        json.dumps(
+            export_authority_dictionary(
+                session, project_id=project_id, dictionary_name=dictionary_name
+            ),
+            ensure_ascii=False,
+            indent=2,
+        )
+        + "\n"
+    ).encode("utf-8")
 
 
 __all__ = [
@@ -1272,6 +1518,8 @@ __all__ = [
     "authority_dictionary_example_bytes",
     "authority_dictionary_schema",
     "authority_dictionary_schema_bytes",
+    "export_authority_dictionary",
+    "export_authority_dictionary_bytes",
     "load_authority_dictionary",
     "validate_authority_dictionary",
 ]

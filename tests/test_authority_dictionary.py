@@ -11,6 +11,7 @@ from archive_workbench.authority_dictionary import (
     apply_authority_dictionary,
     authority_dictionary_example,
     authority_dictionary_schema,
+    export_authority_dictionary_bytes,
     load_authority_dictionary,
     validate_authority_dictionary,
 )
@@ -23,6 +24,7 @@ from archive_workbench.db.models import (
     EntityRelation,
 )
 from archive_workbench.decisions import load_decisions
+from archive_workbench.relations import create_entity_relation
 
 
 def _setup(tmp_path: Path):
@@ -103,8 +105,9 @@ def test_schema_and_example_are_versioned_and_document_the_core_contract() -> No
     schema = authority_dictionary_schema()
     example = authority_dictionary_example()
 
-    assert schema["$id"].endswith("authority-dictionary-1.0.json")
-    assert schema["properties"]["schema_version"]["const"] == DICTIONARY_SCHEMA_VERSION
+    assert schema["$id"].endswith("authority-dictionary-1.1.json")
+    assert schema["properties"]["schema_version"]["default"] == DICTIONARY_SCHEMA_VERSION
+    assert schema["properties"]["schema_version"]["enum"] == ["1.0", "1.1"]
     assert example["schema_version"] == DICTIONARY_SCHEMA_VERSION
     assert example["authorities"][0]["aliases"][0]["alias_type"] == "acronym"
     assert example["relations"][0]["evidence"]["note"]
@@ -350,5 +353,106 @@ def test_relation_cannot_reference_the_same_local_authority(tmp_path: Path) -> N
             )
             assert not report.valid
             assert any(issue.code == "self_relation" for issue in report.issues)
+    finally:
+        engine.dispose()
+
+
+def test_exported_authority_relation_template_updates_existing_descriptions(tmp_path: Path) -> None:
+    _root, decisions, engine = _setup(tmp_path)
+    try:
+        with session_scope(engine) as session:
+            source = create_authority(
+                session,
+                project_id=decisions.project_id,
+                entity_type="organization",
+                preferred_name="Organismo de prueba",
+                description="Historia original",
+                temporal_expression="1946 - 2015; desde 2024",
+                profile_json={"places": "Buenos Aires"},
+                review_status="reviewed",
+                created_by="tests",
+            )
+            target = create_authority(
+                session,
+                project_id=decisions.project_id,
+                entity_type="organization",
+                preferred_name="Organismo relacionado",
+                profile_json={"legal_status": "Organismo estatal"},
+                created_by="tests",
+            )
+            add_authority_alias(
+                session,
+                authority_id=source.id,
+                alias="OP",
+                alias_type="acronym",
+                created_by="tests",
+            )
+            relation = create_entity_relation(
+                session,
+                project_id=decisions.project_id,
+                source_authority_id=source.id,
+                relation_label="dependió de",
+                target_kind="entity",
+                target_id=target.id,
+                relation_kind="analytical",
+                evidence_note="Decreto original",
+                temporal_expression="1950 - 1960",
+                profile_json={"archival_category": "hierarchical", "description": "Descripción original"},
+                review_status="reviewed",
+                created_by="tests",
+            )
+            source_id = source.id
+            relation_id = relation.id
+
+        with session_scope(engine) as session:
+            exported = export_authority_dictionary_bytes(
+                session, project_id=decisions.project_id
+            )
+        payload = json.loads(exported)
+        assert payload["schema_version"] == "1.1"
+        source_payload = next(
+            item for item in payload["authorities"]
+            if item["resolution"]["authority_id"] == source_id
+        )
+        relation_payload = next(
+            item for item in payload["relations"]
+            if item["resolution"]["relation_id"] == relation_id
+        )
+        assert source_payload["resolution"]["action"] == "update_existing"
+        assert source_payload["profile"] == {"places": "Buenos Aires"}
+        assert relation_payload["resolution"]["action"] == "update_existing"
+        assert relation_payload["profile"]["description"] == "Descripción original"
+
+        source_payload["description"] = "Historia revisada desde plantilla"
+        source_payload["profile"]["places"] = "Buenos Aires; La Plata"
+        relation_payload["evidence"]["note"] = "Decreto revisado"
+        relation_payload["profile"]["description"] = "Descripción revisada desde plantilla"
+        edited = json.dumps(payload, ensure_ascii=False).encode()
+
+        with session_scope(engine) as session:
+            report = validate_authority_dictionary(
+                session, project_id=decisions.project_id, source=edited
+            )
+            assert report.valid
+            assert report.authority_update_count == 2
+            assert report.relation_update_count == 1
+            result = apply_authority_dictionary(
+                session,
+                project_id=decisions.project_id,
+                source=edited,
+                changed_by="Alex",
+            )
+            assert result.authorities_updated == 2
+            assert result.relations_updated == 1
+
+        with session_scope(engine) as session:
+            updated_source = session.get(AuthorityRecord, source_id)
+            updated_relation = session.get(EntityRelation, relation_id)
+            assert updated_source is not None
+            assert updated_source.description == "Historia revisada desde plantilla"
+            assert updated_source.profile_json == {"places": "Buenos Aires; La Plata"}
+            assert updated_relation is not None
+            assert updated_relation.evidence_note == "Decreto revisado"
+            assert updated_relation.profile_json["description"] == "Descripción revisada desde plantilla"
     finally:
         engine.dispose()

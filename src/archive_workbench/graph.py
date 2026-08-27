@@ -27,7 +27,7 @@ from archive_workbench.db.models import (
     SourceRegistration,
 )
 from archive_workbench.sources import PROCESSABLE_SOURCE_TYPES
-from archive_workbench.temporal import format_temporal_range, temporal_overlap
+from archive_workbench.temporal import format_temporal_range, temporal_expression_overlap
 
 GRAPH_EDGE_TYPES = (
     "hierarchy",
@@ -251,7 +251,8 @@ def build_graph(
     if temporal_filter_active:
         relations = [
             row for row in relations
-            if temporal_overlap(
+            if temporal_expression_overlap(
+                expression=row.temporal_expression,
                 item_start=row.temporal_start,
                 item_end=row.temporal_end,
                 query_start=temporal_start,
@@ -268,7 +269,8 @@ def build_graph(
         authorities = [
             row for row in authorities
             if row.id in relation_authority_ids
-            or temporal_overlap(
+            or temporal_expression_overlap(
+                expression=row.temporal_expression,
                 item_start=row.temporal_start,
                 item_end=row.temporal_end,
                 query_start=temporal_start,
@@ -564,7 +566,7 @@ def build_graph(
                 "la autoridad con este documento o parte interna."
             )
             if pending:
-                explanation += f" {pending} todavía está(n) pendiente(s) de revisión humana."
+                explanation += f" {pending} todavía está(n) pendiente(s) de revisión manual."
             if stale:
                 explanation += f" {stale} corresponde(n) a una revisión textual anterior."
             edges[edge_key] = GraphEdge(

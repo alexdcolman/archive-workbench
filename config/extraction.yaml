@@ -4,7 +4,7 @@ backend: "surya_cli"
 surya_command: ".venv-surya/bin/surya_ocr"
 surya_inference_url: null
 surya_parallel: 1
-surya_keep_server: true
+surya_keep_server: false
 surya_torch_device: "cpu"
 surya_clean_library_path: true
 fallback_profile: "config/extraction_docling_es.yaml"

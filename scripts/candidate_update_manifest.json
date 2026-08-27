@@ -1,0 +1,31 @@
+{
+  "schema_version": 1,
+  "candidate": "0.89.0 RC79",
+  "relocations": [
+    {
+      "from": "docs/operativos/AUDITORIA_INTERFAZ_RC11_5_PASADAS.txt",
+      "to": "docs/historico/actualizaciones/AUDITORIA_INTERFAZ_RC11_5_PASADAS.txt",
+      "sha256": "69c296aa1edbffd4447d33ba8cedc6bd63a1ec1e2917e26453c5bea024339a3e"
+    },
+    {
+      "from": "docs/operativos/AUDITORIA_INTERFAZ_RC12_5_PASADAS.txt",
+      "to": "docs/historico/actualizaciones/AUDITORIA_INTERFAZ_RC12_5_PASADAS.txt",
+      "sha256": "fdb76fbb3bb348307e8dd921308f4690977828e455203dbb8cf0e9c3bb470e1a"
+    },
+    {
+      "from": "CONTINUIDAD_ARCHIVE_WORKBENCH_0890_RC10_PILOT01_20260811.md",
+      "to": "docs/historico/relevos/CONTINUIDAD_ARCHIVE_WORKBENCH_0890_RC10_PILOT01_20260811.md",
+      "sha256": "e70165cc940d2461a5e20ce027f93c48f763fb3b334d62f10a72ca1a2c28f199"
+    },
+    {
+      "from": "CONTINUIDAD_ARCHIVE_WORKBENCH_0890_RC11_PILOT01_20260815.md",
+      "to": "docs/historico/relevos/CONTINUIDAD_ARCHIVE_WORKBENCH_0890_RC11_PILOT01_20260815.md",
+      "sha256": "70e347c68c4b7ae4e6d30c88f946e3ee5cd2abbd0b8696c4023e5fb6ac589736"
+    },
+    {
+      "from": "CONTINUIDAD_ARCHIVE_WORKBENCH_0890_RC12_PILOT01_20260816.md",
+      "to": "docs/historico/relevos/CONTINUIDAD_ARCHIVE_WORKBENCH_0890_RC12_PILOT01_20260816.md",
+      "sha256": "d4bab450a2b1548e143f03ac7372e5ee6303a8f4c4756ff890881249217e78a2"
+    }
+  ]
+}

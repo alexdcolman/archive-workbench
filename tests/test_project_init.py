@@ -35,3 +35,20 @@ def test_init_copies_preferred_surya_and_docling_fallback(tmp_path: Path) -> Non
     assert (root / "config/extraction.yaml").is_file()
     assert (root / "config/extraction_docling_es.yaml").is_file()
     assert (root / "config/extraction_surya_es.yaml").is_file()
+
+
+def test_init_refuses_existing_destination_unless_explicitly_allowed(tmp_path: Path) -> None:
+    destination = tmp_path / "existing"
+    destination.mkdir()
+
+    try:
+        initialize_project(destination)
+    except FileExistsError as exc:
+        assert "ya existe" in str(exc)
+    else:
+        raise AssertionError("initialize_project debía rechazar una carpeta existente")
+
+    root = initialize_project(destination, allow_existing=True)
+    assert root == destination
+    assert (root / "config").is_dir()
+    assert (root / "corpus").is_dir()

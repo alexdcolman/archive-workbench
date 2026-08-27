@@ -1131,6 +1131,7 @@ class AuthorityRecord(Base):
     temporal_precision: Mapped[str | None] = mapped_column(String(32), nullable=True)
     temporal_approximate: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
     temporal_note: Mapped[str | None] = mapped_column(Text, nullable=True)
+    profile_json: Mapped[dict[str, Any] | None] = mapped_column(JSON, nullable=True)
     lifecycle_status: Mapped[str] = mapped_column(String(32), nullable=False, default="active")
     review_status: Mapped[str] = mapped_column(String(32), nullable=False, default="unreviewed")
     created_by: Mapped[str] = mapped_column(String(200), nullable=False)
@@ -1314,6 +1315,7 @@ class EntityRelation(Base):
     temporal_precision: Mapped[str | None] = mapped_column(String(32), nullable=True)
     temporal_approximate: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
     temporal_note: Mapped[str | None] = mapped_column(Text, nullable=True)
+    profile_json: Mapped[dict[str, Any] | None] = mapped_column(JSON, nullable=True)
     lifecycle_status: Mapped[str] = mapped_column(String(32), nullable=False, default="active")
     review_status: Mapped[str] = mapped_column(String(32), nullable=False, default="unreviewed")
     created_by: Mapped[str] = mapped_column(String(200), nullable=False)
@@ -1482,7 +1484,7 @@ class ExchangeDryRun(Base):
 
 
 class ExchangeConflictResolution(Base):
-    """Decisión humana explícita para un campo conflictivo o revisable."""
+    """Decisión explícita explícita para un campo conflictivo o revisable."""
 
     __tablename__ = "exchange_conflict_resolutions"
     __table_args__ = (
@@ -2086,7 +2088,7 @@ class DiscoveryCandidate(Base):
 
 
 class DiscoveryDecision(Base):
-    """Decisión humana append-only sobre un candidato de descubrimiento."""
+    """Decisión explícita append-only sobre un candidato de descubrimiento."""
 
     __tablename__ = "discovery_decisions"
     __table_args__ = (

@@ -36,10 +36,16 @@ def test_surya_runtime_packaging_is_compatible_and_isolated() -> None:
     ):
         profile = (root / "config" / profile_name).read_text(encoding="utf-8")
         assert 'surya_command: ".venv-surya/bin/surya_ocr"' in profile
-        assert "surya_keep_server: true" in profile
+        assert "surya_keep_server: false" in profile
         assert 'surya_torch_device: "cpu"' in profile
         assert "surya_clean_library_path: true" in profile
         assert 'fallback_profile: "config/extraction_docling_es.yaml"' in profile
+
+    processing_source = (root / "src" / "archive_workbench" / "processing_app.py").read_text(encoding="utf-8")
+    assert 'update={"surya_keep_server": len(source_keys) > 1}' in processing_source
+    assert "stop_surya_servers()" in processing_source
+    assert "finally:\n        if cleanup_surya:\n            stop_surya_servers()" in processing_source
+    assert 'resource_cleanup="automatic_after_job"' in processing_source
 
     fallback = (root / "config/extraction_docling_es.yaml").read_text(encoding="utf-8")
     assert 'profile_key: "docling_tesseract_es_fallback_v1"' in fallback
@@ -172,17 +178,17 @@ def test_version_docs_and_discovery_plan_are_packaged() -> None:
         / "archive_workbench"
         / "migrations"
         / "versions"
-        / "0046_audiovisual_timeline_annotations.py"
+        / "0047_authority_relation_profiles.py"
     )
 
-    assert data["project"]["version"] == "0.88.2"
-    assert '__version__ = "0.88.2"' in version_source
+    assert data["project"]["version"] == "0.89.0"
+    assert '__version__ = "0.89.0"' in version_source
     assert migration.is_file()
     assert 'down_revision = "0044_layout_structure_review"' in migration.read_text(
         encoding="utf-8"
     )
     assert timeline_migration.is_file()
-    assert 'down_revision = "0045_audiovisual_transcription"' in timeline_migration.read_text(
+    assert 'down_revision = "0046_audiovisual_timeline_annotations"' in timeline_migration.read_text(
         encoding="utf-8"
     )
     assert (root / "src" / "archive_workbench" / "audiovisual.py").is_file()
@@ -351,6 +357,7 @@ def test_version_docs_and_discovery_plan_are_packaged() -> None:
     assistant_root = root / ".assistant"
     if assistant_root.is_dir():
         assert (assistant_root / "00_LEER_PRIMERO.md").is_file()
+        assert (assistant_root / "00_CHECKLIST_CAMBIOS.md").is_file()
         assert (assistant_root / "05_CRITERIOS_INTERFAZ.md").is_file()
         assert (assistant_root / "06_RELEVO_NUEVA_CONVERSACION.md").is_file()
         security = (assistant_root / "07_SEGURIDAD_ARCHIVOS_Y_REPOSITORIO.md").read_text(encoding="utf-8")
@@ -439,3 +446,127 @@ def test_dewarp_validation_scripts_are_packaged_and_executable() -> None:
     assert "expected_curved_applied" in creator_source
     assert "RESULTADO: validación OCR-01E completa y consistente." in verifier_source
     assert "la selección canónica permanece vacía" in verifier_source
+
+
+def test_first_project_default_configuration_is_packaged() -> None:
+    root = Path(__file__).parents[1]
+    data = tomllib.loads((root / "pyproject.toml").read_text(encoding="utf-8"))
+    package_data = data["tool"]["setuptools"]["package-data"]["archive_workbench"]
+
+    assert "default_config/*.yaml" in package_data
+    defaults = root / "src" / "archive_workbench" / "default_config"
+    for name in (
+        "decisions.template.yaml",
+        "extraction.template.yaml",
+        "extraction_docling_es.template.yaml",
+        "extraction_surya_es.template.yaml",
+        "extraction_tesseract.template.yaml",
+        "extraction_press_columns.template.yaml",
+        "ocr_benchmark.template.yaml",
+        "ocr_benchmark_truth.template.yaml",
+        "regions_leg_17_leg_15_a_c_6.template.yaml",
+        "test_corpus.template.yaml",
+    ):
+        assert (defaults / name).is_file(), name
+
+
+
+def test_candidate_update_reconciles_only_known_relocations(tmp_path: Path) -> None:
+    import json
+    import shutil
+    import subprocess
+    import sys
+
+    root = Path(__file__).parents[1]
+    target = tmp_path / "repo"
+    target.mkdir()
+    shutil.copy2(root / "pyproject.toml", target / "pyproject.toml")
+
+    manifest = json.loads(
+        (root / "scripts" / "candidate_update_manifest.json").read_text(encoding="utf-8")
+    )
+    assert manifest["candidate"] == "0.89.0 RC79"
+    assert len(manifest["relocations"]) == 5
+
+    for item in manifest["relocations"]:
+        historical = root / item["to"]
+        old = target / item["from"]
+        old.parent.mkdir(parents=True, exist_ok=True)
+        shutil.copy2(historical, old)
+
+    local_marker = target / "pilot_data" / "LOCAL_DO_NOT_TOUCH.txt"
+    local_marker.parent.mkdir(parents=True)
+    local_marker.write_text("persistente", encoding="utf-8")
+
+    result = subprocess.run(
+        [
+            sys.executable,
+            str(root / "scripts" / "apply_candidate_update.py"),
+            "--source",
+            str(root),
+            "--target",
+            str(target),
+        ],
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    assert result.returncode == 0, result.stdout + result.stderr
+    assert local_marker.read_text(encoding="utf-8") == "persistente"
+    for item in manifest["relocations"]:
+        assert not (target / item["from"]).exists()
+        assert (target / item["to"]).is_file()
+
+    operational_files = {
+        path.name for path in (target / "docs" / "operativos").iterdir() if path.is_file()
+    }
+    assert operational_files == {
+        "PENDIENTES_ACTIVOS.md",
+        "IMPLEMENTACIONES_REALIZADAS.md",
+        "ACTUALIZACION_ACTUAL.md",
+        "ESTRATEGIA_DE_PRUEBAS.md",
+        "GUIA_PRUEBA_PILOTO.md",
+        "HOJA_DE_RUTA_PRE_RELEASE.md",
+    }
+
+
+def test_candidate_update_aborts_before_copy_if_known_old_file_was_modified(tmp_path: Path) -> None:
+    import json
+    import shutil
+    import subprocess
+    import sys
+
+    root = Path(__file__).parents[1]
+    target = tmp_path / "repo"
+    target.mkdir()
+    shutil.copy2(root / "pyproject.toml", target / "pyproject.toml")
+    marker = target / "src" / "do_not_overwrite.txt"
+    marker.parent.mkdir(parents=True)
+    marker.write_text("antes", encoding="utf-8")
+
+    manifest = json.loads(
+        (root / "scripts" / "candidate_update_manifest.json").read_text(encoding="utf-8")
+    )
+    item = manifest["relocations"][0]
+    old = target / item["from"]
+    old.parent.mkdir(parents=True, exist_ok=True)
+    old.write_text("contenido local modificado", encoding="utf-8")
+
+    result = subprocess.run(
+        [
+            sys.executable,
+            str(root / "scripts" / "apply_candidate_update.py"),
+            "--source",
+            str(root),
+            "--target",
+            str(target),
+        ],
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    assert result.returncode == 2
+    assert "No se tocará" in result.stderr
+    assert marker.read_text(encoding="utf-8") == "antes"
+    assert old.read_text(encoding="utf-8") == "contenido local modificado"
+    assert not (target / "src" / "archive_workbench").exists()

@@ -1,0 +1,23 @@
+<!doctype html>
+<html lang="es-AR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Intercambio · Archive Workbench</title>
+<meta name="description" content="Intercambio offline de cambios entre copias locales de Archive Workbench y transporte opcional por Google Drive.">
+<meta name="theme-color" content="#f4f0e6">
+<link rel="stylesheet" href="assets/site.css">
+</head>
+<body>
+<a class="skip" href="#contenido">Saltar al contenido</a>
+<header class="site-head"><div class="head-inner"><div class="brand"><a href="index.html">Archive Workbench</a><span>documentación pública · 0.89.0</span></div><nav aria-label="Navegación principal"><ul><li><a href="index.html">Inicio</a></li><li><a href="instalacion.html">Instalación</a></li><li><a href="tutorial.html">Tutorial</a></li><li><a href="catalogo.html">Catálogo</a></li><li><a href="procesamiento.html">Procesamiento</a></li><li><a href="revision.html">Revisión</a></li><li><a href="entidades.html">Entidades</a></li><li><a href="busquedas.html">Búsquedas</a></li><li><a href="relaciones.html">Relaciones</a></li><li><a href="audiovisual.html">Audio y video</a></li><li><a href="exportacion.html">Exportación</a></li><li><a href="intercambio.html" aria-current="page">Intercambio</a></li><li><a href="resguardo.html">Resguardo</a></li><li><a href="conceptos.html">Conceptos</a></li><li><a href="referencia.html">Referencia</a></li><li><a href="problemas.html">Problemas frecuentes</a></li></ul></nav></div></header>
+<main id="contenido">
+<p class="kicker">Trabajo entre copias locales</p><h1>Intercambiar cambios sin compartir una base viva</h1><p class="lead">Cada integrante conserva una copia local del proyecto. Los cambios viajan en paquetes ZIP que se inspeccionan y simulan antes de aplicarse.</p>
+<figure class="figure"><img src="assets/diagrams/intercambio.svg" alt="Dos copias locales intercambian paquetes ZIP y conservan bases SQLite independientes."><figcaption>El transporte puede ser local o mediante Google Drive. La base SQLite no se sincroniza por Drive.</figcaption></figure>
+<h2>Preparar una copia de trabajo</h2><p>Una copia inicial puede distribuirse a varias personas. Cada copia se identifica localmente al abrirse.</p>
+<h2>Enviar y recibir cambios</h2><p>Los paquetes incrementales contienen manifiestos y estado trazable. Recibir un ZIP no aplica cambios automáticamente: primero se revisa y se ejecuta una simulación.</p>
+<h2>Conflictos y recuperación</h2><p>Los casos excepcionales se resuelven mediante acciones específicas y con backup previo cuando corresponde. La documentación técnica describe el linaje y la adopción de estado en más detalle.</p>
+</main>
+<footer class="site-foot"><p>Archive Workbench · software libre AGPL-3.0-or-later · <a href="https://github.com/alexdcolman/archive-workbench">repositorio</a> · <a href="https://github.com/alexdcolman/archive-workbench/blob/main/CITATION.cff">cita</a> · <a href="https://github.com/alexdcolman/archive-workbench/blob/main/CHANGELOG.md">cambios</a></p></footer>
+</body>
+</html>

@@ -1,11 +1,12 @@
 from __future__ import annotations
 
+from archive_workbench.ui_help import TAB_HELP, TASK_HELP
 from collections import defaultdict
 from pathlib import Path
 
 from sqlalchemy import select
 
-from archive_workbench.analysis_quality import analysis_quality_scope, quality_scope_caption
+from archive_workbench.analysis_quality import analysis_quality_scope
 from archive_workbench.db import create_sqlite_engine, session_scope
 from archive_workbench.db.models import AuthorityRecord, EditableObject
 from archive_workbench.discovery_grouping import (
@@ -17,13 +18,15 @@ from archive_workbench.discovery_grouping import (
     remove_candidate_from_group,
 )
 from archive_workbench.discovery_review import (
-    DISCOVERY_DECISION_TYPES,
+    accept_discovery_candidates_as_new_authorities,
     acceptance_mode_label,
     allowed_acceptance_modes,
     allowed_authority_types,
     candidate_status_label,
     decision_label,
     discovery_decision_rows,
+    reject_discovery_candidates,
+    restore_rejected_discovery_candidate,
     review_discovery_candidate,
 )
 from archive_workbench.open_discovery import (
@@ -38,7 +41,7 @@ from archive_workbench.open_discovery import (
     run_open_discovery,
     save_discovery_profile,
 )
-from archive_workbench.ui_navigation import request_tab, rerun_view, tracked_tabs
+from archive_workbench.ui_navigation import mount_choice_help, request_tab, rerun_view, tracked_tabs
 
 _PAGE_STATUS_LABELS = {
     "unreviewed": "Sin revisar",
@@ -57,15 +60,19 @@ _AUTHORITY_TYPE_LABELS = {
     "organization": "Organización",
     "place": "Lugar",
     "event": "Acontecimiento",
-    "work": "Obra",
+    "work": "Obra / publicación",
     "other": "Otra entidad",
 }
 _DECISION_OPTIONS = {
-    "accept": "Aceptar",
-    "reject": "Rechazar",
-    "modify": "Modificar propuesta",
-    "defer": "Aplazar",
+    "accept": "Aceptar esta referencia",
+    "reject": "Descartar esta referencia",
 }
+
+
+def _discovery_rules_label(provider_key: str, provider_version: str) -> str:
+    if provider_key == DISCOVERY_PROVIDER_KEY and provider_version.startswith("local_rules_v"):
+        return f"reglas {provider_version.removeprefix('local_rules_')}"
+    return f"{provider_key} · {provider_version}"
 
 
 def _run_action(st, *, db_path: Path, callback) -> object | None:
@@ -91,92 +98,101 @@ def _render_profile_configuration(
 ):
     selected_profile = None
     profile_map = {row.id: row for row in profiles}
+    pending_profile_id = st.session_state.pop("open_discovery_profile_selected__pending", None)
+    if pending_profile_id in profile_map:
+        st.session_state["open_discovery_profile_selected"] = pending_profile_id
     if profiles:
         selected_profile_id = st.selectbox(
-            "Perfil de descubrimiento",
+            "Configuración para buscar entidades",
             options=list(profile_map),
-            format_func=lambda value: (
-                f"{profile_map[value].name} · v{profile_map[value].revision} · "
-                f"{profile_map[value].provider_key}"
-            ),
+            format_func=lambda value: profile_map[value].name,
             key="open_discovery_profile_selected",
         )
         selected_profile = profile_map[selected_profile_id]
+
+    if selected_profile is not None:
+        rules_label = _discovery_rules_label(
+            selected_profile.provider_key, selected_profile.provider_version
+        )
+        if (
+            selected_profile.provider_key == DISCOVERY_PROVIDER_KEY
+            and selected_profile.provider_version != DISCOVERY_PROVIDER_VERSION
+        ):
+            current_label = _discovery_rules_label(
+                DISCOVERY_PROVIDER_KEY, DISCOVERY_PROVIDER_VERSION
+            )
+            st.warning(
+                f"Esta configuración usa {rules_label} históricas. "
+                f"Las correcciones actuales de detección ({current_label}) no se aplican mientras siga usando esta versión."
+            )
+            if st.button(
+                f"Actualizar esta configuración a {current_label}",
+                type="primary",
+                key=f"open_discovery_profile_upgrade_{selected_profile.id}_{selected_profile.revision}",
+            ):
+                stored_page_statuses = tuple(
+                    selected_profile.include_page_review_statuses_json or ()
+                )
+                stored_quality_scope = analysis_quality_scope(stored_page_statuses)
+                saved = _run_action(
+                    st,
+                    db_path=db_path,
+                    callback=lambda session: save_discovery_profile(
+                        session,
+                        project_id=project_id,
+                        profile_id=selected_profile.id,
+                        values=DiscoveryProfileValues(
+                            name=selected_profile.name,
+                            description=selected_profile.description,
+                            families=tuple(selected_profile.families_json or ()),
+                            include_object_types=tuple(
+                                selected_profile.include_object_types_json or ()
+                            ),
+                            include_object_review_statuses=tuple(
+                                selected_profile.include_object_review_statuses_json or ()
+                            ),
+                            include_page_review_statuses=stored_page_statuses,
+                            minimum_confidence=float(selected_profile.minimum_confidence),
+                            provider_key=DISCOVERY_PROVIDER_KEY,
+                            provider_version=DISCOVERY_PROVIDER_VERSION,
+                        ),
+                        changed_by=actor or "local_user",
+                        broader_quality_scope_confirmed=(
+                            stored_quality_scope.is_broader_than_default
+                        ),
+                        quality_scope_reason=(
+                            "Actualización explícita de la configuración a las reglas de detección vigentes."
+                            if stored_quality_scope.is_broader_than_default
+                            else None
+                        ),
+                        quality_scope_source="ui",
+                    ),
+                )
+                if saved is not None:
+                    st.session_state["open_discovery_profile_selected__pending"] = saved.id
+                    st.session_state["open_discovery_success"] = (
+                        f"Configuración actualizada a {current_label}. Las búsquedas anteriores conservan sus reglas históricas."
+                    )
+                    rerun_view(st)
+        else:
+            st.caption(f"Versión de detección de esta configuración: {rules_label}.")
+
     profile_key = selected_profile.id if selected_profile else "new"
 
     profile_panel_open = st.toggle(
-        "Configurar perfil",
+        "Configurar búsqueda de entidades",
         value=not profiles,
         key=f"open_discovery_profile_panel_{profile_key}",
-        help="El panel permanece abierto mientras cambiás sus controles.",
     )
     if profile_panel_open:
         with st.container(border=True):
             default_name = selected_profile.name if selected_profile else "Descubrimiento local inicial"
-            profile_name = st.text_input(
-                "Nombre",
-                value=default_name,
-                key=f"open_discovery_profile_name_{profile_key}",
-            )
-            profile_description = st.text_area(
-                "Descripción",
-                value=(selected_profile.description or "") if selected_profile else (
-                    "Proveedor local determinista para revisar el circuito de descubrimiento abierto."
-                ),
-                height=80,
-                key=f"open_discovery_profile_description_{profile_key}",
-            )
-            profile_families = st.multiselect(
-                "Familias semánticas",
-                options=list(DISCOVERY_FAMILIES),
-                default=(
-                    list(selected_profile.families_json or [])
-                    if selected_profile
-                    else list(DISCOVERY_FAMILIES[:-1])
-                ),
-                format_func=family_label,
-                key=f"open_discovery_profile_families_{profile_key}",
-            )
-            filter_cols = st.columns(2)
-            with filter_cols[0]:
-                profile_object_types = st.multiselect(
-                    "Tipos de objeto incluidos",
-                    options=list(object_types),
-                    default=(
-                        list(selected_profile.include_object_types_json or [])
-                        if selected_profile
-                        else []
-                    ),
-                    help="Una selección vacía incluye todos los tipos de objeto.",
-                    key=f"open_discovery_object_types_{profile_key}",
-                )
-                profile_object_statuses = st.multiselect(
-                    "Estados de revisión de objeto",
-                    options=list(_OBJECT_STATUS_LABELS),
-                    default=(
-                        list(selected_profile.include_object_review_statuses_json or [])
-                        if selected_profile
-                        else []
-                    ),
-                    format_func=lambda value: _OBJECT_STATUS_LABELS[value],
-                    help="Una selección vacía incluye todos los estados de objeto.",
-                    key=f"open_discovery_object_statuses_{profile_key}",
-                )
-            with filter_cols[1]:
-                profile_page_statuses = st.multiselect(
-                    "Estados de página incluidos",
-                    options=list(_PAGE_STATUS_LABELS),
-                    default=(
-                        list(selected_profile.include_page_review_statuses_json or [])
-                        if selected_profile
-                        else ["approved"]
-                    ),
-                    format_func=lambda value: _PAGE_STATUS_LABELS[value],
-                    help=(
-                        "Por seguridad, el valor predeterminado incluye únicamente páginas aprobadas. "
-                        "Una selección vacía significa todos los estados."
-                    ),
-                    key=f"open_discovery_page_statuses_{profile_key}",
+            with st.container(horizontal=True, vertical_alignment="bottom", gap="small"):
+                profile_name = st.text_input(
+                    "Nombre de la configuración",
+                    value=default_name,
+                    key=f"open_discovery_profile_name_{profile_key}",
+                    width="stretch",
                 )
                 profile_minimum_confidence = st.slider(
                     "Confianza mínima",
@@ -189,32 +205,76 @@ def _render_profile_configuration(
                     ),
                     step=0.01,
                     key=f"open_discovery_confidence_{profile_key}",
+                    width=260,
+                )
+            profile_description = st.text_area(
+                "Descripción (opcional)",
+                value=(selected_profile.description or "") if selected_profile else "",
+                height=70,
+                key=f"open_discovery_profile_description_{profile_key}",
+            )
+            with st.container(horizontal=True, vertical_alignment="bottom", gap="small"):
+                profile_families = st.multiselect(
+                    "Tipos de referencia",
+                    options=list(DISCOVERY_FAMILIES),
+                    default=(
+                        list(selected_profile.families_json or [])
+                        if selected_profile
+                        else list(DISCOVERY_FAMILIES[:-1])
+                    ),
+                    format_func=family_label,
+                    key=f"open_discovery_profile_families_{profile_key}",
+                    width="stretch",
+                )
+                profile_page_statuses = st.multiselect(
+                    "Estado de las páginas",
+                    options=list(_PAGE_STATUS_LABELS),
+                    default=(
+                        list(selected_profile.include_page_review_statuses_json or [])
+                        if selected_profile
+                        else ["approved"]
+                    ),
+                    format_func=lambda value: _PAGE_STATUS_LABELS[value],
+                    help="Una selección vacía incluye páginas con cualquier estado de revisión.",
+                    key=f"open_discovery_page_statuses_{profile_key}",
+                    width="stretch",
+                )
+            with st.container(horizontal=True, vertical_alignment="bottom", gap="small"):
+                profile_object_types = st.multiselect(
+                    "Tipos de fragmento de texto",
+                    options=list(object_types),
+                    default=(
+                        list(selected_profile.include_object_types_json or [])
+                        if selected_profile
+                        else []
+                    ),
+                    help="Una selección vacía incluye todos los tipos de fragmento de texto.",
+                    key=f"open_discovery_object_types_{profile_key}",
+                    width="stretch",
+                )
+                profile_object_statuses = st.multiselect(
+                    "Estado de revisión del texto",
+                    options=list(_OBJECT_STATUS_LABELS),
+                    default=(
+                        list(selected_profile.include_object_review_statuses_json or [])
+                        if selected_profile
+                        else []
+                    ),
+                    format_func=lambda value: _OBJECT_STATUS_LABELS[value],
+                    help="Una selección vacía incluye fragmentos de texto con cualquier estado de revisión.",
+                    key=f"open_discovery_object_statuses_{profile_key}",
+                    width="stretch",
                 )
 
             quality_scope = analysis_quality_scope(profile_page_statuses)
-            quality_confirmed = False
-            quality_reason = ""
-            if quality_scope.is_default:
-                st.caption(quality_scope_caption(profile_page_statuses))
-            else:
-                st.warning(quality_scope_caption(profile_page_statuses))
-                quality_confirmed = st.checkbox(
-                    "Confirmo que deseo descubrir candidatos en páginas no aprobadas",
-                    value=False,
-                    key=f"open_discovery_quality_confirm_{profile_key}",
-                )
-                quality_reason = st.text_area(
-                    "Fundamento del alcance ampliado",
-                    value="",
-                    placeholder=(
-                        "Explicá por qué esta corrida debe incluir páginas "
-                        "que todavía no están aprobadas."
-                    ),
-                    height=80,
-                    key=f"open_discovery_quality_reason_{profile_key}",
-                )
+            quality_confirmed = quality_scope.is_broader_than_default
+            quality_reason = (
+                "Estados de revisión de página elegidos explícitamente en Buscar nuevas entidades."
+                if quality_confirmed
+                else None
+            )
             if st.button(
-                "Guardar perfil de descubrimiento",
+                "Guardar configuración de búsqueda",
                 type="primary",
                 key=f"open_discovery_profile_save_{profile_key}",
             ):
@@ -246,14 +306,14 @@ def _render_profile_configuration(
                         ),
                         changed_by=actor or "local_user",
                         broader_quality_scope_confirmed=quality_confirmed,
-                        quality_scope_reason=quality_reason or None,
+                        quality_scope_reason=quality_reason,
                         quality_scope_source="ui",
                     ),
                 )
                 if saved is not None:
-                    st.session_state["open_discovery_profile_selected"] = saved.id
+                    st.session_state["open_discovery_profile_selected__pending"] = saved.id
                     st.session_state["open_discovery_success"] = (
-                        "Perfil guardado y autorización registrada."
+                        "Configuración de búsqueda guardada."
                     )
                     rerun_view(st)
     return selected_profile
@@ -272,7 +332,7 @@ def _render_decision_history(st, decisions) -> None:
             if item.acceptance_label:
                 details.append(f"destino: {item.acceptance_label}")
             if item.target_authority_name:
-                details.append(f"autoridad: {item.target_authority_name}")
+                details.append(f"entidad vinculada: {item.target_authority_name}")
             st.caption(" · ".join(details))
             if item.reason:
                 st.caption(f"Fundamento: {item.reason}")
@@ -289,14 +349,13 @@ def _render_candidate_review(
     authorities,
 ) -> None:
     if row.status in {"accepted", "rejected"}:
-        st.caption("La decisión es terminal; el historial permanece disponible.")
         return
 
     review_panel_open = st.toggle(
-        "Revisar candidato",
+        "Revisar esta referencia encontrada",
         value=False,
         key=f"discovery_candidate_review_panel_{row.candidate_id}",
-        help="El panel permanece abierto mientras cambiás la decisión o su destino.",
+        help="Abrí este panel para aceptar la referencia o descartarla.",
     )
     if not review_panel_open:
         return
@@ -304,15 +363,18 @@ def _render_candidate_review(
     with st.container(border=True):
         if row.is_stale:
             st.warning(
-                "El texto o la revisión del objeto cambió. Cualquier intento de decisión será "
-                "rechazado hasta volver a detectar el candidato."
+                "El texto del documento cambió después de esta búsqueda. Antes de decidir sobre esta referencia, actualizá su ubicación desde «Duplicados y cambios de texto»."
             )
-        decision_type = st.selectbox(
-            "Decisión",
-            options=list(DISCOVERY_DECISION_TYPES),
+            return
+
+        decision_type = st.radio(
+            "Qué querés hacer con esta referencia",
+            options=("accept", "reject"),
             format_func=lambda value: _DECISION_OPTIONS[value],
+            horizontal=True,
             key=f"discovery_decision_type_{row.candidate_id}",
         )
+
         reviewed_text = row.effective_text
         reviewed_family = row.effective_family
         reviewed_subtype = row.effective_subtype
@@ -323,103 +385,104 @@ def _render_candidate_review(
         temporal_expression = None
         confirm_new_authority = False
 
-        if decision_type == "modify":
-            reviewed_text = st.text_input(
-                "Texto o etiqueta revisada",
-                value=row.effective_text,
-                key=f"discovery_reviewed_text_{row.candidate_id}",
+        if decision_type == "accept":
+            correct_before_accept = st.checkbox(
+                "Corregir el texto o el tipo antes de aceptar esta referencia",
+                value=False,
+                key=f"discovery_correct_before_accept_{row.candidate_id}",
             )
-            reviewed_family = st.selectbox(
-                "Familia revisada",
-                options=list(DISCOVERY_FAMILIES),
-                index=list(DISCOVERY_FAMILIES).index(row.effective_family),
-                format_func=family_label,
-                key=f"discovery_reviewed_family_{row.candidate_id}",
-            )
-            reviewed_subtype = st.text_input(
-                "Subtipo revisado",
-                value=row.effective_subtype,
-                key=f"discovery_reviewed_subtype_{row.candidate_id}",
-            )
-        elif decision_type == "accept":
-            modes = allowed_acceptance_modes(row.effective_family)
+            if correct_before_accept:
+                reviewed_text = st.text_input(
+                    "Texto correcto de esta referencia",
+                    value=row.effective_text,
+                    key=f"discovery_reviewed_text_{row.candidate_id}",
+                )
+                reviewed_family = st.selectbox(
+                    "Tipo general correcto de esta referencia",
+                    options=list(DISCOVERY_FAMILIES),
+                    index=list(DISCOVERY_FAMILIES).index(row.effective_family),
+                    format_func=family_label,
+                    key=f"discovery_reviewed_family_{row.candidate_id}",
+                )
+                reviewed_subtype = st.text_input(
+                    "Tipo específico correcto de esta referencia",
+                    value=row.effective_subtype,
+                    key=f"discovery_reviewed_subtype_{row.candidate_id}",
+                )
+
+            modes = allowed_acceptance_modes(reviewed_family)
             acceptance_mode = st.radio(
-                "Destino de la aceptación",
+                "Qué querés crear o vincular al aceptar esta referencia",
                 options=list(modes),
                 format_func=acceptance_mode_label,
                 key=f"discovery_acceptance_mode_{row.candidate_id}",
             )
             if acceptance_mode == "existing_authority":
-                compatible_types = allowed_authority_types(
-                    row.effective_family, row.effective_subtype
-                )
-                choices = [
-                    item for item in authorities if item.entity_type in compatible_types
-                ]
+                compatible_types = allowed_authority_types(reviewed_family, reviewed_subtype)
+                choices = [item for item in authorities if item.entity_type in compatible_types]
                 if choices:
                     choice_map = {item.id: item for item in choices}
                     authority_id = st.selectbox(
-                        "Autoridad existente",
+                        "Entidad existente que corresponde a esta referencia",
                         options=list(choice_map),
                         format_func=lambda value: (
                             f"{choice_map[value].preferred_name} · "
                             f"{_AUTHORITY_TYPE_LABELS.get(choice_map[value].entity_type, choice_map[value].entity_type)} · "
-                            f"{choice_map[value].review_status}"
+                            f"{_OBJECT_STATUS_LABELS.get(choice_map[value].review_status, choice_map[value].review_status)}"
                         ),
                         key=f"discovery_authority_{row.candidate_id}",
                     )
                 else:
-                    st.warning("No hay autoridades activas compatibles en este proyecto.")
+                    st.warning("No hay entidades activas compatibles en este proyecto.")
             elif acceptance_mode == "new_authority":
                 new_authority_name = st.text_input(
-                    "Nombre preferido de la nueva autoridad",
-                    value=row.effective_text,
+                    "Nombre de la nueva entidad",
+                    value=reviewed_text,
                     key=f"discovery_new_authority_name_{row.candidate_id}",
                 )
                 description = st.text_area(
-                    "Descripción inicial",
+                    "Descripción inicial de la nueva entidad (opcional)",
                     value="",
                     height=80,
                     key=f"discovery_new_authority_description_{row.candidate_id}",
                 )
-                if row.effective_family == "event":
+                if reviewed_family == "event":
                     temporal_expression = st.text_input(
                         "Expresión temporal del acontecimiento (opcional)",
                         value="",
                         key=f"discovery_new_authority_temporal_{row.candidate_id}",
                     )
                 confirm_new_authority = st.checkbox(
-                    "Confirmo la creación de una autoridad nueva con estado Sin revisar",
+                    "Confirmo que quiero crear esta entidad con estado Sin revisar",
                     value=False,
                     key=f"discovery_new_authority_confirm_{row.candidate_id}",
                 )
             else:
                 description = st.text_area(
-                    "Descripción o nota propia de la familia (opcional)",
+                    "Descripción adicional para esta referencia aceptada (opcional)",
                     value="",
                     height=80,
                     key=f"discovery_context_description_{row.candidate_id}",
                 )
-                if row.effective_family in {"time", "event"}:
+                if reviewed_family in {"time", "event"}:
                     temporal_expression = st.text_input(
                         "Expresión temporal (opcional)",
-                        value=(row.effective_text if row.effective_family == "time" else ""),
+                        value=(reviewed_text if reviewed_family == "time" else ""),
                         key=f"discovery_context_temporal_{row.candidate_id}",
                     )
 
-        reason = st.text_area(
-            "Fundamento",
+        note = st.text_area(
+            "Nota sobre esta decisión (opcional)",
             value="",
-            help=(
-                "Es obligatorio para rechazar, modificar, aplazar o crear una autoridad nueva. "
-                "En las demás aceptaciones puede dejarse vacío."
-            ),
-            height=75,
-            key=f"discovery_decision_reason_{row.candidate_id}_{decision_type}",
+            height=70,
+            key=f"discovery_decision_note_{row.candidate_id}_{decision_type}",
+        )
+        button_label = (
+            "Aceptar esta referencia" if decision_type == "accept" else "Descartar esta referencia"
         )
         if st.button(
-            "Registrar decisión",
-            type="primary",
+            button_label,
+            type="primary" if decision_type == "accept" else "secondary",
             key=f"discovery_decision_submit_{row.candidate_id}_{decision_type}",
         ):
             result = _run_action(
@@ -431,7 +494,7 @@ def _render_candidate_review(
                     candidate_id=row.candidate_id,
                     decision_type=decision_type,
                     decided_by=actor or "local_user",
-                    reason=reason or None,
+                    reason=note or None,
                     reviewed_text=reviewed_text,
                     semantic_family=reviewed_family,
                     reviewed_subtype=reviewed_subtype,
@@ -446,7 +509,7 @@ def _render_candidate_review(
             )
             if result is not None:
                 st.session_state["open_discovery_decision_success"] = (
-                    f"Decisión registrada: {decision_label(result.decision_type)}."
+                    "Referencia aceptada." if decision_type == "accept" else "Referencia descartada. Podés restaurarla desde «Referencias descartadas»."
                 )
                 rerun_view(st)
 
@@ -459,20 +522,17 @@ def _render_grouping_and_continuity(
     project_id: str,
     actor: str,
 ) -> None:
-    st.caption(
-        "Estas operaciones no borran candidatos, decisiones ni procedencias. "
-        "Los grupos y vínculos de continuidad conservan un historial auditable."
-    )
     groups_tab, continuity_tab = tracked_tabs(
         st,
-        ["Revisar grupos", "Continuidad textual"],
+        ["Revisar posibles referencias repetidas", "Actualizar referencias después de corregir el texto"],
         key="open_discovery_grouping_tasks",
-        default="Revisar grupos",
+        help_by_label=TAB_HELP["open_discovery_grouping_tasks"],
+        default="Revisar posibles referencias repetidas",
     )
 
     with groups_tab:
         if st.button(
-            "Actualizar grupos propuestos",
+            "Buscar referencias que podrían corresponder al mismo referente",
             key="open_discovery_grouping_rebuild",
         ):
             summary = _run_action(
@@ -487,8 +547,7 @@ def _render_grouping_and_continuity(
             )
             if summary is not None:
                 st.session_state["open_discovery_grouping_success"] = (
-                    f"Agrupamiento actualizado: {summary.groups_created} grupos nuevos y "
-                    f"{summary.memberships_created} pertenencias nuevas."
+                    f"Agrupamiento actualizado: {summary.groups_created} grupos nuevos y {summary.memberships_created} referencias incorporadas a esos grupos."
                 )
                 rerun_view(st)
 
@@ -518,7 +577,7 @@ def _render_grouping_and_continuity(
             elif st.session_state.get("open_discovery_group_selected") not in group_map:
                 st.session_state["open_discovery_group_selected"] = next(iter(group_map))
             selected_group_id = st.selectbox(
-                "Grupo",
+                "Grupo de referencias que querés revisar",
                 options=list(group_map),
                 format_func=lambda value: (
                     f"{group_map[value].preferred_label} · "
@@ -528,19 +587,11 @@ def _render_grouping_and_continuity(
                 key="open_discovery_group_selected",
             )
             selected_group = group_map[selected_group_id]
-            st.caption(
-                f"Método: {selected_group.grouping_method} · "
-                f"corridas: {selected_group.run_count} · "
-                f"miembros obsoletos: {selected_group.stale_member_count}"
-            )
+            st.caption(f"Referencias vigentes en este grupo: {selected_group.active_member_count} · referencias que necesitan volver a ubicarse: {selected_group.stale_member_count}")
             for member in selected_group.members:
                 status = "separado" if member.membership_status != "active" else "activo"
                 stale = " · obsoleto" if member.is_stale else ""
-                st.write(
-                    f"- **{member.effective_text}** · {status}{stale} · "
-                    f"{member.original_filename}, p. {member.page_number} · "
-                    f"corrida `{member.run_id}` · candidato `{member.candidate_id}`"
-                )
+                st.write(f"- **{member.effective_text}** · {status}{stale} · {member.original_filename}, página {member.page_number}")
 
             active_members = [
                 row for row in selected_group.members if row.membership_status == "active"
@@ -548,7 +599,7 @@ def _render_grouping_and_continuity(
             if len(active_members) > 1:
                 remove_map = {row.candidate_id: row for row in active_members}
                 remove_candidate_id = st.selectbox(
-                    "Candidato que debe separarse del grupo",
+                    "Referencia encontrada que no corresponde a este grupo",
                     options=list(remove_map),
                     format_func=lambda value: (
                         f"{remove_map[value].effective_text} · "
@@ -557,13 +608,13 @@ def _render_grouping_and_continuity(
                     key=f"open_discovery_group_remove_candidate_{selected_group_id}",
                 )
                 remove_reason = st.text_area(
-                    "Fundamento de la separación",
+                    "Por qué esta referencia debe quedar fuera del grupo",
                     value="",
                     height=70,
                     key=f"open_discovery_group_remove_reason_{selected_group_id}",
                 )
                 if st.button(
-                    "Separar candidato",
+                    "Quitar esta referencia del grupo",
                     key=f"open_discovery_group_remove_submit_{selected_group_id}",
                 ):
                     result = _run_action(
@@ -581,46 +632,44 @@ def _render_grouping_and_continuity(
                     )
                     if result is not None:
                         st.session_state["open_discovery_grouping_success"] = (
-                            "Candidato separado; el grupo y la procedencia histórica se conservaron."
+                            "La referencia fue quitada del grupo. Su búsqueda de origen y las decisiones anteriores siguen registradas."
                         )
                         rerun_view(st)
         else:
-            st.caption("Todavía no hay grupos. Actualizá las propuestas o creá uno manual.")
+            st.caption("Todavía no hay referencias agrupadas. Podés detectar agrupaciones posibles o crear un grupo de forma manual.")
 
         manual_open = st.toggle(
-            "Crear grupo manual",
+            "Crear un grupo de referencias de forma manual",
             value=False,
             key="open_discovery_manual_group_panel",
         )
         if manual_open:
             candidate_map = {row.candidate_id: row for row in all_candidates}
             manual_ids = st.multiselect(
-                "Candidatos del grupo",
+                "Referencias encontradas que querés reunir en este grupo",
                 options=list(candidate_map),
                 format_func=lambda value: (
-                    f"{candidate_map[value].effective_text} · "
-                    f"{candidate_map[value].original_filename}, p. {candidate_map[value].page_number} · "
-                    f"candidato {value[:8]} · corrida {candidate_map[value].run_id[:8]}"
+                    f"{candidate_map[value].effective_text} · {candidate_map[value].original_filename}, página {candidate_map[value].page_number}"
                 ),
                 key="open_discovery_manual_group_candidates",
             )
             manual_label = st.text_input(
-                "Etiqueta del grupo",
+                "Nombre con el que identificarás este grupo",
                 key="open_discovery_manual_group_label",
             )
             manual_family = st.selectbox(
-                "Familia del grupo",
+                "Tipo de referencias reunidas en este grupo",
                 options=list(DISCOVERY_FAMILIES),
                 format_func=family_label,
                 key="open_discovery_manual_group_family",
             )
             manual_reason = st.text_area(
-                "Fundamento del agrupamiento manual",
+                "Por qué estas referencias deben revisarse juntas",
                 height=70,
                 key="open_discovery_manual_group_reason",
             )
             if st.button(
-                "Crear grupo manual",
+                "Crear un grupo de referencias de forma manual",
                 key="open_discovery_manual_group_submit",
             ):
                 group = _run_action(
@@ -642,7 +691,7 @@ def _render_grouping_and_continuity(
                         "open_discovery_group_pending_selection"
                     ] = group.id
                     st.session_state["open_discovery_grouping_success"] = (
-                        "Grupo manual creado sin fusionar candidatos ni procedencias."
+                        "Grupo creado. Las referencias siguen siendo registros independientes y conservan su procedencia."
                     )
                     rerun_view(st)
 
@@ -657,36 +706,31 @@ def _render_grouping_and_continuity(
             engine.dispose()
         stale = [row for row in all_candidates if row.is_stale]
         if not stale:
-            st.caption("No hay candidatos obsoletos que requieran continuidad.")
+            st.caption("No hay referencias encontradas que hayan quedado desactualizadas por cambios posteriores en el texto.")
         else:
             stale_map = {row.candidate_id: row for row in stale}
             source_candidate_id = st.selectbox(
-                "Candidato obsoleto",
+                "Referencia que quedó desactualizada después de editar el texto",
                 options=list(stale_map),
                 format_func=lambda value: (
                     f"{stale_map[value].effective_text} · "
                     f"{stale_map[value].original_filename}, p. {stale_map[value].page_number} · "
-                    f"rev. {stale_map[value].object_revision_number} · "
-                    f"candidato {value[:8]} · corrida {stale_map[value].run_id[:8]}"
+                    f"versión del texto {stale_map[value].object_revision_number}"
                 ),
                 key="open_discovery_continuity_candidate",
             )
             method = st.radio(
-                "Método",
+                "Cómo buscar esta misma referencia en el texto corregido",
                 options=list(CONTINUITY_METHODS),
                 format_func=lambda value: (
-                    "Proyección exacta única"
+                    "Buscar exactamente el mismo texto en la versión corregida"
                     if value == "exact_projection"
-                    else "Nueva detección local"
+                    else "Volver a buscar esa referencia cerca de su ubicación anterior"
                 ),
                 key="open_discovery_continuity_method",
             )
-            st.caption(
-                "La operación crea un candidato nuevo para la revisión vigente y mantiene "
-                "visible el candidato obsoleto como procedencia histórica."
-            )
             if st.button(
-                "Crear continuidad",
+                "Buscar esta referencia en el texto corregido",
                 key="open_discovery_continuity_submit",
             ):
                 summary = _run_action(
@@ -719,12 +763,6 @@ def _render_discovery_run_setup(
     project_id: str,
     actor: str,
 ) -> None:
-    st.subheader("Preparar una corrida")
-    st.caption(
-        "Elegí o configurá un perfil y ejecutá el descubrimiento. "
-        "La corrida solo crea candidatos revisables."
-    )
-
     engine = create_sqlite_engine(db_path)
     try:
         with session_scope(engine) as session:
@@ -752,15 +790,21 @@ def _render_discovery_run_setup(
         st.success(success)
 
     if selected_profile is None:
-        st.info("Guardá un perfil antes de ejecutar el descubrimiento.")
+        st.info("Creá y guardá una configuración de búsqueda para iniciar la primera búsqueda.")
         return
 
-    st.caption(
-        "La ejecución usa el perfil exactamente como fue autorizado. Cambiar cualquier parámetro "
-        "obliga a guardar nuevamente el perfil."
-    )
+    if (
+        selected_profile.provider_key == DISCOVERY_PROVIDER_KEY
+        and selected_profile.provider_version != DISCOVERY_PROVIDER_VERSION
+    ):
+        st.info(
+            "Para ejecutar una búsqueda nueva desde la interfaz, actualizá primero esta configuración a las reglas vigentes. "
+            "Las búsquedas históricas siguen disponibles para consulta y no se recalculan."
+        )
+        return
+
     if st.button(
-        "Ejecutar descubrimiento abierto",
+        "Buscar nuevas entidades en los textos",
         type="primary",
         key=f"open_discovery_run_{selected_profile.id}_{selected_profile.revision}",
     ):
@@ -777,14 +821,10 @@ def _render_discovery_run_setup(
         if summary is not None:
             st.session_state["open_discovery_run_selected"] = summary.run_id
             st.session_state["open_discovery_run_success"] = (
-                f"Corrida completada: {summary.candidate_count} candidatos en "
-                f"{summary.object_count} objetos."
+                f"Búsqueda de entidades completada: {summary.candidate_count} referencias encontradas en "
+                f"{summary.object_count} fragmentos de texto."
             )
-            request_tab(
-                st,
-                key="open_discovery_tasks",
-                label="Revisar candidatos",
-            )
+            st.session_state["open_discovery_task__pending"] = "review"
             rerun_view(st)
 
 
@@ -795,12 +835,6 @@ def _render_discovery_candidate_workspace(
     project_id: str,
     actor: str,
 ) -> None:
-    st.subheader("Revisar candidatos")
-    st.caption(
-        "Elegí una corrida, filtrá los candidatos y registrá una decisión explícita. "
-        "Los datos técnicos quedan cerrados por defecto."
-    )
-
     run_success = st.session_state.pop("open_discovery_run_success", None)
     if run_success:
         st.success(run_success)
@@ -825,7 +859,7 @@ def _render_discovery_candidate_workspace(
 
     if not runs:
         st.info(
-            "Todavía no hay corridas registradas. Abrí ‘Nueva corrida’ para crear la primera."
+            "Todavía no hay búsquedas de nuevas entidades ejecutadas. Elegí «Ejecutar búsqueda de entidades» para crear la primera."
         )
         return
 
@@ -833,26 +867,43 @@ def _render_discovery_candidate_workspace(
     current_run = st.session_state.get("open_discovery_run_selected")
     if current_run not in run_map:
         st.session_state["open_discovery_run_selected"] = runs[0].run_id
-    selected_run_id = st.selectbox(
-        "Corrida registrada",
-        options=list(run_map),
-        format_func=lambda value: (
-            f"{run_map[value].started_at.isoformat(timespec='minutes')} · "
-            f"{run_map[value].profile_name} · {run_map[value].candidate_count} candidatos"
-        ),
-        key="open_discovery_run_selected",
-    )
-    selected_run = run_map[selected_run_id]
 
-    with st.expander("Resumen de la corrida", expanded=False):
-        metrics = st.columns(3)
-        metrics[0].metric("Objetos recorridos", selected_run.object_count)
-        metrics[1].metric("Candidatos", selected_run.candidate_count)
-        metrics[2].metric("Estado", selected_run.status)
-        st.caption(
-            f"Proveedor: {selected_run.provider_key}@{selected_run.provider_version} · "
-            f"Páginas: {', '.join(selected_run.page_review_statuses) or 'todos los estados'}"
+    with st.container(horizontal=True, vertical_alignment="bottom", gap="small"):
+        selected_run_id = st.selectbox(
+            "Búsqueda de entidades",
+            options=list(run_map),
+            format_func=lambda value: (
+                f"{run_map[value].started_at.isoformat(timespec='minutes')} · "
+                f"{run_map[value].profile_name} · "
+                f"{_discovery_rules_label(run_map[value].provider_key, run_map[value].provider_version)} · "
+                f"{run_map[value].candidate_count} referencias"
+            ),
+            key="open_discovery_run_selected",
+            width="stretch",
         )
+        candidate_families = st.multiselect(
+            "Tipos de referencia",
+            options=list(DISCOVERY_FAMILIES),
+            default=[],
+            format_func=family_label,
+            placeholder="Todos los tipos",
+            key=f"open_discovery_candidate_family_filter_{selected_run_id}",
+            width="stretch",
+        )
+
+    selected_run = run_map[selected_run_id]
+    selected_rules_label = _discovery_rules_label(
+        selected_run.provider_key, selected_run.provider_version
+    )
+    if (
+        selected_run.provider_key == DISCOVERY_PROVIDER_KEY
+        and selected_run.provider_version != DISCOVERY_PROVIDER_VERSION
+    ):
+        st.caption(
+            f"Esta búsqueda fue generada con {selected_rules_label} históricas. Instalar reglas nuevas no modifica sus referencias ya registradas."
+        )
+    else:
+        st.caption(f"Esta búsqueda fue generada con {selected_rules_label}.")
 
     engine = create_sqlite_engine(db_path)
     try:
@@ -861,7 +912,7 @@ def _render_discovery_candidate_workspace(
                 session,
                 project_id=project_id,
                 run_id=selected_run_id,
-                limit=500,
+                limit=None,
             )
             decisions = discovery_decision_rows(
                 session, project_id=project_id, limit=10_000
@@ -870,95 +921,276 @@ def _render_discovery_candidate_workspace(
         engine.dispose()
 
     if not candidates:
-        st.info("La corrida no produjo candidatos con el umbral configurado.")
+        st.info("Esta búsqueda no encontró referencias con la configuración elegida.")
         return
 
     decisions_by = defaultdict(list)
     for item in decisions:
         decisions_by[item.candidate_id].append(item)
 
-    with st.expander("Filtros de candidatos", expanded=False):
-        filters = st.columns(2)
-        with filters[0]:
-            candidate_families = st.multiselect(
-                "Familia",
-                options=list(DISCOVERY_FAMILIES),
-                default=[],
-                format_func=family_label,
-                key=f"open_discovery_candidate_family_filter_{selected_run_id}",
-            )
-        with filters[1]:
-            candidate_statuses = st.multiselect(
-                "Estado de decisión",
-                options=["pending", "modified", "deferred", "accepted", "rejected"],
-                default=[],
-                format_func=candidate_status_label,
-                key=f"open_discovery_candidate_status_filter_{selected_run_id}",
-            )
-
-    visible = [
+    matching_candidates = [
         row
         for row in candidates
-        if (not candidate_families or row.effective_family in candidate_families)
-        and (not candidate_statuses or row.status in candidate_statuses)
+        if not candidate_families or row.effective_family in candidate_families
     ]
-    st.caption(f"Candidatos visibles: {len(visible)}")
-
-    for row in visible:
-        with st.container(border=True):
-            head, confidence = st.columns([5, 1])
-            head.write(
-                f"**{row.effective_text}** · {family_label(row.effective_family)} / "
-                f"{row.effective_subtype} · **{candidate_status_label(row.status)}**"
-            )
-            confidence.metric(
-                "Confianza", "—" if row.confidence is None else f"{row.confidence:.2f}"
-            )
-            head.caption(
-                f"{row.source_key or row.original_filename} · página {row.page_number} · "
-                f"objeto {row.editable_object_id} · offsets {row.start_offset}:{row.end_offset} · "
-                f"revisión textual {row.object_revision_number}"
-            )
-            st.write(f"…{row.context_before}**{row.exact_text}**{row.context_after}…")
-            if row.effective_text != row.exact_text or row.effective_family != row.semantic_family:
-                st.caption(
-                    "Propuesta original: "
-                    f"{row.exact_text} · {row.family_label}/{row.suggested_subtype}"
-                )
-            if row.is_stale:
-                st.warning("El objeto cambió después de esta corrida; el candidato está obsoleto.")
-            _render_candidate_review(
-                st,
-                db_path=db_path,
-                project_id=project_id,
-                actor=actor,
-                row=row,
-                decisions=decisions_by.get(row.candidate_id, []),
-                authorities=authorities,
-            )
-            _render_decision_history(st, decisions_by.get(row.candidate_id, []))
-            with st.expander("Trazabilidad técnica", expanded=False):
-                st.write(row.explanation)
-                st.code(
-                    "\n".join(
-                        [
-                            f"candidate_id={row.candidate_id}",
-                            f"run_id={row.run_id}",
-                            f"editable_page_id={row.editable_page_id}",
-                            f"page_revision_number={row.page_revision_number}",
-                            f"provider={row.provider_key}",
-                            f"provider_version={row.provider_version}",
-                            f"method={row.method}",
-                            f"parameters_sha256={row.parameters_sha256}",
-                            f"decision_count={row.decision_count}",
-                        ]
-                    )
-                )
-
-    st.caption(
-        "Las decisiones son append-only. Aceptar una referencia nunca crea relaciones. "
-        "Las autoridades nuevas quedan con estado Sin revisar."
+    active_candidates_all = [
+        row for row in matching_candidates if row.status not in {"accepted", "rejected"}
+    ]
+    rejected_candidates_all = [
+        row for row in matching_candidates if row.status == "rejected"
+    ]
+    accepted_candidate_count = sum(
+        row.status == "accepted" for row in matching_candidates
     )
+
+    display_choice = st.selectbox(
+        "Cuántas referencias mostrar",
+        options=("100", "250", "500", "1000", "Todas"),
+        index=2,
+        key=f"open_discovery_visible_candidate_limit_{selected_run_id}",
+        help=(
+            "Controla cuántas referencias pendientes y descartadas se dibujan en esta vista. "
+            "El total de la búsqueda y el total que coincide con los filtros se muestran siempre."
+        ),
+    )
+    visible_limit = None if display_choice == "Todas" else int(display_choice)
+    active_candidates = (
+        active_candidates_all
+        if visible_limit is None
+        else active_candidates_all[:visible_limit]
+    )
+    rejected_candidates = (
+        rejected_candidates_all
+        if visible_limit is None
+        else rejected_candidates_all[:visible_limit]
+    )
+
+    total_count = len(candidates)
+    matching_count = len(matching_candidates)
+    count_summary = (
+        "Esta búsqueda contiene "
+        f"{total_count:,} referencias en total. "
+        f"Con los tipos elegidos coinciden {matching_count:,}: "
+        f"{len(active_candidates_all):,} referencias pendientes, "
+        f"{accepted_candidate_count:,} referencias aceptadas y "
+        f"{len(rejected_candidates_all):,} referencias descartadas."
+    )
+    st.caption(count_summary.replace(",", "."))
+
+    review_modes_key = f"open_discovery_review_modes_{selected_run_id}"
+    pending_tab, bulk_tab, discarded_tab = tracked_tabs(
+        st,
+        [
+            "Revisar una por una",
+            "Trabajar con varias referencias",
+            "Referencias descartadas",
+        ],
+        key=review_modes_key,
+        default="Revisar una por una",
+        help_by_label=TAB_HELP["open_discovery_review_modes"],
+    )
+
+    with pending_tab:
+        st.badge(
+            f"Mostrando {len(active_candidates):,} de {len(active_candidates_all):,} referencias pendientes".replace(",", "."),
+            color="primary",
+        )
+        if not active_candidates:
+            st.info("No hay referencias pendientes que coincidan con los tipos seleccionados.")
+        for row in active_candidates:
+            with st.container(border=True):
+                with st.container(horizontal=True, vertical_alignment="center", gap="small"):
+                    st.markdown(
+                        f"**{row.effective_text}** · {family_label(row.effective_family)} / "
+                        f"{row.effective_subtype} · **{candidate_status_label(row.status)}**"
+                    )
+                    st.badge(
+                        "Confianza —" if row.confidence is None else f"Confianza {row.confidence:.2f}",
+                        color="gray",
+                    )
+                st.caption(
+                    f"{row.original_filename} · página {row.page_number} · versión del texto {row.object_revision_number}"
+                )
+                st.write(
+                    f"…{row.context_before}**{row.exact_text}**{row.context_after}…"
+                )
+                if (
+                    row.effective_text != row.exact_text
+                    or row.effective_family != row.semantic_family
+                ):
+                    st.caption(
+                        "Referencia encontrada originalmente: "
+                        f"{row.exact_text} · {row.family_label}/{row.suggested_subtype}"
+                    )
+                if row.is_stale:
+                    st.warning(
+                        "El texto del documento cambió después de esta búsqueda. Actualizá la ubicación de esta referencia desde «Duplicados y cambios de texto» antes de decidir."
+                    )
+                _render_candidate_review(
+                    st,
+                    db_path=db_path,
+                    project_id=project_id,
+                    actor=actor,
+                    row=row,
+                    decisions=decisions_by.get(row.candidate_id, []),
+                    authorities=authorities,
+                )
+                _render_decision_history(
+                    st, decisions_by.get(row.candidate_id, [])
+                )
+                with st.expander("Trazabilidad técnica", expanded=False):
+                    st.write(row.explanation)
+                    st.code(
+                        "\n".join(
+                            [
+                                f"candidate_id={row.candidate_id}",
+                                f"run_id={row.run_id}",
+                                f"editable_page_id={row.editable_page_id}",
+                                f"page_revision_number={row.page_revision_number}",
+                                f"provider={row.provider_key}",
+                                f"provider_version={row.provider_version}",
+                                f"method={row.method}",
+                                f"parameters_sha256={row.parameters_sha256}",
+                                f"decision_count={row.decision_count}",
+                            ]
+                        )
+                    )
+
+    with bulk_tab:
+        st.caption("Seleccioná referencias y elegí una acción para todo el conjunto.")
+        active_map = {
+            row.candidate_id: row for row in active_candidates if not row.is_stale
+        }
+        if not active_map:
+            st.info(
+                "No hay referencias pendientes disponibles para crear entidades o descartar en conjunto con los tipos seleccionados."
+            )
+        else:
+            with st.form(
+                f"open_discovery_bulk_form_{selected_run_id}",
+                enter_to_submit=False,
+            ):
+                selected_bulk_ids = st.multiselect(
+                    "Referencias pendientes que querés seleccionar",
+                    options=list(active_map),
+                    format_func=lambda value: (
+                        f"{active_map[value].effective_text} · "
+                        f"{family_label(active_map[value].effective_family)} · "
+                        f"{active_map[value].original_filename}, p. {active_map[value].page_number}"
+                    ),
+                    key=f"open_discovery_bulk_candidates_{selected_run_id}",
+                )
+                confirm_bulk = st.checkbox(
+                    "Confirmo que quiero aplicar a todas las referencias seleccionadas la acción del botón que pulse",
+                    value=False,
+                    key=f"open_discovery_bulk_confirm_{selected_run_id}",
+                )
+                create_column, reject_column = st.columns(2)
+                with create_column:
+                    bulk_create_submit = st.form_submit_button(
+                        "Crear una entidad Sin revisar por cada referencia seleccionada",
+                        type="primary",
+                        use_container_width=True,
+                    )
+                with reject_column:
+                    bulk_reject_submit = st.form_submit_button(
+                        "Descartar las referencias seleccionadas",
+                        use_container_width=True,
+                    )
+
+            if bulk_create_submit or bulk_reject_submit:
+                if not selected_bulk_ids:
+                    st.error("Seleccioná al menos una referencia antes de confirmar esta acción.")
+                elif not confirm_bulk:
+                    st.error(
+                        "Marcá la confirmación antes de crear entidades o descartar las referencias seleccionadas."
+                    )
+                elif bulk_create_submit:
+                    result = _run_action(
+                        st,
+                        db_path=db_path,
+                        callback=lambda session, ids=tuple(selected_bulk_ids): accept_discovery_candidates_as_new_authorities(
+                            session,
+                            project_id=project_id,
+                            candidate_ids=ids,
+                            decided_by=actor or "local_user",
+                            source="ui",
+                        ),
+                    )
+                    if result is not None:
+                        st.session_state["open_discovery_decision_success"] = (
+                            f"Se crearon {len(result)} entidades con estado Sin revisar y se vinculó cada referencia seleccionada con su entidad."
+                        )
+                        request_tab(
+                            st,
+                            key=review_modes_key,
+                            label="Trabajar con varias referencias",
+                        )
+                        rerun_view(st)
+                else:
+                    result = _run_action(
+                        st,
+                        db_path=db_path,
+                        callback=lambda session, ids=tuple(selected_bulk_ids): reject_discovery_candidates(
+                            session,
+                            project_id=project_id,
+                            candidate_ids=ids,
+                            decided_by=actor or "local_user",
+                            source="ui",
+                        ),
+                    )
+                    if result is not None:
+                        st.session_state["open_discovery_decision_success"] = (
+                            f"Se descartaron {len(result)} referencias. Podés restaurarlas desde la pestaña «Referencias descartadas»."
+                        )
+                        request_tab(
+                            st,
+                            key=review_modes_key,
+                            label="Trabajar con varias referencias",
+                        )
+                        rerun_view(st)
+
+    with discarded_tab:
+        st.badge(
+            f"Mostrando {len(rejected_candidates):,} de {len(rejected_candidates_all):,} referencias descartadas".replace(",", "."),
+            color="gray",
+        )
+        if not rejected_candidates:
+            st.info("No hay referencias descartadas en esta búsqueda.")
+        for row in rejected_candidates:
+            with st.container(border=True):
+                st.write(
+                    f"**{row.effective_text}** · {family_label(row.effective_family)} · "
+                    f"{row.original_filename}, página {row.page_number}"
+                )
+                _render_decision_history(
+                    st, decisions_by.get(row.candidate_id, [])
+                )
+                if st.button(
+                    "Restaurar esta referencia para revisarla",
+                    key=f"open_discovery_restore_{row.candidate_id}",
+                ):
+                    result = _run_action(
+                        st,
+                        db_path=db_path,
+                        callback=lambda session, candidate_id=row.candidate_id: restore_rejected_discovery_candidate(
+                            session,
+                            project_id=project_id,
+                            candidate_id=candidate_id,
+                            restored_by=actor or "local_user",
+                            source="ui",
+                        ),
+                    )
+                    if result is not None:
+                        st.session_state["open_discovery_decision_success"] = (
+                            "Referencia restaurada. Volvió a la lista de referencias pendientes de revisión."
+                        )
+                        request_tab(
+                            st,
+                            key=review_modes_key,
+                            label="Referencias descartadas",
+                        )
+                        rerun_view(st)
 
 
 def render_open_discovery_section(
@@ -968,42 +1200,44 @@ def render_open_discovery_section(
     project_id: str,
     actor: str,
 ) -> None:
-    st.caption(
-        "Propone actores, espacios, tiempos, acontecimientos, acciones, procesos y obras "
-        "a partir del texto. Las corridas crean candidatos revisables y nunca crean "
-        "relaciones automáticamente. Separá la revisión cotidiana de la configuración "
-        "de corridas y de las tareas de continuidad."
+    task_labels = {
+        "review": "Revisar referencias encontradas",
+        "run": "Ejecutar búsqueda de entidades",
+        "grouping": "Duplicados y cambios de texto",
+    }
+    pending = st.session_state.pop("open_discovery_task__pending", None)
+    if pending in task_labels:
+        st.session_state["open_discovery_task"] = pending
+    task = st.selectbox(
+        "Tarea para buscar nuevas entidades",
+        options=list(task_labels),
+        format_func=lambda value: task_labels[value],
+        key="open_discovery_task",
+        label_visibility="collapsed",
     )
-
-    review_tab, run_tab, grouping_tab = tracked_tabs(
+    task_label = task_labels[task]
+    mount_choice_help(
         st,
-        ["Revisar candidatos", "Nueva corrida", "Agrupamiento y continuidad"],
-        key="open_discovery_tasks",
-        default="Revisar candidatos",
+        key="open_discovery_task",
+        label=task_label,
+        help_text=TASK_HELP["open_discovery_task"][task_label],
     )
 
-    with review_tab:
+    if task == "review":
         _render_discovery_candidate_workspace(
             st,
             db_path=db_path,
             project_id=project_id,
             actor=actor,
         )
-
-    with run_tab:
+    elif task == "run":
         _render_discovery_run_setup(
             st,
             db_path=db_path,
             project_id=project_id,
             actor=actor,
         )
-
-    with grouping_tab:
-        st.subheader("Agrupamiento y continuidad")
-        st.caption(
-            "Usá estas herramientas solo para revisar duplicados o mantener el anclaje "
-            "después de una edición textual. No fusionan candidatos ni trasladan decisiones."
-        )
+    else:
         _render_grouping_and_continuity(
             st,
             db_path=db_path,

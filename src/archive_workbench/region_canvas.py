@@ -9,18 +9,20 @@ from archive_workbench.contracts.regions import RegionDefinition
 
 _COMPONENT_HTML = """
 <div class="awr-toolbar">
-  <button type="button" data-action="draw">Dibujar una zona</button>
-  <span>Arrastrá sobre la página para delimitar la zona.</span>
+  <button type="button" data-action="draw">Dibujar zona</button>
+  <button type="button" data-action="confirm">Usar zona marcada</button>
+  <span>Dibujá y ajustá el rectángulo antes de usarlo.</span>
 </div>
 <div class="awr-canvas-wrap">
-  <canvas class="awr-canvas" aria-label="Página para OCR regional"></canvas>
+  <canvas class="awr-canvas" aria-label="Página sobre la que se señalarán partes para volver a leer"></canvas>
 </div>
 """
 
 _COMPONENT_CSS = """
-.awr-toolbar { display:flex; align-items:center; gap:.6rem; margin-bottom:.45rem; font-family:var(--st-font,sans-serif); }
+.awr-toolbar { display:flex; align-items:center; gap:.6rem; margin-bottom:.45rem; font-family:var(--st-font,sans-serif); flex-wrap:wrap; }
 .awr-toolbar button { border:1px solid color-mix(in srgb,var(--st-text-color) 28%,transparent); border-radius:.35rem; background:var(--st-secondary-background-color); color:var(--st-text-color); padding:.38rem .75rem; cursor:pointer; }
 .awr-toolbar button.active { border-color:var(--st-primary-color); box-shadow:0 0 0 1px var(--st-primary-color); }
+.awr-toolbar button:disabled { opacity:.45; cursor:default; }
 .awr-toolbar span { opacity:.72; font-size:.84rem; }
 .awr-canvas-wrap { width:100%; max-height:74vh; overflow:auto; border:1px solid color-mix(in srgb,var(--st-text-color) 18%,transparent); border-radius:.45rem; background:#fff; }
 .awr-canvas { display:block; width:100%; height:auto; cursor:crosshair; }
@@ -31,12 +33,43 @@ export default function(component) {
   const { parentElement, data, setTriggerValue } = component;
   const canvas = parentElement.querySelector('.awr-canvas');
   const button = parentElement.querySelector('[data-action="draw"]');
+  const confirm = parentElement.querySelector('[data-action="confirm"]');
   const ctx = canvas.getContext('2d');
   const image = new Image();
-  const state = parentElement.__awrState || { drawing:false, start:null, current:null };
+  const browserStateKey = `archive-workbench-region-canvas:${String(data.browser_state_key || 'default')}`;
+  const readStored = () => {
+    try { return JSON.parse(window.sessionStorage.getItem(browserStateKey) || 'null'); }
+    catch (error) { return null; }
+  };
+  const stored = readStored() || {};
+  const state = parentElement.__awrState || {
+    drawing:false,
+    start:null,
+    current:null,
+    drawnBox:stored.drawnBox || null,
+  };
   parentElement.__awrState = state;
+  if (data.pending_box && !state.drawnBox) state.drawnBox = data.pending_box;
 
+  const saveState = () => {
+    window.sessionStorage.setItem(browserStateKey, JSON.stringify({drawnBox:state.drawnBox}));
+  };
   const color = (box) => box.draft ? '#d62728' : (box.mode === 'ocr' ? '#1677c8' : '#e58b22');
+  const activeBox = () => {
+    if (state.start && state.current) {
+      return {
+        x0:Math.min(state.start.x,state.current.x)/canvas.width,
+        y0:Math.min(state.start.y,state.current.y)/canvas.height,
+        x1:Math.max(state.start.x,state.current.x)/canvas.width,
+        y1:Math.max(state.start.y,state.current.y)/canvas.height,
+      };
+    }
+    return state.drawnBox;
+  };
+  const updateControls = () => {
+    button.classList.toggle('active', state.drawing);
+    confirm.disabled = !state.drawnBox;
+  };
   const draw = () => {
     if (!image.naturalWidth) return;
     canvas.width = image.naturalWidth;
@@ -56,11 +89,12 @@ export default function(component) {
       ctx.fillStyle = color(box); ctx.fillRect(x, Math.max(0, y - boxH), metrics.width + 12, boxH);
       ctx.fillStyle = '#fff'; ctx.fillText(label, x + 6, Math.max(15, y - 5));
     }
-    if (state.start && state.current) {
-      const x = Math.min(state.start.x, state.current.x);
-      const y = Math.min(state.start.y, state.current.y);
-      const w = Math.abs(state.current.x - state.start.x);
-      const h = Math.abs(state.current.y - state.start.y);
+    const draft = activeBox();
+    if (draft) {
+      const x = draft.x0 * canvas.width;
+      const y = draft.y0 * canvas.height;
+      const w = (draft.x1 - draft.x0) * canvas.width;
+      const h = (draft.y1 - draft.y0) * canvas.height;
       ctx.strokeStyle = '#d62728'; ctx.lineWidth = Math.max(3, canvas.width / 350);
       ctx.strokeRect(x, y, w, h);
     }
@@ -68,8 +102,18 @@ export default function(component) {
 
   image.onload = draw;
   image.src = data.image_data_url;
-  button.classList.toggle('active', state.drawing);
-  button.onclick = () => { state.drawing = !state.drawing; state.start = null; state.current = null; button.classList.toggle('active', state.drawing); draw(); };
+  button.onclick = () => {
+    state.drawing = !state.drawing;
+    state.start = null;
+    state.current = null;
+    if (state.drawing) state.drawnBox = null;
+    saveState();
+    updateControls();
+    draw();
+  };
+  confirm.onclick = () => {
+    if (state.drawnBox) setTriggerValue('box_commit', state.drawnBox);
+  };
 
   const point = (event) => {
     const rect = canvas.getBoundingClientRect();
@@ -87,9 +131,14 @@ export default function(component) {
     const y0 = Math.min(state.start.y, state.current.y) / canvas.height;
     const x1 = Math.max(state.start.x, state.current.x) / canvas.width;
     const y1 = Math.max(state.start.y, state.current.y) / canvas.height;
-    if (x1-x0 > .005 && y1-y0 > .005) setTriggerValue('drawn_box', {x0,y0,x1,y1});
-    state.drawing = false; state.start = null; state.current = null; button.classList.remove('active'); draw();
+    if (x1-x0 > .005 && y1-y0 > .005) state.drawnBox = {x0,y0,x1,y1};
+    state.drawing = false; state.start = null; state.current = null;
+    if (canvas.hasPointerCapture(event.pointerId)) canvas.releasePointerCapture(event.pointerId);
+    saveState(); updateControls(); draw();
   };
+  canvas.onpointercancel = canvas.onpointerup;
+  updateControls();
+  saveState();
 }
 """
 
@@ -126,22 +175,18 @@ def build_region_canvas_payload(
                 continue
             boxes.append({
                 "region_key": str(item.get("region_key") or "draft"),
-                "label": str(item.get("label") or "Zona"),
+                "label": str(item.get("label") or "Parte marcada"),
                 "reading_order": int(item.get("reading_order", len(boxes) + 1)),
                 "mode": str(item.get("mode") or "manual"),
                 "bbox": dict(item["bbox"]),
                 "draft": bool(item.get("draft", False)),
             })
-    if pending_box:
-        boxes.append({
-            "region_key": "pending",
-            "label": "Zona recién dibujada",
-            "reading_order": len(boxes) + 1,
-            "mode": "manual",
-            "bbox": dict(pending_box),
-            "draft": True,
-        })
-    return {"image_data_url": _image_data_url(image_path), "page": page, "boxes": boxes}
+    return {
+        "image_data_url": _image_data_url(image_path),
+        "page": page,
+        "boxes": boxes,
+        "pending_box": pending_box,
+    }
 
 
 @lru_cache(maxsize=1)
@@ -165,19 +210,22 @@ def regional_region_canvas(
     pending_box: dict[str, float] | None,
     key: str,
 ) -> dict[str, float] | None:
+    """Dibuja localmente y comunica a Python sólo el rectángulo confirmado."""
     renderer = _renderer()
     if renderer is None:
         return None
+    payload = build_region_canvas_payload(
+        image_path, regions, page=page, pending_box=pending_box
+    )
+    payload["browser_state_key"] = key
     result = renderer(
-        data=build_region_canvas_payload(
-            image_path, regions, page=page, pending_box=pending_box
-        ),
+        data=payload,
         key=key,
         height=760,
         width="stretch",
-        on_drawn_box_change=lambda: None,
+        on_box_commit_change=lambda: None,
     )
-    value = getattr(result, "drawn_box", None)
+    value = getattr(result, "box_commit", None)
     if not value:
         return None
-    return {key: float(value[key]) for key in ("x0", "y0", "x1", "y1")}
+    return {name: float(value[name]) for name in ("x0", "y0", "x1", "y1")}

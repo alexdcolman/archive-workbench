@@ -331,7 +331,7 @@ def original_transcript_text(
     *,
     run_id: str,
 ) -> str:
-    """Devuelve solo la salida automática original de una corrida, sin revisiones humanas."""
+    """Devuelve solo la salida automática original de una corrida, sin revisiones manuales."""
 
     rows = transcript_segment_rows(session, run_id=run_id)
     return " ".join(row.original_text.strip() for row in rows if row.original_text.strip()).strip()
@@ -365,7 +365,7 @@ def _text_for_reference_window(
     """Devuelve el texto temporal disponible sin usar la referencia para recortarlo.
 
     CER/WER sólo son válidos si las fronteras de los segmentos candidatos coinciden
-    con la ventana humana. Cuando la segmentación difiere y no hay timestamps por
+    con la ventana revisada. Cuando la segmentación difiere y no hay timestamps por
     palabra, se conserva el contexto temporal completo y la ventana queda sin puntuar.
     """
 
@@ -406,7 +406,7 @@ def compare_transcription_to_reviewed_reference(
     """Compara una corrida contra las mismas ventanas corregidas por una persona.
 
     Las referencias proceden de la muestra determinista revisada del run de referencia.
-    Para evitar exigir una segunda corrección humana, la corrida candidata se proyecta
+    Para evitar exigir una segunda corrección revisada, la corrida candidata se proyecta
     sobre esos mismos intervalos temporales.
     """
 
@@ -454,7 +454,7 @@ def compare_transcription_to_reviewed_reference(
 
     if not windows:
         raise ValueError(
-            "La corrida de referencia todavía no tiene una muestra humana completa para comparar."
+            "La corrida de referencia todavía no tiene una muestra revisada completa para comparar."
         )
 
     all_windows_scoreable = all(window.scoreable for window in windows)

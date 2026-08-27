@@ -2,8 +2,7 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from archive_workbench.ui_navigation import rerun_app, request_app_view
-
+from archive_workbench.ui_navigation import rerun_app, request_app_view, section_heading
 from archive_workbench.db import create_sqlite_engine, session_scope
 from archive_workbench.operational import operational_readiness
 
@@ -22,11 +21,7 @@ def _navigate(st, mode: str) -> None:
 
 
 def render_home_view(st, *, project_root: Path, db_path: Path, actor: str) -> None:
-    st.header("Inicio del proyecto")
-    st.caption(
-        "Estado operativo del proyecto y recorrido guiado. Los indicadores se derivan de SQLite "
-        "y de los archivos verificables; no modifican el corpus."
-    )
+    section_heading(st, "Inicio")
 
     engine = create_sqlite_engine(db_path)
     try:
@@ -35,53 +30,32 @@ def render_home_view(st, *, project_root: Path, db_path: Path, actor: str) -> No
     finally:
         engine.dispose()
 
-    metrics = st.columns(4)
-    metrics[0].metric("Listos", report.ready_count)
-    metrics[1].metric("Requieren atención", report.attention_count)
-    metrics[2].metric("Pendientes", report.pending_count)
-    metrics[3].metric("Versión de la base", report.database_revision or "-")
+    metrics = st.columns(3)
+    metrics[0].metric("Etapas listas", report.ready_count)
+    metrics[1].metric("Etapas que requieren atención", report.attention_count)
+    metrics[2].metric("Etapas pendientes", report.pending_count)
 
     if report.overall_status == "attention":
-        st.warning("Hay cuestiones operativas que conviene resolver antes de ampliar el trabajo.")
+        st.warning("Hay etapas del proyecto que requieren revisión antes de continuar con tareas que dependan de ellas.")
     elif report.overall_status == "in_progress":
-        st.info("El proyecto es utilizable, pero todavía tiene etapas pendientes.")
+        st.info("El proyecto puede continuar, aunque algunas etapas del trabajo con el corpus todavía están pendientes.")
     else:
-        st.success("Los controles operativos principales están listos.")
+        st.success("Las comprobaciones principales del proyecto están al día.")
 
-    st.subheader("Recorrido del proyecto")
+    st.subheader("Estado del proyecto")
     for item in report.items:
         label = _STATUS_LABELS.get(item.status, item.status)
-        with st.container(border=True):
-            left, right = st.columns([5, 1])
-            with left:
-                st.write(f"**{item.label}** · {label}")
-                st.write(item.summary)
-                if item.detail:
-                    st.caption(item.detail)
-            with right:
-                if item.app_mode and st.button(
-                    "Abrir",
-                    key=f"home_open_{item.key}",
-                    use_container_width=True,
-                ):
-                    _navigate(st, item.app_mode)
-
-    st.subheader("Secuencia recomendada")
-    st.code(
-        "Catálogo documental\n"
-        "→ Procesar documentos\n"
-        "→ Organizar trabajo\n"
-        "→ Revisar documentos\n"
-        "→ Buscar y registrar entidades\n"
-        "→ Explorar relaciones y preparar corpus\n"
-        "→ Intercambiar cambios y recuperar",
-        language=None,
-    )
-    st.caption(
-        "La barra lateral describe cada sección. Podés volver a Inicio en cualquier momento "
-        "sin perder la selección del documento ni el estado guardado."
-    )
-    st.caption(
-        "La comparación OCR/Surya, la optimización de extracción y la estabilización CUDA "
-        "siguen diferidas hasta contar con una muestra real suficiente."
-    )
+        left, right = st.columns([6, 1])
+        with left:
+            st.markdown(f"**{item.label}** · {label}")
+            st.caption(item.summary)
+            if item.detail and item.status != "ready":
+                st.caption(item.detail)
+        with right:
+            if item.app_mode and st.button(
+                f"Abrir {item.label}",
+                key=f"home_open_{item.key}",
+                help=f"Abrir {item.label}",
+                use_container_width=True,
+            ):
+                _navigate(st, item.app_mode)

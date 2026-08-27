@@ -9,6 +9,7 @@ from sqlalchemy import inspect, select
 from archive_workbench.audiovisual import (
     archive_timeline_annotation,
     assign_speaker_from_time,
+    assign_speaker_to_segment,
     create_timeline_annotation,
     export_transcript_segments_bytes,
     register_transcription_backend,
@@ -44,7 +45,7 @@ def test_0046_adds_timeline_annotation_tables(tmp_path: Path) -> None:
     assert current_revision(root) == "0045_audiovisual_transcription"
 
     upgrade_database(root)
-    assert current_revision(root) == "0046_audiovisual_timeline_annotations"
+    assert current_revision(root) == "0047_authority_relation_profiles"
 
     engine = create_sqlite_engine(database_path(root))
     try:
@@ -287,6 +288,50 @@ def test_assign_speaker_from_time_closes_previous_turn(tmp_path: Path) -> None:
         engine.dispose()
 
 
+
+def test_assign_speaker_to_segment_preserves_neighboring_turn(tmp_path: Path) -> None:
+    root, decisions, engine, result, _audio = _project(tmp_path)
+    try:
+        with session_scope(engine) as session:
+            media = session.scalar(
+                select(AudiovisualMedia).where(
+                    AudiovisualMedia.digital_object_id == result.digital_object_id
+                )
+            )
+            assert media is not None
+            broad = create_timeline_annotation(
+                session,
+                media_id=media.id,
+                annotation_type="speaker",
+                start_time=0.0,
+                end_time=float(media.duration_seconds),
+                label="Hablante A",
+                authority_id=None,
+                actor="alex",
+            )
+            replacement = assign_speaker_to_segment(
+                session,
+                media_id=media.id,
+                start_time=0.4,
+                end_time=0.8,
+                label="Hablante B",
+                authority_id=None,
+                actor="alex",
+            )
+            assert replacement.id != broad.id
+            rows = [
+                row
+                for row in timeline_annotation_rows(session, media_id=media.id)
+                if row.annotation_type == "speaker"
+            ]
+            assert [(row.label, row.start_time, row.end_time) for row in rows] == [
+                ("Hablante A", 0.0, 0.4),
+                ("Hablante B", 0.4, 0.8),
+                ("Hablante A", 0.8, float(media.duration_seconds)),
+            ]
+    finally:
+        engine.dispose()
+
 def test_synchronized_review_payload_keeps_text_and_links() -> None:
     class Authority:
         id = "authority-1"
@@ -319,9 +364,12 @@ def test_synchronized_review_payload_keeps_text_and_links() -> None:
             },
         )()
     ]
-    payload = build_synchronized_review_payload(segments, annotations, [Authority()])
+    payload = build_synchronized_review_payload(
+        segments, annotations, [Authority()], persistence_key="run-1"
+    )
     assert payload["segments"][0]["text"] == "Texto corregido"
     assert payload["annotations"][0]["authority_id"] == "authority-1"
+    assert payload["persistence_key"] == "run-1"
     assert payload["speaker_options"] == [
         {
             "value": "authority:authority-1",
@@ -342,10 +390,12 @@ def test_audiovisual_timeline_ui_is_synchronized_and_secondary_management() -> N
 
     for literal in (
         "Revisión sincronizada",
-        "Hablante actual",
-        "Asignar hablante desde aquí",
-        "Agregar anotación aquí",
-        "Gestionar anotaciones y hablantes",
+        "Hablante para este fragmento",
+        "Asignar hablante",
+        "Sólo este fragmento",
+        "Desde aquí hasta el próximo cambio",
+        "Agregar esta anotación en el momento actual",
+        "Revisar marcas temporales, hablantes y anotaciones ya registradas",
         "Transcripción con hablantes y anotaciones",
     ):
         assert literal in source or literal in component
@@ -353,6 +403,12 @@ def test_audiovisual_timeline_ui_is_synchronized_and_secondary_management() -> N
     assert "timeupdate" in component
     assert "scrollIntoView" in component
     assert "setTriggerValue('action'" in component
+    assert "sessionStorage" in component
+    assert "persistence_key" in component
+    assert "lastKnownTime" in component
+    assert "componentState.restoring" in component
+    assert "snapshotBeforeExternalInteraction" in component
+    assert "No volver a leer currentTime durante el desmontaje" in component
     assert "Tramo inicial" not in source
     assert "Tramo final" not in source
     assert "Guardar marca" not in source

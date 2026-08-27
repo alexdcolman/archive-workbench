@@ -6,6 +6,7 @@ import hashlib
 from pathlib import Path
 import shutil
 from typing import Any
+from urllib.parse import parse_qs, urlparse
 
 from sqlalchemy import select
 from sqlalchemy.orm import Session
@@ -89,6 +90,47 @@ def _platform_name(info: dict[str, Any]) -> str:
     return cleaned or "platform"
 
 
+def _legacy_platform_grouping(metadata: dict[str, Any]) -> dict[str, Any] | None:
+    if metadata.get("platform_grouping") is not None:
+        grouping = metadata.get("platform_grouping")
+        return dict(grouping) if isinstance(grouping, dict) else None
+    requested_url = str(metadata.get("requested_url") or "").strip()
+    if not requested_url or "youtube" not in str(metadata.get("platform") or "").lower():
+        return None
+    playlist_ids = parse_qs(urlparse(requested_url).query).get("list") or []
+    if not playlist_ids:
+        return None
+    playlist_id = str(playlist_ids[0]).strip()
+    if not playlist_id:
+        return None
+    return {
+        "kind": "platform_grouping",
+        "title": None,
+        "platform_id": playlist_id,
+        "webpage_url": f"https://www.youtube.com/playlist?list={playlist_id}",
+        "index": None,
+        "item_count": None,
+    }
+
+
+def _platform_grouping_snapshot(info: dict[str, Any]) -> dict[str, Any] | None:
+    title = info.get("playlist_title") or info.get("playlist")
+    grouping_id = info.get("playlist_id")
+    webpage_url = info.get("playlist_webpage_url")
+    index = info.get("playlist_index")
+    count = info.get("playlist_count")
+    if not any(value is not None for value in (title, grouping_id, webpage_url, index, count)):
+        return None
+    return {
+        "kind": "platform_grouping",
+        "title": title,
+        "platform_id": str(grouping_id) if grouping_id is not None else None,
+        "webpage_url": webpage_url,
+        "index": index,
+        "item_count": count,
+    }
+
+
 def _metadata_snapshot(info: dict[str, Any], *, request_url: str, media_kind: str) -> dict[str, Any]:
     requested_formats = info.get("requested_formats") or []
     if not requested_formats and info.get("format_id"):
@@ -105,11 +147,23 @@ def _metadata_snapshot(info: dict[str, Any], *, request_url: str, media_kind: st
         }
         for row in requested_formats
     ]
+    webpage_url = info.get("webpage_url") or info.get("original_url") or request_url
+    platform = _platform_name(info)
+    platform_id = str(info.get("id") or "")
+    publication = {
+        "kind": "platform_publication",
+        "platform": platform,
+        "platform_id": platform_id,
+        "webpage_url": webpage_url,
+        "title": info.get("title"),
+        "channel": info.get("channel") or info.get("uploader"),
+        "upload_date": info.get("upload_date"),
+    }
     return {
         "requested_url": request_url,
-        "webpage_url": info.get("webpage_url") or info.get("original_url") or request_url,
-        "platform": _platform_name(info),
-        "platform_id": str(info.get("id") or ""),
+        "webpage_url": webpage_url,
+        "platform": platform,
+        "platform_id": platform_id,
         "extractor": info.get("extractor"),
         "extractor_key": info.get("extractor_key"),
         "title": info.get("title"),
@@ -125,6 +179,8 @@ def _metadata_snapshot(info: dict[str, Any], *, request_url: str, media_kind: st
         "description": info.get("description"),
         "media_kind_requested": media_kind,
         "formats": formats,
+        "publication": publication,
+        "platform_grouping": _platform_grouping_snapshot(info),
     }
 
 
@@ -164,7 +220,10 @@ def _extract_info(*, url: str, download: bool, outtmpl: str | None = None, media
     if not isinstance(info, dict):
         raise RuntimeError("La plataforma no devolvió metadatos utilizables")
     if info.get("_type") in {"playlist", "multi_video"} or info.get("entries"):
-        raise ValueError("AV-02 incorpora un audio o video por vez; pegá la URL del material concreto")
+        raise ValueError(
+            "Esta URL corresponde a una agrupación de plataforma, no a un audio o video individual. "
+            "Archive Workbench no la convierte automáticamente en una Colección o Serie: abrí el material concreto que querés incorporar."
+        )
     if not info.get("id"):
         raise RuntimeError("La plataforma no devolvió un identificador estable")
     return yt_dlp, info
@@ -256,6 +315,13 @@ def import_platform_media(
             "incorporated_sha256": digest,
             "incorporated_byte_size": path.stat().st_size,
             "incorporated_extension": path.suffix.lower().lstrip("."),
+            "local_copy": {
+                "kind": "incorporated_copy",
+                "relative_path": relative_path,
+                "sha256": digest,
+                "byte_size": path.stat().st_size,
+                "extension": path.suffix.lower().lstrip("."),
+            },
         }
     )
     payload = dict(registration.source_payload_json or {})
@@ -321,5 +387,8 @@ def platform_origin_for_digital_object(
         payload = registration.source_payload_json or {}
         platform = payload.get("platform_import")
         if isinstance(platform, dict):
-            return dict(platform)
+            normalized = dict(platform)
+            if normalized.get("platform_grouping") is None:
+                normalized["platform_grouping"] = _legacy_platform_grouping(normalized)
+            return normalized
     return None

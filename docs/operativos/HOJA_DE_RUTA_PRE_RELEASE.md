@@ -1,7 +1,7 @@
 # Hoja de ruta pre-release y líneas paralelas — Archive Workbench
 
-**Estado preparado:** 2026-08-08
-**Versión de referencia:** 0.88.2
+**Estado preparado:** 2026-08-27
+**Versión de referencia:** 0.89.0 RC79
 
 Esta hoja ordena el trabajo restante hasta v1.0. El detalle y el estado de cada bloque se mantienen en [`PENDIENTES_ACTIVOS.md`](PENDIENTES_ACTIVOS.md). Las líneas paralelas no bloquean la publicación inicial salvo decisión explícita posterior.
 
@@ -9,16 +9,14 @@ Esta hoja ordena el trabajo restante hasta v1.0. El detalle y el estado de cada 
 
 `OCR-01` quedó implementado, validado y cerrado en 0.83.0. `AV-01` quedó implementado, validado y cerrado en 0.84.0. `AV-02` quedó implementado, validado y cerrado en 0.85.0. `AV-03` quedó implementado, validado y cerrado en 0.86.0. `INT-01` quedó implementado, validado y cerrado en 0.87.0. `EXP-01` quedó implementado, validado y cerrado en 0.88.0.
 
-1. Ejecutar `PILOT-01` sobre un proyecto real y persistente con materiales DIPPBA, APM-Chubut y testimonios audiovisuales.
-2. Ejecutar `UX-02` sobre la aplicación completa y el corpus real del piloto.
-3. Completar `WEB-01`: sitio público de Archive Workbench en GitHub Pages, tutorial, README ilustrado y referencia técnica pública.
-4. Ejecutar `QA-01` junto con `OPS-02`.
-5. Preparar `OPS-01` y verificar perfiles de instalación.
-6. Cerrar `OPS-03`, congelar contratos públicos y preparar la candidata a v1.0.
+1. Completar y validar `OPS-01`: publicar las imágenes CPU y NVIDIA GPU de RC79 y comprobar el inicio por doble clic en los sistemas compatibles.
+2. Retomar `WEB-01` sólo después de estabilizar la instalación pública y reescribir sitio/README bajo la regla de lectores sin conocimiento previo. La publicación final seguirá usando GitHub Pages.
+3. Ejecutar `QA-01` junto con `OPS-02`.
+4. Cerrar `OPS-03`, congelar contratos públicos y preparar la candidata a v1.0.
 
 ## Línea paralela vinculada
 
-`GIAR-01` puede comenzar en paralelo con `PILOT-01`, porque reutiliza materiales, autoridades, unidades archivísticas y resultados de investigación reales. Su base debe vivir en un proyecto separado y persistente de Archive Workbench. La construcción del sitio público del Grupo de Investigación en Archivos de la Represión se realizará cuando el modelo de datos y los contenidos hayan sido revisados; no bloquea por sí sola la v1.0 de Archive Workbench.
+`UX-02` quedó cerrado por la recorrida manual posterior a RC70. `PILOT-01` quedó cerrado para pre-release en RC66. `GIAR-01` continúa como línea paralela porque reutiliza materiales, autoridades, unidades archivísticas y resultados de investigación reales. Su base debe vivir en un proyecto separado y persistente de Archive Workbench. La construcción del sitio público del Grupo de Investigación en Archivos de la Represión se realizará cuando el modelo de datos y los contenidos hayan sido revisados; no bloquea por sí sola la v1.0 de Archive Workbench.
 
 El alcance completo se documenta en [`PROYECTO_PARALELO_GIAR.md`](../referencia/PROYECTO_PARALELO_GIAR.md).
 

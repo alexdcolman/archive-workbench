@@ -42,6 +42,7 @@ _DECISION_LABELS = {
     "reject": "Rechazado",
     "modify": "Modificado",
     "defer": "Aplazado",
+    "restore": "Restaurado para revisión",
 }
 _STATUS_LABELS = {
     "pending": "Pendiente",
@@ -343,7 +344,7 @@ def review_discovery_candidate(
     confirm_new_authority: bool = False,
     source: str = "api",
 ) -> DiscoveryDecisionSummary:
-    """Registra una decisión humana y sus escrituras explícitas en una transacción.
+    """Registra una decisión explícita y sus escrituras explícitas en una transacción.
 
     La fila de decisión es append-only. El candidato conserva el snapshot original y
     solo actualiza su estado operativo. Ninguna aceptación crea relaciones.
@@ -386,7 +387,7 @@ def review_discovery_candidate(
 
     clean_reason = _clean_optional(reason)
     clean_description = _clean_optional(description)
-    if decision_type in {"reject", "modify", "defer"} and clean_reason is None:
+    if decision_type in {"modify", "defer"} and clean_reason is None:
         raise ValueError("La decisión requiere un fundamento")
     if decision_type == "modify":
         if (
@@ -433,8 +434,6 @@ def review_discovery_candidate(
                 raise ValueError(
                     "Confirmá explícitamente la creación de una autoridad sin revisar"
                 )
-            if clean_reason is None:
-                raise ValueError("Crear una autoridad nueva requiere un fundamento")
             preferred_name = _clean_required(
                 new_authority_name or next_text,
                 field="El nombre preferido de la nueva autoridad",
@@ -457,8 +456,8 @@ def review_discovery_candidate(
                 review_status="unreviewed",
                 created_by=actor,
                 note=(
-                    f"Creada explícitamente desde el candidato {candidate.id}. "
-                    f"Fundamento: {clean_reason}"
+                    f"Creada explícitamente desde la referencia encontrada {candidate.id}."
+                    + (f" Nota: {clean_reason}" if clean_reason else "")
                 ),
             )
 
@@ -578,6 +577,136 @@ def review_discovery_candidate(
         context_record_id=context_record.id if context_record else None,
     )
 
+
+
+def accept_discovery_candidates_as_new_authorities(
+    session: Session,
+    *,
+    project_id: str,
+    candidate_ids: Iterable[str],
+    decided_by: str,
+    source: str = "api",
+) -> tuple[DiscoveryDecisionSummary, ...]:
+    """Acepta varias referencias y crea una entidad sin revisar por cada una, en una sola transacción."""
+
+    selected_ids = tuple(dict.fromkeys(str(value) for value in candidate_ids if str(value)))
+    if not selected_ids:
+        raise ValueError("Seleccioná al menos una referencia")
+    summaries: list[DiscoveryDecisionSummary] = []
+    for candidate_id in selected_ids:
+        candidate = session.get(DiscoveryCandidate, candidate_id)
+        if candidate is None or candidate.project_id != project_id:
+            raise ValueError("Una de las referencias seleccionadas no existe en este proyecto")
+        effective = effective_candidate_values(session, candidate)
+        if effective.semantic_family not in {"actor", "space", "event", "work"}:
+            raise ValueError(
+                f"La referencia «{effective.text}» no corresponde a una clase que pueda crear una entidad"
+            )
+        summaries.append(
+            review_discovery_candidate(
+                session,
+                project_id=project_id,
+                candidate_id=candidate_id,
+                decision_type="accept",
+                decided_by=decided_by,
+                reviewed_text=effective.text,
+                semantic_family=effective.semantic_family,
+                reviewed_subtype=effective.subtype,
+                acceptance_mode="new_authority",
+                new_authority_name=effective.text,
+                confirm_new_authority=True,
+                reason="Creación conjunta confirmada desde la revisión de referencias encontradas.",
+                source=source,
+            )
+        )
+    return tuple(summaries)
+
+
+def reject_discovery_candidates(
+    session: Session,
+    *,
+    project_id: str,
+    candidate_ids: Iterable[str],
+    decided_by: str,
+    reason: str | None = None,
+    source: str = "api",
+) -> tuple[DiscoveryDecisionSummary, ...]:
+    """Descarta varias referencias de forma explícita y reversible desde el historial."""
+
+    selected_ids = tuple(dict.fromkeys(str(value) for value in candidate_ids if str(value)))
+    if not selected_ids:
+        raise ValueError("Seleccioná al menos una referencia")
+    return tuple(
+        review_discovery_candidate(
+            session,
+            project_id=project_id,
+            candidate_id=candidate_id,
+            decision_type="reject",
+            decided_by=decided_by,
+            reason=reason,
+            source=source,
+        )
+        for candidate_id in selected_ids
+    )
+
+
+def restore_rejected_discovery_candidate(
+    session: Session,
+    *,
+    project_id: str,
+    candidate_id: str,
+    restored_by: str,
+    source: str = "api",
+) -> DiscoveryDecisionSummary:
+    """Devuelve una referencia descartada a la cola de revisión sin borrar su historial."""
+
+    _ensure_project(session, project_id)
+    candidate = session.get(DiscoveryCandidate, candidate_id)
+    if candidate is None or candidate.project_id != project_id:
+        raise ValueError("La referencia no existe en este proyecto")
+    latest = _latest_decision(session, candidate.id)
+    if candidate.status != "rejected" or latest is None or latest.decision_type != "reject":
+        raise ValueError("La referencia seleccionada no está descartada")
+    actor = _clean_required(restored_by, field="La persona responsable", maximum=200)
+    if source not in {"ui", "cli", "api", "script"}:
+        raise ValueError(f"Origen de decisión inválido: {source}")
+    effective = effective_candidate_values(session, candidate)
+    decision = DiscoveryDecision(
+        id=new_id(),
+        project_id=project_id,
+        candidate_id=candidate.id,
+        decision_number=_next_decision_number(session, candidate.id),
+        decision_type="restore",
+        reviewed_text=effective.text,
+        semantic_family=effective.semantic_family,
+        reviewed_subtype=effective.subtype,
+        acceptance_mode=None,
+        target_authority_id=None,
+        created_mention_id=None,
+        reason="Restaurada para volver a revisarla.",
+        source=source,
+        candidate_state_sha256=_candidate_state_sha256(candidate),
+        payload_json={"restored_rejection_decision_id": latest.id},
+        decided_by=actor,
+        decided_at=utc_now(),
+    )
+    session.add(decision)
+    candidate.status = "pending"
+    session.flush()
+    return DiscoveryDecisionSummary(
+        decision_id=decision.id,
+        candidate_id=candidate.id,
+        decision_number=decision.decision_number,
+        decision_type=decision.decision_type,
+        candidate_status=candidate.status,
+        reviewed_text=decision.reviewed_text,
+        semantic_family=decision.semantic_family,
+        reviewed_subtype=decision.reviewed_subtype,
+        acceptance_mode=None,
+        target_authority_id=None,
+        created_mention_id=None,
+        context_record_id=None,
+    )
 
 def discovery_decision_rows(
     session: Session,

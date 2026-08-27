@@ -368,6 +368,37 @@ def test_clickable_canvas_payload_contains_only_valid_boxes(tmp_path: Path) -> N
     assert payload["boxes"][0]["selected"] is True
 
 
+
+def test_review_canvas_component_callback_syncs_selected_object_before_rerun() -> None:
+    from types import SimpleNamespace
+
+    from archive_workbench.review_canvas import _sync_component_selection
+
+    class FakeStreamlit:
+        def __init__(self) -> None:
+            self.session_state = {
+                "canvas": SimpleNamespace(selection_commit="object-b"),
+                "selector": "object-a",
+            }
+
+    st = FakeStreamlit()
+    _sync_component_selection(
+        st,
+        component_key="canvas",
+        selection_state_key="selector",
+        valid_object_ids={"object-a", "object-b"},
+    )
+    assert st.session_state["selector"] == "object-b"
+
+    st.session_state["canvas"] = SimpleNamespace(selection_commit="not-on-page")
+    _sync_component_selection(
+        st,
+        component_key="canvas",
+        selection_state_key="selector",
+        valid_object_ids={"object-a", "object-b"},
+    )
+    assert st.session_state["selector"] == "object-b"
+
 def test_run_action_queues_selection_without_mutating_widget_key() -> None:
     class FakeStreamlit:
         def __init__(self) -> None:

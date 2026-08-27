@@ -14,7 +14,7 @@ from archive_workbench.audiovisual import (
     transcribe_audiovisual,
 )
 from archive_workbench.catalog import ensure_project
-from archive_workbench.catalog_management import create_archival_unit
+from archive_workbench.catalog_management import create_archival_unit, register_external_file
 from archive_workbench.contracts.audiovisual import TranscriptSegmentInput, TranscriptionRequest
 from archive_workbench.contracts.platform import PlatformImportRequest
 from archive_workbench.db import create_sqlite_engine, database_path, session_scope, upgrade_database
@@ -22,6 +22,8 @@ from archive_workbench.db.models import AudiovisualMedia, DigitalObject, SourceR
 from archive_workbench.decisions import load_decisions
 from archive_workbench.identity import sha256_file
 from archive_workbench.platform_import import (
+    _extract_info,
+    _legacy_platform_grouping,
     import_platform_media,
     platform_origin_for_digital_object,
 )
@@ -82,6 +84,11 @@ def _metadata() -> dict:
         "channel_id": "canal123",
         "uploader": "Canal de prueba",
         "upload_date": "20260801",
+        "playlist_id": "PL-rememorarte",
+        "playlist_title": "rememorARTE, honrar la vida",
+        "playlist_index": 4,
+        "playlist_count": 12,
+        "playlist_webpage_url": "https://www.youtube.com/playlist?list=PL-rememorarte",
         "duration": 9.48,
         "license": None,
         "format_id": "137+140",
@@ -91,6 +98,73 @@ def _metadata() -> dict:
             {"format_id": "140", "ext": "m4a", "vcodec": "none", "acodec": "mp4a"},
         ],
     }
+
+
+
+def test_local_file_import_uses_the_same_catalog_and_audiovisual_circuit(tmp_path: Path) -> None:
+    root, decisions, engine, unit = _project(tmp_path)
+    fixture = Path(__file__).parents[1] / "examples" / "av01_validation" / "testimonio_controlado.mp4"
+    try:
+        with session_scope(engine) as session:
+            result = register_external_file(
+                session,
+                project_root=root,
+                project_id=decisions.project_id,
+                archival_unit_id=unit.id,
+                source_path=fixture,
+                registered_by="alex",
+            )
+            assert result.relative_path.startswith("corpus/importados/")
+            digital = session.get(DigitalObject, result.registration.digital_object_id)
+            assert digital is not None
+            assert digital.media_type == "video"
+            media = session.scalar(
+                select(AudiovisualMedia).where(AudiovisualMedia.digital_object_id == digital.id)
+            )
+            assert media is not None
+            assert media.title == "testimonio_controlado"
+    finally:
+        engine.dispose()
+
+def test_legacy_youtube_watch_url_recovers_playlist_context_without_reimport() -> None:
+    grouping = _legacy_platform_grouping(
+        {
+            "platform": "youtube",
+            "requested_url": "https://www.youtube.com/watch?v=videoAV02&list=PL-rememorarte",
+        }
+    )
+    assert grouping is not None
+    assert grouping["platform_id"] == "PL-rememorarte"
+    assert grouping["webpage_url"] == "https://www.youtube.com/playlist?list=PL-rememorarte"
+
+
+def test_platform_playlist_is_preserved_as_external_grouping_not_catalog_unit(monkeypatch) -> None:
+    class FakeYDL:
+        def __enter__(self):
+            return self
+
+        def __exit__(self, exc_type, exc, tb):
+            return False
+
+        def extract_info(self, url, download=False):
+            return {
+                "_type": "playlist",
+                "id": "PL-rememorarte",
+                "title": "rememorARTE, honrar la vida",
+                "entries": [{"id": "videoAV02"}],
+            }
+
+    fake_yt_dlp = SimpleNamespace(
+        YoutubeDL=lambda _options: FakeYDL(),
+        utils=SimpleNamespace(),
+    )
+    monkeypatch.setattr("archive_workbench.platform_import._load_yt_dlp", lambda: fake_yt_dlp)
+
+    with pytest.raises(ValueError, match="no la convierte automáticamente en una Colección o Serie"):
+        _extract_info(
+            url="https://www.youtube.com/playlist?list=PL-rememorarte",
+            download=False,
+        )
 
 
 def test_platform_request_requires_explicit_authorization() -> None:
@@ -165,7 +239,19 @@ def test_platform_import_enters_av01_and_preserves_remote_provenance(tmp_path: P
             assert origin["webpage_url"] == metadata["webpage_url"]
             assert origin["access_conditions"].startswith("Material autorizado")
             assert origin["authorization_confirmed"] is True
+            assert origin["publication"]["kind"] == "platform_publication"
+            assert origin["publication"]["platform_id"] == "videoAV02"
+            assert origin["platform_grouping"] == {
+                "kind": "platform_grouping",
+                "title": "rememorARTE, honrar la vida",
+                "platform_id": "PL-rememorarte",
+                "webpage_url": "https://www.youtube.com/playlist?list=PL-rememorarte",
+                "index": 4,
+                "item_count": 12,
+            }
             assert origin["incorporated_sha256"] == result.sha256
+            assert origin["local_copy"]["kind"] == "incorporated_copy"
+            assert origin["local_copy"]["sha256"] == result.sha256
             assert origin["yt_dlp_version"] == "2026.7.4"
 
             media = session.scalar(
@@ -212,23 +298,32 @@ def test_platform_import_enters_av01_and_preserves_remote_provenance(tmp_path: P
         engine.dispose()
 
 
-def test_platform_ui_is_optional_closed_and_does_not_auto_transcribe() -> None:
+def test_platform_ui_is_one_incorporation_method_and_does_not_auto_transcribe() -> None:
     root = Path(__file__).parents[1]
     source = (root / "src" / "archive_workbench" / "audiovisual_app.py").read_text(
         encoding="utf-8"
     )
     for literal in (
-        "Incorporar desde plataforma",
+        "Incorporar audio o video",
+        "Cómo querés incorporar el audio o video",
+        "Desde esta computadora",
+        "Desde una plataforma web",
         "URL del audio o video",
-        "Unidad archivística",
-        "Tipo de incorporación",
-        "Condiciones de acceso / autorización",
-        "Confirmo que el proyecto está autorizado a incorporar este material",
+        "Unidad del catálogo a la que pertenece este material",
+        "Qué parte del material querés incorporar",
+        "Motivo o condiciones que autorizan incorporar este material",
+        "Confirmo que este proyecto está autorizado a conservar una copia de este audio o video",
+        "Incorporar este audio o video desde la plataforma",
+        "Publicación en la plataforma",
+        "Agrupación en la plataforma",
+        "Copia incorporada al proyecto",
+        "no se transforma automáticamente",
     ):
         assert literal in source
-    assert '"Incorporar desde plataforma",\n        value=False,' in source
-    assert "No inicia ninguna transcripción automáticamente." in source
-    assert "import_platform_media(" in source
+    assert 'av_platform_import_open' not in source
+    assert 'import_platform_media(' in source
+    platform_block = source[source.index('with st.form("av_platform_import_form"'):source.index('def _render_transcription_workspace')]
+    assert 'transcribe_audiovisual(' not in platform_block
 
 
 def test_av02_validation_scripts_accept_one_authorized_youtube_import(tmp_path: Path, monkeypatch) -> None:
@@ -245,8 +340,8 @@ def test_av02_validation_scripts_accept_one_authorized_youtube_import(tmp_path: 
 
     project_root = tmp_path / "av02_validation"
     summary = create_module.create_validation_project(project_root)
-    assert summary["version"] == "0.88.2"
-    assert summary["revision"] == "0046_audiovisual_timeline_annotations"
+    assert summary["version"] == "0.89.0"
+    assert summary["revision"] == "0047_authority_relation_profiles"
     assert summary["platform_import_count"] == 0
     assert summary["project_data_touched"] is False
 

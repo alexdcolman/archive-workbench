@@ -118,6 +118,7 @@ class SemanticSearchResult:
     score: float
     title: str
     excerpt: str
+    query_text: str
     source_key: str | None
     object_ids: list[str]
     page_start: int
@@ -804,6 +805,8 @@ def semantic_search(
     query: str,
     top_k: int = 20,
     minimum_score: float = 0.0,
+    exclude_chunk_ids: Sequence[str] = (),
+    exclude_object_ids: Sequence[str] = (),
     temporal_start: date | None = None,
     temporal_end: date | None = None,
     temporal_include_undated: bool = False,
@@ -854,7 +857,13 @@ def semantic_search(
         raise ValueError("El índice y sus metadatos tienen cantidades diferentes")
     query_vector = validated[0]
     scored: list[tuple[float, dict[str, Any]]] = []
+    excluded = {str(value) for value in exclude_chunk_ids}
+    excluded_objects = {str(value) for value in exclude_object_ids}
     for vector, row in zip(vectors, metadata, strict=True):
+        if str(row.get("chunk_id", "")) in excluded:
+            continue
+        if excluded_objects.intersection(str(value) for value in row.get("object_ids", [])):
+            continue
         if profile.normalize_embeddings:
             score = _dot(query_vector, vector)
         else:
@@ -894,6 +903,7 @@ def semantic_search(
                 score=score,
                 title=str(row.get("title") or "Sin título"),
                 excerpt=excerpt,
+                query_text=text_value,
                 source_key=row.get("source_key"),
                 object_ids=[str(value) for value in row.get("object_ids", [])],
                 page_start=int(row.get("page_start") or 1),

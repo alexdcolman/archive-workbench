@@ -1,9 +1,11 @@
 from __future__ import annotations
 
+from archive_workbench.ui_dates import DATE_INPUT_MIN, DATE_INPUT_MAX
+from archive_workbench.ui_help import TAB_HELP
 from datetime import datetime, time, timezone
 from pathlib import Path
 
-from archive_workbench.ui_navigation import rerun_view, tracked_tabs
+from archive_workbench.ui_navigation import rerun_view, section_heading, tracked_tabs
 
 from archive_workbench.ui_navigation import rerun_app, request_app_view
 
@@ -51,11 +53,9 @@ _ACTIVE_STATUSES = {"planned", "in_progress", "submitted", "blocked"}
 
 
 def _render_summary_card(st, label: str, value: object) -> None:
-    """Muestra un indicador legible también en paneles angostos."""
+    """Muestra un indicador compacto del estado del trabajo."""
 
-    with st.container(border=True):
-        st.caption(label)
-        st.write(f"**{value}**")
+    st.metric(label, value)
 
 
 def _database_action(db_path: Path, callback):
@@ -127,17 +127,7 @@ def render_work_view(
     project_id: str,
     actor: str,
 ) -> None:
-    st.header("Organizar trabajo")
-    st.caption(
-        "Asigná responsabilidades, seguí el avance y coordiná revisiones sin modificar "
-        "automáticamente el OCR, el texto editable ni sus estados de aprobación."
-    )
-    with st.expander("Cómo se organiza el trabajo", expanded=False):
-        st.write(
-            "Una asignación indica quién trabaja sobre un documento o un rango de páginas. "
-            "Mi trabajo reúne las tareas de la persona indicada en la barra lateral, y la "
-            "revisión cruzada permite que otra persona controle una revisión primaria."
-        )
+    section_heading(st, "Organizar trabajo")
     assignments, workload, candidates, inventory = _load_all(
         db_path=db_path,
         project_root=project_root,
@@ -147,8 +137,9 @@ def render_work_view(
     assignment_map = {row.assignment_id: row for row in assignments}
     panel_tab, assignments_tab, mine_tab, cross_tab = tracked_tabs(
         st,
-        ["Resumen", "Asignar y administrar", "Mi trabajo", "Revisión cruzada"],
+        ["Estado de las tareas", "Crear y administrar asignaciones", "Tareas de la persona actual", "Asignar una segunda revisión"],
         key="work_tabs",
+        help_by_label=TAB_HELP["work_tabs"],
     )
 
     with panel_tab:
@@ -164,22 +155,17 @@ def render_work_view(
             for row in assignments
             if row.assignment_kind == "cross_review" and row.status in _ACTIVE_STATUSES
         ]
-        first_row = st.columns(2)
-        with first_row[0]:
-            _render_summary_card(st, "Asignaciones activas", len(active))
-        with first_row[1]:
+        summary_cols = st.columns(4)
+        with summary_cols[0]:
+            _render_summary_card(st, "Activas", len(active))
+        with summary_cols[1]:
             _render_summary_card(st, "Vencidas", len(overdue))
-        second_row = st.columns(2)
-        with second_row[0]:
-            _render_summary_card(st, "Enviadas a revisión", len(submitted))
-        with second_row[1]:
-            _render_summary_card(
-                st,
-                "Revisiones cruzadas pendientes",
-                len(cross_pending),
-            )
+        with summary_cols[2]:
+            _render_summary_card(st, "En revisión", len(submitted))
+        with summary_cols[3]:
+            _render_summary_card(st, "Segundas revisiones", len(cross_pending))
 
-        with st.expander("Carga por responsable", expanded=False):
+        with st.expander("Cantidad de tareas por responsable", expanded=False):
             if workload:
                 st.dataframe(
                     [
@@ -204,18 +190,18 @@ def render_work_view(
             else:
                 st.info("Todavía no hay asignaciones de trabajo.")
 
-        with st.expander("Avance de los documentos", expanded=False):
+        with st.expander("Avance de procesamiento y revisión por documento", expanded=False):
             st.dataframe(
                 [
                     {
                         "Documento": row.title,
-                        "source_key": row.source_key,
-                        "Procesamiento": row.status,
+                        "Identificador técnico del documento": row.source_key,
+                        "Estado de procesamiento": row.status,
                         "Páginas": row.page_count,
-                        "Seleccionadas": row.selected_pages,
-                        "Editables": row.editable_pages,
-                        "Revisadas": row.reviewed_pages,
-                        "Aprobadas": row.approved_pages,
+                        "Páginas con texto elegido": row.selected_pages,
+                        "Páginas disponibles en Revisar documentos": row.editable_pages,
+                        "Páginas revisadas": row.reviewed_pages,
+                        "Páginas aprobadas": row.approved_pages,
                         "Asignaciones activas": sum(
                             item.source_key == row.source_key
                             and item.status in _ACTIVE_STATUSES
@@ -229,41 +215,43 @@ def render_work_view(
             )
 
     with assignments_tab:
-        st.subheader("Crear asignación")
+        st.subheader("Crear una asignación de trabajo")
         if not inventory:
             st.info("No hay documentos procesables registrados en el catálogo.")
         else:
             with st.form("create_work_assignment", enter_to_submit=False):
                 source_key = st.selectbox(
-                    "Documento",
+                    "Documento sobre el que se trabajará",
                     options=list(inventory_map),
                     format_func=lambda key: f"{inventory_map[key].title} · {key}",
                 )
                 selected_document = inventory_map[source_key]
                 kind = st.selectbox(
-                    "Tipo",
+                    "Tarea que se asignará",
                     options=["processing", "primary_review"],
                     format_func=lambda value: _KIND_LABELS[value],
                 )
-                assignee = st.text_input("Responsable", value=actor or "")
+                assignee = st.text_input("Persona responsable de esta asignación", value=actor or "")
                 page_start, page_end = _scope_inputs(
                     st,
                     prefix="create_assignment",
                     page_count=selected_document.page_count,
                 )
                 priority = st.selectbox(
-                    "Prioridad",
+                    "Prioridad de esta asignación",
                     options=list(ASSIGNMENT_PRIORITIES),
                     index=list(ASSIGNMENT_PRIORITIES).index("normal"),
                     format_func=lambda value: _PRIORITY_LABELS[value],
                 )
-                has_due = st.checkbox("Definir fecha límite", value=False)
+                has_due = st.checkbox("Agregar una fecha límite a esta asignación", value=False)
                 due_date = st.date_input(
-                    "Fecha límite",
-                    help="La fecha solo se guarda cuando está marcada la opción anterior.",
+                    "Fecha límite de esta asignación",
+                    min_value=DATE_INPUT_MIN,
+                    max_value=DATE_INPUT_MAX,
+                    help="La fecha sólo se guarda si activaste la opción de agregar una fecha límite.",
                 )
-                note = st.text_area("Nota")
-                submit = st.form_submit_button("Crear asignación")
+                note = st.text_area("Indicaciones opcionales para la persona responsable")
+                submit = st.form_submit_button("Crear una asignación de trabajo")
             if submit:
                 try:
                     _database_action(
@@ -290,18 +278,18 @@ def render_work_view(
                     rerun_view(st)
 
         st.divider()
-        st.subheader("Asignaciones existentes")
+        st.subheader("Asignaciones de trabajo existentes")
         people = sorted({row.assignee for row in assignments}, key=str.casefold)
-        with st.expander("Filtros de asignaciones", expanded=False):
+        with st.popover("Filtrar asignaciones"):
             filter_cols = st.columns(3)
-            person_filter = filter_cols[0].multiselect("Responsable", people)
+            person_filter = filter_cols[0].multiselect("Persona responsable", people)
             status_filter = filter_cols[1].multiselect(
-                "Estado",
+                "Estado de la asignación",
                 list(ASSIGNMENT_STATUSES),
                 format_func=lambda value: _STATUS_LABELS[value],
             )
             kind_filter = filter_cols[2].multiselect(
-                "Tipo de tarea",
+                "Tarea asignada",
                 list(ASSIGNMENT_KINDS),
                 format_func=lambda value: _KIND_LABELS[value],
             )
@@ -315,98 +303,106 @@ def render_work_view(
         if not filtered:
             st.info("No hay asignaciones para los filtros seleccionados.")
         for row in filtered:
-            with st.expander(_assignment_label(row)):
-                st.write(f"**Ruta:** {row.archival_path}")
-                st.write(f"**Tipo:** {_KIND_LABELS[row.assignment_kind]}")
-                st.write(f"**Prioridad:** {_PRIORITY_LABELS[row.priority]}")
-                if row.due_at:
-                    st.write(f"**Fecha límite:** {row.due_at.date().isoformat()}")
-                if row.note:
-                    st.write(row.note)
-                if row.parent_assignee:
-                    st.caption(f"Revisión primaria realizada por {row.parent_assignee}")
-                with st.form(f"update_assignment_{row.assignment_id}_{row.revision}", enter_to_submit=False):
-                    new_assignee = st.text_input("Responsable", value=row.assignee)
-                    new_status = st.selectbox(
-                        "Estado",
-                        options=list(ASSIGNMENT_STATUSES),
-                        index=list(ASSIGNMENT_STATUSES).index(row.status),
-                        format_func=lambda value: _STATUS_LABELS[value],
-                    )
-                    new_priority = st.selectbox(
-                        "Prioridad",
-                        options=list(ASSIGNMENT_PRIORITIES),
-                        index=list(ASSIGNMENT_PRIORITIES).index(row.priority),
-                        format_func=lambda value: _PRIORITY_LABELS[value],
-                    )
-                    keep_due = st.checkbox(
-                        "Definir fecha límite",
-                        value=row.due_at is not None,
-                        key=f"assignment_has_due_{row.assignment_id}",
-                    )
-                    new_due_date = st.date_input(
-                        "Fecha límite",
-                        value=row.due_at.date() if row.due_at else datetime.now().date(),
-                        key=f"assignment_due_{row.assignment_id}",
-                        help="La fecha solo se guarda cuando está marcada la opción anterior.",
-                    )
-                    new_note = st.text_area("Nota de asignación", value=row.note or "")
-                    outcome = None
-                    if row.assignment_kind == "cross_review":
-                        outcome_options = [None, *CROSS_REVIEW_OUTCOMES]
-                        outcome = st.selectbox(
-                            "Resultado",
-                            options=outcome_options,
-                            index=outcome_options.index(row.outcome),
-                            format_func=lambda value: (
-                                "Sin resultado" if value is None else _OUTCOME_LABELS[value]
-                            ),
+            assignment_panel_open = st.toggle(
+                _assignment_label(row),
+                value=False,
+                key=f"work_assignment_panel_{row.assignment_id}",
+            )
+            if assignment_panel_open:
+                with st.container(border=True):
+                    st.write(f"**Ruta:** {row.archival_path}")
+                    st.write(f"**Tipo:** {_KIND_LABELS[row.assignment_kind]}")
+                    st.write(f"**Prioridad:** {_PRIORITY_LABELS[row.priority]}")
+                    if row.due_at:
+                        st.write(f"**Fecha límite:** {row.due_at.date().isoformat()}")
+                    if row.note:
+                        st.write(row.note)
+                    if row.parent_assignee:
+                        st.caption(f"Revisión primaria realizada por {row.parent_assignee}")
+                    with st.form(f"update_assignment_{row.assignment_id}_{row.revision}", enter_to_submit=False):
+                        new_assignee = st.text_input("Persona responsable de esta asignación", value=row.assignee)
+                        new_status = st.selectbox(
+                            "Estado de la asignación",
+                            options=list(ASSIGNMENT_STATUSES),
+                            index=list(ASSIGNMENT_STATUSES).index(row.status),
+                            format_func=lambda value: _STATUS_LABELS[value],
                         )
-                    change_note = st.text_input("Motivo del cambio")
-                    update_submit = st.form_submit_button("Guardar cambios")
-                if update_submit:
-                    try:
-                        _database_action(
+                        new_priority = st.selectbox(
+                            "Prioridad de esta asignación",
+                            options=list(ASSIGNMENT_PRIORITIES),
+                            index=list(ASSIGNMENT_PRIORITIES).index(row.priority),
+                            format_func=lambda value: _PRIORITY_LABELS[value],
+                        )
+                        keep_due = st.checkbox(
+                            "Mantener o agregar una fecha límite a esta asignación",
+                            value=row.due_at is not None,
+                            key=f"assignment_has_due_{row.assignment_id}",
+                        )
+                        new_due_date = st.date_input(
+                            "Fecha límite",
+                            value=row.due_at.date() if row.due_at else datetime.now().date(),
+                            min_value=DATE_INPUT_MIN,
+                            max_value=DATE_INPUT_MAX,
+                            key=f"assignment_due_{row.assignment_id}",
+                            help="La fecha solo se guarda cuando está marcada la opción anterior.",
+                        )
+                        new_note = st.text_area("Indicaciones de esta asignación", value=row.note or "")
+                        outcome = None
+                        if row.assignment_kind == "cross_review":
+                            outcome_options = [None, *CROSS_REVIEW_OUTCOMES]
+                            outcome = st.selectbox(
+                                "Resultado de la revisión cruzada",
+                                options=outcome_options,
+                                index=outcome_options.index(row.outcome),
+                                format_func=lambda value: (
+                                    "Sin resultado" if value is None else _OUTCOME_LABELS[value]
+                                ),
+                            )
+                        change_note = st.text_input("Motivo de los cambios en esta asignación")
+                        update_submit = st.form_submit_button("Guardar cambios de esta asignación")
+                    if update_submit:
+                        try:
+                            _database_action(
+                                db_path,
+                                lambda session, row=row: update_work_assignment(
+                                    session,
+                                    assignment_id=row.assignment_id,
+                                    expected_revision=row.revision,
+                                    changed_by=actor,
+                                    assignee=new_assignee,
+                                    status=new_status,
+                                    priority=new_priority,
+                                    due_at=_due_datetime(keep_due, new_due_date),
+                                    outcome=outcome,
+                                    assignment_note=new_note,
+                                    change_note=change_note,
+                                ),
+                            )
+                        except ValueError as exc:
+                            st.error(str(exc))
+                        else:
+                            st.success("Asignación actualizada.")
+                            rerun_view(st)
+                    if st.button(
+                        "Abrir este documento en Revisar documentos",
+                        key=f"assignment_open_{row.assignment_id}",
+                    ):
+                        _go_to_review(st, source_key=row.source_key, page=row.page_start)
+                    with st.expander("Historial de la asignación"):
+                        history = _database_action(
                             db_path,
-                            lambda session, row=row: update_work_assignment(
-                                session,
-                                assignment_id=row.assignment_id,
-                                expected_revision=row.revision,
-                                changed_by=actor,
-                                assignee=new_assignee,
-                                status=new_status,
-                                priority=new_priority,
-                                due_at=_due_datetime(keep_due, new_due_date),
-                                outcome=outcome,
-                                assignment_note=new_note,
-                                change_note=change_note,
+                            lambda session, row=row: work_assignment_revision_rows(
+                                session, assignment_id=row.assignment_id
                             ),
                         )
-                    except ValueError as exc:
-                        st.error(str(exc))
-                    else:
-                        st.success("Asignación actualizada.")
-                        rerun_view(st)
-                if st.button(
-                    "Abrir documento en Revisión",
-                    key=f"assignment_open_{row.assignment_id}",
-                ):
-                    _go_to_review(st, source_key=row.source_key, page=row.page_start)
-                with st.expander("Historial de la asignación"):
-                    history = _database_action(
-                        db_path,
-                        lambda session, row=row: work_assignment_revision_rows(
-                            session, assignment_id=row.assignment_id
-                        ),
-                    )
-                    for revision in history:
-                        st.write(
-                            f"Revisión {revision.revision_number} · {revision.operation} · "
-                            f"{revision.changed_by} · "
-                            f"{revision.changed_at.isoformat(timespec='minutes')}"
-                        )
-                        if revision.note:
-                            st.caption(revision.note)
+                        for revision in history:
+                            st.write(
+                                f"Revisión {revision.revision_number} · {revision.operation} · "
+                                f"{revision.changed_by} · "
+                                f"{revision.changed_at.isoformat(timespec='minutes')}"
+                            )
+                            if revision.note:
+                                st.caption(revision.note)
 
     with mine_tab:
         clean_actor = (actor or "").strip()
@@ -430,14 +426,14 @@ def render_work_view(
                 )
                 if row.note:
                     title_col.write(row.note)
-                if action_col.button("Abrir", key=f"mine_open_{row.assignment_id}"):
+                if action_col.button("Abrir el documento de esta tarea", key=f"mine_open_{row.assignment_id}"):
                     _go_to_review(st, source_key=row.source_key, page=row.page_start)
                 quick_cols = st.columns(4)
                 transitions = [
-                    ("En curso", "in_progress"),
-                    ("Enviar", "submitted"),
-                    ("Bloquear", "blocked"),
-                    ("Completar", "completed"),
+                    ("Marcar en curso", "in_progress"),
+                    ("Enviar a revisión", "submitted"),
+                    ("Marcar bloqueada", "blocked"),
+                    ("Marcar completada", "completed"),
                 ]
                 for column, (label, target_status) in zip(quick_cols, transitions):
                     disabled = (
@@ -470,7 +466,7 @@ def render_work_view(
                 if row.assignment_kind == "cross_review":
                     with st.form(f"mine_cross_outcome_{row.assignment_id}_{row.revision}", enter_to_submit=False):
                         selected_outcome = st.selectbox(
-                            "Resultado de revisión cruzada",
+                            "Conclusión de esta segunda revisión",
                             options=list(CROSS_REVIEW_OUTCOMES),
                             index=(
                                 list(CROSS_REVIEW_OUTCOMES).index(row.outcome)
@@ -480,10 +476,10 @@ def render_work_view(
                             format_func=lambda value: _OUTCOME_LABELS[value],
                         )
                         outcome_note = st.text_area(
-                            "Observaciones", value=row.note or "", height=90
+                            "Observaciones de esta segunda revisión", value=row.note or "", height=90
                         )
                         finish_cross = st.form_submit_button(
-                            "Guardar resultado y completar"
+                            "Guardar la conclusión y completar esta segunda revisión"
                         )
                     if finish_cross:
                         try:
@@ -507,9 +503,9 @@ def render_work_view(
                             rerun_view(st)
 
     with cross_tab:
-        st.subheader("Revisiones primarias enviadas")
+        st.subheader("Revisiones primarias disponibles para una segunda revisión")
         if not candidates:
-            st.info("No hay revisiones primarias enviadas o completadas.")
+            st.info("No hay revisiones primarias enviadas o completadas que puedan recibir una segunda revisión.")
         for candidate in candidates:
             scope = (
                 "Documento completo"
@@ -528,7 +524,7 @@ def render_work_view(
                     f"completadas {candidate.completed_cross_reviews}"
                 )
                 if st.button(
-                    "Abrir revisión primaria",
+                    "Abrir el documento de esta revisión primaria",
                     key=f"cross_open_{candidate.assignment_id}",
                 ):
                     _go_to_review(
@@ -538,27 +534,29 @@ def render_work_view(
                     )
                 with st.form(f"create_cross_{candidate.assignment_id}", enter_to_submit=False):
                     reviewer = st.text_input(
-                        "Responsable de revisión cruzada",
+                        "Persona responsable de la segunda revisión",
                         value=(actor if actor.casefold() != candidate.assignee.casefold() else ""),
                     )
                     priority = st.selectbox(
-                        "Prioridad",
+                        "Prioridad de esta asignación",
                         options=list(ASSIGNMENT_PRIORITIES),
                         index=list(ASSIGNMENT_PRIORITIES).index("normal"),
                         format_func=lambda value: _PRIORITY_LABELS[value],
                     )
                     cross_has_due = st.checkbox(
-                        "Definir fecha límite",
+                        "Agregar una fecha límite a esta segunda revisión",
                         value=False,
                         key=f"cross_has_due_{candidate.assignment_id}",
                     )
                     cross_due_date = st.date_input(
-                        "Fecha límite",
+                        "Fecha límite de esta segunda revisión",
+                        min_value=DATE_INPUT_MIN,
+                        max_value=DATE_INPUT_MAX,
                         key=f"cross_due_{candidate.assignment_id}",
                         help="La fecha solo se guarda cuando está marcada la opción anterior.",
                     )
-                    note = st.text_area("Indicaciones")
-                    cross_submit = st.form_submit_button("Asignar revisión cruzada")
+                    note = st.text_area("Indicaciones para la persona que hará la segunda revisión")
+                    cross_submit = st.form_submit_button("Asignar esta segunda revisión")
                 if cross_submit:
                     try:
                         _database_action(

@@ -6,7 +6,10 @@ import pytest
 from sqlalchemy import select
 from typer.testing import CliRunner
 
-from archive_workbench.analysis_audit import automatic_analysis_authorization_rows
+from archive_workbench.analysis_audit import (
+    automatic_analysis_authorization_filter_options,
+    automatic_analysis_authorization_rows,
+)
 from archive_workbench.analysis_quality import (
     ANALYSIS_QUALITY_POLICY_VERSION,
     AUTOMATIC_ANALYSIS_SPECS,
@@ -163,6 +166,28 @@ def test_export_and_semantic_profiles_record_append_only_authorizations(
                 limit=20,
             )
             assert len(rows) == 2
+            options = automatic_analysis_authorization_filter_options(
+                session, project_id="search_project"
+            )
+            assert {kind for kind, _label in options.analysis_kinds} == {
+                "corpus_export",
+                "semantic_index",
+            }
+            assert options.confirmed_by == ("tests",)
+            assert set(options.sources) == {"cli", "ui"}
+            assert set(options.scope_keys) == {"approved_only", "broader"}
+            assert [
+                row.analysis_kind
+                for row in automatic_analysis_authorization_rows(
+                    session,
+                    project_id="search_project",
+                    analysis_kind="corpus_export",
+                    source="ui",
+                    scope_key="broader",
+                    query="metodológica",
+                    limit=20,
+                )
+            ] == ["corpus_export"]
             by_kind = {row.analysis_kind: row for row in rows}
             assert by_kind["corpus_export"].scope_key == "broader"
             assert by_kind["corpus_export"].confirmation_reason == (
@@ -195,6 +220,9 @@ def test_quality_controls_do_not_depend_on_reactive_state_inside_forms() -> None
     authority_source = (root / "src/archive_workbench/authority_app.py").read_text(
         encoding="utf-8"
     )
+    discovery_source = (root / "src/archive_workbench/discovery_app.py").read_text(
+        encoding="utf-8"
+    )
     admin_source = (root / "src/archive_workbench/admin_app.py").read_text(
         encoding="utf-8"
     )
@@ -209,23 +237,36 @@ def test_quality_controls_do_not_depend_on_reactive_state_inside_forms() -> None
     ).read_text(encoding="utf-8")
 
     for source in (export_source, semantic_source):
-        assert "Confirmo que deseo incluir páginas no aprobadas" in source
-        assert "Fundamento del alcance ampliado" in source
+        assert "broader_quality_scope_confirmed = st.checkbox(" in source
+        assert "quality_scope_reason = st.text_area(" in source
         assert "broader_quality_scope_confirmed=" in source
         assert 'quality_scope_source="ui"' in source
         assert "st.form_submit_button" in source
 
-    assert "Confirmo que deseo buscar menciones en páginas no aprobadas" in authority_source
-    assert "candidate_quality_scope.is_default" in authority_source
-    assert "candidate_quality_reason" in authority_source
+    assert "candidate_quality_scope.is_broader_than_default" in authority_source
+    assert (
+        "Estados de revisión de página elegidos explícitamente en la pestaña Menciones."
+        in authority_source
+    )
     assert "record_mention_suggestion_authorization" in authority_source
+    assert "Confirmo que esta búsqueda puede incluir páginas" not in authority_source
+    assert "Por qué esta búsqueda debe incluir páginas" not in authority_source
     candidate_search = authority_source[
-        authority_source.index('st.subheader("Encontrar nuevas menciones en el corpus")'):
-        authority_source.index('if reset_col.button(')
+        authority_source.index('st.subheader(\n            "Buscar menciones"'):
+        authority_source.index('if clear_clicked:')
     ]
     assert 'disabled=' not in candidate_search
     assert 'search_disabled' not in candidate_search
-    assert "Auditoría de análisis" in admin_source
+
+    assert "quality_scope.is_broader_than_default" in discovery_source
+    assert (
+        "Estados de revisión de página elegidos explícitamente en Buscar nuevas entidades."
+        in discovery_source
+    )
+    assert 'quality_scope_source="ui"' in discovery_source
+    assert "Confirmo que esta búsqueda puede incluir páginas" not in discovery_source
+    assert "Por qué esta búsqueda debe incluir páginas" not in discovery_source
+    assert "Autorizaciones de análisis" in admin_source
     assert "automatic_analysis_authorization_rows" in admin_source
     assert "require_automatic_analysis_authorization" in audit_source
     assert "_require_export_profile_authorization" in export_domain_source

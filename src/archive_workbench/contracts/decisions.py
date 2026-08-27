@@ -8,6 +8,24 @@ from pydantic import Field, model_validator
 from archive_workbench.contracts.common import ContractModel
 
 
+CatalogSemanticKind = Literal["custody_context", "record_set", "record", "container", "other"]
+RecordSetType = Literal["fonds", "collection", "series", "file", "other"]
+
+_DEFAULT_LEVEL_SEMANTICS: dict[str, tuple[CatalogSemanticKind, RecordSetType | None]] = {
+    "archivo": ("custody_context", None),
+    "fondo": ("record_set", "fonds"),
+    "coleccion": ("record_set", "collection"),
+    "seccion": ("record_set", "other"),
+    "subseccion": ("record_set", "other"),
+    "serie": ("record_set", "series"),
+    "subserie": ("record_set", "series"),
+    "caja": ("container", None),
+    "legajo": ("record_set", "file"),
+    "tomo": ("container", None),
+    "documento": ("record", None),
+}
+
+
 class ArchivalLevelDefinition(ContractModel):
     key: str = Field(pattern=r"^[a-z][a-z0-9_]*$")
     label: str = Field(min_length=1)
@@ -17,6 +35,28 @@ class ArchivalLevelDefinition(ContractModel):
     required_fields: list[str] = Field(default_factory=list)
     optional: bool = True
     enabled: bool = True
+    semantic_kind: CatalogSemanticKind | None = None
+    record_set_type: RecordSetType | None = None
+
+    @property
+    def resolved_semantic_kind(self) -> CatalogSemanticKind:
+        if self.semantic_kind is not None:
+            return self.semantic_kind
+        return _DEFAULT_LEVEL_SEMANTICS.get(self.key, ("other", None))[0]
+
+    @property
+    def resolved_record_set_type(self) -> RecordSetType | None:
+        if self.record_set_type is not None:
+            return self.record_set_type
+        if self.resolved_semantic_kind != "record_set":
+            return None
+        return _DEFAULT_LEVEL_SEMANTICS.get(self.key, ("other", None))[1]
+
+    @model_validator(mode="after")
+    def validate_semantic_classification(self) -> "ArchivalLevelDefinition":
+        if self.record_set_type is not None and self.resolved_semantic_kind != "record_set":
+            raise ValueError("record_set_type sólo puede usarse en niveles semánticos record_set")
+        return self
 
 
 class DescriptiveFieldDefinition(ContractModel):
@@ -29,6 +69,27 @@ class DescriptiveFieldDefinition(ContractModel):
     supports_list: bool = False
     examples: list[str] = Field(default_factory=list)
     enabled: bool = True
+
+
+BASE_OPTIONAL_DESCRIPTIVE_FIELDS: tuple[dict[str, object], ...] = (
+    {"key": "arrangement", "label": "Organización y orden", "applies_to_levels": ["all"], "required": False, "repeatable": False, "data_type": "text"},
+    {"key": "access_conditions", "label": "Condiciones de acceso", "applies_to_levels": ["all"], "required": False, "repeatable": False, "data_type": "text"},
+    {"key": "physical_access_conditions", "label": "Condiciones físicas de acceso", "applies_to_levels": ["all"], "required": False, "repeatable": False, "data_type": "text"},
+    {"key": "technical_access_requirements", "label": "Requisitos técnicos de acceso", "applies_to_levels": ["all"], "required": False, "repeatable": False, "data_type": "text"},
+    {"key": "reproduction_use_conditions", "label": "Condiciones de reproducción y uso", "applies_to_levels": ["all"], "required": False, "repeatable": False, "data_type": "text"},
+    {"key": "languages_scripts", "label": "Lenguas y escrituras de los documentos", "applies_to_levels": ["all"], "required": False, "repeatable": True, "data_type": "text"},
+    {"key": "finding_aids", "label": "Instrumentos de descripción", "applies_to_levels": ["all"], "required": False, "repeatable": True, "data_type": "text"},
+    {"key": "custodial_history", "label": "Historia de la custodia", "applies_to_levels": ["all"], "required": False, "repeatable": False, "data_type": "text"},
+    {"key": "acquisition_method", "label": "Forma de ingreso", "applies_to_levels": ["all"], "required": False, "repeatable": False, "data_type": "text"},
+    {"key": "appraisal_selection_destruction", "label": "Valoración, selección y eliminación", "applies_to_levels": ["all"], "required": False, "repeatable": False, "data_type": "text"},
+    {"key": "accruals", "label": "Nuevos ingresos previstos", "applies_to_levels": ["all"], "required": False, "repeatable": False, "data_type": "text"},
+    {"key": "originals_location", "label": "Existencia y localización de originales", "applies_to_levels": ["all"], "required": False, "repeatable": False, "data_type": "text"},
+    {"key": "copies_location", "label": "Existencia y localización de copias", "applies_to_levels": ["all"], "required": False, "repeatable": False, "data_type": "text"},
+    {"key": "related_material", "label": "Documentación relacionada", "applies_to_levels": ["all"], "required": False, "repeatable": True, "data_type": "text"},
+    {"key": "related_publications", "label": "Publicaciones relacionadas", "applies_to_levels": ["all"], "required": False, "repeatable": True, "data_type": "text"},
+    {"key": "description_rules", "label": "Reglas y convenciones de descripción", "applies_to_levels": ["all"], "required": False, "repeatable": True, "data_type": "text"},
+    {"key": "description_sources", "label": "Fuentes de la descripción", "applies_to_levels": ["all"], "required": False, "repeatable": True, "data_type": "text"},
+)
 
 
 class CatalogDecisions(ContractModel):
@@ -132,6 +193,12 @@ class ProjectDecisions(ContractModel):
 
     @model_validator(mode="after")
     def validate_catalogs(self) -> "ProjectDecisions":
+        configured_field_keys = {item.key for item in self.descriptive_fields}
+        for payload in BASE_OPTIONAL_DESCRIPTIVE_FIELDS:
+            key = str(payload["key"])
+            if key not in configured_field_keys:
+                self.descriptive_fields.append(DescriptiveFieldDefinition.model_validate(payload))
+                configured_field_keys.add(key)
         level_keys = [item.key for item in self.archival_levels]
         object_keys = [item.key for item in self.object_types]
         field_keys = [item.key for item in self.descriptive_fields]

@@ -1,3 +1,574 @@
+## 0.89.0 RC79 - 2026-08-27
+
+- Registra como verde la transcripción audiovisual real `large-v3` + CUDA `float16` de la distribución GPU Linux/NVIDIA.
+- Corrige `peak_gpu_memory_mib` dentro de Docker cuando NVIDIA informa PIDs del anfitrión distintos del PID interno del contenedor.
+- Mantiene una atribución conservadora: ante varios procesos Python de cómputo equivalentes, la métrica queda sin medir.
+- Reconcila dos regresiones de prueba de AV-03 que todavía buscaban rótulos anteriores a la reorganización audiovisual; no cambia la interfaz.
+- Cambia los tags administrados a `0.89.0-rc79-cpu` y `0.89.0-rc79-gpu`.
+- Sin migración; continúa `0047_authority_relation_profiles`.
+
+## 0.89.0 RC78 - 2026-08-27
+
+- Corrige `extraction-doctor` en la imagen administrada GPU: el diagnóstico ya no exige Docker anidado para declarar disponible la ruta Surya/llama.cpp CUDA.
+- Registra la validación material Linux/NVIDIA de RC77: Surya 0.22.1 completó una página con `llama-server` CUDA, liberó el proceso al finalizar y devolvió la VRAM al nivel basal.
+- Mantiene sin cambios el runtime de inferencia, SQLite y la revisión `0047_authority_relation_profiles`.
+
+## 0.89.0 RC77 - 2026-08-26
+
+- Ajusta el runtime administrado Surya/llama.cpp después del timeout material de RC76: `SURYA_INFERENCE_TIMEOUT_SECONDS` toma el presupuesto documental y `SURYA_MAX_TOKENS_FULL_PAGE` usa 8192 por defecto.
+- Conserva overrides explícitos y registra ambos valores en `raw/surya.log`.
+- Mantiene sin cambios las instalaciones nativas y otros backends de Surya.
+- Pasa los tags administrados a `0.89.0-rc77-cpu` y `0.89.0-rc77-gpu`.
+- Sin migración; continúa `0047_authority_relation_profiles`.
+
+## 0.89.0 RC76 - 2026-08-26
+
+- Hace que el preflight de Surya use `LLAMA_CPP_BINARY`, igual que el runtime real del backend llama.cpp incluido.
+- Conserva `LD_LIBRARY_PATH` dentro del modo administrado `llamacpp`, sin cambiar la limpieza histórica de las instalaciones nativas.
+- Muestra Surya, Docling o Tesseract en la selección y comparación de extracciones.
+- Conserva la pestaña visual activa de Streamlit en el navegador durante reruns semánticos, sin convertir el cambio de pestaña en un rerun global.
+- Cambia los tags administrados a `0.89.0-rc76-cpu` y `0.89.0-rc76-gpu`.
+- Sin migración; continúa `0047_authority_relation_profiles`.
+
+## 0.89.0 RC75 - 2026-08-25
+
+- Permite elegir desde Windows, macOS o Linux la carpeta de un proyecto existente antes de iniciar Docker; sólo esa carpeta se monta como `/selected-project` y se abre directamente.
+- Conserva el inicio general para crear proyectos nuevos o abrir los guardados en `ArchiveWorkbenchData/Projects`.
+- Advierte que Google Drive, OneDrive, Dropbox e iCloud se usan como transporte y no como ubicación de una SQLite viva.
+- Los lanzadores reutilizan una imagen local ya disponible y sólo descargan el tag cuando falta, permitiendo validar la experiencia antes de publicar en GHCR.
+- Registra como verde el preflight material CPU de RC74; la extracción Surya y el reinicio persistente siguen pendientes.
+- Sin migración; continúa `0047_authority_relation_profiles`.
+
+## 0.89.0 RC74 - 2026-08-25
+
+- Corrige la ruta de bibliotecas compartidas de `llama-server` en las imágenes CPU y GPU después del fallo material del primer build RC73.
+- Cambia los tags administrados a `0.89.0-rc74-cpu` y `0.89.0-rc74-gpu`.
+- Agrega una regresión para exigir `/opt/llama` en la ruta dinámica y verificar `libllama-server-impl.so` durante ambos builds.
+- Sin migración; continúa `0047_authority_relation_profiles`.
+
+## 0.89.0 RC73 - 2026-08-25
+
+- Separa la distribución administrada en una imagen CPU multi-arquitectura y una imagen NVIDIA GPU.
+- Incluye `llama-server` CPU en la imagen estándar y `llama-server` CUDA 12 en la imagen NVIDIA; el modo administrado usa esos servidores para Surya sin Docker anidado.
+- Fuerza PyTorch CPU en el entorno Surya de la imagen CPU y usa CUDA 12.8/cuDNN + PyTorch CUDA 12.8 en la imagen GPU, manteniendo en CPU los auxiliares del perfil Surya preferido.
+- Agrega servicios Compose y lanzadores GPU separados para Windows y Linux; macOS utiliza CPU.
+- Elimina la construcción local automática en equipos de usuario: los lanzadores sólo descargan imágenes publicadas.
+- El workflow de GHCR publica CPU para `linux/amd64,linux/arm64` y GPU para `linux/amd64`.
+- Los builds reales y la validación en hosts limpios siguen pendientes; sin migración, continúa `0047_authority_relation_profiles`.
+
+## 0.89.0 RC72 - 2026-08-25
+
+- Pausa `WEB-01` hasta estabilizar la distribución pública y registra reglas estrictas de redacción para lectores sin conocimiento previo.
+- Inicia `OPS-01` con una distribución CPU administrada para Windows, macOS y Linux mediante Docker.
+- Agrega `ArchiveWorkbenchData/` como carpeta persistente para proyectos, importaciones y preferencias, fuera de la imagen del programa.
+- Adapta launcher, incorporación documental por lote, incorporación audiovisual y exportación del grafo para no depender de selectores Linux dentro del contenedor.
+- Agrega lanzadores de inicio/detención por sistema operativo y workflow de publicación de la imagen CPU en GHCR.
+- La construcción/publicación real de la imagen y la validación en máquinas limpias quedan pendientes; sin migración, continúa `0047_authority_relation_profiles`.
+
+## 0.89.0 RC71 - 2026-08-25
+
+- Cierra `UX-02` por validación manual y abre `WEB-01`.
+- Agrega documentación pública multipágina en `docs/` para GitHub Pages, con tutorial, páginas temáticas, conceptos, referencia técnica, solución de problemas y diagramas accesibles.
+- Reorganiza `README.md` como entrada pública con instalación rápida, flujo, capacidades, límites y enlaces a la documentación extensa.
+- `WEB-01` queda parcial hasta incorporar capturas reales y revisar la publicación final. Sin migración; continúa `0047_authority_relation_profiles`.
+
+## 0.89.0 RC70 - 2026-08-25
+
+- Cierra `DISC-03` por validación manual de RC69 e inicia `UX-02`.
+- `Casilleros y campos` pasa a una única tarea visible por vez y conserva la página como referencia visual permanente.
+- `Orden y estructura` relega la tabla extensa del orden propuesto a un detalle informativo cerrado.
+- `Leer una zona` vuelve a exponer seis pasos y elimina rótulos genéricos `Más opciones` de Procesar documentos.
+- `UX-02` queda parcial hasta recorrida manual representativa; sin migración, continúa `0047_authority_relation_profiles`.
+
+
+## 0.89.0 RC69 - 2026-08-25
+
+- Agrega `local_rules_v5` y conserva v1-v4 para reproducibilidad histórica.
+- Hace visible la versión de reglas de configuraciones y corridas y evita ejecutar inadvertidamente una configuración local histórica desde la UI.
+- Mantiene completos los límites nominales reportados y endurece `Obra / publicación` eliminando la propagación contextual amplia de citas.
+- Usa 500 referencias visibles por defecto; 100/250/1000/Todas siguen disponibles y los totales completos permanecen explícitos.
+- `DISC-03` continúa parcial hasta validar una corrida v5; sin migración, continúa `0047_authority_relation_profiles`.
+
+
+## 0.89.0 RC68 - 2026-08-25
+
+- Agrega `local_rules_v4` y conserva v1/v2/v3 para reproducibilidad de perfiles, corridas y continuidades históricas.
+- Reduce falsos `Obra / publicación` al exigir señales positivas además de comillas y corrige límites truncados o contaminados de actores e instituciones.
+- Elimina el límite silencioso de 500 candidatos en la vista de revisión, informa total de corrida, coincidencias por filtro y cantidad visible, y permite mostrar todas las referencias o limitar a 100/250/500/1000.
+- Agrega `config/discovery_evaluation_corpus_disc03_rc68.jsonl` con regresiones sintéticas de los errores reportados.
+- `DISC-03` continúa parcial hasta validación manual de una corrida v4; sin migración, continúa `0047_authority_relation_profiles`.
+## 0.89.0 RC67 - 2026-08-25
+
+- Continúa `DISC-03` con auditoría de sólo lectura sobre exportaciones reales de 138 documentos y 78 segmentos audiovisuales, sin incorporarlas al repositorio.
+- Agrega `local_rules_v3` para perfiles nuevos y conserva v1/v2 ejecutables para reproducibilidad y continuidad histórica.
+- Refina obras/publicaciones entrecomilladas, tiempos ambiguos, secuencias abreviadas de años, nombres/topónimos testimoniales y acciones/acontecimientos contextualizados.
+- Agrega 41 regresiones sintéticas derivadas de patrones reales; el corpus RC66 de 46 controles permanece intacto.
+- `DISC-03` continúa parcial hasta revisión humana de una muestra real de candidatos v3.
+- Sin migración; continúa `0047_authority_relation_profiles`.
+
+## 0.89.0 RC66 - 2026-08-25
+
+- Cierra `PILOT-01A` y el recorrido pre-release de `PILOT-01` tras la validación manual de RC65; `PILOT-01N` queda post-release.
+- Inicia `DISC-03` preservando `local_rules_v1` y agregando `local_rules_v2` como versión local vigente para perfiles nuevos.
+- Versiona la redetección de continuidad y agrega un corpus heterogéneo de 46 controles con holdouts; F1 micro local pasa de `0.675676` a `0.911765` en ese benchmark.
+- Mantiene `DISC-03` parcial hasta contrastar con corpus real; sin migración, continúa `0047_authority_relation_profiles`.
+
+## 0.89.0 RC65 - 2026-08-24
+
+- Cierra `PILOT-01AE` por validación manual de RC64.
+- Retoma `PILOT-01A` con semántica configurable de custodia, conjuntos documentales, recursos y contenedores, compatible con configuraciones anteriores.
+- Separa en procedencia audiovisual publicación de plataforma, agrupación externa y copia local; una playlist no crea automáticamente una Colección o Serie.
+- Sin migración; continúa `0047_authority_relation_profiles`.
+
+## 0.89.0 RC64 - 2026-08-24
+
+- Repara las regresiones de ejecución encontradas durante la primera validación manual de RC63 en Grafo, Exportar corpus y Revisar documentos.
+- Corrige además el mismo patrón de estado condicional en Búsqueda textual y Búsqueda semántica.
+- Mantiene los controles reactivos que abren contenido fuera de `st.form`, preserva valores necesarios con paneles cerrados y agrega un guardrail específico para ese patrón.
+- Agrega el import faltante de `Path` en Exportar corpus, bug latente anterior a RC63.
+- `PILOT-01AE` permanece abierto hasta validación manual; sin migración, continúa `0047_authority_relation_profiles`.
+
+## 0.89.0 RC63 - 2026-08-24
+
+- Cierra `PILOT-01E` por validación manual de RC62.
+- Repara transversalmente el invariante Streamlit: pestañas pasivas por defecto y 23 flujos interactivos fuera de `st.expander`.
+- Corrige confirmación circular en un formulario de Catálogo, escritura audiovisual por Enter y actualización tardía de un selector en Descubrimiento.
+- Agrega guardrails globales para estas cinco clases de regresión.
+- Abre `PILOT-01AE` sólo hasta la validación manual sección por sección; sin migración, continúa `0047_authority_relation_profiles`.
+
+## 0.89.0 RC62 - 2026-08-24
+
+- Muestra en **Audio y video > Incorporar audio o video > Desde esta computadora** los formatos admitidos de audio y video.
+- Genera esa lista desde las constantes canónicas usadas por el selector y la detección audiovisual, evitando duplicar el contrato en texto fijo.
+- No cambia registro, reproducción, transcripción ni persistencia; continúa `0047_authority_relation_profiles`.
+
+## 0.89.0 RC61 - 2026-08-24
+
+- Reorganiza la sección audiovisual como **Audio y video**, con dos tareas principales: **Incorporar audio o video** y **Transcribir y revisar**.
+- Integra la incorporación local y desde plataformas como dos métodos de una misma tarea, mostrando sólo el método elegido.
+- Agrega selector gráfico múltiple de archivos locales y reutiliza `register_external_file()` para mantener un único circuito de Catálogo, `DigitalObject`, `FileInstance`, `SourceRegistration` y `AudiovisualMedia`.
+- Después de una incorporación correcta permite abrir directamente el medio en **Transcribir y revisar** sin iniciar transcripción automáticamente.
+- Evita reruns forzados al cambiar entre las dos tareas principales y sustituye expanders interactivos residuales de descarte/restauración por controles persistentes.
+- No agrega migración; continúa `0047_authority_relation_profiles`.
+
+## 0.89.0 RC60 - 2026-08-24
+
+- Registra la validación manual de RC59 y mantiene cerrado `PILOT-01L`.
+- Completa las cinco pasadas semánticas finales de `PILOT-01E` sobre la interfaz vigente.
+- Elimina abreviaturas y deícticos residuales y evita mostrar `source_key`/IDs técnicos como rótulos normales.
+- Relega rutas, tamaños y SHA-256 de exportaciones y backups a detalles técnicos cerrados.
+- `PILOT-01E` sigue parcial hasta la recorrida manual sin guía externa.
+- Sin migración nueva; continúa `0047_authority_relation_profiles`.
+
+## 0.89.0 RC59 - 2026-08-24
+
+- Cierra `PILOT-01AD` y `PILOT-01I` después de las validaciones manuales de estabilidad de Procesar documentos y ciclo de vida de Surya en lote.
+- Fija el contrato documental público en PDF, TIFF, PNG, JPEG y WebP y excluye BMP de Inspección/Preparar páginas.
+- Centraliza el conjunto de extensiones procesables y alinea los mensajes de Catálogo.
+- Agrega regresiones de inspección y preparación para formatos raster admitidos y para rechazo de BMP.
+- Sin migración nueva; continúa `0047_authority_relation_profiles`.
+
+## 0.89.0 RC58 - 2026-08-24
+
+- Corrige parpadeos de `Procesar documentos` evitando reruns globales por cambios puramente visuales de pestaña.
+- Usa `digital_object_id` como identidad de controles documentales y desambigua títulos/nombres repetidos sin fusionar ni retirar opciones homónimas.
+- Extiende ese criterio a Preparar / extraer, OCR regional, elección de texto para revisar e incorporación masiva a revisión.
+- Corrige un formulario que dependía reactivamente de una casilla interna; la confirmación se valida al enviar.
+- Registra el cierre manual de `PILOT-01AC` y `PILOT-01P`, la prueba de backup/recuperación y la mitad individual de `PILOT-01I`.
+- Sin migración nueva; continúa `0047_authority_relation_profiles`.
+
+## 0.89.0 RC57 - 2026-08-24
+
+- Cierra por validación manual `PILOT-01AB` y continúa el piloto en `Administrar y recuperar`.
+- Hace accionables los diagnósticos de Integridad con navegación contextual y relega revisión de base, IDs y códigos a detalles técnicos.
+- Agrega descarte reversible de avisos no bloqueantes sin borrar evidencia y respeta omisiones deliberadas de originales/exportaciones en copias configurables.
+- Agrega búsqueda y filtros por tipo, responsable, origen y alcance a `Autorizaciones de análisis`.
+- Sin migración nueva; continúa `0047_authority_relation_profiles`.
+
+## 0.89.0 RC56 - 2026-08-24
+
+- Simplifica `Intercambiar cambios` a Enviar, Recibir y Preparar copia; Google Drive pasa a ser una modalidad contextual de esas tareas.
+- `Recibir cambios` revela archivo, eliminación, incorporación de otro ZIP, recuperación y resolución masiva sólo cuando se solicitan.
+- Los conflictos se revisan de uno en uno y las herramientas avanzadas salen del selector principal.
+- Sin migración nueva; continúa `0047_authority_relation_profiles`.
+
+## 0.89.0 RC55 - 2026-08-24
+
+- Ordena visualmente `Intercambiar cambios` sin cambiar su modelo ni persistencia.
+- Separa el recorrido principal de las opciones secundarias y muestra una sola tarea de Google Drive a la vez.
+- Reduce banners simultáneos y mueve detalles técnicos de archivos y compatibilidad a paneles cerrados.
+- No agrega migración; continúa `0047_authority_relation_profiles`.
+
+## 0.89.0 RC53 - 2026-08-23
+
+- Contiene `zipfile.BadZipFile` al inspeccionar paquetes de intercambio y muestra un error comprensible en la interfaz.
+- Google Drive preselecciona sólo paquetes incrementales válidos de `exchange/outgoing/`.
+- Distingue una copia completa de trabajo de un paquete incremental y evita intentar subirla desde el transporte de intercambio por Drive.
+- No agrega migración; continúa `0047_authority_relation_profiles`.
+
+## 0.89.0 RC52 - 2026-08-23
+
+- Simplifica el intercambio normal a `Preparar una copia para trabajar en equipo`, `Enviar cambios` y `Recibir cambios`.
+- Permite distribuir un único ZIP inicial a varias personas; cada copia se reidentifica automáticamente en su primera apertura y conserva la misma huella de base.
+- `Enviar cambios` usa automáticamente el último punto de control y deja de pedir contraparte o checkpoint en la interfaz normal.
+- Mantiene acuerdos bilaterales, recuperación de linaje y adopción completa como herramientas excepcionales.
+- No agrega migración; continúa `0047_authority_relation_profiles`.
+
+## 0.89.0 RC51 - 2026-08-23
+
+- Cierra por validación manual `PILOT-01AA` y la pasada de asignación/revisión cruzada del piloto.
+- Renombra y reexplica la base común de intercambio como el punto en que dos copias del mismo proyecto contienen exactamente el mismo trabajo editable.
+- Reorganiza el acuerdo bilateral en tres pasos orientados por copia: iniciar, confirmar en la otra copia y completar en la copia inicial.
+- Agrega `Crear un paquete con mis cambios` a `Intercambiar cambios`, usando `export_change_bundle()` y materializando el ZIP dentro de `exchange/outgoing/` antes de ofrecer descarga o envío por Drive.
+- No agrega migración; continúa `0047_authority_relation_profiles`.
+
+## 0.89.0 RC50 - 2026-08-23
+
+- Normaliza la exportación audiovisual con configuración, vista previa, creación dentro de `exports/`, historial y descarga secundaria.
+- Amplía de forma aditiva el contrato JSONL/CSV documental a esquema 1.1 con configuración, procedencia de originales, `source_documents`, contexto archivístico, procedencia por bloque y metadatos de corrida/estado del corpus.
+
+## 0.89.0 RC49 - 2026-08-22
+
+- Extiende la reducción de ruido del grafo a relaciones estructurales inversas como `es parte de`, manteniendo aristas visibles y rótulos accesibles por hover, selección o zoom.
+- No cambia persistencia, filtros ni modelo del grafo; continúa `0047_authority_relation_profiles`.
+
+## 0.89.0 RC48 - 2026-08-22
+
+- Corrige el error de montaje Bidi introducido en RC47 al abrir `Explorar relaciones`: la raíz de montaje de Components v2 ya no se trata como `HTMLElement`.
+- Agrega un contenedor HTML propio `.awg-root` para `classList`, fullscreen y clases visuales del grafo.
+- Conserva pantalla completa, leyenda y reducción de rótulos estructurales como interacciones locales sin triggers hacia Python.
+- No agrega migración; continúa `0047_authority_relation_profiles`.
+
+## 0.89.0 RC47 - 2026-08-22
+
+- Cierra por validación manual las ampliaciones de Búsqueda semántica de RC45-RC46.
+- Agrega pantalla completa del grafo mediante la API Fullscreen del navegador, sin rerun ni escritura de estado en Python.
+- Agrega una leyenda compacta y local para tipos de nodo y familias de vínculo.
+- Reduce el ruido de `contiene`/`contiene parte` en vínculos estructurales; reaparecen mediante hover, selección o zoom >=145%.
+- No agrega migración; continúa `0047_authority_relation_profiles`.
+
+## 0.89.0 RC46 - 2026-08-22
+
+- Mueve el recorrido textual/semántico debajo del visor de `Revisar documentos` y lo compacta, con cierre mediante `✕`.
+- Cerrar el recorrido deja de solicitar rerun global: elimina sólo el contexto de navegación dentro del fragmento local, conservando documento, página y bloque activo.
+- Permite iniciar Búsqueda semántica desde cualquier bloque seleccionado en `Revisar documentos`, usando su texto revisado y excluyendo el bloque semilla de los resultados.
+- No agrega migración; continúa `0047_authority_relation_profiles`.
+
+## 0.89.0 RC45 - 2026-08-22
+
+- Cierra por validación manual las ampliaciones RC44 de Búsqueda textual y permite cerrar su recorrido dentro de Revisar documentos.
+- Amplía Búsqueda semántica con distribución de resultados, similitud coseno visible y umbral mínimo dentro de opciones secundarias.
+- Permite recorrer, volver y cerrar conjuntos semánticos desde Revisar documentos conservando consulta y parámetros.
+- Agrega `Buscar pasajes similares a este resultado`, usando el texto completo del fragmento y excluyendo el pasaje semilla.
+- No agrega migración; continúa `0047_authority_relation_profiles`.
+
+## 0.89.0 RC44 - 2026-08-22
+
+- Agrega vista de concordancias KWIC para comparar cada aparición con contexto anterior y posterior.
+- Agrega un resumen plegable de distribución por documento, lugar de coincidencia y parte interna.
+- Permite recorrer resultados anterior/siguiente dentro de Revisar documentos y volver a la misma consulta con sus filtros.
+- No agrega migración; continúa `0047_authority_relation_profiles`.
+
+## 0.89.0 RC43 - 2026-08-22
+
+- Reorganiza el ciclo de vida de versiones audiovisuales: elimina el contenedor genérico `Opciones de esta transcripción`.
+- Mantiene primero escucha, corrección, anotación y evaluación; `Descartar esta versión de la transcripción` y `Transcripciones descartadas (n)` quedan cerrados y al final del recorrido normal.
+- Refuerza el criterio permanente de interfaz para acciones excepcionales o destructivas.
+- Sin migración; continúa `0047_authority_relation_profiles`.
+
+## 0.89.0 RC42 - 2026-08-22
+
+- Reemplaza los paneles complejos `Más filtros` y `Configurar mapa` de popovers flotantes a expanders inline de ancho completo.
+- Retira el CSS específico de RC41 que intentaba modificar el ancho interno del popover y no funcionó en la ejecución real.
+- Conserva filtros, formularios y persistencia existentes; no agrega migración y continúa `0047_authority_relation_profiles`.
+
+## 0.89.0 RC41 - 2026-08-22
+
+- Cierra por validación manual `PILOT-01T` y retoma el extremo a extremo en Búsqueda textual.
+- Amplía el cuerpo de `Más filtros` sin convertir el botón en una superficie dominante.
+- Permite descartar y restaurar versiones de transcripción completadas; el descarte conserva contenido e historial y excluye temporalmente la versión de búsqueda/exportación.
+- Corrige `Explorar relaciones` para mostrar `Familia` y evitar `KeyError: 'family'`.
+- No agrega migración; continúa `0047_authority_relation_profiles`.
+
+## 0.89.0 RC40 - 2026-08-21
+
+- Corrige la regresión de RC39: seleccionar un bbox vuelve a seleccionar inmediatamente el bloque correspondiente en el panel de `Revisar documentos`.
+- Acota ese cambio a un `st.fragment` con imagen, selector y panel del bloque activo, evitando reconstruir documento, página y navegación general.
+- Mantiene zoom y desplazamiento localmente en el navegador y no agrega migración; continúa `0047_authority_relation_profiles`.
+
+## 0.89.0 RC39 - 2026-08-21
+
+- Corrige `PILOT-01T` eliminando el rerun automático que todavía ocurría en cada clic de bbox dentro de `Revisar documentos`.
+- La selección visual de un bbox vuelve a permanecer local en el navegador; `Usar el texto seleccionado` es la única confirmación que sincroniza el bloque activo con Python.
+- Retira las capas de navegación generacional introducidas por los intentos RC34-RC38 y restaura el guardia simple de documento/página.
+- No agrega migración; continúa `0047_authority_relation_profiles`.
+
+## 0.89.0 RC38 - 2026-08-21
+
+- Reemplaza los intentos insuficientes RC34-RC37 para `PILOT-01T` con un cambio de identidad de widgets por navegación programática.
+- Conserva documento/página en contexto durable y crea claves generacionales nuevas para sus selectores cada vez que Menciones solicita un destino explícito; los reruns ordinarios por bbox mantienen la misma generación.
+- Restaura en Menciones el flujo explícito `request_app_view(...)` + `rerun_app(st)` y no modifica `review_canvas.py`.
+- Retira la dependencia errónea de RC37 sobre `persist_state="session"` y mantiene compatibilidad con `streamlit>=1.55,<2`.
+- No agrega migración; continúa `0047_authority_relation_profiles`. `PILOT-01T` sigue abierto hasta validación manual real.
+
+## 0.89.0 RC37 - 2026-08-21
+
+- Intentó resolver `PILOT-01T` mediante `persist_state="session"`, pero la validación manual real mostró que documento/página seguían cambiando. La premisa de compatibilidad con el mínimo Streamlit 1.55 fue corregida en RC38.
+
+## 0.89.0 RC36 - 2026-08-21
+
+- Corrige `PILOT-01T` con separación estricta entre contexto durable (`review_context_*`) y claves temporales de widgets (`_review_*`).
+- Navegar desde Menciones escribe documento/página/objeto mediante callback antes del rerun natural de Streamlit y elimina el rerun explícito posterior.
+- Mantiene `review_canvas.py` sin cambios y no agrega reruns compensatorios.
+- No hay migración nueva; continúa `0047_authority_relation_profiles`.
+
+## 0.89.0 RC35 - 2026-08-21
+
+- Intentó preservar documento y página frente a limpieza de widgets mediante copias auxiliares; la validación manual posterior demostró que el diseño seguía siendo insuficiente y queda supersedido por RC36.
+
+## 0.89.0 RC34 - 2026-08-21
+
+- Incorpora árbol de catálogo tipo explorador, eliminación auditable de vínculos de producción/gestión creados por error y límites amplios explícitos en calendarios.
+- El intento de continuidad Menciones -> Revisar documentos quedó supersedido por RC36 tras validación manual.
+
+## 0.89.0 RC33 - 2026-08-21
+RC33 agrega plantillas bidireccionales para entidades y relaciones analíticas: el JSON 1.1 puede exportar fichas existentes con identificadores estables y reimportarlas como actualizaciones explícitas después de simulación, conservando perfiles, temporalidad y evidencia sin borrar alias por ausencia. En Catálogo, reemplaza el selector lineal de unidades por un árbol navegable con padres visibles, contexto de antecesores durante búsquedas y selección jerárquica también al mover unidades. No hay migración nueva; continúa `0047_authority_relation_profiles`. `PILOT-01P` y `PILOT-01Q` quedan pendientes de validación manual.
+
+## 0.89.0 RC32 - 2026-08-21
+
+- Corrige `exchange-fork-copy` para recomponer directorios faltantes sobre una copia física ya existente sin debilitar `init-project`.
+- Hace compatible la huella de intercambio con bases anteriores a `0047`, evitando consultar `profile_json` antes de que exista.
+- Conserva el transporte y la revisión de `profile_json` cuando la base ya está en `0047`.
+- Ajusta la regresión de creaciones múltiples para contar el nuevo campo estructurado. No hay migración nueva ni cambios de interfaz.
+
+## 0.89.0 RC31 - 2026-08-21
+
+- Admite períodos discontinuos en autoridades y relaciones, por ejemplo `1946 - 2015; desde 2024`, y filtra cada tramo sin considerar vigente el hueco intermedio.
+- Amplía autoridades y relaciones con perfiles descriptivos estructurados informados por ISAAR(CPF), DACS, EAC-CPF y RiC; agrega `Familia` como tipo de autoridad y una clasificación archivística opcional de relaciones.
+- Presenta relaciones analíticas como fichas desplegables cerradas por defecto, con campos explícitos y edición activada únicamente por `Modificar esta relación`.
+- Agrega un perfil descriptivo opcional y progresivo para unidades de catálogo, informado por DACS, RiC-CM e ISAD(G), sin convertir los elementos descriptivos en una lista visual obligatoria.
+- Da prioridad visual a productores y responsables ya registrados y separa debajo las acciones para agregar un vínculo o crear una persona u organización.
+- Corrige la continuidad `Menciones -> Revisar documentos` para que un rerun por selección visual no vuelva a elegir otra página o documento.
+- Agrega la migración aditiva `0047_authority_relation_profiles`, con `profile_json` nullable para autoridades y relaciones y transporte por intercambio, adopción de estado e importación de diccionarios.
+- Registra como política de prioridad máxima que la suite completa la ejecuta exclusivamente Alex; el asistente sólo ejecuta gates focales y `pytest --collect-only -q`, y nunca retiene un ZIP por quedar pendiente un gate final.
+
+## 0.89.0 RC30 - 2026-08-21
+
+- Registra la validación manual y cierre de `UX-04` después de RC29.
+- Retira `UX-04` de pendientes y fija **Relaciones** como punto exacto para retomar `PILOT-01`.
+- No modifica código de aplicación, dominio, persistencia ni revisión DB; continúa `0046_audiovisual_timeline_annotations`.
+
+## 0.89.0 RC29 - 2026-08-21
+
+- Corrige la legibilidad del tooltip de ayuda usando los tokens oficiales `--st-*` del tema de Streamlit y una superficie opaca.
+- Evita que el foco residual de un clic con mouse deje la explicación pegada; el foco visible de teclado sigue mostrando la ayuda y `Escape` la cierra.
+- Conserva los textos, iconos y cobertura de RC28 y no modifica dominio, persistencia ni arquitectura de reruns. No agrega migración; continúa `0046_audiovisual_timeline_annotations`.
+
+## 0.89.0 RC28 - 2026-08-21
+
+- Conserva los textos de orientación completos de RC27 y hace descubrible la ayuda mediante un icono de información visible junto a secciones, pestañas y tareas principales.
+- Muestra la descripción por hover y por foco de teclado; las pestañas también exponen la ayuda al recibir foco.
+- Mantiene la ayuda fuera del cuerpo principal, sin signos `?`, paneles adicionales ni párrafos permanentes.
+- Actualiza la política canónica y la checklist para exigir el mismo patrón en toda superficie nueva o renombrada.
+- El componente visual no comunica estado a Python ni introduce reruns, fragmentos o mecanismos nuevos de scroll. No agrega migración; continúa `0046_audiovisual_timeline_annotations`.
+
+## 0.89.0 RC27 - 2026-08-21
+
+- Reemplaza la ayuda contextual visible `?` de RC26 por explicaciones al posar el cursor sobre el propio título de cada sección y cada pestaña.
+- Da a los selectores compactos de tarea una explicación equivalente de la tarea activa, sin agregar otra superficie visual.
+- Centraliza la redacción explícita y no críptica en `src/archive_workbench/ui_help.py` y exige cobertura en la política canónica de interfaz, la checklist y los tests.
+- La ayuda por hover sólo anota `title` y `aria-description` en el DOM; no comunica estado a Python ni introduce reruns, fragmentos o mecanismos nuevos de scroll.
+- Conserva los cambios de procesamiento y revisión validados en RC26 y no agrega migración; continúa `0046_audiovisual_timeline_annotations`.
+
+## 0.89.0 RC26 - 2026-08-21
+
+- Cierra una ronda final de `UX-04`: `Ruta archivística` visible por defecto en Estado, integración regional más compacta y ayuda contextual `?` para recorridos complejos.
+- Rediseña `Revisar documentos > Orden y estructura` con selector de tarea y un solo recorrido visible por vez.
+- Las pestañas de `Revisar documentos` dejan de solicitar un rerun completo sólo para cambiar la pestaña, corrigiendo el reinicio y el salto horizontal del selector.
+- Refuerza la checklist obligatoria para que `05_CRITERIOS_INTERFAZ.md` se relea antes de cualquier modificación de código.
+- No agrega migración; continúa `0046_audiovisual_timeline_annotations`.
+
+## 0.89.0 RC25 - 2026-08-21
+
+- Acota `UX-04` a una segunda pasada sobre `Procesar documentos` después de que RC24 quedara favorable en principio para el resto de la aplicación.
+- Simplifica las siete tareas de procesamiento, reduce texto, métricas y columnas permanentes y muestra un solo recorrido cuando las alternativas son mutuamente excluyentes.
+- Mantiene la imagen como centro de la lectura regional, relega controles técnicos, compacta comparación e historial y conserva las confirmaciones necesarias para escrituras materiales.
+- Incorpora a la política de interfaz la regla de no renderizar simultáneamente recorridos alternativos mutuamente excluyentes.
+- No hay migración nueva; la revisión permanece en `0046_audiovisual_timeline_annotations`.
+
+## 0.89.0 RC24 - 2026-08-20
+
+- Extiende `UX-04` a toda la interfaz después de la validación manual de RC23 y promueve los criterios aprobados a `.assistant/05_CRITERIOS_INTERFAZ.md`.
+- Reduce introducciones, paneles informativos, métricas permanentes y topología vertical; mantiene `Guía de esta sección` como lugar de explicación general.
+- Compacta Catálogo, Procesar documentos, Organizar trabajo, Búsqueda textual, Búsqueda semántica, Grafo, Exportación, Intercambio y Administración, conservando los recorridos de dominio y las confirmaciones materiales.
+- Refuerza la identidad visual del medio y la unidad activos, mantiene la arquitectura validada de `Revisar documentos` y conserva sin cambios funcionales `Entidades y menciones` de RC23.
+- `Intercambiar cambios` muestra un único recorrido principal por vez mediante selector de tarea; `Catálogo` elimina la segunda navegación superior simultánea y compacta filtros y altas de archivos.
+- No agrega migración; continúa `0046_audiovisual_timeline_annotations`.
+
+## 0.89.0 RC23 - 2026-08-20
+
+- Profundiza `UX-04` en `Menciones`: prioriza menciones vinculadas, deja la búsqueda debajo con alcance visible en línea y retira mensajes, confirmaciones y fundamentos redundantes de calidad sin perder la autorización auditable interna.
+- Deja `Crear una relación analítica` cerrado por defecto mediante un toggle persistente.
+- Reformula `Buscar nuevas entidades en los textos`: selector compacto de tarea, configuración y filtros con menor densidad, una sola serie de pestañas visible por recorrido, resultados más compactos y trazabilidad técnica secundaria.
+- Cierra `GRAPH-03` después de la validación manual satisfactoria de RC22.
+- No agrega migración; continúa `0046_audiovisual_timeline_annotations`.
+
+## 0.89.0 RC22 - 2026-08-20
+
+- Abre la primera candidata de `UX-04` sobre `Entidades y menciones`: reduce texto y superficies, integra búsqueda y refinamientos, jerarquiza la ficha activa, integra los nombres alternativos y deja una sola navegación contextual.
+- Mueve el título `Archive Workbench` al sidebar, elimina la navegación anterior/siguiente y conserva la orientación en `Guía de esta sección`.
+- Simplifica `Menciones` y `Relaciones`; distingue roles archivísticos de relaciones analíticas y elimina explicaciones redundantes sin cambiar funcionalidad ni persistencia.
+- Implementa `GRAPH-03`: `Jerarquía archivística` y `Documentos en unidades` quedan desactivadas por defecto en el grafo, pero continúan disponibles.
+- No agrega migración; continúa `0046_audiovisual_timeline_annotations`.
+
+## 0.89.0 RC21 - 2026-08-20
+
+- Cierra documentalmente `PILOT-01O` después de la validación manual satisfactoria de RC20.
+- Deja validada la etapa de `Entidades y menciones` del recorrido actual de PILOT-01 y fija **Relaciones** como próximo paso.
+- Archiva la guía y el relevo de RC20 y actualiza la continuidad canónica sin modificar código funcional.
+- No agrega migración; continúa `0046_audiovisual_timeline_annotations`.
+
+## 0.89.0 RC20 - 2026-08-20
+
+- Sincroniza el bbox rojo y el selector textual de `Revisar documentos` mediante el callback previo al rerun del componente v2.
+- Reemplaza el expander reactivo de selección masiva de referencias por una pestaña estable con `st.form`, evitando reruns mientras se seleccionan referencias y se marca la confirmación.
+- Mueve `Referencias descartadas` a una pestaña propia con restauración append-only.
+- Registra la obligación de confirmar la checklist en todo mensaje que presente cambios de código.
+- No agrega migración; continúa `0046_audiovisual_timeline_annotations`.
+
+## 0.89.0 RC19 - 2026-08-20
+
+- Restaura en `Revisar documentos` la sincronización entre el bbox seleccionado sobre la imagen y el selector del bloque de texto, aplicando la selección antes de instanciar el widget y sin introducir un segundo rerun.
+- Muestra en `Entidades y menciones` los roles archivísticos `producer` y `manager` creados desde Catálogo como información de solo lectura; Catálogo permanece como única interfaz de edición de esos vínculos.
+- Simplifica la revisión de referencias encontradas a **Aceptar** o **Descartar**. Las correcciones forman parte de Aceptar; los descartes se pueden restaurar mediante una nueva decisión append-only.
+- Agrega acciones masivas para crear entidades nuevas con estado `Sin revisar` a partir de varias referencias seleccionadas, con confirmación explícita, y para descartar varias referencias de una vez.
+- Reescribe agrupamiento y continuidad textual con rótulos orientados a la tarea y conserva compatibilidad histórica con decisiones `modify`/`defer` sin exponerlas en la interfaz nueva.
+- Traslada `PILOT-01H`, `PILOT-01K` y `PILOT-01M` a implementaciones cerradas después de su validación manual; abre `PILOT-01N` como optimización post-release de OCR localizado bajo firmas y `DISC-03` como afinado pre-release de búsqueda de nuevas entidades.
+- No agrega migración; continúa `0046_audiovisual_timeline_annotations`.
+
+## 0.89.0 - 2026-08-09
+
+## 0.89.0 RC17 - 2026-08-19
+
+- Se descarta RC16 y se retoma RC15 como base.
+- Se restablece la arquitectura Streamlit validada en RC7/RC8: sin fragmento global, estado visual local en navegador y comunicación a Python sólo al confirmar acciones discretas.
+- Se elimina `fragmented_view` y se recupera el scroll keeper pasivo de RC8.
+- La selección de cajas y el dibujo en procesamiento pueden repetirse localmente sin rerun; las confirmaciones usan acciones explícitas.
+- `Revisar documentos` deja de ofrecer `Agregar un bloque de texto`; esa alta queda únicamente en Procesar documentos con ubicación gráfica.
+- La fuente única de esta arquitectura queda en `docs/referencia/ARQUITECTURA_Y_MODELO_ACTUAL.md#streamlit-interaction-invariant`.
+
+### 0.89.0 RC15 - 2026-08-19
+
+- Separa en `Procesar documentos` la elección de una extracción completa, la corrección o agregado de texto reconocido en una parte concreta y el envío masivo de páginas a `Revisar documentos`.
+- Para agregar texto faltante exige dibujar su ubicación sobre la página; conserva la geometría del reconocimiento parcial como procedencia.
+- Corrige el lote sobre varios documentos usando `digital_object_id` como identidad de controles y operaciones, evitando colisiones cuando `source_key` se repite.
+- Refuerza de forma transversal la conservación del contexto y la posición vertical después de escrituras de Streamlit mediante ancla lógica y respaldo por desplazamiento.
+- Traduce en el historial la causa de trabajos antiguos que intentaron extraer texto sin imágenes preparadas y explicita el soporte de PDF, TIFF, PNG, JPEG y WebP; la discrepancia BMP queda abierta en `PILOT-01L`.
+- No agrega migración; continúa `0046_audiovisual_timeline_annotations`.
+
+### 0.89.0 RC14 - 2026-08-16
+
+- Corrige la actualización entre candidatas cuando una versión reubica archivos: agrega un manifiesto explícito y un actualizador que verifica SHA-256 antes de retirar copias antiguas conocidas, sin limpiar contenido local ajeno al paquete.
+- No agrega migración; continúa `0046_audiovisual_timeline_annotations`.
+
+### 0.89.0 RC13 - 2026-08-16
+
+- Ordena `Procesar documentos` como `1. Preparar imágenes para extraer texto` y `2. Extraer texto de las imágenes preparadas`; extracción sólo ofrece documentos con una preparación vigente.
+- Retira `Preparar páginas para revisión` como operación paralela y presenta el envío masivo desde `Elegir texto para revisar` como uso de un resultado de extracción como texto inicial.
+- Mueve el reintento de páginas fallidas a una acción secundaria visible sólo cuando corresponde.
+- Permite usar un OCR de zona para reemplazar un bloque existente o agregar un bloque nuevo; muestra cajas clicables de los bloques de la página y conserva geometría/procedencia regional.
+- Reduce aclaraciones negativas innecesarias en la interfaz y conserva sólo las relevantes para seguridad, procesamiento o alcance de una escritura.
+- Restaura la estructura documental canónica: informes de auditoría RC11/RC12 pasan de `docs/operativos/` a `docs/historico/actualizaciones/`.
+- No agrega migración; continúa `0046_audiovisual_timeline_annotations`.
+
+### 0.89.0 RC11 - 2026-08-15
+
+- Replantea `Procesar documentos` a partir de PILOT-01: `OCR regional` pasa a `Trabajar una zona`, `Selección canónica` pasa a `Elegir texto para revisar` y el recorrido principal evita jerga interna innecesaria.
+- Agrega reemplazo explícito del texto de un objeto editable con el texto de un resultado regional parcial, sin cambiar la extracción general elegida para la página; conserva revisión y procedencia regional.
+- Agrega preparación masiva para revisión por documento y por varios documentos, omitiendo páginas ya inicializadas y rechazando resultados regionales como base completa.
+- Gestiona automáticamente el ciclo de vida de Surya desde la interfaz: una tarea individual no conserva el servidor; un lote lo reutiliza entre documentos y lo detiene al finalizar mediante limpieza garantizada.
+- Replantea `Revisar documentos`: explica `Formulario`, renombra el alta manual de casilleros, agrega síntesis breves por pestaña, mueve `Datos adicionales` al penúltimo lugar e `Historial general` al último y explicita los referentes de sugerencias, estados y acciones.
+- Ejecuta cinco pasadas de auditoría de referentes sobre la interfaz y agrega regresiones estáticas contra rótulos genéricos aislados y frases opacas observadas en PILOT-01.
+- No agrega migración; la revisión continúa en `0046_audiovisual_timeline_annotations`.
+
+### 0.89.0 RC10 - 2026-08-11
+
+- Registra `PILOT-01J` para replantear orientación, lenguaje y orden de `Revisar documentos`; refuerza `PILOT-01E` con cinco pasadas de auditoría de referentes y documenta que una corrida regional parcial no reemplaza la selección explícita anterior.
+- Corrige la preparación de TIFF con pyvips cuando una misma página produce derivado OCR y preview: cada salida abre una lectura secuencial independiente y se evita `tiff2vips: out of order read`.
+- Agrega una regresión que falla si una lectura pyvips secuencial se reutiliza después de su primer guardado.
+- Reformula la introducción de `Procesar documentos` para nombrar explícitamente documentos, versiones de texto y páginas, y elimina el metacomentario sobre cuándo aparecen opciones técnicas.
+- Actualiza el estado de `PILOT-01`: continuidad/reruns, trazabilidad audiovisual y temas/fechas pasan a cerrados tras su validación.
+- Validación manual posterior de RC10: los dos TIFF reales se prepararon correctamente, la extracción Surya sobre los cinco documentos terminó 5/5 sin advertencias ni fallos y `PILOT-01F` queda cerrado.
+- Registra como pendiente `PILOT-01G` una inicialización masiva y explícita de páginas extraídas por documento y por lote, sin sobrescribir decisiones previas; `PILOT-01E` incorpora además la reducción del léxico técnico de `Extraer texto`.
+- No agrega migración; la revisión continúa en `0046_audiovisual_timeline_annotations`.
+
+### 0.89.0 RC8 - 2026-08-11
+
+- Corrige una regresión de arranque introducida por RC7: el componente v2 de conservación de scroll ya no monta `width=0` ni `height=0`, valores inválidos para el layout actual de Streamlit.
+- El componente conserva los valores nativos de layout de Streamlit (`width=stretch`, `height=content`) porque no renderiza contenido visible.
+- Agrega una regresión automatizada que impide reintroducir dimensiones cero en ese componente.
+- No modifica `pilot_data`, la lógica audiovisual ni el esquema de base; continúa `0046_audiovisual_timeline_annotations`.
+
+### 0.89.0 RC7 - 2026-08-11
+
+- PILOT-01B elimina el fragmento global que envolvía toda la vista activa y conserva posición, tiempo del reproductor y segmento activo mediante componentes Streamlit v2 sin enviar eventos continuos a Python.
+- La revisión audiovisual permite asignar un hablante sólo al segmento vigente o desde ese punto hasta la próxima marca, con alcance explícito y preservación de tramos vecinos.
+- El registro de menciones de entidades queda inmediatamente debajo del encabezado que explica la operación.
+- La evaluación muestra los picos de memoria RAM y GPU con la misma jerarquía visual cuando la corrida usa CUDA.
+- PILOT-01D deja de retematizar Streamlit con CSS inyectado: las paletas personalizadas pasan a la configuración nativa del servidor al abrir la aplicación; Sistema permanece sin cambios.
+- La corrida controlada de `large-v3` reproduce los parámetros históricos, incluido el vocabulario esperado, vuelve a 78 segmentos y coincide aproximadamente en 99,76 % de caracteres normalizados con la salida histórica.
+- No agrega migraciones; continúa `0046_audiovisual_timeline_annotations`.
+
+### 0.89.0 RC6 - 2026-08-11
+
+- PILOT-01B centraliza la continuidad de posición sobre `section[data-testid="stMain"]`, conserva la posición antes de interacciones y la restaura durante reruns sin permitir que un salto programático a cero la sobrescriba.
+- Rehace Azul, Bosque, Terracota y Violeta mediante roles semánticos de color y amplía la cobertura a botones, estados deshabilitados y calendario; `Sistema` permanece sin cambios.
+- Exige un nombre de usuario antes de habilitar cualquier vista operativa.
+- La revisión audiovisual usa `Marcar hablante`, elimina el panel redundante de navegación por segmentos y conserva `Revisión sincronizada` como recorrido principal.
+- La configuración de faster-whisper agrega vocabulario esperado, `beam_size` y VAD explícitos; la trazabilidad permite repetir la corrida histórica de `large-v3` con los parámetros capturados.
+- Simplifica la evaluación de transcripción y reemplaza etiquetas ambiguas por referentes completos sobre tiempo de procesamiento, memoria y diferencias respecto de una referencia revisada.
+- Documenta `PILOT-01C`: las corridas histórica y actual usan el mismo original y WAV, faster-whisper 1.2.1, large-v3, CUDA, español, float16, VAD y beam 5; el vocabulario esperado es la única opción de inferencia capturada que difiere, pendiente de una corrida controlada antes de atribuir causalidad.
+- No agrega migraciones; continúa `0046_audiovisual_timeline_annotations`.
+
+### 0.89.0 RC5 - 2026-08-10
+
+- PILOT-01 conserva la posición por vista durante reruns locales de Streamlit.
+- La interfaz audiovisual elimina códigos internos del texto normal y usa selectores para modelo y tipo de cálculo.
+- Los tipos de cálculo se consultan a CTranslate2 según el dispositivo cuando está disponible; la corrida expone `compute_type`, beam size y VAD en sus detalles técnicos.
+- El calendario descriptivo audiovisual admite fechas desde 1800 hasta hoy y las paletas amplían contraste a controles BaseWeb y calendario.
+- `PILOT-01A` deja abierta la revisión archivística de repositorios, colecciones, series, recursos audiovisuales y playlists; RC5 no fuerza una reclasificación automática.
+
+
+- RC4 agrega `Colección` como nivel estándar bajo `Archivo`, con habilitación explícita para proyectos existentes.
+- RC4 permite cambiar el tipo de una unidad conservando identidad e historial cuando la jerarquía, los hijos y los campos siguen siendo compatibles.
+- RC4 agrega eliminación explícita de unidades vacías y bloquea la acción cuando existen hijos, contenidos digitales, procedencia o relaciones.
+- RC4 mantiene compatibles las planillas de catálogo anteriores aunque no incluyan un nivel agregado después al proyecto.
+- RC3 corrige las observaciones posteriores a la incorporación real de 138 originales: Inicio deja de exponer `generación 0/5` y la revisión técnica de base, las paletas ganan contraste y cobertura integral, Unidades del catálogo pasa a pestaña principal, las pestañas internas ya no fuerzan rerun al cambiar, los campos de carpetas ofrecen selector gráfico y la incorporación por lote permite editar excepciones a reglas de carpeta.
+- RC2 agrega selección gráfica de la carpeta contenedora al crear proyectos y usa por defecto la carpeta de trabajo actual.
+- RC2 convierte las paletas en temas completos y corrige la persistencia de nombre/paleta entre launcher y proyecto.
+- RC2 corrige `StreamlitAPIException` al guardar Preferencias evitando modificar claves de widgets después de instanciarlos.
+- Abre `archive-workbench review-app` sin proyecto y agrega un inicio general para crear o abrir proyectos desde la interfaz.
+- Crea proyectos nuevos sin editar YAML ni ejecutar manualmente `db-upgrade`; conserva la apertura directa con `review-app PROYECTO`.
+- `init-project` rechaza carpetas existentes por defecto y agrega `--complete-existing` para completar sin reemplazar.
+- Agrega preferencias locales de nombre de usuario y paleta; elimina `Responsable=alex` hardcodeado.
+- Renombra la navegación con tareas explícitas y reemplaza el checkbox de orientación por `Guía de esta sección`.
+- Reorganiza Inicio en `Estado y próximos pasos` y `Guía para trabajar con el proyecto`.
+- Reorganiza Catálogo con pestañas y revisa el texto de onboarding para explicar conceptos sin presuponer conocimientos técnicos.
+- Amplía la plantilla XLSX con ejemplos de cada campo y explicaciones más claras.
+- Permite ajustar desde la interfaz qué niveles del catálogo pueden contener a otros cuando una planilla detecta errores de jerarquía.
+- Restringe la confirmación de descripción completa al estado `Completo`.
+- Permite crear personas u organizaciones desde `Productores y gestión`.
+- Hace reactiva la ayuda de tipos de relación, propone rangos de páginas automáticamente y permite elegir archivos existentes bajo `corpus/`.
+- Traduce estados de procesamiento en Catálogo y elimina comandos CLI del flujo normal, sustituyéndolos por navegación a `Procesar documentos`.
+- Corrige el botón `Confirmar movimiento`, que podía quedar deshabilitado por depender de un selector dentro del mismo formulario.
+- Agrega incorporación de archivos por lote con previsualización, asociación revisable, reglas por carpeta, sugerencias no vinculantes y transacciones independientes por archivo.
+- Elimina referencias visibles hardcodeadas a `project_data` en las pantallas afectadas.
+- No agrega migraciones; continúa `0046_audiovisual_timeline_annotations`.
+
+## 0.89.0 RC14 - 2026-08-16
+
+- Corrige la actualización por superposición cuando una candidata reubica archivos, con manifiesto explícito y verificación SHA-256 antes de retirar copias antiguas conocidas.
+
 ## 0.88.2 — 2026-08-08
 
 - Corrige la aplicación de plantillas XLSX cuando una fila `actualizar` o `crear` referencia mediante `parent_local_id` una unidad existente marcada `omitir`.

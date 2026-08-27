@@ -1,0 +1,36 @@
+<!doctype html>
+<html lang="es-AR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Instalación · Archive Workbench</title>
+<meta name="description" content="Instalación de Archive Workbench en Linux, extensiones opcionales y apertura o creación de un proyecto.">
+<meta name="theme-color" content="#f4f0e6">
+<link rel="stylesheet" href="assets/site.css">
+</head>
+<body>
+<a class="skip" href="#contenido">Saltar al contenido</a>
+<header class="site-head"><div class="head-inner"><div class="brand"><a href="index.html">Archive Workbench</a><span>documentación pública · 0.89.0</span></div><nav aria-label="Navegación principal"><ul><li><a href="index.html">Inicio</a></li><li><a href="instalacion.html" aria-current="page">Instalación</a></li><li><a href="tutorial.html">Tutorial</a></li><li><a href="catalogo.html">Catálogo</a></li><li><a href="procesamiento.html">Procesamiento</a></li><li><a href="revision.html">Revisión</a></li><li><a href="entidades.html">Entidades</a></li><li><a href="busquedas.html">Búsquedas</a></li><li><a href="relaciones.html">Relaciones</a></li><li><a href="audiovisual.html">Audio y video</a></li><li><a href="exportacion.html">Exportación</a></li><li><a href="intercambio.html">Intercambio</a></li><li><a href="resguardo.html">Resguardo</a></li><li><a href="conceptos.html">Conceptos</a></li><li><a href="referencia.html">Referencia</a></li><li><a href="problemas.html">Problemas frecuentes</a></li></ul></nav></div></header>
+<main id="contenido">
+<p class="kicker">Primeros pasos</p><h1>Instalación y apertura</h1><p class="lead">La instalación actual está orientada a Linux y requiere una terminal. Una placa gráfica es opcional.</p>
+<h2>Requisitos de sistema</h2><pre><code>sudo apt update
+sudo apt install -y git python3 python3-venv python3-pip   tesseract-ocr tesseract-ocr-spa ffmpeg</code></pre>
+<h2>Instalar Archive Workbench</h2><pre><code>git clone https://github.com/alexdcolman/archive-workbench.git
+cd archive-workbench
+python3 -m venv .venv
+source .venv/bin/activate
+python -m pip install --upgrade pip
+pip install -e ".[extraction,streamlit,tiff]"</code></pre>
+<p>La búsqueda semántica, la incorporación desde plataformas y otros backends se instalan como extensiones opcionales cuando se necesitan.</p>
+<h3>Extensiones opcionales</h3><pre><code>pip install -e ".[semantic]"
+pip install -e ".[platform]"
+./scripts/install_surya_runtime.sh --dry-run
+./scripts/install_surya_runtime.sh</code></pre>
+<h2>Abrir o crear un proyecto</h2><pre><code>source .venv/bin/activate
+archive-workbench review-app</code></pre><p>La pantalla inicial permite <strong>Abrir un proyecto existente</strong> o <strong>Crear un proyecto nuevo</strong>. También puede abrirse una carpeta conocida directamente:</p><pre><code>archive-workbench review-app mi_proyecto</code></pre>
+<p class="callout warning"><strong>Migraciones:</strong> un proyecto existente se migra sólo después de crear y verificar un backup. No se ejecuta <code>db-upgrade</code> por rutina.</p>
+<h2>Siguiente paso</h2><p>Una vez abierto el proyecto, el <a href="tutorial.html">tutorial</a> recorre catálogo, incorporación, procesamiento y revisión con los nombres visibles de la interfaz.</p>
+</main>
+<footer class="site-foot"><p>Archive Workbench · software libre AGPL-3.0-or-later · <a href="https://github.com/alexdcolman/archive-workbench">repositorio</a> · <a href="https://github.com/alexdcolman/archive-workbench/blob/main/CITATION.cff">cita</a> · <a href="https://github.com/alexdcolman/archive-workbench/blob/main/CHANGELOG.md">cambios</a></p></footer>
+</body>
+</html>

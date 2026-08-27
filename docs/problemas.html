@@ -1,0 +1,26 @@
+<!doctype html>
+<html lang="es-AR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Problemas frecuentes · Archive Workbench</title>
+<meta name="description" content="Solución de problemas frecuentes de instalación, OCR, GPU, búsqueda e intercambio en Archive Workbench.">
+<meta name="theme-color" content="#f4f0e6">
+<link rel="stylesheet" href="assets/site.css">
+</head>
+<body>
+<a class="skip" href="#contenido">Saltar al contenido</a>
+<header class="site-head"><div class="head-inner"><div class="brand"><a href="index.html">Archive Workbench</a><span>documentación pública · 0.89.0</span></div><nav aria-label="Navegación principal"><ul><li><a href="index.html">Inicio</a></li><li><a href="instalacion.html">Instalación</a></li><li><a href="tutorial.html">Tutorial</a></li><li><a href="catalogo.html">Catálogo</a></li><li><a href="procesamiento.html">Procesamiento</a></li><li><a href="revision.html">Revisión</a></li><li><a href="entidades.html">Entidades</a></li><li><a href="busquedas.html">Búsquedas</a></li><li><a href="relaciones.html">Relaciones</a></li><li><a href="audiovisual.html">Audio y video</a></li><li><a href="exportacion.html">Exportación</a></li><li><a href="intercambio.html">Intercambio</a></li><li><a href="resguardo.html">Resguardo</a></li><li><a href="conceptos.html">Conceptos</a></li><li><a href="referencia.html">Referencia</a></li><li><a href="problemas.html" aria-current="page">Problemas frecuentes</a></li></ul></nav></div></header>
+<main id="contenido">
+<p class="kicker">Diagnóstico</p><h1>Problemas frecuentes</h1>
+<details><summary>La aplicación no abre</summary><p>Comprobá que el entorno virtual esté activo y que la instalación incluya el extra <code>streamlit</code>. Ejecutá <code>archive-workbench review-app</code> desde la carpeta del proyecto de código.</p></details>
+<details><summary>Un proyecto existente pide migración</summary><p>Consultá primero <code>archive-workbench db-status RUTA_DEL_PROYECTO</code>. Creá y verificá un backup antes de ejecutar una migración. No repitas <code>db-upgrade</code> si el proyecto ya está en la revisión vigente.</p></details>
+<details><summary>El OCR no usa Surya</summary><p>Surya vive en un entorno separado. Usá el diagnóstico de extracción y comprobá el runtime antes de cambiar perfiles. Si no está disponible, el perfil puede recurrir a Docling/Tesseract.</p></details>
+<details><summary>La GPU sigue ocupada</summary><p>Consultá <code>archive-workbench surya-server-status</code> y, cuando no haya un trabajo activo que necesite conservar el servidor, usá <code>archive-workbench surya-server-stop</code>.</p></details>
+<details><summary>La búsqueda semántica no devuelve resultados esperados</summary><p>Comprobá que exista un índice para el perfil actual y recordá que la similitud semántica no constituye una decisión analítica. Compará con búsqueda textual y revisá el alcance del índice.</p></details>
+<details><summary>Un paquete de intercambio no se puede aplicar</summary><p>Inspeccioná el paquete y ejecutá la simulación. Si existe un conflicto de linaje o estado, utilizá las acciones específicas de resolución; no copies una base SQLite sobre otra.</p></details>
+<h2>Diagnósticos y soporte</h2><p>Cuando informes un error, conservá el mensaje exacto, la sección donde ocurrió, la operación que lo produjo y la versión de Archive Workbench. No incluyas originales restringidos ni datos personales si no son necesarios para reproducirlo.</p>
+</main>
+<footer class="site-foot"><p>Archive Workbench · software libre AGPL-3.0-or-later · <a href="https://github.com/alexdcolman/archive-workbench">repositorio</a> · <a href="https://github.com/alexdcolman/archive-workbench/blob/main/CITATION.cff">cita</a> · <a href="https://github.com/alexdcolman/archive-workbench/blob/main/CHANGELOG.md">cambios</a></p></footer>
+</body>
+</html>

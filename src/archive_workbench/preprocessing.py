@@ -29,7 +29,7 @@ from archive_workbench.db.models import (
 )
 from archive_workbench.domain.enums import FilePresence, MediaType
 from archive_workbench.identity import new_id, sha256_file, sha256_json
-from archive_workbench.inspection import inspect_input
+from archive_workbench.inspection import inspect_input, is_processable_document_path
 from archive_workbench.preprocessing_geometry import (
     GEOMETRY_MODE_LABELS,
     apply_conservative_geometry,
@@ -740,9 +740,22 @@ def _render_raster_pyvips(
             source_dpi=source_dpi,
             profile=profile,
         )
-        preview = image
+
+        # Una imagen abierta con access="sequential" sólo puede consumirse una vez.
+        # El guardado del derivado OCR recorre la fuente completa, por lo que reutilizar
+        # `image` para el preview puede forzar a libvips a volver a pedir la línea 0 y
+        # producir `tiff2vips: out of order read`. Reabrimos la misma página para cada
+        # salida independiente y conservamos así el streaming de TIFF grandes.
+        preview_source = pyvips.Image.new_from_file(str(source), **load_options)
+        if preview_source.bands in {2, 4}:
+            preview_source = preview_source.flatten(
+                background=[255] * (preview_source.bands - 1)
+            )
+        if preview_source.bands not in {1, 3}:
+            preview_source = preview_source.colourspace("srgb")
+        preview = preview_source
         if (preview_width, preview_height) != (source_width, source_height):
-            preview = image.resize(preview_width / source_width)
+            preview = preview_source.resize(preview_width / source_width)
         preview_path = (
             output_dir / "preview" / f"page_{frame + 1:04d}.{_extension(profile.preview_format)}"
         )
@@ -979,6 +992,12 @@ def prepare_derivatives(
                     profile=profile,
                 )
             elif media_type in {MediaType.TIFF, MediaType.IMAGE}:
+                if not is_processable_document_path(source):
+                    raise RuntimeError(
+                        "Formato no admitido para derivados documentales: "
+                        f"{source.suffix.lower() or "sin extensión"}. "
+                        "Usá PDF, TIFF, PNG, JPEG o WebP."
+                    )
                 inspection = inspect_input(source)
                 pyvips = _pyvips_module() if profile.use_pyvips_when_available else None
                 use_pyvips = (

@@ -139,6 +139,57 @@ def resolve_surya_command(command: str) -> str:
     return command
 
 
+def resolve_llama_cpp_binary() -> str:
+    """Devuelve el binario llama.cpp que usará Surya en este entorno."""
+
+    configured = str(os.environ.get("LLAMA_CPP_BINARY", "")).strip()
+    return configured or "llama-server"
+
+
+def should_clean_surya_library_path(profile: ExtractionProfile) -> bool:
+    """Respeta la limpieza nativa salvo en el runtime llama.cpp administrado.
+
+    Las imágenes Docker incluyen ``llama-server`` y sus bibliotecas en ``/opt/llama``.
+    En ese modo quitar ``LD_LIBRARY_PATH`` impide arrancar precisamente el binario
+    administrado. La instalación nativa conserva el comportamiento histórico del
+    perfil y continúa limpiando la variable cuando así se configuró.
+    """
+
+    if not profile.surya_clean_library_path:
+        return False
+    managed_backend = str(
+        os.environ.get("ARCHIVE_WORKBENCH_SURYA_BACKEND", "")
+    ).strip().casefold()
+    return managed_backend != "llamacpp"
+
+
+def apply_managed_llamacpp_limits(
+    env: dict[str, str],
+    profile: ExtractionProfile,
+    *,
+    backend: str | None,
+) -> None:
+    """Aplica guardas conservadoras al llama.cpp administrado.
+
+    Surya 0.22.1 permite 12.288 tokens en OCR full-page pero su cliente corta una
+    petición a los 600 s. En CPU una salida degenerada puede no alcanzar ese límite
+    antes del timeout, de modo que Surya nunca llega a inspeccionarla ni a activar su
+    recuperación por repetición. El runtime administrado usa un techo de 8.192 tokens
+    y alinea el timeout de la petición con el presupuesto documental de Archive
+    Workbench. Las variables ya definidas se respetan como override explícito.
+    """
+
+    managed_backend = str(
+        os.environ.get("ARCHIVE_WORKBENCH_SURYA_BACKEND", "")
+    ).strip().casefold()
+    if backend != "llamacpp" or managed_backend != "llamacpp":
+        return
+    env.setdefault(
+        "SURYA_INFERENCE_TIMEOUT_SECONDS", str(profile.document_timeout_seconds)
+    )
+    env.setdefault("SURYA_MAX_TOKENS_FULL_PAGE", "8192")
+
+
 def surya_version(command: str) -> str | None:
     resolved_command = resolve_surya_command(command)
     command_path = Path(resolved_command)
@@ -181,6 +232,11 @@ def surya_version(command: str) -> str | None:
 
 
 def _backend_from_profile(profile: ExtractionProfile) -> str | None:
+    managed_backend = str(
+        os.environ.get("ARCHIVE_WORKBENCH_SURYA_BACKEND", "")
+    ).strip().casefold()
+    if managed_backend in {"llamacpp", "vllm"}:
+        return managed_backend
     if profile.device == "cuda":
         return "vllm"
     if profile.device == "cpu":
@@ -225,10 +281,14 @@ def _command_log(
     torch_device: str,
     clean_library_path: bool,
     keep_server: bool,
+    inference_timeout: str | None,
+    max_tokens_full_page: str | None,
 ) -> str:
     parts = [f"$ {shlex.join(command)}", f"exit_code={result.returncode}"]
     parts.append(f"SURYA_INFERENCE_BACKEND={backend or 'auto'}")
     parts.append(f"SURYA_INFERENCE_URL={inference_url or '-'}")
+    parts.append(f"SURYA_INFERENCE_TIMEOUT_SECONDS={inference_timeout or '-'}")
+    parts.append(f"SURYA_MAX_TOKENS_FULL_PAGE={max_tokens_full_page or '-'}")
     parts.append(f"TORCH_DEVICE={torch_device}")
     parts.append(f"ARCHIVE_WORKBENCH_CLEAN_LD_LIBRARY_PATH={int(clean_library_path)}")
     parts.append(f"SURYA_INFERENCE_KEEP_ALIVE={int(keep_server)}")
@@ -368,10 +428,12 @@ def _run_surya_attempt(
         command.append("--keep_server")
 
     env = os.environ.copy()
-    if profile.surya_clean_library_path:
+    clean_library_path = should_clean_surya_library_path(profile)
+    if clean_library_path:
         env.pop("LD_LIBRARY_PATH", None)
     if backend:
         env["SURYA_INFERENCE_BACKEND"] = backend
+    apply_managed_llamacpp_limits(env, profile, backend=backend)
     if profile.surya_inference_url:
         env["SURYA_INFERENCE_URL"] = profile.surya_inference_url
     env["SURYA_INFERENCE_PARALLEL"] = str(profile.surya_parallel)
@@ -403,8 +465,12 @@ def _run_surya_attempt(
             for part in (
                 f"$ {shlex.join(command)}",
                 f"SURYA_INFERENCE_BACKEND={backend or 'auto'}",
+                "SURYA_INFERENCE_TIMEOUT_SECONDS="
+                + env.get("SURYA_INFERENCE_TIMEOUT_SECONDS", "-"),
+                "SURYA_MAX_TOKENS_FULL_PAGE="
+                + env.get("SURYA_MAX_TOKENS_FULL_PAGE", "-"),
                 f"TORCH_DEVICE={env.get('TORCH_DEVICE', 'auto')}",
-                f"ARCHIVE_WORKBENCH_CLEAN_LD_LIBRARY_PATH={int(profile.surya_clean_library_path)}",
+                f"ARCHIVE_WORKBENCH_CLEAN_LD_LIBRARY_PATH={int(clean_library_path)}",
                 stdout.strip(),
                 stderr.strip(),
             )
@@ -421,8 +487,10 @@ def _run_surya_attempt(
         backend=backend,
         inference_url=env.get("SURYA_INFERENCE_URL"),
         torch_device=env.get("TORCH_DEVICE", "auto"),
-        clean_library_path=profile.surya_clean_library_path,
+        clean_library_path=clean_library_path,
         keep_server=profile.surya_keep_server,
+        inference_timeout=env.get("SURYA_INFERENCE_TIMEOUT_SECONDS"),
+        max_tokens_full_page=env.get("SURYA_MAX_TOKENS_FULL_PAGE"),
     )
     if result.returncode != 0:
         diagnostic = (result.stderr or result.stdout or "").strip()

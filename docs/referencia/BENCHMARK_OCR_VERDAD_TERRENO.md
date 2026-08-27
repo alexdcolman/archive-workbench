@@ -7,7 +7,7 @@
 
 El benchmark compara Tesseract, Docling y Surya sobre exactamente los mismos derivados OCR y las mismas páginas transcritas manualmente. No selecciona una corrida canónica, no inicializa la capa editable y no modifica los originales.
 
-La comparación automática mide fidelidad textual mediante CER y WER. La evaluación de layout, orden de lectura, tablas, formularios, sellos, manuscritos e imágenes continúa siendo una revisión humana sobre las salidas conservadas por cada motor.
+La comparación automática mide fidelidad textual mediante CER y WER. La evaluación de layout, orden de lectura, tablas, formularios, sellos, manuscritos e imágenes continúa siendo una revisión manual sobre las salidas conservadas por cada motor.
 
 ## Verdad terreno
 
@@ -37,7 +37,7 @@ El diagnóstico del benchmark exige que los tres motores solicitados estén real
 
 `WER = distancia de Levenshtein entre palabras / palabras de referencia`.
 
-Los valores pueden superar 1 cuando las inserciones son numerosas. Un valor menor indica menos ediciones respecto de la transcripción humana. El informe conserva también distancias absolutas, recuentos de caracteres y palabras y tiempo de ejecución.
+Los valores pueden superar 1 cuando las inserciones son numerosas. Un valor menor indica menos ediciones respecto de la transcripción de referencia. El informe conserva también distancias absolutas, recuentos de caracteres y palabras y tiempo de ejecución.
 
 ## Salida
 

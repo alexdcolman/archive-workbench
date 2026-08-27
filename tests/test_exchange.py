@@ -77,6 +77,12 @@ from archive_workbench.work import (
     create_work_assignment,
     update_work_assignment,
 )
+from archive_workbench.team_copy import (
+    activate_received_team_copy,
+    create_team_copy_package,
+    inspect_team_copy_package,
+    plan_team_copy,
+)
 
 
 def _write_pdf(path: Path) -> None:
@@ -425,7 +431,7 @@ def test_exchange_migration_upgrades_existing_0012_database(tmp_path: Path) -> N
     upgrade_database(root, revision="0012_editable_search_fts")
     assert current_revision(root) == "0012_editable_search_fts"
     upgrade_database(root)
-    assert current_revision(root) == "0046_audiovisual_timeline_annotations"
+    assert current_revision(root) == "0047_authority_relation_profiles"
     engine = create_sqlite_engine(database_path(root))
     try:
         tables = set(inspect(engine).get_table_names())
@@ -454,7 +460,7 @@ def test_dry_run_migration_upgrades_populated_0013_database(tmp_path: Path) -> N
         engine.dispose()
     assert current_revision(root) == "0013_offline_exchange_log"
     upgrade_database(root)
-    assert current_revision(root) == "0046_audiovisual_timeline_annotations"
+    assert current_revision(root) == "0047_authority_relation_profiles"
     engine = create_sqlite_engine(database_path(root))
     try:
         tables = set(inspect(engine).get_table_names())
@@ -1101,7 +1107,7 @@ def test_transactional_apply_migration_upgrades_populated_0014_database(tmp_path
         engine.dispose()
     assert current_revision(root) == "0014_exchange_dry_run"
     upgrade_database(root)
-    assert current_revision(root) == "0046_audiovisual_timeline_annotations"
+    assert current_revision(root) == "0047_authority_relation_profiles"
     engine = create_sqlite_engine(database_path(root))
     try:
         tables = set(inspect(engine).get_table_names())
@@ -1679,7 +1685,7 @@ def test_delete_precondition_migration_upgrades_populated_0015_database(tmp_path
         engine.dispose()
     assert current_revision(root) == "0015_exchange_transactional_apply"
     upgrade_database(root)
-    assert current_revision(root) == "0046_audiovisual_timeline_annotations"
+    assert current_revision(root) == "0047_authority_relation_profiles"
     engine = create_sqlite_engine(database_path(root))
     try:
         columns = {
@@ -1700,7 +1706,7 @@ def test_conflict_resolution_migration_upgrades_populated_0016_database(tmp_path
     engine.dispose()
     assert current_revision(root) == "0016_exchange_delete_preconditions"
     upgrade_database(root)
-    assert current_revision(root) == "0046_audiovisual_timeline_annotations"
+    assert current_revision(root) == "0047_authority_relation_profiles"
     engine = create_sqlite_engine(database_path(root))
     try:
         tables = set(inspect(engine).get_table_names())
@@ -2107,7 +2113,7 @@ def test_resolution_usability_migration_upgrades_populated_0017_database(tmp_pat
         engine.dispose()
     assert current_revision(root) == "0017_exchange_conflict_resolutions"
     upgrade_database(root)
-    assert current_revision(root) == "0046_audiovisual_timeline_annotations"
+    assert current_revision(root) == "0047_authority_relation_profiles"
     engine = create_sqlite_engine(database_path(root))
     try:
         columns = {
@@ -2572,6 +2578,7 @@ def test_explicit_entity_relations_travel_in_bundle(tmp_path: Path) -> None:
                 project_id=decisions.project_id,
                 entity_type="person",
                 preferred_name="Juan Pérez",
+                profile_json={"places": "Rawson", "sources": "Ficha revisada"},
                 created_by="Source",
             )
             organization = create_authority(
@@ -2591,8 +2598,13 @@ def test_explicit_entity_relations_travel_in_bundle(tmp_path: Path) -> None:
                 evidence_note="Según el informe revisado.",
                 temporal_expression="03/1974 - 03/1976",
                 temporal_note="Vigencia documentada",
+                profile_json={
+                    "archival_category": "associative",
+                    "context": "Actividad política documentada",
+                },
                 created_by="Source",
             )
+            person_id = person.id
             relation_id = relation.id
         with session_scope(source_engine) as session:
             bundle = export_change_bundle(
@@ -2619,6 +2631,10 @@ def test_explicit_entity_relations_travel_in_bundle(tmp_path: Path) -> None:
             )
             assert applied.applied_event_count == 3
         with session_scope(receiver_engine) as session:
+            from archive_workbench.db.models import AuthorityRecord
+            received_person = session.get(AuthorityRecord, person_id)
+            assert received_person is not None
+            assert received_person.profile_json == {"places": "Rawson", "sources": "Ficha revisada"}
             relation = session.get(EntityRelation, relation_id)
             assert relation is not None
             assert relation.relation_kind == "analytical"
@@ -2629,6 +2645,10 @@ def test_explicit_entity_relations_travel_in_bundle(tmp_path: Path) -> None:
             assert relation.temporal_start.isoformat() == "1974-03-01"
             assert relation.temporal_end.isoformat() == "1976-03-31"
             assert relation.temporal_note == "Vigencia documentada"
+            assert relation.profile_json == {
+                "archival_category": "associative",
+                "context": "Actividad política documentada",
+            }
             assert relation.revision == 1
     finally:
         source_engine.dispose()
@@ -3644,8 +3664,8 @@ def test_0030_repairs_legacy_source_replaced_bundle_end_to_end(
     # generar nuevos eventos y la exportación corrige el evento ya existente.
     upgrade_database(source_root)
     upgrade_database(receiver_root)
-    assert current_revision(source_root) == "0046_audiovisual_timeline_annotations"
-    assert current_revision(receiver_root) == "0046_audiovisual_timeline_annotations"
+    assert current_revision(source_root) == "0047_authority_relation_profiles"
+    assert current_revision(receiver_root) == "0047_authority_relation_profiles"
     source_engine = create_sqlite_engine(database_path(source_root))
     receiver_engine = create_sqlite_engine(database_path(receiver_root))
     try:
@@ -4022,8 +4042,8 @@ def test_0031_backfills_legacy_page_action_and_preserves_history_end_to_end(
     _drop_historical_schema_compat_columns(receiver_root)
     upgrade_database(source_root)
     upgrade_database(receiver_root)
-    assert current_revision(source_root) == "0046_audiovisual_timeline_annotations"
-    assert current_revision(receiver_root) == "0046_audiovisual_timeline_annotations"
+    assert current_revision(source_root) == "0047_authority_relation_profiles"
+    assert current_revision(receiver_root) == "0047_authority_relation_profiles"
 
     source_engine = create_sqlite_engine(database_path(source_root))
     receiver_engine = create_sqlite_engine(database_path(receiver_root))
@@ -4244,8 +4264,9 @@ def test_unmatched_bundle_with_multiple_creations_exposes_all_review_fields(
             }
             fields = conflict_field_rows(session, bundle.bundle_id)
             assert len({row.event_id for row in fields}) == 3
-            assert len(fields) == 21
+            assert len(fields) == 24
             assert {row.operation for row in fields} == {"create"}
+            assert sum(row.field_name == "profile_json" for row in fields) == 3
     finally:
         source_engine.dispose()
         receiver_engine.dispose()
@@ -4951,7 +4972,7 @@ def test_lineage_validation_script_creates_recoverable_discardable_pair(
         receiver,
         force=False,
     )
-    assert result["revision"] == "0046_audiovisual_timeline_annotations"
+    assert result["revision"] == "0047_authority_relation_profiles"
 
     engine = create_sqlite_engine(database_path(receiver))
     try:
@@ -5588,7 +5609,7 @@ def test_common_base_validation_script_creates_distinct_identical_copies(
         tmp_path / "common_base_b",
         force=False,
     )
-    assert result["revision"] == "0046_audiovisual_timeline_annotations"
+    assert result["revision"] == "0047_authority_relation_profiles"
     assert result["initiator_workspace_id"] != result["counterpart_workspace_id"]
     assert len(str(result["state_sha256"])) == 64
     assert Path(result["validation_path"]).is_file()
@@ -5900,7 +5921,7 @@ def test_state_adoption_validation_script_creates_divergent_copies_and_package(
         tmp_path / "state_adoption_target",
         force=False,
     )
-    assert result["revision"] == "0046_audiovisual_timeline_annotations"
+    assert result["revision"] == "0047_authority_relation_profiles"
     assert result["source_workspace_id"] != result["target_workspace_id"]
     assert result["source_state_sha256"] != result["target_state_sha256"]
     assert Path(result["package_path"]).is_file()
@@ -5988,3 +6009,135 @@ def test_layout_structure_travels_in_bundle_with_page_revision_history(
     finally:
         source_engine.dispose()
         receiver_engine.dispose()
+
+
+
+def test_team_copy_can_omit_originals_and_records_that_choice(tmp_path: Path) -> None:
+    source_root = tmp_path / "source"
+    engine, _decisions, _object_id = _seed_project(source_root)
+    engine.dispose()
+    original = source_root / "corpus" / "doc.pdf"
+    assert original.is_file()
+    derivative = source_root / "derivatives" / "preview.webp"
+    derivative.parent.mkdir(parents=True, exist_ok=True)
+    derivative.write_bytes(b"preview")
+
+    decisions_file = source_root / "config" / "decisions.yaml"
+    decisions_file.parent.mkdir(parents=True, exist_ok=True)
+    decisions_file.write_text("project: test\n", encoding="utf-8")
+
+    plan = plan_team_copy(
+        project_root=source_root,
+        included_groups=["derivatives", "extraction", "transcripts"],
+        profile_name="review",
+    )
+    assert "originals" in plan.omitted_groups
+    assert any(row.key == "originals" and row.byte_size > 0 for row in plan.group_summaries)
+
+    summary = create_team_copy_package(
+        project_root=source_root,
+        created_by="Alex",
+        included_groups=["derivatives", "extraction", "transcripts"],
+        content_profile="review",
+    )
+    inspected = inspect_team_copy_package(summary.output_path)
+    assert inspected.content_profile == "review"
+    assert "originals" in inspected.omitted_content_groups
+    with zipfile.ZipFile(summary.output_path) as archive:
+        names = archive.namelist()
+        assert not any(name.endswith("/corpus/doc.pdf") for name in names)
+        assert any(name.endswith("/derivatives/preview.webp") for name in names)
+        assert any(name.endswith("/data/archive_workbench.sqlite3") for name in names)
+        assert any(name.endswith("/config/decisions.yaml") for name in names)
+
+
+def test_team_copy_package_can_seed_multiple_independent_copies(tmp_path: Path) -> None:
+    source_root = tmp_path / "source"
+    engine, decisions, object_id = _seed_project(source_root)
+    engine.dispose()
+
+    summary = create_team_copy_package(
+        project_root=source_root,
+        created_by="Alex",
+    )
+    assert summary.output_path.is_file()
+    assert summary.package_sha256
+    assert summary.base_checkpoint_label.startswith("team_base_")
+
+    extracted_roots: list[Path] = []
+    for label in ("receiver_a", "receiver_b"):
+        destination = tmp_path / label
+        destination.mkdir()
+        with zipfile.ZipFile(summary.output_path) as archive:
+            archive.extractall(destination)
+        project_dirs = [path for path in destination.iterdir() if path.is_dir()]
+        assert len(project_dirs) == 1
+        extracted_roots.append(project_dirs[0])
+
+    activations = [
+        activate_received_team_copy(project_root=root, created_by="Persona receptora")
+        for root in extracted_roots
+    ]
+    assert all(item is not None for item in activations)
+    first, second = activations
+    assert first is not None and second is not None
+    assert first.workspace_id != second.workspace_id
+    assert first.workspace_id != summary.source_workspace_id
+    assert second.workspace_id != summary.source_workspace_id
+    assert first.checkpoint_label == summary.base_checkpoint_label
+    assert second.checkpoint_label == summary.base_checkpoint_label
+    assert first.state_sha256 == summary.base_state_sha256
+    assert second.state_sha256 == summary.base_state_sha256
+
+    # La activación es de una sola vez y no vuelve a cambiar la identidad.
+    assert (
+        activate_received_team_copy(
+            project_root=extracted_roots[0], created_by="Persona receptora"
+        )
+        is None
+    )
+
+    # Una copia puede editar y enviar un bundle sin conocer el ID de la contraparte.
+    first_root = extracted_roots[0]
+    first_engine = create_sqlite_engine(database_path(first_root))
+    try:
+        with session_scope(first_engine) as session:
+            update_editable_object(
+                session,
+                decisions=decisions,
+                object_id=object_id,
+                expected_revision=1,
+                edited_by="Persona A",
+                text="Cambio de Persona A",
+            )
+        with session_scope(first_engine) as session:
+            checkpoint = session.scalar(
+                select(ExchangeCheckpoint).where(
+                    ExchangeCheckpoint.label == summary.base_checkpoint_label
+                )
+            )
+            assert checkpoint is not None
+            bundle = export_change_bundle(
+                session,
+                project_root=first_root,
+                checkpoint_ref=checkpoint.id,
+                created_by="Persona A",
+            )
+    finally:
+        first_engine.dispose()
+
+    second_root = extracted_roots[1]
+    second_engine = create_sqlite_engine(database_path(second_root))
+    try:
+        with session_scope(second_engine) as session:
+            dry_run = dry_run_change_bundle(
+                session,
+                project_root=second_root,
+                bundle_path=bundle.output_path,
+                assessed_by="Persona B",
+            )
+        assert dry_run.base_match_status == "matched"
+        assert dry_run.counts["apply"] == 1
+        assert dry_run.counts["conflict"] == 0
+    finally:
+        second_engine.dispose()

@@ -34,12 +34,12 @@ from archive_workbench.db.models import (
 )
 from archive_workbench.identity import new_id
 from archive_workbench.sources import PROCESSABLE_SOURCE_TYPES
-from archive_workbench.temporal import parse_temporal_expression
+from archive_workbench.temporal import parse_temporal_expression, temporal_expression_overlap
 
-AUTHORITY_TYPES = ("person", "organization", "place", "event", "work", "other")
+AUTHORITY_TYPES = ("person", "family", "organization", "place", "event", "work", "other")
 AUTHORITY_REVIEW_STATUSES = ("unreviewed", "reviewed", "approved")
 AUTHORITY_LIFECYCLE_STATUSES = ("active", "inactive")
-ALIAS_TYPES = ("variant", "abbreviation", "acronym", "former_name", "title", "other")
+ALIAS_TYPES = ("parallel", "normalized_other_rules", "variant", "abbreviation", "acronym", "former_name", "title", "other")
 MENTION_STATUSES = ("pending", "accepted", "rejected", "modified")
 LINKED_MENTION_STATUSES = ("accepted", "modified")
 MENTION_SOURCES = ("manual", "dictionary", "automatic")
@@ -117,6 +117,7 @@ class AuthorityRow:
     temporal_precision: str | None
     temporal_approximate: bool
     temporal_note: str | None
+    profile: dict[str, object]
     lifecycle_status: str
     review_status: str
     revision: int
@@ -336,6 +337,7 @@ def _authority_snapshot(session: Session, authority: AuthorityRecord) -> dict[st
         "temporal_precision": authority.temporal_precision,
         "temporal_approximate": authority.temporal_approximate,
         "temporal_note": authority.temporal_note,
+        "profile_json": authority.profile_json or {},
         "lifecycle_status": authority.lifecycle_status,
         "review_status": authority.review_status,
         "aliases": [
@@ -425,6 +427,7 @@ def create_authority(
     description: str | None = None,
     temporal_expression: str | None = None,
     temporal_note: str | None = None,
+    profile_json: Mapping[str, object] | None = None,
     review_status: str = "unreviewed",
     note: str | None = None,
 ) -> AuthorityRecord:
@@ -451,6 +454,7 @@ def create_authority(
         temporal_precision=temporal.precision,
         temporal_approximate=temporal.approximate,
         temporal_note=temporal_note.strip() if temporal_note and temporal_note.strip() else None,
+        profile_json=dict(profile_json or {}) or None,
         lifecycle_status="active",
         review_status=review_status,
         created_by=created_by,
@@ -478,6 +482,7 @@ def update_authority(
     description: str | None = None,
     temporal_expression: str | None = None,
     temporal_note: str | None = None,
+    profile_json: Mapping[str, object] | None | object = _UNSET,
     review_status: str | None = None,
     lifecycle_status: str | None = None,
     note: str | None = None,
@@ -510,6 +515,8 @@ def update_authority(
         authority.temporal_approximate = temporal.approximate
     if temporal_note is not None:
         authority.temporal_note = temporal_note.strip() or None
+    if profile_json is not _UNSET:
+        authority.profile_json = dict(profile_json or {}) or None
     if review_status is not None:
         if review_status not in AUTHORITY_REVIEW_STATUSES:
             raise ValueError(f"Estado de revisión inválido: {review_status}")
@@ -660,6 +667,19 @@ def authority_rows(
             AuthorityRecord.id,
         )
     ).all()
+    if temporal_start is not None or temporal_end is not None:
+        records = [
+            row
+            for row in records
+            if temporal_expression_overlap(
+                expression=row.temporal_expression,
+                item_start=row.temporal_start,
+                item_end=row.temporal_end,
+                query_start=temporal_start,
+                query_end=temporal_end,
+                include_undated=include_undated,
+            )
+        ]
     if not records:
         return []
     ids = [row.id for row in records]
@@ -705,6 +725,7 @@ def authority_rows(
                 temporal_precision=row.temporal_precision,
                 temporal_approximate=bool(row.temporal_approximate),
                 temporal_note=row.temporal_note,
+                profile=dict(row.profile_json or {}),
                 lifecycle_status=row.lifecycle_status,
                 review_status=row.review_status,
                 revision=row.revision,
@@ -1334,7 +1355,7 @@ def mention_repair_cases(
                     order_index=row.order_index,
                     explanation=(
                         "El fragmento no pudo localizarse de manera única en el texto vigente. "
-                        "Requiere una decisión humana; no se modificará automáticamente."
+                        "Requiere una decisión explícita; no se modificará automáticamente."
                     ),
                 )
             )

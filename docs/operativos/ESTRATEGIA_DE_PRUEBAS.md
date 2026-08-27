@@ -16,7 +16,7 @@ En cada versión se ejecutan, en este orden:
 2. pruebas transversales pertinentes —base, migraciones, navegación, documentación o empaquetado—;
 3. `pytest --collect-only -q` para verificar importación y colección completa;
 4. construcción del wheel;
-5. suite completa `pytest` en el equipo local como validación final cuando corresponda.
+5. suite completa `pytest`, ejecutada exclusivamente por Alex en su equipo local, como validación final cuando corresponda; el asistente nunca la ejecuta.
 
 La entrega debe indicar qué grupos terminaron y no atribuir a la suite completa un resultado que no obtuvo.
 
@@ -39,3 +39,6 @@ No eliminar pruebas por ser lentas. Solo podrá retirarse una si existe redundan
 - `slow`: corpus, backends o recorridos de larga duración.
 
 Los marcadores organizarán la ejecución; no reducirán cobertura.
+
+
+La suite completa es de ejecución exclusiva de Alex. El asistente prepara el comando y revisa la salida, pero nunca ejecuta la corrida monolítica. Esta regla se define canónicamente en `.assistant/03_POLITICA_DE_PRUEBAS.md`. Un gate pendiente no bloquea la entrega del ZIP: se entrega con el estado de validación declarado.

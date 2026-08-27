@@ -1,0 +1,32 @@
+AUDITORÍA ESTÁTICA DE INTERFAZ - RC28 - AYUDA CONTEXTUAL DESCUBRIBLE
+Fecha: 2026-08-21
+Alcance: cambio transversal de orientación de UX-04. Esta auditoría no sustituye la validación manual en navegador sobre pilot_data.
+
+PASADA 1 - TÍTULOS, NAVEGACIÓN Y PROPÓSITO
+- Verificada la cobertura declarada de SECTION_HELP, TAB_HELP y TASK_HELP contra las superficies de navegación existentes.
+- Los textos aprobados de RC27 permanecen idénticos en RC28; sólo cambia el mecanismo visual que los expone.
+- Cada sección y pestaña sigue teniendo explicación explícita de propósito y funcionamiento.
+
+PASADA 2 - RÓTULOS, BOTONES Y SELECTORES
+- El cambio no renombra botones ni operaciones de dominio.
+- Los selectores compactos de tarea conservan su valor y su clave; mount_choice_help sólo agrega el icono de información al DOM.
+- No se introduce un segundo selector, botón de ayuda, popover ni panel adicional.
+
+PASADA 3 - AYUDAS, CAPTIONS, AVISOS Y CONFIRMACIONES
+- El signo ? no forma parte del nuevo componente de ayuda.
+- La ayuda se descubre mediante un icono de información visible y consistente.
+- El tooltip se muestra por hover y por foco de teclado.
+- Advertencias, errores, consecuencias materiales y confirmaciones existentes no se trasladan a tooltips ni se ocultan.
+
+PASADA 4 - ESTADOS, RESULTADOS E HISTORIALES
+- El cambio no modifica estados, resultados, historiales, persistencia ni contratos de escritura.
+- No se agregan métricas, captions ni paneles permanentes que vuelvan a densificar las pantallas.
+- La navegación de Revisar documentos conserva rerun_on_change=False donde ya había sido validado en RC26.
+
+PASADA 5 - BLOQUES TÉCNICOS, AVANZADOS Y DIAGNÓSTICOS
+- El componente v2 de ayuda no llama setStateValue() ni setTriggerValue().
+- El componente no comunica estado a Python y no introduce st.fragment, reruns adicionales ni mecanismos nuevos de conservación de scroll.
+- La ayuda usa role=tooltip y relaciones aria-describedby; en pestañas el foco del propio tab expone la descripción.
+- El JavaScript embebido fue validado sintácticamente con node --check.
+
+RESULTADO DE LA AUDITORÍA ESTÁTICA: VERDE PARA EMPAQUETADO, PENDIENTE VALIDACIÓN MANUAL EN RC28.

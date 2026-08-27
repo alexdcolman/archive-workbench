@@ -1,11 +1,15 @@
 from __future__ import annotations
 
+from archive_workbench.ui_dates import DATE_INPUT_MIN, DATE_INPUT_MAX
+from archive_workbench.ui_help import TAB_HELP
 from datetime import date, datetime, timezone
 from pathlib import Path
 
 from sqlalchemy import select
 
-from archive_workbench.ui_navigation import rerun_view, tracked_tabs
+from archive_workbench.local_picker import choose_local_directory
+from archive_workbench.runtime_environment import managed_workspace, workspace_display_path
+from archive_workbench.ui_navigation import rerun_view, section_heading, tracked_tabs
 
 from archive_workbench.authorities import (
     AUTHORITY_TYPES,
@@ -54,14 +58,19 @@ _EDGE_LABELS = {
     "manager": "Entidades gestoras",
     "shared_entity": "Entidades compartidas",
 }
+
+_DEFAULT_EDGE_TYPES = tuple(
+    edge_type for edge_type in GRAPH_EDGE_TYPES if edge_type not in {"hierarchy", "document"}
+)
 _NODE_LABELS = {
-    "entity": "Autoridad",
+    "entity": "Entidad",
     "archival_unit": "Unidad archivística",
-    "digital_object": "Documento u objeto digital",
+    "digital_object": "Documento digital",
     "document_part": "Parte interna",
 }
 _ENTITY_TYPE_LABELS = {
     "person": "Persona",
+    "family": "Familia",
     "organization": "Organismo / institución",
     "place": "Lugar",
     "event": "Acontecimiento",
@@ -107,7 +116,7 @@ _MENTION_SOURCE_LABELS = {
 _SNAPSHOT_FIELD_LABELS = {
     "revision": "Número de revisión",
     "missing_snapshot": "Snapshot histórico",
-    "editable_object_id": "Objeto textual",
+    "editable_object_id": "Bloque de texto",
     "authority_id": "Entidad vinculada",
     "mention_text": "Fragmento de la mención",
     "normalized_text": "Texto normalizado",
@@ -231,7 +240,7 @@ def _repair_snapshot_divergence_action(
     if decision == "adopt_current":
         message = (
             "Se conservó la fila vigente y se la registró como una nueva revisión. "
-            "El historial anterior permanece intacto."
+            "La corrección queda registrada como una revisión nueva."
         )
     else:
         message = (
@@ -350,7 +359,7 @@ def _repair_duplicate_action(
     if decision == "keep_current":
         message = (
             "Se conservó la mención ya ubicada en el texto vigente y se retiró "
-            "la mención histórica duplicada. El historial anterior permanece intacto."
+            "la mención histórica duplicada y registra la corrección como una revisión nueva."
         )
     else:
         message = (
@@ -487,20 +496,10 @@ def render_graph_view(
     project_id: str,
     actor: str,
 ) -> None:
-    st.header("Mapa de relaciones")
-    st.caption(
-        "Explorá la estructura archivística, los documentos, sus partes, las autoridades y la procedencia de cada vínculo."
-    )
+    section_heading(st, "Explorar relaciones")
     repair_notice = st.session_state.pop("mention_repair_notice", None)
     if repair_notice:
         st.success(repair_notice)
-    with st.expander("Cómo se construye este mapa", expanded=False):
-        st.write(
-            "Es una vista derivada: no guarda datos paralelos ni crea relaciones nuevas. "
-            "Cada capa conserva su significado propio y explica la tabla o registro del que procede; "
-            "la pertenencia archivística nunca se presenta como una relación analítica."
-        )
-
     # El foco se obtiene directamente de los registros para incluir también elementos sin aristas visibles.
     engine = create_sqlite_engine(db_path)
     try:
@@ -541,84 +540,187 @@ def render_graph_view(
     focus_options = [""] + [row[0] for row in focus_rows]
     focus_map = {row[0]: row for row in focus_rows}
     level_options = sorted({row.level_key for row in unit_focus})
-    with st.expander("Filtros del mapa", expanded=False):
-        with st.form("graph_filters", enter_to_submit=False):
-            left, middle, right = st.columns(3)
-            with left:
-                edge_types = st.multiselect(
-                    "Tipos de vínculo",
-                    options=list(GRAPH_EDGE_TYPES),
-                    default=list(GRAPH_EDGE_TYPES),
-                    format_func=lambda value: _EDGE_LABELS[value],
-                )
-                entity_types = st.multiselect(
-                    "Tipos de entidad",
-                    options=list(AUTHORITY_TYPES),
-                    default=list(AUTHORITY_TYPES),
-                    format_func=lambda value: _ENTITY_TYPE_LABELS[value],
-                )
-            with middle:
-                archival_levels = st.multiselect(
-                    "Niveles archivísticos",
-                    options=level_options,
-                    default=level_options,
-                )
-                review_statuses = st.multiselect(
-                    "Revisión de relaciones registradas",
-                    options=["unreviewed", "reviewed", "approved"],
-                    default=["unreviewed", "reviewed", "approved"],
-                    format_func=lambda value: _REVIEW_LABELS[value],
-                )
-                include_inactive = st.checkbox("Incluir relaciones y entidades inactivas")
-                include_pending_mentions = st.checkbox(
-                    "Incluir menciones pendientes",
-                    help="Las menciones pendientes se muestran como evidencia provisional; no equivalen a una aceptación humana.",
-                )
-            with right:
-                min_shared = st.number_input(
-                    "Entidades compartidas mínimas",
-                    min_value=1,
-                    max_value=20,
-                    value=1,
-                    step=1,
-                )
-                max_nodes = st.selectbox("Máximo de elementos", options=[60, 120, 180, 300], index=2)
-                focus_node_id = st.selectbox(
-                    "Centrar en",
-                    options=focus_options,
-                    format_func=lambda value: (
-                        "Todo el mapa"
-                        if not value
-                        else f"{_NODE_LABELS[focus_map[value][1]]} · {focus_map[value][2]}"
-                    ),
-                )
-                depth_value = st.selectbox(
-                    "Distancia desde el centro",
-                    options=[1, 2, 3, 0],
-                    format_func=lambda value: "Sin límite" if value == 0 else f"{value} salto(s)",
+    default_graph_filters = {
+        "edge_types": list(_DEFAULT_EDGE_TYPES),
+        "entity_types": list(AUTHORITY_TYPES),
+        "archival_levels": list(level_options),
+        "review_statuses": ["unreviewed", "reviewed", "approved"],
+        "include_inactive": False,
+        "include_pending_mentions": False,
+        "min_shared": 1,
+        "max_nodes": 180,
+        "focus_node_id": "",
+        "depth_value": 1,
+        "temporal_enabled": False,
+        "temporal_from": date(1900, 1, 1),
+        "temporal_to": date.today(),
+        "temporal_include_undated": False,
+    }
+    applied_graph_filters = st.session_state.get("graph_applied_filters")
+    if not isinstance(applied_graph_filters, dict):
+        applied_graph_filters = dict(default_graph_filters)
+    else:
+        applied_graph_filters = {**default_graph_filters, **applied_graph_filters}
+    applied_graph_filters["edge_types"] = [
+        value
+        for value in applied_graph_filters["edge_types"]
+        if value in GRAPH_EDGE_TYPES
+    ]
+    applied_graph_filters["entity_types"] = [
+        value
+        for value in applied_graph_filters["entity_types"]
+        if value in AUTHORITY_TYPES
+    ]
+    applied_graph_filters["archival_levels"] = [
+        value
+        for value in applied_graph_filters["archival_levels"]
+        if value in level_options
+    ]
+    applied_graph_filters["review_statuses"] = [
+        value
+        for value in applied_graph_filters["review_statuses"]
+        if value in {"unreviewed", "reviewed", "approved"}
+    ]
+    if applied_graph_filters["focus_node_id"] not in focus_options:
+        applied_graph_filters["focus_node_id"] = ""
+    st.session_state["graph_applied_filters"] = applied_graph_filters
+
+    graph_filters_open = st.toggle(
+        "Configurar mapa",
+        value=False,
+        key="graph_filters_open",
+    )
+    if graph_filters_open:
+        with st.container(border=True):
+            with st.form("graph_filters", enter_to_submit=False):
+                left, middle, right = st.columns(3)
+                with left:
+                    edge_types = st.multiselect(
+                        "Tipos de relación que querés mostrar",
+                        options=list(GRAPH_EDGE_TYPES),
+                        default=list(applied_graph_filters["edge_types"]),
+                        format_func=lambda value: _EDGE_LABELS[value],
+                    )
+                    entity_types = st.multiselect(
+                        "Tipos de entidad que querés mostrar",
+                        options=list(AUTHORITY_TYPES),
+                        default=list(applied_graph_filters["entity_types"]),
+                        format_func=lambda value: _ENTITY_TYPE_LABELS[value],
+                    )
+                with middle:
+                    archival_levels = st.multiselect(
+                        "Tipos de unidad del catálogo que querés mostrar",
+                        options=level_options,
+                        default=list(applied_graph_filters["archival_levels"]),
+                    )
+                    review_statuses = st.multiselect(
+                        "Estado de revisión de las relaciones que querés mostrar",
+                        options=["unreviewed", "reviewed", "approved"],
+                        default=list(applied_graph_filters["review_statuses"]),
+                        format_func=lambda value: _REVIEW_LABELS[value],
+                    )
+                    include_inactive = st.checkbox(
+                        "Mostrar también relaciones y entidades dadas de baja",
+                        value=bool(applied_graph_filters["include_inactive"]),
+                    )
+                    include_pending_mentions = st.checkbox(
+                        "Mostrar también menciones de entidades todavía no confirmadas",
+                        value=bool(applied_graph_filters["include_pending_mentions"]),
+                        help="Las menciones pendientes se muestran como evidencia provisional; no equivalen a una aceptación explícita.",
+                    )
+                with right:
+                    min_shared = st.number_input(
+                        "Cantidad mínima de entidades compartidas para conectar dos elementos",
+                        min_value=1,
+                        max_value=20,
+                        value=int(applied_graph_filters["min_shared"]),
+                        step=1,
+                    )
+                    max_node_options = [60, 120, 180, 300]
+                    max_nodes = st.selectbox(
+                        "Cantidad máxima de elementos que se mostrarán en el mapa",
+                        options=max_node_options,
+                        index=max_node_options.index(
+                            int(applied_graph_filters["max_nodes"])
+                            if int(applied_graph_filters["max_nodes"]) in max_node_options
+                            else 180
+                        ),
+                    )
+                    focus_node_id = st.selectbox(
+                        "Elemento alrededor del cual querés centrar el mapa",
+                        options=focus_options,
+                        index=focus_options.index(str(applied_graph_filters["focus_node_id"])),
+                        format_func=lambda value: (
+                            "Todo el mapa"
+                            if not value
+                            else f"{_NODE_LABELS[focus_map[value][1]]} · {focus_map[value][2]}"
+                        ),
+                    )
+                    depth_value = st.selectbox(
+                        "Cantidad de relaciones a mostrar desde el elemento central",
+                        options=[1, 2, 3, 0],
+                        index=[1, 2, 3, 0].index(
+                            int(applied_graph_filters["depth_value"])
+                            if int(applied_graph_filters["depth_value"]) in {0, 1, 2, 3}
+                            else 1
+                        ),
+                        format_func=lambda value: "Sin límite" if value == 0 else f"{value} salto(s)",
+                        help=(
+                            "Se aplica cuando elegís un elemento en «Centrar en». "
+                            "Sin foco, el mapa conserva todos los elementos y omite esta distancia."
+                        ),
+                    )
+                temporal_enabled = st.checkbox(
+                    "Mostrar sólo entidades o relaciones vigentes en un período",
+                    value=bool(applied_graph_filters["temporal_enabled"]),
                     help=(
-                        "Se aplica cuando elegís un elemento en «Centrar en». "
-                        "Sin foco, el mapa conserva todos los elementos y omite esta distancia."
+                        "Conserva entidades cuyo período se superpone con el intervalo y también "
+                        "las entidades necesarias para mostrar relaciones vigentes en ese período."
                     ),
                 )
-            temporal_enabled = st.checkbox(
-                "Filtrar por período de entidades o relaciones",
-                help=(
-                    "Conserva entidades cuyo período se superpone con el intervalo y también "
-                    "las entidades necesarias para mostrar relaciones vigentes en ese período."
-                ),
-            )
-            temporal_cols = st.columns(3)
-            temporal_from = temporal_cols[0].date_input(
-                "Desde", value=date(1900, 1, 1), key="graph_temporal_from"
-            )
-            temporal_to = temporal_cols[1].date_input(
-                "Hasta", value=date.today(), key="graph_temporal_to"
-            )
-            temporal_include_undated = temporal_cols[2].checkbox(
-                "Incluir sin fecha", value=False, key="graph_temporal_undated"
-            )
-            st.form_submit_button("Aplicar filtros", type="primary")
+                temporal_cols = st.columns(3)
+                temporal_from = temporal_cols[0].date_input(
+                    "Desde",
+                    value=applied_graph_filters["temporal_from"],
+                    min_value=DATE_INPUT_MIN,
+                    max_value=DATE_INPUT_MAX,
+                    key="graph_temporal_from",
+                )
+                temporal_to = temporal_cols[1].date_input(
+                    "Hasta",
+                    value=applied_graph_filters["temporal_to"],
+                    min_value=DATE_INPUT_MIN,
+                    max_value=DATE_INPUT_MAX,
+                    key="graph_temporal_to",
+                )
+                temporal_include_undated = temporal_cols[2].checkbox(
+                    "Incluir sin fecha",
+                    value=bool(
+                        applied_graph_filters["temporal_include_undated"]
+                    ),
+                    key="graph_temporal_undated",
+                )
+                filters_submitted = st.form_submit_button(
+                    "Actualizar el mapa con estos filtros", type="primary"
+                )
+            if filters_submitted:
+                applied_graph_filters = {
+                    "edge_types": list(edge_types),
+                    "entity_types": list(entity_types),
+                    "archival_levels": list(archival_levels),
+                    "review_statuses": list(review_statuses),
+                    "include_inactive": bool(include_inactive),
+                    "include_pending_mentions": bool(include_pending_mentions),
+                    "min_shared": int(min_shared),
+                    "max_nodes": int(max_nodes),
+                    "focus_node_id": focus_node_id,
+                    "depth_value": int(depth_value),
+                    "temporal_enabled": bool(temporal_enabled),
+                    "temporal_from": temporal_from,
+                    "temporal_to": temporal_to,
+                    "temporal_include_undated": bool(temporal_include_undated),
+                }
+                st.session_state["graph_applied_filters"] = applied_graph_filters
 
     engine = create_sqlite_engine(db_path)
     try:
@@ -626,19 +728,38 @@ def render_graph_view(
             view = build_graph(
                 session,
                 project_id=project_id,
-                edge_types=tuple(edge_types),
-                entity_types=tuple(entity_types),
-                archival_levels=tuple(archival_levels),
-                review_statuses=tuple(review_statuses),
-                include_inactive=include_inactive,
-                include_pending_mentions=include_pending_mentions,
-                temporal_start=temporal_from if temporal_enabled else None,
-                temporal_end=temporal_to if temporal_enabled else None,
-                temporal_include_undated=temporal_include_undated if temporal_enabled else False,
-                min_shared_entities=int(min_shared),
-                focus_node_id=focus_node_id or None,
-                max_depth=None if depth_value == 0 or not focus_node_id else int(depth_value),
-                max_nodes=int(max_nodes),
+                edge_types=tuple(applied_graph_filters["edge_types"]),
+                entity_types=tuple(applied_graph_filters["entity_types"]),
+                archival_levels=tuple(applied_graph_filters["archival_levels"]),
+                review_statuses=tuple(applied_graph_filters["review_statuses"]),
+                include_inactive=bool(applied_graph_filters["include_inactive"]),
+                include_pending_mentions=bool(
+                    applied_graph_filters["include_pending_mentions"]
+                ),
+                temporal_start=(
+                    applied_graph_filters["temporal_from"]
+                    if applied_graph_filters["temporal_enabled"]
+                    else None
+                ),
+                temporal_end=(
+                    applied_graph_filters["temporal_to"]
+                    if applied_graph_filters["temporal_enabled"]
+                    else None
+                ),
+                temporal_include_undated=(
+                    bool(applied_graph_filters["temporal_include_undated"])
+                    if applied_graph_filters["temporal_enabled"]
+                    else False
+                ),
+                min_shared_entities=int(applied_graph_filters["min_shared"]),
+                focus_node_id=applied_graph_filters["focus_node_id"] or None,
+                max_depth=(
+                    None
+                    if int(applied_graph_filters["depth_value"]) == 0
+                    or not applied_graph_filters["focus_node_id"]
+                    else int(applied_graph_filters["depth_value"])
+                ),
+                max_nodes=int(applied_graph_filters["max_nodes"]),
             )
             issues = graph_consistency_issues(session, project_id=project_id)
             repair_cases = mention_repair_cases(session, project_id=project_id)
@@ -688,15 +809,12 @@ def render_graph_view(
     analytical_count = sum(edge.edge_type == "analytical" for edge in view.edges)
     role_count = sum(edge.edge_type in {"producer", "manager"} for edge in view.edges)
     mention_count = sum(edge.edge_type == "mention" for edge in view.edges)
-    with st.expander("Resumen del mapa", expanded=False):
-        metrics = st.columns(7)
-        metrics[0].metric("Elementos", len(view.nodes))
-        metrics[1].metric("Vínculos", len(view.edges))
-        metrics[2].metric("Estructura", structural_count)
-        metrics[3].metric("Analíticos", analytical_count)
-        metrics[4].metric("Productores / gestores", role_count)
-        metrics[5].metric("Menciones", mention_count)
-        metrics[6].metric("Alertas", sum(item.severity != "info" for item in issues))
+    st.caption(
+        f"{len(view.nodes)} elementos · {len(view.edges)} relaciones · "
+        f"{structural_count} de estructura · {analytical_count} analíticas · "
+        f"{role_count} productor/gestor · {mention_count} menciones · "
+        f"{sum(item.severity != 'info' for item in issues)} problemas para revisar"
+    )
     if view.truncated:
         st.warning(
             f"La vista se limitó a {len(view.nodes)} elementos. Antes del límite había "
@@ -705,7 +823,10 @@ def render_graph_view(
         )
 
     graph_tab, quality_tab, export_tab = tracked_tabs(
-        st, ["Explorar", "Revisar alertas", "Exportar datos"], key="graph_tabs"
+        st,
+        ["Explorar las relaciones", "Revisar problemas detectados", "Exportar estas relaciones"],
+        key="graph_tabs",
+        help_by_label=TAB_HELP["graph_tabs"],
     )
     with graph_tab:
         selected_node = st.session_state.get("graph_selected_node")
@@ -716,23 +837,33 @@ def render_graph_view(
             selected_node = None
         if selected_edge not in edge_ids:
             selected_edge = None
+        graph_canvas_key = (
+            "graph_canvas_"
+            + "_".join(sorted(applied_graph_filters["edge_types"]))
+            + "_entities_"
+            + "_".join(sorted(applied_graph_filters["entity_types"]))
+            + "_levels_"
+            + "_".join(sorted(applied_graph_filters["archival_levels"]))
+            + "_reviews_"
+            + "_".join(sorted(applied_graph_filters["review_statuses"]))
+        )
+        graph_canvas_key += (
+            f"_{applied_graph_filters['include_inactive']}"
+            f"_{applied_graph_filters['include_pending_mentions']}"
+            f"_{applied_graph_filters['focus_node_id']}"
+            f"_{applied_graph_filters['depth_value']}"
+            f"_{applied_graph_filters['max_nodes']}"
+            f"_{applied_graph_filters['min_shared']}"
+            f"_{applied_graph_filters['temporal_enabled']}"
+            f"_{applied_graph_filters['temporal_from']}"
+            f"_{applied_graph_filters['temporal_to']}"
+            f"_{applied_graph_filters['temporal_include_undated']}"
+        )
         clicked_node, clicked_edge = interactive_graph_canvas(
             view,
             selected_node=selected_node,
             selected_edge=selected_edge,
-            key=(
-                "graph_canvas_"
-                + "_".join(sorted(edge_types))
-                + "_entities_"
-                + "_".join(sorted(entity_types))
-                + "_levels_"
-                + "_".join(sorted(archival_levels))
-                + "_reviews_"
-                + "_".join(sorted(review_statuses))
-                + f"_{include_inactive}_{include_pending_mentions}"
-                + f"_{focus_node_id}_{depth_value}_{max_nodes}_{min_shared}"
-                + f"_{temporal_enabled}_{temporal_from}_{temporal_to}_{temporal_include_undated}"
-            ),
+            key=graph_canvas_key,
         )
         if clicked_node in node_ids and clicked_node != selected_node:
             st.session_state["graph_selected_node"] = clicked_node
@@ -745,12 +876,6 @@ def render_graph_view(
         if not hasattr(st.components, "v2"):
             st.info("El mapa interactivo requiere Streamlit 1.51 o posterior.")
 
-        with st.expander("Cómo leer los elementos y vínculos", expanded=False):
-            st.caption(
-                "Los nodos distinguen autoridades, unidades, documentos y partes. "
-                "Las líneas continuas representan estructura o relaciones analíticas; "
-                "los roles productor/gestor y las menciones usan guiones; las entidades compartidas usan puntos."
-            )
         node_map = {row.node_id: row for row in view.nodes}
         edge_map = {row.edge_id: row for row in view.edges}
         selected_node = st.session_state.get("graph_selected_node")
@@ -776,7 +901,7 @@ def render_graph_view(
                 with st.expander("Detalles técnicos", expanded=False):
                     st.code(f"registro={node.record_id}")
                     st.code(f"nodo={node.node_id}")
-                if st.button("Abrir registro", type="primary", key=f"graph_open_node_{node.node_id}"):
+                if st.button("Abrir el registro de este elemento", type="primary", key=f"graph_open_node_{node.node_id}"):
                     _navigate_node(st, node)
         elif selected_edge in edge_map:
             edge = edge_map[selected_edge]
@@ -826,16 +951,16 @@ def render_graph_view(
                     if actions[1].button("Abrir evidencia textual", key=f"graph_open_evidence_{edge.edge_id}"):
                         _navigate_edge_evidence(st, edge)
         else:
-            st.info("Seleccioná un elemento o un vínculo para ver su explicación y abrir el registro de origen.")
+            st.info("Seleccioná un elemento o una línea del mapa para ver qué representa, de qué registro proviene y, cuando corresponda, abrir el documento, unidad o entidad relacionada.")
 
     with quality_tab:
         st.caption(
             "Las alertas no cambian datos por sí mismas. Las reparaciones automáticas "
-            "exigen una ubicación única; los casos ambiguos requieren una selección humana "
-            "explícita y también quedan registrados."
+            "exigen una ubicación única; cuando hay varias ubicaciones posibles, la persona debe "
+            "elegir manualmente la ubicación correcta y la decisión también queda registrada."
         )
 
-        st.subheader("Menciones que requieren revisión")
+        st.subheader("Menciones de entidades que necesitan una decisión")
         st.caption(
             "Las menciones rechazadas se conservan como evidencia histórica y no aparecen "
             "como trabajo activo. Toda reparación agrega una revisión nueva; nunca reescribe "
@@ -849,7 +974,7 @@ def render_graph_view(
         )
         repair_metrics_bottom = st.columns(2)
         repair_metrics_bottom[0].metric(
-            "Requieren decisión humana",
+            "Requieren decisión explícita",
             sum(
                 case.code in {
                     "unresolved_relocation",
@@ -898,7 +1023,7 @@ def render_graph_view(
                 st.caption(
                     f"{first_case.document_title or '[sin título]'} · "
                     f"página {first_case.page_number} · "
-                    f"objeto {first_case.order_index + 1}"
+                    f"bloque de texto {first_case.order_index + 1}"
                 )
                 for safe_case in safe_group:
                     st.write(
@@ -947,7 +1072,7 @@ def render_graph_view(
                 )
                 st.caption(
                     f"{case.document_title or '[sin título]'} · página {case.page_number} · "
-                    f"objeto {case.order_index + 1}"
+                    f"bloque de texto {case.order_index + 1}"
                 )
                 if case.authority_name:
                     st.write(f"**Entidad:** {case.authority_name}")
@@ -1045,7 +1170,7 @@ def render_graph_view(
                         st.caption("Mención histórica")
                         st.write(case.authority_name or "Sin entidad vinculada")
                         st.write(
-                            f"Estado: {_MENTION_STATUS_LABELS.get(case.status, case.status)} · "
+                            f"Estado de la mención histórica: {_MENTION_STATUS_LABELS.get(case.status, case.status)} · "
                             "revisión textual "
                             f"{case.stored_object_revision}"
                         )
@@ -1053,14 +1178,14 @@ def render_graph_view(
                         st.caption("Mención ya ubicada en el texto vigente")
                         st.write(duplicate_row.authority_name or "Sin entidad vinculada")
                         st.write(
-                            f"Estado: {_MENTION_STATUS_LABELS.get(duplicate_row.status, duplicate_row.status)} · "
+                            f"Estado de la mención vigente: {_MENTION_STATUS_LABELS.get(duplicate_row.status, duplicate_row.status)} · "
                             "revisión textual "
                             f"{duplicate_row.object_revision_number}"
                         )
 
                 action_cols = st.columns(2)
                 if case.source_key and action_cols[0].button(
-                    "Abrir texto",
+                    "Abrir el texto de esta mención",
                     key=f"mention_repair_open_text_{case.code}_{case.mention_id}",
                 ):
                     request_app_view(
@@ -1072,7 +1197,7 @@ def render_graph_view(
                     )
                     rerun_app(st)
                 if case.authority_id and action_cols[1].button(
-                    "Abrir entidad",
+                    "Abrir la ficha de esta entidad",
                     key=f"mention_repair_open_entity_{case.code}_{case.mention_id}",
                 ):
                     _go_to(
@@ -1189,7 +1314,7 @@ def render_graph_view(
                         enter_to_submit=False,
                     ):
                         repair_note = st.text_input(
-                            "Nota de reparación",
+                            "Nota sobre esta reparación de la mención",
                             value=(
                                 f"Reubicación segura desde la revisión textual "
                                 f"{case.stored_object_revision} a la "
@@ -1200,7 +1325,7 @@ def render_graph_view(
                             "Confirmo que deseo reubicar esta mención y registrar una nueva revisión"
                         )
                         repair_submit = st.form_submit_button(
-                            "Reubicar mención",
+                            "Reubicar esta mención en el texto vigente",
                             type="primary",
                         )
                     if repair_submit and not confirm_repair:
@@ -1217,7 +1342,7 @@ def render_graph_view(
                 if case.can_resolve_unresolved:
                     object_info = repair_objects.get(case.object_id)
                     if object_info is None:
-                        st.error("No pudo cargarse el texto vigente del objeto.")
+                        st.error("No pudo cargarse el texto vigente del bloque de texto asociado con esta mención.")
                     else:
                         current_text = str(object_info["text"])
                         original_occurrences = exact_mention_occurrences(
@@ -1227,7 +1352,7 @@ def render_graph_view(
                         st.markdown("**Resolver la ubicación manualmente**")
                         with st.expander("Ver texto vigente completo", expanded=False):
                             st.text_area(
-                                "Texto vigente del objeto",
+                                "Texto vigente del bloque asociado con esta mención",
                                 value=current_text,
                                 height=220,
                                 disabled=True,
@@ -1241,7 +1366,7 @@ def render_graph_view(
                         if not original_occurrences:
                             decision_options.append("mark_absent")
                         unresolved_decision = st.radio(
-                            "Qué querés registrar",
+                            "Qué querés registrar sobre la ubicación de esta mención",
                             options=decision_options,
                             format_func=lambda value: {
                                 "relocate": (
@@ -1551,7 +1676,7 @@ def render_graph_view(
                         else:
                             st.info(
                                 "La mención seguirá registrada, pero volverá a requerir "
-                                "una decisión humana antes de considerarse aceptada."
+                                "una decisión explícita antes de considerarse aceptada."
                             )
                             default_missing_note = (
                                 "La mención vuelve a pendiente porque no tiene una "
@@ -1563,7 +1688,7 @@ def render_graph_view(
                             )
                             submit_label = "Devolver a pendiente"
                         missing_note = st.text_input(
-                            "Nota de reparación",
+                            "Nota sobre esta reparación de la mención",
                             value=default_missing_note,
                         )
                         confirm_missing = st.checkbox(confirmation_label)
@@ -1585,13 +1710,12 @@ def render_graph_view(
                         )
 
         st.divider()
-        st.subheader("Otras alertas del mapa")
+        st.subheader("Otros problemas detectados en las relaciones")
         st.caption(
-            "Incluye relaciones duplicadas, falta de evidencia, destinos inexistentes y "
-            "otros problemas que todavía no tienen una reparación automática."
+            "Esta lista reúne relaciones duplicadas, relaciones sin evidencia, destinos que ya no existen y otros problemas de consistencia que necesitan revisión."
         )
         severity_filter = st.multiselect(
-            "Gravedad",
+            "Tipo de problema que querés mostrar",
             options=["error", "warning", "info"],
             default=["error", "warning"],
             format_func=lambda value: _SEVERITY_LABELS[value],
@@ -1623,7 +1747,7 @@ def render_graph_view(
                     if issue.mention_id:
                         st.code(f"mencion={issue.mention_id}")
                 if issue.entity_id and st.button(
-                    "Abrir entidad",
+                    "Abrir la ficha de esta entidad",
                     key=f"graph_issue_entity_{index}_{issue.entity_id}",
                 ):
                     _go_to(
@@ -1635,23 +1759,44 @@ def render_graph_view(
 
     with export_tab:
         st.caption(
-            "La exportación reproduce exactamente los filtros actuales y genera JSON, CSV y GraphML. "
-            "GraphML puede abrirse en Gephi, Cytoscape u otras herramientas de redes."
+            "Esta pestaña guarda en archivos las relaciones que están visibles con los filtros actuales. Genera formatos JSON, CSV y GraphML; el archivo GraphML puede abrirse en herramientas de redes como Gephi o Cytoscape."
         )
         default_name = "grafo_" + datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%SZ")
+        export_key = "graph_export_directory"
+        pending_export_dir = st.session_state.pop("graph_export_directory__pending", None)
+        if pending_export_dir is not None:
+            st.session_state[export_key] = pending_export_dir
+        st.session_state.setdefault(export_key, f"exports/{default_name}")
         relative_dir = st.text_input(
-            "Carpeta relativa a project_data",
-            value=f"exports/{default_name}",
-            key="graph_export_directory",
+            "Carpeta de exportación dentro del proyecto",
+            key=export_key,
         )
-        if st.button("Exportar vista y controles", type="primary"):
+        if managed_workspace() is None:
+            if st.button("Elegir la carpeta donde guardar la exportación", key="graph_export_choose_directory"):
+                selected_dir, selection_error = choose_local_directory(
+                    project_root / relative_dir,
+                    title="Elegir carpeta de exportación dentro del proyecto",
+                )
+                if selection_error:
+                    st.warning(selection_error)
+                elif selected_dir is not None:
+                    try:
+                        relative_selected = selected_dir.resolve().relative_to(
+                            project_root.resolve()
+                        ).as_posix()
+                    except ValueError:
+                        st.error("Elegí una carpeta ubicada dentro de la carpeta del proyecto.")
+                    else:
+                        st.session_state["graph_export_directory__pending"] = relative_selected
+                        rerun_view(st)
+        if st.button("Guardar en archivos las relaciones visibles", type="primary"):
             target = (project_root / relative_dir).resolve()
             try:
                 target.relative_to(project_root.resolve())
             except ValueError:
-                st.error("La carpeta de exportación debe quedar dentro de project_data.")
+                st.error("La carpeta de exportación debe quedar dentro de la carpeta del proyecto.")
             else:
                 paths = export_graph(view, output_dir=target, issues=issues)
-                st.success(f"Exportación creada en {target}")
+                st.success(f"Exportación creada en {workspace_display_path(target)}")
                 for path in paths:
                     st.code(str(path.relative_to(project_root)))

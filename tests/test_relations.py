@@ -9,6 +9,7 @@ from archive_workbench.db import create_sqlite_engine, database_path, session_sc
 from archive_workbench.decisions import load_decisions
 from archive_workbench.relations import (
     create_entity_relation,
+    delete_entity_relation,
     entity_relation_revision_rows,
     entity_relation_rows,
     relation_target_choices,
@@ -76,6 +77,65 @@ def test_entity_relation_is_versioned_and_can_be_deactivated(tmp_path: Path) -> 
     finally:
         engine.dispose()
 
+
+
+def test_archival_role_can_be_deleted_as_error_without_erasing_history(tmp_path: Path) -> None:
+    _root, decisions, engine = _setup(tmp_path)
+    try:
+        with session_scope(engine) as session:
+            source = create_authority(
+                session,
+                project_id=decisions.project_id,
+                entity_type="organization",
+                preferred_name="Productor equivocado",
+                created_by="tests",
+            )
+            unit = create_archival_unit(
+                session,
+                decisions=decisions,
+                project_id=decisions.project_id,
+                parent_id=None,
+                level_key="archivo",
+                title="Archivo",
+                created_by="tests",
+            )
+            relation = create_entity_relation(
+                session,
+                project_id=decisions.project_id,
+                source_authority_id=source.id,
+                relation_label="produjo",
+                relation_kind="producer",
+                target_kind="archival_unit",
+                target_id=unit.id,
+                evidence_note="Carga inicial",
+                provenance_note="Catálogo",
+                created_by="tests",
+            )
+            delete_entity_relation(
+                session,
+                relation_id=relation.id,
+                expected_revision=1,
+                changed_by="tests",
+                note="Vínculo cargado por error",
+            )
+            visible = entity_relation_rows(
+                session,
+                project_id=decisions.project_id,
+                archival_unit_id=unit.id,
+                relation_kinds=("producer", "manager"),
+                include_inactive=True,
+            )
+            revisions = entity_relation_revision_rows(session, relation.id)
+            persisted = session.get(type(relation), relation.id)
+
+        assert visible == []
+        assert persisted is not None
+        assert persisted.lifecycle_status == "deleted"
+        assert persisted.source_authority_id == source.id
+        assert [row.operation for row in revisions] == ["delete", "create"]
+        assert revisions[0].note == "Vínculo cargado por error"
+    finally:
+        engine.dispose()
 
 def test_relation_target_can_be_changed_and_is_versioned(tmp_path: Path) -> None:
     _root, decisions, engine = _setup(tmp_path)
@@ -196,10 +256,10 @@ def test_authority_ui_defaults_candidate_search_to_approved_pages() -> None:
         / "authority_app.py"
     ).read_text(encoding="utf-8")
 
-    assert '"Estados de página incluidos"' in source
+    assert '"Estado de las páginas"' in source
     assert 'default=["approved"]' in source
     assert "page_review_statuses=tuple(candidate_page_statuses)" in source
-    assert "Estado que se asignará a las nuevas menciones" in source
+    assert "Estado de revisión que tendrán las menciones que incorpores" in source
 
 
 def test_transversal_entity_candidates_show_alias_and_can_be_included(tmp_path: Path) -> None:
@@ -749,5 +809,61 @@ def test_archival_roles_are_controlled_versioned_and_filterable_by_unit(tmp_path
             "Expediente 12/1983, Archivo General"
         )
         assert producer.id in histories
+    finally:
+        engine.dispose()
+
+
+def test_authority_and_relation_profiles_are_structured_and_queryable(tmp_path: Path) -> None:
+    from archive_workbench.authorities import authority_rows
+
+    _root, decisions, engine = _setup(tmp_path)
+    try:
+        with session_scope(engine) as session:
+            source = create_authority(
+                session,
+                project_id=decisions.project_id,
+                entity_type="organization",
+                preferred_name="SIDE",
+                temporal_expression="1946 - 2015; desde 2024",
+                profile_json={
+                    "legal_status": "Organismo estatal",
+                    "functions_activities": "Inteligencia de Estado",
+                },
+                created_by="tests",
+            )
+            target = create_authority(
+                session,
+                project_id=decisions.project_id,
+                entity_type="organization",
+                preferred_name="Presidencia",
+                created_by="tests",
+            )
+            relation = create_entity_relation(
+                session,
+                project_id=decisions.project_id,
+                source_authority_id=source.id,
+                relation_label="dependió de",
+                target_kind="entity",
+                target_id=target.id,
+                temporal_expression="1946 - 2015; desde 2024",
+                profile_json={
+                    "archival_category": "hierarchical",
+                    "context": "Dependencia institucional",
+                },
+                created_by="tests",
+            )
+            source_rows = authority_rows(session, project_id=decisions.project_id, query="SIDE")
+            relation_rows = entity_relation_rows(
+                session,
+                project_id=decisions.project_id,
+                authority_id=source.id,
+                include_inactive=True,
+            )
+        source_row = next(row for row in source_rows if row.authority_id == source.id)
+        assert source_row.profile["legal_status"] == "Organismo estatal"
+        assert source_row.temporal_precision == "set"
+        assert relation_rows[0].relation_id == relation.id
+        assert relation_rows[0].profile["archival_category"] == "hierarchical"
+        assert relation_rows[0].profile["context"] == "Dependencia institucional"
     finally:
         engine.dispose()

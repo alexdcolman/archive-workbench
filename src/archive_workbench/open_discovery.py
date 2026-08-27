@@ -63,7 +63,7 @@ _FAMILY_LABELS = {
     "time": "Tiempo",
     "event": "Acontecimiento",
     "action_process": "Acción o proceso",
-    "work": "Obra",
+    "work": "Obra / publicación",
     "other": "Otra clase",
 }
 
@@ -141,7 +141,7 @@ _ACTOR_PATTERNS: tuple[tuple[str, re.Pattern[str], float, str], ...] = (
             re.I,
         ),
         0.82,
-        "Colectivo humano expresado mediante una referencia nominal explícita.",
+        "Grupo de personas expresado mediante una referencia nominal explícita.",
     ),
 )
 
@@ -200,6 +200,445 @@ _WORK_PATTERNS: tuple[tuple[str, re.Pattern[str], float, str], ...] = (
         0.9,
         "Secuencia entrecomillada tratada como posible título de obra.",
     ),
+)
+
+
+# DISC-03 conserva todas las versiones locales previas para reproducibilidad.
+# RC69 agrega local_rules_v5 después de comprobar que una configuración persistida
+# podía seguir ejecutando v3 aunque la aplicación ya tuviera reglas más nuevas.
+_LOCAL_RULES_VERSIONS = ("local_rules_v1", "local_rules_v2", "local_rules_v3", "local_rules_v4", "local_rules_v5")
+
+_TIME_PATTERNS_V2: tuple[tuple[str, re.Pattern[str], float, str], ...] = (
+    _TIME_PATTERNS[0],
+    _TIME_PATTERNS[1],
+    (
+        "year",
+        re.compile(r"\b(?:18|19|20)\d{2}\b(?!\s*[/.-]\s*\d)"),
+        0.95,
+        "Año de cuatro cifras fuera de un identificador numérico compuesto.",
+    ),
+    _TIME_PATTERNS[3],
+    _TIME_PATTERNS[4],
+    (
+        "temporal_expression",
+        re.compile(r"\b(?:ayer|hoy|mañana|anteayer)\b", re.I),
+        0.88,
+        "Expresión temporal relativa explícita.",
+    ),
+    (
+        "temporal_expression",
+        re.compile(
+            r"\b(?:lunes|martes|miércoles|miercoles|jueves|viernes|sábado|sabado|domingo)\b",
+            re.I,
+        ),
+        0.88,
+        "Día de la semana explícito.",
+    ),
+)
+
+_ACTOR_CAPTURE_PATTERNS_V2: tuple[tuple[str, re.Pattern[str], float, str], ...] = (
+    (
+        "person",
+        re.compile(
+            rf"\b(?i:según|declaró|declaró ante|testimonio de|firmado por|suscripto por)\s+"
+            rf"({_CAPITALIZED}(?:\s+{_CAPITALIZED}){{1,3}})\b"
+        ),
+        0.88,
+        "Nombre propio de persona en un contexto lingüístico explícito de atribución o firma.",
+    ),
+    (
+        "organization",
+        re.compile(
+            r"\b(?i:agentes|personal|miembros|integrantes)\s+de\s+(?i:la|el)\s+"
+            r"([A-ZÁÉÍÓÚÜÑ][A-ZÁÉÍÓÚÜÑ0-9.-]{2,14})\b"
+        ),
+        0.88,
+        "Sigla institucional en un contexto explícito de pertenencia organizacional.",
+    ),
+)
+
+_SPACE_CAPTURE_PATTERNS_V2: tuple[tuple[str, re.Pattern[str], float, str], ...] = (
+    (
+        "place",
+        re.compile(
+            rf"\b(?i:viajó|viajo|llegó|llego|regresó|regreso|volvió|volvio|residió|residio|nació|nacio)"
+            rf"\s+(?i:a|en|desde)\s+({_CAPITALIZED_PHRASE})\b"
+        ),
+        0.86,
+        "Topónimo propuesto por un contexto espacial explícito de desplazamiento o residencia.",
+    ),
+)
+
+_EVENT_PATTERNS_V2: tuple[tuple[str, re.Pattern[str], float, str], ...] = (
+    (
+        "event",
+        re.compile(
+            rf"\b(?i:golpe de Estado|huelga|reunión|operativo|elección|juicio|detención|"
+            rf"allanamiento|congreso|asamblea)(?:\s+(?:{_CAPITALIZED}|(?i:general|estudiantil|"
+            rf"policial|militar|clandestina|clandestino|pública|publica|público|publico))){{0,3}}\b"
+        ),
+        0.86,
+        "Construcción nominal acotada que designa un acontecimiento explícito.",
+    ),
+    (
+        "event",
+        re.compile(
+            r"\bmanifestación(?!\s+de\s+interés)(?:\s+(?:estudiantil|general|pública|publica))?\b",
+            re.I,
+        ),
+        0.86,
+        "Manifestación como acontecimiento, excluyendo la fórmula administrativa de interés.",
+    ),
+    (
+        "event",
+        re.compile(
+            r"\bacto(?!\s+administrativo)(?:\s+(?:público|publico|político|politico|conmemorativo))?\b",
+            re.I,
+        ),
+        0.84,
+        "Acto como acontecimiento, excluyendo la categoría jurídica de acto administrativo.",
+    ),
+)
+
+_ACTION_PATTERNS_V2: tuple[tuple[str, re.Pattern[str], float, str], ...] = (
+    (
+        "process",
+        re.compile(
+            r"\b(?:investigación|persecución|organización|movilización|censura|represión|"
+            r"vigilancia|clasificación|depuración|intervención|exilio|resistencia)"
+            r"(?:\s+(?:política|social|documental|administrativa|estatal|clandestina))?\b",
+            re.I,
+        ),
+        0.82,
+        "Sustantivo de acción o proceso incluido en el vocabulario conservador revisado.",
+    ),
+    (
+        "action",
+        re.compile(r"\b(?:clasificar|vigilar|reprimir|perseguir|censurar|archivar)\b", re.I),
+        0.78,
+        "Infinitivo que designa una acción explícita del vocabulario conservador revisado.",
+    ),
+)
+
+_WORK_CAPTURE_PATTERNS_V2: tuple[tuple[str, re.Pattern[str], float, str], ...] = (
+    (
+        "quoted_work",
+        re.compile(
+            r"\b(?i:obra|película|pelicula|documental|libro|informe|artículo|articulo|poema|"
+            r"canción|cancion|publicación|publicacion|revista)"
+            r"(?:\s+(?i:titulada|titulado))?\s*[“\"]([^“”\"\n]{3,160})[”\"]"
+        ),
+        0.93,
+        "Título entrecomillado introducido por una clase explícita de obra o publicación.",
+    ),
+)
+
+
+# DISC-03 RC67: v3 is derived from an audit over a real 138-document export and
+# a real audiovisual transcript. The real corpus itself is deliberately not
+# embedded in the repository; only generalized, synthetic regression patterns
+# are kept here and in the evaluation corpus.
+_WEEKDAY_WORDS = "lunes|martes|miércoles|miercoles|jueves|viernes|sábado|sabado|domingo"
+
+_ABBREVIATED_YEAR_SEQUENCE_V3 = re.compile(
+    r"\b(?:18|19|20)\d{2}(?:\s*[-/]\s*\d{2})+\b"
+)
+_MODEL_OR_IDENTIFIER_BEFORE_YEAR_V3 = re.compile(
+    r"(?i)(?:modelo|equipo\s+modelo|expediente|legajo|código|codigo|identificador)\s*$"
+)
+_WEEKDAY_V3 = re.compile(rf"\b(?:{_WEEKDAY_WORDS})\b", re.I)
+_RELATIVE_DAY_V3 = re.compile(r"\b(?:ayer|hoy|mañana|anteayer)\b", re.I)
+
+# New v3 contextual captures deliberately require ordinary title-case tokens.
+# Existing v1/v2 patterns remain available for all-caps OCR and explicit classes.
+_PERSON_TOKEN_MIXED_V3 = r"[A-ZÁÉÍÓÚÜÑ][a-záéíóúüñ'’-]+"
+_PERSON_NAME_MIXED_V3 = rf"{_PERSON_TOKEN_MIXED_V3}(?:[ \t]+{_PERSON_TOKEN_MIXED_V3}){{0,3}}"
+_PERSON_NAME_MULTI_MIXED_V3 = rf"{_PERSON_TOKEN_MIXED_V3}(?:[ \t]+{_PERSON_TOKEN_MIXED_V3}){{1,3}}"
+_PLACE_NAME_MIXED_V3 = (
+    rf"{_PERSON_TOKEN_MIXED_V3}"
+    rf"(?:[ \t]+(?:de|del|la|las|los|y|e|{_PERSON_TOKEN_MIXED_V3})){{0,4}}"
+)
+
+_ACTOR_CAPTURE_PATTERNS_V3: tuple[tuple[str, re.Pattern[str], float, str], ...] = (
+    (
+        "person",
+        re.compile(
+            rf"\b(?i:conocí\s+a|conoci\s+a|conocimos\s+a|conoció\s+a|conocio\s+a|"
+            rf"entrevisté\s+a|entreviste\s+a|entrevistó\s+a|entrevisto\s+a|junto\s+con)[ \t]+"
+            rf"({_PERSON_NAME_MIXED_V3})\b"
+        ),
+        0.89,
+        "Nombre propio de persona introducido por un contexto testimonial explícito.",
+    ),
+    (
+        "person",
+        re.compile(
+            rf"\b({_PERSON_NAME_MULTI_MIXED_V3})[ \t]+"
+            rf"(?i:declaró|declaro|manifestó|manifesto|informó|informo|testificó|testifico|"
+            rf"firmó|firmo|suscribió|suscribio)\b"
+        ),
+        0.89,
+        "Nombre propio de persona seguido por un verbo explícito de declaración o firma.",
+    ),
+)
+
+_SPACE_CAPTURE_PATTERNS_V3: tuple[tuple[str, re.Pattern[str], float, str], ...] = (
+    (
+        "place",
+        re.compile(rf"\b(?i:acá|aca|aquí|aqui)[ \t]+en[ \t]+({_PLACE_NAME_MIXED_V3})\b"),
+        0.88,
+        "Topónimo introducido por una referencia deíctica espacial explícita.",
+    ),
+    (
+        "place",
+        re.compile(
+            rf"\b(?i:envió|envio|envían|envian|enviado|enviada|enviados|enviadas|saluda|escribe|llegó|llego|vino|regresó|regreso|"
+            rf"volvió|volvio|procedente|noticias?)[^.!?\n]{{0,48}}?\b(?i:desde)[ \t]+"
+            rf"({_PLACE_NAME_MIXED_V3})\b"
+        ),
+        0.87,
+        "Topónimo respaldado por un contexto explícito de procedencia o comunicación.",
+    ),
+    (
+        "place",
+        re.compile(
+            rf"\b(?i:desde)[ \t]+({_PLACE_NAME_MIXED_V3})[ \t]+"
+            rf"(?i:expresa|dice|escribe|informa|saluda|envía|envia|comunica)\b"
+        ),
+        0.87,
+        "Topónimo respaldado por un contexto explícito de procedencia o comunicación.",
+    ),
+    (
+        "place",
+        re.compile(rf"\b(?i:barrio)[ \t]+({_PLACE_NAME_MIXED_V3})\b"),
+        0.9,
+        "Nombre de barrio introducido por una clase espacial explícita.",
+    ),
+    (
+        "place",
+        re.compile(
+            rf"\b(?i:de)[ \t]+({_PLACE_NAME_MIXED_V3})[ \t]+"
+            rf"(?i:venía|venia|vino|llegó|llego|regresó|regreso|volvió|volvio)\b"
+        ),
+        0.86,
+        "Topónimo propuesto por un contexto explícito de procedencia y desplazamiento.",
+    ),
+)
+
+_EVENT_PATTERNS_V3: tuple[tuple[str, re.Pattern[str], float, str], ...] = (
+    *_EVENT_PATTERNS_V2,
+    (
+        "event",
+        re.compile(
+            r"\bmarcha\s+(?:estudiantil|obrera|sindical|política|politica|pública|publica)\b",
+            re.I,
+        ),
+        0.85,
+        "Marcha designada explícitamente como acontecimiento colectivo.",
+    ),
+)
+
+_ACTION_CONTEXT_PATTERNS_V3: tuple[tuple[str, re.Pattern[str], float, str], ...] = (
+    (
+        "action",
+        re.compile(
+            r"\b(clasificar|clasificó|clasifico|archivar|archivó|archivo)\s+"
+            r"(?:el|los?|las?|una?|unos?|unas?)?\s*"
+            r"(?:documentos?|expedientes?|fichas?|legajos?|material(?:es)?|información|informacion)\b",
+            re.I,
+        ),
+        0.82,
+        "Acción documental explícita con un objeto compatible.",
+    ),
+    (
+        "action",
+        re.compile(
+            r"\b(vigilar|vigiló|vigilo|perseguir|persiguió|persiguio|reprimir|reprimió|reprimio|"
+            r"censurar|censuró|censuro)\s+(?:a\s+)?(?:los?|las?)?\s*"
+            r"(?:militantes?|trabajadores?|estudiantes?|manifestantes?|organizaciones?|sindicatos?|"
+            r"actividades?|manifestaciones?|huelgas?|protestas?)\b",
+            re.I,
+        ),
+        0.82,
+        "Acción de vigilancia, persecución, represión o censura con un objetivo explícito.",
+    ),
+)
+
+_QUOTED_SPAN_PATTERNS_V3: tuple[re.Pattern[str], ...] = (
+    re.compile(r'"([^"\n]{2,180})"'),
+    re.compile(r"“([^”\n]{2,180})”"),
+)
+_WORK_CLASS_PREFIX_V3 = re.compile(
+    r"(?i)(?:obra|pieza|comedia|drama|película|pelicula|film|documental|libro|informe|artículo|articulo|poema|"
+    r"canción|cancion|publicación|publicacion|revista|diario|novela|cuento|sainete|zarzuela|"
+    r"opereta|ballet)\b[^.!?\n\"“”]{0,80}$"
+)
+_WORK_VERB_PREFIX_V3 = re.compile(
+    r"(?i)(?:estren(?:ó|o|ará|ara|aron)|represent(?:ó|o|ará|ara|aron)|"
+    r"present(?:ó|o|ará|ara|aron)|escenific(?:ó|o|aron)|ley(?:ó|o|eron)|"
+    r"public(?:ó|o|aron)|edit(?:ó|o|aron)|puesta(?:\s+en\s+escena)?(?:\s+de)?)"
+    r"\b[^.!?\n\"“”]{0,65}$"
+)
+_WORK_LIST_CUE_V3 = re.compile(
+    r"(?i)(?:repertorio|teatro\s+leído|teatro\s+leido|dirección\s+de\s+teatro|"
+    r"direccion\s+de\s+teatro|títulos\s+escogidos|titulos\s+escogidos|"
+    r"obras?\s+representadas|obras?\s+bajo\s+el\s+título|obras?\s+bajo\s+el\s+titulo|"
+    r"terna\s+de\s+obras|programa(?:\s+[^.!?\n]{0,40})?\s+dividido\s+en)"
+    r"\b[^.!?\n\"“”]{0,150}$"
+)
+_WORK_SUFFIX_CUE_V3 = re.compile(
+    rf"^\s*(?:,\s*)?(?:de|por)\s+{_CAPITALIZED}(?:\s+{_CAPITALIZED}){{0,3}}\b"
+)
+_WORK_SUFFIX_TYPE_V3 = re.compile(
+    r"^\s*(?:,|—|-)?\s*(?:obra|pieza|libro|poema|canción|cancion|novela|cuento|"
+    r"documental|película|pelicula|sainete)\b",
+    re.I,
+)
+_WORK_SUFFIX_TYPE_V4 = re.compile(
+    r"^[ \t]*(?:,|—|-)?[ \t]*(?:obra|pieza|libro|poema|canción|cancion|novela|cuento|"
+    r"documental|película|pelicula|sainete)\b",
+    re.I,
+)
+_NON_WORK_PREFIX_V3 = re.compile(
+    r"(?i)(?:grupo|conjunto|biblioteca|colegio|club|sala|local|instituto|escuela|centro|"
+    r"apodado|apodada|conocido\s+como|conocida\s+como|denominado|denominada|expresión|expresion)\s*$"
+)
+_NON_WORK_CONTEXT_V3 = re.compile(
+    r"(?i)\b(?:grupo|conjunto|biblioteca|colegio|club|instituto|escuela|centro|"
+    r"jardín\s+de\s+infantes|jardin\s+de\s+infantes|frigoríficos?|frigorificos?|"
+    r"peña(?:-[^.!?\n\"“”]{0,30})?|teatro(?:\s+(?:independiente|experimental|vocacional|"
+    r"universitario|infantil|estudio))?)\b[^.!?\n\"“”]{0,64}$"
+)
+_NON_WORK_EXACT_V3 = re.compile(
+    r"(?i)\b(?:grupo|teatro|conjunto|biblioteca|jardín\s+de\s+infantes|"
+    r"jardin\s+de\s+infantes|colegio|club|frigorífico|frigorifico)\b"
+)
+_WORK_VENUE_PREFIX_V3 = re.compile(r"(?i)(?:teatro|sala)\s*$")
+_WORK_THEATRICAL_CLASS_V3 = re.compile(r"(?i)obra\s+de\s+teatro\s*$")
+_DIRECT_SPEECH_PREFIX_V3 = re.compile(
+    r"(?i)(?:dijo|dice|expresó|expreso|agregó|agrego|respondió|respondio|preguntó|pregunto|"
+    r"contestó|contesto|señaló|senalo|manifestó|manifesto|declaró|declaro)\s*:?\s*$"
+)
+
+
+# DISC-03 RC68: v4 tightens candidate precision and entity boundaries after
+# manual review of RC67 on the pilot corpus. v1-v3 remain immutable historical
+# versions so existing profiles, runs, and continuity operations stay reproducible.
+_V4_NAME_WORD = (
+    r"(?!(?i:de|del|la|las|los|y|e)\b)"
+    r"[A-ZÁÉÍÓÚÜÑ][A-ZÁÉÍÓÚÜÑa-záéíóúüñ0-9'’]+"
+)
+_V4_INITIAL = r"[A-ZÁÉÍÓÚÜÑ]\."
+_V4_INITIAL_SURNAME = rf"[A-ZÁÉÍÓÚÜÑ]\.{_V4_NAME_WORD}"
+_V4_NAME_TOKEN = rf"(?:{_V4_INITIAL_SURNAME}|{_V4_INITIAL}|{_V4_NAME_WORD})"
+_V4_NAME_CONNECTOR = r"(?:de|del|la|las|los|y|e)"
+_V4_NAME_CHAIN = (
+    rf"{_V4_NAME_TOKEN}"
+    rf"(?:[ \t]+(?:(?:{_V4_NAME_CONNECTOR})[ \t]+)*{_V4_NAME_TOKEN}){{0,7}}"
+)
+_V4_NAME_CHAIN_MULTI = (
+    rf"{_V4_NAME_TOKEN}"
+    rf"(?:[ \t]+(?:(?:{_V4_NAME_CONNECTOR})[ \t]+)*{_V4_NAME_TOKEN}){{1,7}}"
+)
+_V4_ORG_CHAIN = (
+    rf"(?:(?:{_V4_NAME_CONNECTOR})\s+)*{_V4_NAME_TOKEN}"
+    rf"(?:\s+(?:(?:{_V4_NAME_CONNECTOR})\s+)*{_V4_NAME_TOKEN}){{0,9}}"
+)
+_PERSON_TITLE_V4 = (
+    r"(?:Sr\.?|Sra\.?|Srta\.?|Dr\.?|Dra\.?|doctor|doctora|presidente|presidenta|"
+    r"ministro|ministra|general|coronel|profesor|profesora)"
+)
+_ACTOR_PATTERNS_V4: tuple[tuple[str, re.Pattern[str], float, str], ...] = (
+    (
+        "person",
+        re.compile(rf"\b{_PERSON_TITLE_V4}[ \t]+{_V4_NAME_CHAIN}(?![A-ZÁÉÍÓÚÜÑ]\.)"),
+        0.93,
+        "Nombre propio con tratamiento o cargo; conserva partículas e iniciales completas y corta antes de separadores de procedencia.",
+    ),
+    (
+        "organization",
+        re.compile(
+            rf"\b(?:Ministerio|Secretaría|Universidad|Partido|Sindicato|Comisión|Junta|"
+            rf"Asociación|Fundación|Instituto|Dirección|Departamento)\s+{_V4_ORG_CHAIN}"
+        ),
+        0.95,
+        "Denominación institucional completa; las partículas internas no consumen el límite de palabras significativas.",
+    ),
+    _ACTOR_PATTERNS[2],
+)
+
+_ACTOR_CAPTURE_PATTERNS_V4: tuple[tuple[str, re.Pattern[str], float, str], ...] = (
+    (
+        "person",
+        re.compile(
+            rf"\b(?i:según|declaró|declaro|declaró ante|declaro ante|testimonio de|firmado por|suscripto por)\s+"
+            rf"({_V4_NAME_CHAIN})(?![A-ZÁÉÍÓÚÜÑ]\.)"
+        ),
+        0.9,
+        "Nombre propio completo en un contexto explícito de atribución o firma.",
+    ),
+    _ACTOR_CAPTURE_PATTERNS_V2[1],
+    (
+        "person",
+        re.compile(
+            rf"\b(?i:conocí\s+a|conoci\s+a|conocimos\s+a|conoció\s+a|conocio\s+a|"
+            rf"entrevisté\s+a|entreviste\s+a|entrevistó\s+a|entrevisto\s+a|junto\s+con)[ \t]+"
+            rf"({_V4_NAME_CHAIN})(?![A-ZÁÉÍÓÚÜÑ]\.)"
+        ),
+        0.9,
+        "Nombre propio completo introducido por un contexto testimonial explícito.",
+    ),
+    (
+        "person",
+        re.compile(
+            rf"\b({_V4_NAME_CHAIN_MULTI})[ \t]+"
+            rf"(?i:declaró|declaro|manifestó|manifesto|informó|informo|testificó|testifico|"
+            rf"firmó|firmo|suscribió|suscribio)\b"
+        ),
+        0.9,
+        "Nombre propio completo seguido por un verbo explícito de declaración o firma.",
+    ),
+)
+
+_WORK_CLASS_PREFIX_V4 = re.compile(
+    r"(?i)\b(?:obra|pieza|comedia|drama|película|pelicula|film|documental|libro|informe|"
+    r"artículo|articulo|poema|canción|cancion|publicación|publicacion|revista|diario|novela|"
+    r"cuento|sainete|zarzuela|opereta|ballet|sketch)"
+    r"(?:\s+(?:de|del|por)\s+[A-ZÁÉÍÓÚÜÑ][A-ZÁÉÍÓÚÜÑa-záéíóúüñ'’]+"
+    r"(?:[ \t]+[A-ZÁÉÍÓÚÜÑ][A-ZÁÉÍÓÚÜÑa-záéíóúüñ'’]+){0,4})?"
+    r"(?:\s+(?:titulad[oa]|llamad[oa]|antes\s+mencionad[oa]))?[ \t,:-]*$"
+)
+_WORK_VERB_PREFIX_V4 = re.compile(
+    r"(?i)\b(?:estreno\s+de|estren(?:ó|o|ará|ara|aron)|represent(?:ó|o|ará|ara|aron|ar)|"
+    r"present(?:ó|o|ará|ara|aron|ar)(?:\s+con)?|escenific(?:ó|o|aron|ar)|"
+    r"ley(?:ó|o|eron)|public(?:ó|o|aron)|edit(?:ó|o|aron)|montaje\s+de|"
+    r"puesta\s+en\s+escena\s+de|puesta\s+de)"
+    r"(?:[ \t]+(?:la|el|una|un|esta|esa|su|nueva|nuevo|obra|pieza|trabajo|espectáculo|espectaculo))*"
+    r"[ \t,:-]*$"
+)
+_WORK_LIST_CUE_V4 = re.compile(
+    r"(?i)\b(?:repertorio|teatro\s+leído|teatro\s+leido|títulos\s+escogidos|titulos\s+escogidos|"
+    r"obras?\s+presentadas|obras?\s+representadas|últimas\s+obras\s+dirigidas|ultimas\s+obras\s+dirigidas|"
+    r"roles?\s+protagónicos?|roles?\s+protagonicos?|programa(?:\s+[^.!?\n]{0,40})?\s+dividido\s+en)"
+    r"\b[^.!?\n]{0,160}$"
+)
+
+_NON_WORK_PREFIX_V4 = re.compile(
+    r"(?i)(?:grupo|conjunto|teatro(?:\s+independiente)?|biblioteca(?:\s+popular)?|colegio|club|sala|local|instituto|escuela|centro|"
+    r"apodado|apodada|conocido\s+como|conocida\s+como|denominado|denominada|"
+    r"expresión|expresion|género\s+de|genero\s+de|técnica\s+del|tecnica\s+del|"
+    r"manifestación\s+de|manifestacion\s+de)\s*$"
+)
+_WORK_CONTEXT_V4 = re.compile(
+    r"(?i)\b(?:obra|pieza|repertorio|estreno|puesta(?:\s+en\s+escena)?|montaje|"
+    r"roles?\s+protagónicos?|roles?\s+protagonicos?|labor\s+actoral|libro|poema|"
+    r"diario|revista|publicación|publicacion|novela|cuento|film|película|pelicula|canción|"
+    r"cancion|programa|representación|representacion|representad[oa]s?|escenificación|"
+    r"escenificacion)\b"
+)
+_SPEECH_AFTER_WORK_CLASS_V4 = re.compile(
+    r"(?i)\b(?:dijo|dice|expresó|expreso|agregó|agrego|respondió|respondio|preguntó|"
+    r"pregunto|contestó|contesto|señaló|senalo|manifestó|manifesto|declaró|declaro)\b"
 )
 
 
@@ -608,30 +1047,619 @@ def _pattern_detections(
                 yield detection
 
 
-def detect_local_candidates(text: str, *, families: Iterable[str]) -> list[_Detection]:
+
+def _make_detection(
+    text: str,
+    *,
+    start: int,
+    end: int,
+    family: str,
+    subtype: str,
+    confidence: float,
+    explanation: str,
+) -> _Detection | None:
+    while start < end and text[start].isspace():
+        start += 1
+    while end > start and text[end - 1].isspace():
+        end -= 1
+    if start >= end:
+        return None
+    return _Detection(
+        start=start,
+        end=end,
+        exact_text=text[start:end],
+        family=family,
+        subtype=subtype,
+        confidence=confidence,
+        explanation=explanation,
+    )
+
+
+def _time_detections_v3(text: str) -> list[_Detection]:
+    detections: list[_Detection] = []
+    # Explicit full dates, historical periods and explicit "entre X y Y" intervals.
+    for pattern in (_TIME_PATTERNS[0], _TIME_PATTERNS[1], _TIME_PATTERNS[3], _TIME_PATTERNS[4]):
+        detections.extend(_pattern_detections(text, family="time", patterns=(pattern,)))
+
+    abbreviated_spans: list[tuple[int, int]] = []
+    for match in _ABBREVIATED_YEAR_SEQUENCE_V3.finditer(text):
+        detection = _make_detection(
+            text,
+            start=match.start(),
+            end=match.end(),
+            family="time",
+            subtype="interval",
+            confidence=0.96,
+            explanation="Secuencia abreviada de años con año inicial explícito.",
+        )
+        if detection is not None:
+            detections.append(detection)
+            abbreviated_spans.append((detection.start, detection.end))
+
+    for match in re.finditer(r"\b(?:18|19|20)\d{2}\b", text):
+        start, end = match.span()
+        if any(a <= start and end <= b for a, b in abbreviated_spans):
+            continue
+        before = text[max(0, start - 48):start]
+        after = text[end:min(len(text), end + 12)]
+        if _MODEL_OR_IDENTIFIER_BEFORE_YEAR_V3.search(before):
+            continue
+        # A one-digit suffix such as 1976/4 is treated as an identifier, not a year range.
+        if re.match(r"\s*[/.-]\s*\d(?!\d)", after):
+            continue
+        detection = _make_detection(
+            text,
+            start=start,
+            end=end,
+            family="time",
+            subtype="year",
+            confidence=0.95,
+            explanation="Año de cuatro cifras fuera de un identificador numérico o modelo explícito.",
+        )
+        if detection is not None:
+            detections.append(detection)
+
+    for match in _RELATIVE_DAY_V3.finditer(text):
+        exact = match.group(0)
+        start, end = match.span()
+        if exact.casefold() == "mañana":
+            before = text[max(0, start - 40):start]
+            after = text[end:min(len(text), end + 32)]
+            if re.search(r"(?i)(?:\bla\s+|\bpor\s+la\s+|\ba\s+la\s+|\bturnos?\s+)$", before):
+                continue
+            if re.match(r"(?i)\s+y\s+tarde\b", after):
+                continue
+        detection = _make_detection(
+            text,
+            start=start,
+            end=end,
+            family="time",
+            subtype="temporal_expression",
+            confidence=0.88,
+            explanation="Expresión temporal relativa explícita en un contexto compatible.",
+        )
+        if detection is not None:
+            detections.append(detection)
+
+    quoted_spans = [(start, end) for start, end, _ in _quoted_spans_v3(text)]
+    weekday_matches = list(_WEEKDAY_V3.finditer(text))
+    for match in weekday_matches:
+        start, end = match.span()
+        if any(a <= start and end <= b for a, b in quoted_spans):
+            continue
+        before = text[max(0, start - 64):start]
+        after = text[end:min(len(text), end + 64)]
+        temporal_context = bool(
+            re.search(
+                r"(?i)(?:\bfecha\s*[:,\-]?\s*|\bel\s+|\beste\s+|\bese\s+|\baquel\s+|"
+                r"\bentre\s+el\s+|\btarde\s+del\s+|\bnoche\s+del\s+|\bdel\s+)$",
+                before,
+            )
+            or re.match(r"(?i)\s*,?\s*\d{1,2}(?:\s+de\b|[/-]|\s+horas?\b)", after)
+            or re.match(
+                r"(?i)\s+(?:próxim[oa]s?|proxim[oa]s?|pasad[oa]s?|últim[oa]s?|ultim[oa]s?|venider[oa]s?)\b",
+                after,
+            )
+        )
+        if not temporal_context:
+            nearby = text[max(0, start - 52):min(len(text), end + 72)]
+            weekday_count = len(_WEEKDAY_V3.findall(nearby))
+            temporal_context = weekday_count >= 2 and bool(
+                re.search(
+                    r"(?i)(?:\bel\b|\bentre\b|\bhoras?\b|\bpróxim|\bproxim|\búltim|\bultim|\bvenider|\d{1,2})",
+                    nearby,
+                )
+            )
+        if not temporal_context:
+            continue
+        detection = _make_detection(
+            text,
+            start=start,
+            end=end,
+            family="time",
+            subtype="temporal_expression",
+            confidence=0.89,
+            explanation="Día de la semana dentro de un contexto temporal explícito.",
+        )
+        if detection is not None:
+            detections.append(detection)
+    return detections
+
+
+def _quoted_spans_v3(text: str) -> list[tuple[int, int, str]]:
+    spans: list[tuple[int, int, str]] = []
+    for pattern in _QUOTED_SPAN_PATTERNS_V3:
+        for match in pattern.finditer(text):
+            start, end = match.span(1)
+            exact = text[start:end]
+            if exact.strip():
+                spans.append((start, end, exact))
+    spans.sort(key=lambda row: (row[0], row[1]))
+    dedup: list[tuple[int, int, str]] = []
+    seen: set[tuple[int, int]] = set()
+    for row in spans:
+        key = (row[0], row[1])
+        if key not in seen:
+            seen.add(key)
+            dedup.append(row)
+    return dedup
+
+
+def _work_detections_v3(text: str) -> list[_Detection]:
+    detections: list[_Detection] = []
+    accepted_spans: list[tuple[int, int]] = []
+    previous_quote_span: tuple[int, int] | None = None
+    previous_quote_accepted = False
+    for start, end, _exact in _quoted_spans_v3(text):
+        # _quoted_spans_v3 returns the capture inside the quotes. Context cues
+        # therefore exclude the opening/closing quote themselves.
+        cue_start = start - 1 if start > 0 and text[start - 1] in {'"', '“'} else start
+        cue_end = end + 1 if end < len(text) and text[end] in {'"', '”'} else end
+        before = text[max(0, cue_start - 180):cue_start]
+        after = text[cue_end:min(len(text), cue_end + 120)]
+        immediate_before = text[max(0, cue_start - 72):cue_start]
+        if _DIRECT_SPEECH_PREFIX_V3.search(immediate_before):
+            continue
+        if _NON_WORK_PREFIX_V3.search(immediate_before):
+            continue
+        work_class_match = _WORK_CLASS_PREFIX_V3.search(before)
+        work_verb_match = _WORK_VERB_PREFIX_V3.search(before)
+        work_list_match = _WORK_LIST_CUE_V3.search(before)
+        work_matches = [match for match in (work_class_match, work_verb_match, work_list_match) if match]
+        latest_work_cue = max((match.start() for match in work_matches), default=-1)
+        non_work_context = _NON_WORK_CONTEXT_V3.search(immediate_before)
+        non_work_start = (
+            len(before) - len(immediate_before) + non_work_context.start()
+            if non_work_context
+            else -1
+        )
+        if non_work_context and latest_work_cue <= non_work_start:
+            continue
+        if _NON_WORK_EXACT_V3.search(_exact) and latest_work_cue < 0:
+            continue
+        if _WORK_VENUE_PREFIX_V3.search(immediate_before) and not _WORK_THEATRICAL_CLASS_V3.search(
+            immediate_before
+        ):
+            continue
+        coordinated_prefix = bool(re.search(r"[\"”]\s*(?:,|y|e|o)\s*$", immediate_before, re.I))
+        coordinated_with_work = False
+        if accepted_spans:
+            previous_start, previous_end = accepted_spans[-1]
+            between = text[previous_end:cue_start]
+            coordinated_with_work = bool(re.fullmatch(r"\s*[\"”]?\s*(?:,|y|e|o)\s*", between, re.I))
+        if coordinated_prefix and not coordinated_with_work and latest_work_cue < 0:
+            continue
+        strong = bool(
+            work_class_match
+            or work_verb_match
+            or work_list_match
+            or _WORK_SUFFIX_CUE_V3.search(after)
+            or _WORK_SUFFIX_TYPE_V3.search(after)
+            or coordinated_with_work
+        )
+        if not strong:
+            continue
+        detection = _make_detection(
+            text,
+            start=start,
+            end=end,
+            family="work",
+            subtype="quoted_work",
+            confidence=0.92,
+            explanation="Título entrecomillado respaldado por un contexto explícito de obra, publicación o repertorio.",
+        )
+        if detection is not None:
+            detections.append(detection)
+            accepted_spans.append((cue_start, cue_end))
+    return detections
+
+
+
+def _work_detections_v4(text: str) -> list[_Detection]:
+    detections: list[_Detection] = []
+    for start, end, exact_raw in _quoted_spans_v3(text):
+        exact = exact_raw.strip()
+        words = re.findall(r"[A-ZÁÉÍÓÚÜÑa-záéíóúüñ0-9]+", exact)
+        if not words or len(exact) > 100 or len(words) > 10:
+            continue
+        first_letter = next((char for char in exact if char.isalpha()), "")
+        if first_letter and first_letter.islower():
+            continue
+
+        cue_start = start - 1 if start > 0 and text[start - 1] in {'"', '“'} else start
+        cue_end = end + 1 if end < len(text) and text[end] in {'"', '”'} else end
+        before = text[max(0, cue_start - 200):cue_start]
+        after = text[cue_end:min(len(text), cue_end + 120)]
+        immediate_before = text[max(0, cue_start - 72):cue_start]
+        immediate_after = text[cue_end:min(len(text), cue_end + 72)]
+
+        if _DIRECT_SPEECH_PREFIX_V3.search(immediate_before):
+            continue
+        if _NON_WORK_PREFIX_V4.search(immediate_before):
+            continue
+        # A quoted nickname inside a personal name is not a work title.
+        if (
+            re.search(r"[A-ZÁÉÍÓÚÜÑ][a-záéíóúüñ'’]+[ \t]+$", immediate_before)
+            and re.match(r"[ \t]+[A-ZÁÉÍÓÚÜÑ][a-záéíóúüñ'’]+\b", immediate_after)
+            and len(words) <= 3
+        ):
+            continue
+        # Quotation after a bare determiner is usually a nickname or quoted label.
+        if re.search(r"(?i)\b(?:el|la|los|las)[ \t]+$", immediate_before):
+            continue
+
+        class_near = bool(_WORK_CLASS_PREFIX_V4.search(before))
+        verb_near = bool(_WORK_VERB_PREFIX_V4.search(before))
+        list_near = bool(_WORK_LIST_CUE_V4.search(before))
+        suffix_type = bool(_WORK_SUFFIX_TYPE_V4.search(after))
+        suffix_author = bool(_WORK_SUFFIX_CUE_V3.search(after))
+        author_with_work_context = suffix_author and bool(
+            _WORK_CONTEXT_V4.search(before[-150:])
+        )
+
+        if not (class_near or verb_near or list_near or suffix_type or author_with_work_context):
+            continue
+        detection = _make_detection(
+            text,
+            start=start,
+            end=end,
+            family="work",
+            subtype="quoted_work",
+            confidence=0.95,
+            explanation=(
+                "Título entrecomillado conservado sólo cuando la cita está unida de forma directa "
+                "a una clase de obra/publicación, una acción de representación o publicación, un "
+                "repertorio explícito, una indicación de tipo o una autoría respaldada por contexto de obra."
+            ),
+        )
+        if detection is not None:
+            detections.append(detection)
+    return detections
+
+
+# RC69: v5 treats quotation marks only as delimiters, never as evidence by
+# themselves. A quoted span becomes Obra / publicación only when an explicit,
+# nearby lexical construction identifies it as such. This deliberately favors
+# precision over recall in the review queue.
+def _work_detections_v5(text: str) -> list[_Detection]:
+    detections: list[_Detection] = []
+    for start, end, exact_raw in _quoted_spans_v3(text):
+        exact = exact_raw.strip()
+        words = re.findall(r"[A-ZÁÉÍÓÚÜÑa-záéíóúüñ0-9]+", exact)
+        if not words or len(exact) > 100 or len(words) > 10:
+            continue
+        first_letter = next((char for char in exact if char.isalpha()), "")
+        if first_letter and first_letter.islower():
+            continue
+
+        cue_start = start - 1 if start > 0 and text[start - 1] in {'"', '“'} else start
+        cue_end = end + 1 if end < len(text) and text[end] in {'"', '”'} else end
+        immediate_before = text[max(0, cue_start - 96):cue_start]
+        immediate_after = text[cue_end:min(len(text), cue_end + 96)]
+
+        if _DIRECT_SPEECH_PREFIX_V3.search(immediate_before):
+            continue
+        if _NON_WORK_PREFIX_V4.search(immediate_before):
+            continue
+        if (
+            re.search(r"[A-ZÁÉÍÓÚÜÑ][a-záéíóúüñ'’]+[ \t]+$", immediate_before)
+            and re.match(r"[ \t]+[A-ZÁÉÍÓÚÜÑ][a-záéíóúüñ'’]+\b", immediate_after)
+            and len(words) <= 3
+        ):
+            continue
+        if re.search(r"(?i)\b(?:el|la|los|las)[ \t]+$", immediate_before):
+            continue
+
+        # Every accepted title must have one direct cue. Broad author-context
+        # propagation from v4 is intentionally removed because it made unrelated
+        # quoted speech inherit an earlier mention of teatro/obra/publicación.
+        class_direct = bool(_WORK_CLASS_PREFIX_V4.search(immediate_before))
+        verb_direct = bool(_WORK_VERB_PREFIX_V4.search(immediate_before))
+        list_direct = bool(_WORK_LIST_CUE_V4.search(immediate_before))
+        suffix_type_direct = bool(_WORK_SUFFIX_TYPE_V4.search(immediate_after))
+        if not (class_direct or verb_direct or list_direct or suffix_type_direct):
+            continue
+
+        detection = _make_detection(
+            text,
+            start=start,
+            end=end,
+            family="work",
+            subtype="quoted_work",
+            confidence=0.97,
+            explanation=(
+                "Título entrecomillado propuesto sólo porque una construcción inmediata "
+                "lo identifica explícitamente como obra, publicación, repertorio o pieza representada. "
+                "Las comillas por sí solas no generan una referencia."
+            ),
+        )
+        if detection is not None:
+            detections.append(detection)
+    return detections
+
+def detect_local_candidates(
+    text: str,
+    *,
+    families: Iterable[str],
+    provider_version: str = LOCAL_PROVIDER_VERSION,
+) -> list[_Detection]:
+    if provider_version not in _LOCAL_RULES_VERSIONS:
+        raise ValueError(f"Versión local de descubrimiento no admitida: {provider_version}")
     selected = set(families)
     detections: list[_Detection] = []
-    if "actor" in selected:
-        detections.extend(_pattern_detections(text, family="actor", patterns=_ACTOR_PATTERNS))
-    if "space" in selected:
-        detections.extend(_pattern_detections(text, family="space", patterns=_SPACE_PATTERNS))
-    if "time" in selected:
-        detections.extend(_pattern_detections(text, family="time", patterns=_TIME_PATTERNS))
-    if "event" in selected:
-        detections.extend(_pattern_detections(text, family="event", patterns=_EVENT_PATTERNS))
-    if "action_process" in selected:
-        detections.extend(
-            _pattern_detections(text, family="action_process", patterns=_ACTION_PATTERNS)
-        )
-    if "work" in selected:
-        detections.extend(
+    if provider_version == "local_rules_v1":
+        if "actor" in selected:
+            detections.extend(_pattern_detections(text, family="actor", patterns=_ACTOR_PATTERNS))
+        if "space" in selected:
+            detections.extend(_pattern_detections(text, family="space", patterns=_SPACE_PATTERNS))
+        if "time" in selected:
+            detections.extend(_pattern_detections(text, family="time", patterns=_TIME_PATTERNS))
+        if "event" in selected:
+            detections.extend(_pattern_detections(text, family="event", patterns=_EVENT_PATTERNS))
+        if "action_process" in selected:
+            detections.extend(
+                _pattern_detections(text, family="action_process", patterns=_ACTION_PATTERNS)
+            )
+        if "work" in selected:
+            detections.extend(
+                _pattern_detections(
+                    text,
+                    family="work",
+                    patterns=_WORK_PATTERNS,
+                    quoted_capture=True,
+                )
+            )
+    elif provider_version == "local_rules_v2":
+        if "actor" in selected:
+            detections.extend(_pattern_detections(text, family="actor", patterns=_ACTOR_PATTERNS))
+            detections.extend(
+                _pattern_detections(
+                    text,
+                    family="actor",
+                    patterns=_ACTOR_CAPTURE_PATTERNS_V2,
+                    quoted_capture=True,
+                )
+            )
+        if "space" in selected:
+            detections.extend(_pattern_detections(text, family="space", patterns=_SPACE_PATTERNS))
+            detections.extend(
+                _pattern_detections(
+                    text,
+                    family="space",
+                    patterns=_SPACE_CAPTURE_PATTERNS_V2,
+                    quoted_capture=True,
+                )
+            )
+        if "time" in selected:
+            detections.extend(_pattern_detections(text, family="time", patterns=_TIME_PATTERNS_V2))
+        if "event" in selected:
+            detections.extend(_pattern_detections(text, family="event", patterns=_EVENT_PATTERNS_V2))
+        if "action_process" in selected:
+            detections.extend(
+                _pattern_detections(text, family="action_process", patterns=_ACTION_PATTERNS_V2)
+            )
+        v2_work_detections = list(
             _pattern_detections(
                 text,
                 family="work",
-                patterns=_WORK_PATTERNS,
+                patterns=_WORK_CAPTURE_PATTERNS_V2,
                 quoted_capture=True,
             )
-        )
+        ) if {"time", "work"} & selected else []
+        if "work" in selected:
+            detections.extend(v2_work_detections)
+        work_spans = [(item.start, item.end) for item in v2_work_detections]
+        detections = [
+            item
+            for item in detections
+            if not (
+                item.family == "time"
+                and item.subtype == "year"
+                and any(start <= item.start and end >= item.end for start, end in work_spans)
+            )
+        ]
+    elif provider_version == "local_rules_v3":
+        if "actor" in selected:
+            detections.extend(_pattern_detections(text, family="actor", patterns=_ACTOR_PATTERNS))
+            detections.extend(
+                _pattern_detections(
+                    text,
+                    family="actor",
+                    patterns=_ACTOR_CAPTURE_PATTERNS_V2,
+                    quoted_capture=True,
+                )
+            )
+            detections.extend(
+                _pattern_detections(
+                    text,
+                    family="actor",
+                    patterns=_ACTOR_CAPTURE_PATTERNS_V3,
+                    quoted_capture=True,
+                )
+            )
+        if "space" in selected:
+            detections.extend(_pattern_detections(text, family="space", patterns=_SPACE_PATTERNS))
+            detections.extend(
+                _pattern_detections(
+                    text,
+                    family="space",
+                    patterns=_SPACE_CAPTURE_PATTERNS_V2,
+                    quoted_capture=True,
+                )
+            )
+            detections.extend(
+                _pattern_detections(
+                    text,
+                    family="space",
+                    patterns=_SPACE_CAPTURE_PATTERNS_V3,
+                    quoted_capture=True,
+                )
+            )
+        if "time" in selected:
+            detections.extend(_time_detections_v3(text))
+        if "event" in selected:
+            detections.extend(_pattern_detections(text, family="event", patterns=_EVENT_PATTERNS_V3))
+        if "action_process" in selected:
+            detections.extend(
+                _pattern_detections(text, family="action_process", patterns=_ACTION_PATTERNS_V2[:1])
+            )
+            detections.extend(
+                _pattern_detections(
+                    text,
+                    family="action_process",
+                    patterns=_ACTION_CONTEXT_PATTERNS_V3,
+                    quoted_capture=True,
+                )
+            )
+        v3_work_detections = _work_detections_v3(text) if {"time", "work"} & selected else []
+        if "work" in selected:
+            detections.extend(v3_work_detections)
+        work_spans = [(item.start, item.end) for item in v3_work_detections]
+        detections = [
+            item
+            for item in detections
+            if not (
+                item.family == "time"
+                and item.subtype == "year"
+                and any(start <= item.start and end >= item.end for start, end in work_spans)
+            )
+        ]
+    elif provider_version == "local_rules_v4":
+        if "actor" in selected:
+            detections.extend(_pattern_detections(text, family="actor", patterns=_ACTOR_PATTERNS_V4))
+            detections.extend(
+                _pattern_detections(
+                    text,
+                    family="actor",
+                    patterns=_ACTOR_CAPTURE_PATTERNS_V4,
+                    quoted_capture=True,
+                )
+            )
+        if "space" in selected:
+            detections.extend(_pattern_detections(text, family="space", patterns=_SPACE_PATTERNS))
+            detections.extend(
+                _pattern_detections(
+                    text,
+                    family="space",
+                    patterns=_SPACE_CAPTURE_PATTERNS_V2,
+                    quoted_capture=True,
+                )
+            )
+            detections.extend(
+                _pattern_detections(
+                    text,
+                    family="space",
+                    patterns=_SPACE_CAPTURE_PATTERNS_V3,
+                    quoted_capture=True,
+                )
+            )
+        if "time" in selected:
+            detections.extend(_time_detections_v3(text))
+        if "event" in selected:
+            detections.extend(_pattern_detections(text, family="event", patterns=_EVENT_PATTERNS_V3))
+        if "action_process" in selected:
+            detections.extend(
+                _pattern_detections(text, family="action_process", patterns=_ACTION_PATTERNS_V2[:1])
+            )
+            detections.extend(
+                _pattern_detections(
+                    text,
+                    family="action_process",
+                    patterns=_ACTION_CONTEXT_PATTERNS_V3,
+                    quoted_capture=True,
+                )
+            )
+        v4_work_detections = _work_detections_v4(text) if {"time", "work"} & selected else []
+        if "work" in selected:
+            detections.extend(v4_work_detections)
+        work_spans = [(item.start, item.end) for item in v4_work_detections]
+        detections = [
+            item
+            for item in detections
+            if not (
+                item.family == "time"
+                and item.subtype == "year"
+                and any(start <= item.start and end >= item.end for start, end in work_spans)
+            )
+        ]
+    else:
+        if "actor" in selected:
+            detections.extend(_pattern_detections(text, family="actor", patterns=_ACTOR_PATTERNS_V4))
+            detections.extend(
+                _pattern_detections(
+                    text,
+                    family="actor",
+                    patterns=_ACTOR_CAPTURE_PATTERNS_V4,
+                    quoted_capture=True,
+                )
+            )
+        if "space" in selected:
+            detections.extend(_pattern_detections(text, family="space", patterns=_SPACE_PATTERNS))
+            detections.extend(
+                _pattern_detections(
+                    text,
+                    family="space",
+                    patterns=_SPACE_CAPTURE_PATTERNS_V2,
+                    quoted_capture=True,
+                )
+            )
+            detections.extend(
+                _pattern_detections(
+                    text,
+                    family="space",
+                    patterns=_SPACE_CAPTURE_PATTERNS_V3,
+                    quoted_capture=True,
+                )
+            )
+        if "time" in selected:
+            detections.extend(_time_detections_v3(text))
+        if "event" in selected:
+            detections.extend(_pattern_detections(text, family="event", patterns=_EVENT_PATTERNS_V3))
+        if "action_process" in selected:
+            detections.extend(
+                _pattern_detections(text, family="action_process", patterns=_ACTION_PATTERNS_V2[:1])
+            )
+            detections.extend(
+                _pattern_detections(
+                    text,
+                    family="action_process",
+                    patterns=_ACTION_CONTEXT_PATTERNS_V3,
+                    quoted_capture=True,
+                )
+            )
+        v5_work_detections = _work_detections_v5(text) if {"time", "work"} & selected else []
+        if "work" in selected:
+            detections.extend(v5_work_detections)
+        work_spans = [(item.start, item.end) for item in v5_work_detections]
+        detections = [
+            item
+            for item in detections
+            if not (
+                item.family == "time"
+                and item.subtype == "year"
+                and any(start <= item.start and end >= item.end for start, end in work_spans)
+            )
+        ]
     deduplicated: dict[tuple[int, int, str, str], _Detection] = {}
     for item in detections:
         key = (item.start, item.end, item.family, item.subtype)
@@ -929,7 +1957,7 @@ def discovery_candidate_rows(
     project_id: str,
     run_id: str | None = None,
     families: Iterable[str] = (),
-    limit: int = 500,
+    limit: int | None = 500,
 ) -> list[DiscoveryCandidateRow]:
     query = select(DiscoveryCandidate).where(DiscoveryCandidate.project_id == project_id)
     if run_id:
@@ -940,15 +1968,16 @@ def discovery_candidate_rows(
         if invalid:
             raise ValueError("Familias inválidas: " + ", ".join(sorted(invalid)))
         query = query.where(DiscoveryCandidate.semantic_family.in_(selected_families))
-    rows = session.scalars(
-        query.order_by(
-            DiscoveryCandidate.created_at.desc(),
-            DiscoveryCandidate.original_filename,
-            DiscoveryCandidate.page_number,
-            DiscoveryCandidate.start_offset,
-            DiscoveryCandidate.id,
-        ).limit(max(1, int(limit)))
-    ).all()
+    query = query.order_by(
+        DiscoveryCandidate.created_at.desc(),
+        DiscoveryCandidate.original_filename,
+        DiscoveryCandidate.page_number,
+        DiscoveryCandidate.start_offset,
+        DiscoveryCandidate.id,
+    )
+    if limit is not None:
+        query = query.limit(max(1, int(limit)))
+    rows = session.scalars(query).all()
     object_ids = {row.editable_object_id for row in rows}
     objects = {
         row.id: row

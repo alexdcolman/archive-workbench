@@ -25,10 +25,15 @@ class TemporalRange:
 
 
 _APPROX_PATTERN = re.compile(
-    r"(?:\baprox(?:imadamente)?\.?\b|\bcirca\b|\bca\.?\b|\bc\.?\s+(?=\d)|~)",
+    r"(?:\baprox(?:imadamente)?\.?\b|\bcirca\b|\bca\.?\b|\bc\.?\s+(?=\d)|~|\?)",
     flags=re.IGNORECASE,
 )
 _RANGE_SPLIT = re.compile(r"\s+(?:-|–|—|a|hasta)\s+", flags=re.IGNORECASE)
+_PERIOD_SPLIT = re.compile(r"\s*;\s*")
+_YEAR_RANGE = re.compile(
+    r"^\s*\[?(\d{4})\]?\s*(?:-|–|—|a|hasta)\s*\[?(\d{4})\]?\s*$",
+    flags=re.IGNORECASE,
+)
 
 _DECADE_WORDS = {
     "veinte": 1920,
@@ -50,6 +55,9 @@ def _clean(value: str) -> str:
 
 def _date_bounds(value: str) -> tuple[date, date, str]:
     text = _clean(value).casefold().strip(" .")
+    # Los corchetes pueden conservar una convención descriptiva sin afectar el filtro.
+    if len(text) >= 2 and text.startswith("[") and text.endswith("]"):
+        text = text[1:-1].strip()
     if not text:
         raise ValueError("La expresión temporal está vacía")
 
@@ -98,25 +106,35 @@ def _date_bounds(value: str) -> tuple[date, date, str]:
 
     raise ValueError(
         "No pude interpretar la fecha. Usá, por ejemplo, 15/03/1975, 03/1975, "
-        "1975, años setenta, desde 1974, hasta 03/1976 o 03/1974 - 03/1976."
+        "1975, años setenta, desde 1974, hasta 03/1976, 03/1974 - 03/1976 o "
+        "1946 - 2015; desde 2024."
     )
 
 
-def parse_temporal_expression(value: str | None) -> TemporalRange:
-    if value is None or not value.strip():
-        return TemporalRange(None, None, None, None, False)
-
+def _parse_single_temporal_expression(value: str) -> TemporalRange:
     original = _clean(value)
     approximate = bool(_APPROX_PATTERN.search(original))
     working = _APPROX_PATTERN.sub("", original).strip(" ,")
     folded = working.casefold()
 
-    if folded.startswith("desde "):
-        lower, _upper, precision = _date_bounds(working[6:])
-        return TemporalRange(original, lower, None, f"open_start_{precision}", approximate)
-    if folded.startswith("hasta "):
-        _lower, upper, precision = _date_bounds(working[6:])
-        return TemporalRange(original, None, upper, f"open_end_{precision}", approximate)
+    for prefix in ("desde ", "después de ", "despues de "):
+        if folded.startswith(prefix):
+            lower, _upper, precision = _date_bounds(working[len(prefix):])
+            return TemporalRange(original, lower, None, f"open_start_{precision}", approximate)
+    for prefix in ("hasta ", "antes de "):
+        if folded.startswith(prefix):
+            _lower, upper, precision = _date_bounds(working[len(prefix):])
+            return TemporalRange(original, None, upper, f"open_end_{precision}", approximate)
+
+    year_range = _YEAR_RANGE.fullmatch(working)
+    if year_range:
+        left = int(year_range.group(1))
+        right = int(year_range.group(2))
+        left_lower = date(left, 1, 1)
+        right_upper = date(right, 12, 31)
+        if left_lower > right_upper:
+            raise ValueError("El inicio del rango temporal es posterior al final")
+        return TemporalRange(original, left_lower, right_upper, "year", approximate)
 
     parts = _RANGE_SPLIT.split(working, maxsplit=1)
     if len(parts) == 2:
@@ -129,6 +147,39 @@ def parse_temporal_expression(value: str | None) -> TemporalRange:
 
     lower, upper, precision = _date_bounds(working)
     return TemporalRange(original, lower, upper, precision, approximate)
+
+
+def parse_temporal_periods(value: str | None) -> tuple[TemporalRange, ...]:
+    """Interpreta uno o más períodos no contiguos separados por punto y coma."""
+    if value is None or not value.strip():
+        return ()
+    original = _clean(value)
+    parts = [part for part in _PERIOD_SPLIT.split(original) if part]
+    if not parts:
+        return ()
+    return tuple(_parse_single_temporal_expression(part) for part in parts)
+
+
+def parse_temporal_expression(value: str | None) -> TemporalRange:
+    periods = parse_temporal_periods(value)
+    if not periods:
+        return TemporalRange(None, None, None, None, False)
+    if len(periods) == 1:
+        return periods[0]
+
+    starts = [item.start for item in periods if item.start is not None]
+    ends = [item.end for item in periods if item.end is not None]
+    # Un tramo abierto conserva abierto el extremo agregado para que una consulta SQL
+    # de preselección no descarte candidatos que luego se verifican tramo por tramo.
+    aggregate_start = None if any(item.start is None for item in periods) else min(starts, default=None)
+    aggregate_end = None if any(item.end is None for item in periods) else max(ends, default=None)
+    return TemporalRange(
+        _clean(value or ""),
+        aggregate_start,
+        aggregate_end,
+        "set",
+        any(item.approximate for item in periods),
+    )
 
 
 def temporal_overlap(
@@ -148,6 +199,39 @@ def temporal_overlap(
     if query_end is not None and item_start is not None and item_start > query_end:
         return False
     return True
+
+
+def temporal_expression_overlap(
+    *,
+    expression: str | None,
+    item_start: date | None,
+    item_end: date | None,
+    query_start: date | None,
+    query_end: date | None,
+    include_undated: bool = False,
+) -> bool:
+    """Evalúa el solapamiento respetando huecos entre períodos discontinuos."""
+    if query_start is None and query_end is None:
+        return True
+    periods = parse_temporal_periods(expression)
+    if not periods:
+        return temporal_overlap(
+            item_start=item_start,
+            item_end=item_end,
+            query_start=query_start,
+            query_end=query_end,
+            include_undated=include_undated,
+        )
+    return any(
+        temporal_overlap(
+            item_start=period.start,
+            item_end=period.end,
+            query_start=query_start,
+            query_end=query_end,
+            include_undated=include_undated,
+        )
+        for period in periods
+    )
 
 
 def format_temporal_range(

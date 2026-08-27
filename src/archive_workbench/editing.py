@@ -237,6 +237,7 @@ def bootstrap_editable_layer(
     decisions: ProjectDecisions,
     created_by: str,
     source_keys: set[str] | None = None,
+    digital_object_ids: set[str] | None = None,
     pages: set[int] | None = None,
 ) -> EditingBootstrapSummary:
     """Copia selecciones OCR a una capa editable sin modificar extracted_objects."""
@@ -250,13 +251,19 @@ def bootstrap_editable_layer(
     )
     if source_keys:
         query = query.where(SourceRegistration.source_key.in_(source_keys))
+    if digital_object_ids:
+        query = query.where(DigitalObject.id.in_(digital_object_ids))
     rows = session.execute(query).all()
     found = {row[0].source_key for row in rows}
     missing = (source_keys or set()) - found
     if missing:
         raise ValueError(f"source_key no registrado: {', '.join(sorted(missing))}")
 
+    seen_digital_objects: set[str] = set()
     for registration, digital, _unit in rows:
+        if digital.id in seen_digital_objects:
+            continue
+        seen_digital_objects.add(digital.id)
         summary.documents_seen += 1
         selection_query = (
             select(ExtractionPageSelection, ExtractionPage)
@@ -444,6 +451,9 @@ def add_editable_object(
     before_object_id: str | None = None,
     note: str | None = None,
     document_part_id: str | None = None,
+    geometry: list[dict[str, Any]] | None = None,
+    attributes: dict[str, Any] | None = None,
+    revision_operation: str = "add",
 ) -> EditableObject:
     if after_object_id and before_object_id:
         raise ValueError("Use --after-object-id o --before-object-id, no ambos")
@@ -517,8 +527,8 @@ def add_editable_object(
         current_text=text,
         current_object_type=object_type,
         current_order_index=position,
-        current_geometry_json=[],
-        current_attributes_json={"manually_added": True},
+        current_geometry_json=list(geometry or []),
+        current_attributes_json={"manually_added": True, **dict(attributes or {})},
         lifecycle_status="active",
         revision_number=1,
         created_by=created_by,
@@ -531,7 +541,7 @@ def add_editable_object(
     _append_revision(
         session,
         obj,
-        operation="add",
+        operation=revision_operation,
         created_by=created_by,
         note=note,
         base_revision_number=None,

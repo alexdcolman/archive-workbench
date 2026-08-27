@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import json
 from pathlib import Path
+from uuid import uuid4
 
 import pytest
 from sqlalchemy import func, select
@@ -121,13 +122,153 @@ def test_discovery_persists_reproducible_candidates_without_canonical_writes(
                 assert row.object_revision_number == 2
                 assert row.page_revision_number == 1
                 assert row.provider_key == "local_deterministic"
-                assert row.provider_version == "local_rules_v1"
+                assert row.provider_version == "local_rules_v5"
                 assert row.method == "conservative_regex_rules"
                 assert len(row.parameters_sha256) == 64
                 assert not row.is_stale
     finally:
         engine.dispose()
 
+
+
+
+def test_discovery_profile_can_upgrade_rules_without_rewriting_historical_runs(tmp_path: Path) -> None:
+    root = tmp_path / "discovery_profile_rule_upgrade"
+    _seed_discovery_project(root)
+    engine = create_sqlite_engine(database_path(root))
+    try:
+        with session_scope(engine) as session:
+            profile = save_discovery_profile(
+                session,
+                project_id="search_project",
+                values=DiscoveryProfileValues(
+                    name="Configuración histórica",
+                    provider_version="local_rules_v4",
+                ),
+                changed_by="tests",
+            )
+            old_summary = run_open_discovery(
+                session,
+                project_id="search_project",
+                profile=profile,
+                created_by="tests",
+            )
+            upgraded = save_discovery_profile(
+                session,
+                project_id="search_project",
+                profile_id=profile.id,
+                values=DiscoveryProfileValues(
+                    name=profile.name,
+                    description=profile.description,
+                    families=tuple(profile.families_json or ()),
+                    include_object_types=tuple(profile.include_object_types_json or ()),
+                    include_object_review_statuses=tuple(
+                        profile.include_object_review_statuses_json or ()
+                    ),
+                    include_page_review_statuses=tuple(
+                        profile.include_page_review_statuses_json or ()
+                    ),
+                    minimum_confidence=float(profile.minimum_confidence),
+                    provider_key=profile.provider_key,
+                    provider_version="local_rules_v5",
+                ),
+                changed_by="tests",
+            )
+            new_summary = run_open_discovery(
+                session,
+                project_id="search_project",
+                profile=upgraded,
+                created_by="tests",
+            )
+            old_run = session.get(DiscoveryRun, old_summary.run_id)
+            new_run = session.get(DiscoveryRun, new_summary.run_id)
+            assert old_run is not None and new_run is not None
+            assert old_run.provider_version == "local_rules_v4"
+            assert new_run.provider_version == "local_rules_v5"
+            assert upgraded.provider_version == "local_rules_v5"
+            assert upgraded.revision == 2
+    finally:
+        engine.dispose()
+
+
+def test_discovery_candidate_rows_can_return_more_than_500_when_limit_is_none(
+    tmp_path: Path,
+) -> None:
+    root = tmp_path / "discovery_no_silent_limit"
+    _seed_discovery_project(root)
+    engine = create_sqlite_engine(database_path(root))
+    try:
+        with session_scope(engine) as session:
+            profile = save_discovery_profile(
+                session,
+                project_id="search_project",
+                values=DiscoveryProfileValues(name="Sin límite silencioso"),
+                changed_by="tests",
+                quality_scope_source="api",
+            )
+            summary = run_open_discovery(
+                session,
+                project_id="search_project",
+                profile=profile,
+                created_by="tests",
+            )
+            template = session.scalar(
+                select(DiscoveryCandidate).where(
+                    DiscoveryCandidate.run_id == summary.run_id
+                )
+            )
+            assert template is not None
+            for index in range(501):
+                session.add(
+                    DiscoveryCandidate(
+                        id=str(uuid4()),
+                        project_id=template.project_id,
+                        run_id=template.run_id,
+                        profile_id=template.profile_id,
+                        editable_object_id=template.editable_object_id,
+                        editable_page_id=template.editable_page_id,
+                        digital_object_id=template.digital_object_id,
+                        document_part_id=template.document_part_id,
+                        source_key=template.source_key,
+                        original_filename=template.original_filename,
+                        page_number=template.page_number,
+                        object_revision_number=template.object_revision_number,
+                        page_revision_number=template.page_revision_number,
+                        start_offset=template.start_offset,
+                        end_offset=template.end_offset,
+                        exact_text=template.exact_text,
+                        context_before=template.context_before,
+                        context_after=template.context_after,
+                        semantic_family=template.semantic_family,
+                        suggested_subtype=f"bulk_{index}",
+                        confidence=template.confidence,
+                        method=template.method,
+                        provider_key=template.provider_key,
+                        provider_version=template.provider_version,
+                        model_name=template.model_name,
+                        model_version=template.model_version,
+                        explanation=template.explanation,
+                        parameters_sha256=template.parameters_sha256,
+                        status="pending",
+                    )
+                )
+            session.flush()
+            capped = discovery_candidate_rows(
+                session,
+                project_id="search_project",
+                run_id=summary.run_id,
+            )
+            complete = discovery_candidate_rows(
+                session,
+                project_id="search_project",
+                run_id=summary.run_id,
+                limit=None,
+            )
+            assert len(capped) == 500
+            assert len(complete) == summary.candidate_count + 501
+            assert len(complete) > 500
+    finally:
+        engine.dispose()
 
 def test_discovery_rejects_unconfirmed_scope_and_changed_profile_authorization(
     tmp_path: Path,
@@ -414,14 +555,23 @@ def test_discovery_ui_keeps_profile_and_detection_controls_explicit() -> None:
     source = (root / "src/archive_workbench/discovery_app.py").read_text(
         encoding="utf-8"
     )
-    assert "Propone actores, espacios, tiempos" in source
-    assert "Guardar perfil de descubrimiento" in source
-    assert "Ejecutar descubrimiento abierto" in source
+    assert '"Tarea para buscar nuevas entidades"' in source
+    assert 'key="open_discovery_task"' in source
+    assert 'label_visibility="collapsed"' in source
+    assert '"Configuración para buscar entidades"' in source
+    assert '"Configurar búsqueda de entidades"' in source
+    assert '"Guardar configuración de búsqueda"' in source
+    assert '"Buscar nuevas entidades en los textos"' in source
     assert "Trazabilidad técnica" in source
-    assert "nunca crean" in source and "relaciones automáticamente" in source
+    assert 'key="open_discovery_tasks"' not in source
+    assert 'st.expander("Resumen de la búsqueda ejecutada"' not in source
+    assert 'identificador técnico' not in source
+    assert "Alcance de calidad ampliado:" not in source
+    assert "Confirmo que esta búsqueda puede incluir páginas" not in source
+    assert "Por qué esta búsqueda debe incluir páginas" not in source
     assert "disabled=" not in source[
-        source.index('"Guardar perfil de descubrimiento"') :
-        source.index('"Ejecutar descubrimiento abierto"')
+        source.index('"Guardar configuración de búsqueda"') :
+        source.index('"Buscar nuevas entidades en los textos"')
     ]
 
 
@@ -449,7 +599,7 @@ def test_open_discovery_validation_script_prepares_disposable_copy(
         source_engine.dispose()
 
     result = create_validation_copy(source, destination, force=False)
-    assert result["revision"] == "0046_audiovisual_timeline_annotations"
+    assert result["revision"] == "0047_authority_relation_profiles"
     assert result["expected_candidate_count"] == 7
     assert Path(result["validation_path"]).is_file()
 
@@ -742,14 +892,15 @@ def test_discovery_review_validates_destinations_reasons_and_terminal_state(
                     reason="Intento controlado.",
                     decided_by="alex",
                 )
-            with pytest.raises(ValueError, match="requiere un fundamento"):
-                review_discovery_candidate(
-                    session,
-                    project_id="search_project",
-                    candidate_id=actor.id,
-                    decision_type="reject",
-                    decided_by="alex",
-                )
+            work = _candidate_by_text(session, "Cuaderno del Delta")
+            rejected_without_reason = review_discovery_candidate(
+                session,
+                project_id="search_project",
+                candidate_id=work.id,
+                decision_type="reject",
+                decided_by="alex",
+            )
+            assert rejected_without_reason.candidate_status == "rejected"
             with pytest.raises(ValueError, match="debe cambiar"):
                 review_discovery_candidate(
                     session,
@@ -847,22 +998,29 @@ def test_discovery_review_ui_offers_explicit_append_only_actions() -> None:
         encoding="utf-8"
     )
     assert 'key=f"discovery_candidate_review_panel_{row.candidate_id}"' in source
-    assert 'help="El panel permanece abierto mientras cambiás la decisión o su destino."' in source
-    assert 'with st.expander("Revisar candidato", expanded=False):' not in source
+    assert 'help="Abrí este panel para aceptar la referencia o descartarla."' in source
+    assert 'with st.expander("Revisar propuesta de descubrimiento", expanded=False):' not in source
     assert 'key=f"open_discovery_profile_panel_{profile_key}"' in source
     assert 'with st.expander("Configurar perfil", expanded=not profiles):' not in source
-    assert '["Revisar candidatos", "Nueva corrida", "Agrupamiento y continuidad"]' in source
-    assert 'key="open_discovery_tasks"' in source
-    assert '["Revisar grupos", "Continuidad textual"]' in source
+    assert '"review": "Revisar referencias encontradas"' in source
+    assert '"run": "Ejecutar búsqueda de entidades"' in source
+    assert '"grouping": "Duplicados y cambios de texto"' in source
+    assert 'key="open_discovery_task"' in source
+    assert 'key="open_discovery_tasks"' not in source
+    assert '["Revisar posibles referencias repetidas", "Actualizar referencias después de corregir el texto"]' in source
     assert 'key="open_discovery_grouping_tasks"' in source
     assert 'key="open_discovery_grouping_continuity_panel"' not in source
-    assert '"Registrar decisión"' in source
+    assert '"Aceptar esta referencia"' in source
+    assert '"Descartar esta referencia"' in source
     assert '"Historial de decisiones"' in source
-    assert '"Confirmo la creación de una autoridad nueva con estado Sin revisar"' in source
-    assert "Las decisiones son append-only" in source
+    assert '"Confirmo que quiero crear esta entidad con estado Sin revisar"' in source
+    assert '"Restaurar esta referencia para revisarla"' in source
     assert "create_entity_relation" not in source
-    assert "st.form(" not in source
-    assert "disabled=" not in source
+    candidate_review = source[source.index("def _render_candidate_review("):source.index("def _render_grouping_and_continuity(")]
+    assert "st.form(" not in candidate_review
+    bulk_workspace = source[source.index('with bulk_tab:'):source.index('with discarded_tab:')]
+    assert "st.form(" in bulk_workspace
+    assert "st.form_submit_button" in bulk_workspace
 
 
 def test_open_discovery_review_validation_preparation_preserves_existing_run(
@@ -920,7 +1078,7 @@ def test_open_discovery_review_validation_preparation_preserves_existing_run(
         json.dumps(payload), encoding="utf-8"
     )
     result = prepare_review_validation(destination)
-    assert result["revision"] == "0046_audiovisual_timeline_annotations"
+    assert result["revision"] == "0047_authority_relation_profiles"
     assert result["run_id"] == run.run_id
     assert len(result["candidate_ids_by_text"]) == 7
     engine = create_sqlite_engine(database_path(destination))
@@ -1094,3 +1252,124 @@ def test_open_discovery_review_validation_script_checks_controlled_decisions(
     assert result["controlled_mentions"] == 2
     assert result["additional_mentions"] == 0
     assert result["created_authority"] == "Valentina Orbe"
+
+
+def test_rc19_bulk_entity_creation_and_rejected_reference_restoration(tmp_path: Path) -> None:
+    from archive_workbench.db.models import DiscoveryDecision
+    from archive_workbench.discovery_review import (
+        accept_discovery_candidates_as_new_authorities,
+        reject_discovery_candidates,
+        restore_rejected_discovery_candidate,
+    )
+
+    root = tmp_path / "discovery_rc19_bulk"
+    _seed_discovery_project(root)
+    engine = create_sqlite_engine(database_path(root))
+    try:
+        with session_scope(engine) as session:
+            profile = save_discovery_profile(
+                session,
+                project_id="search_project",
+                values=DiscoveryProfileValues(name="RC19 lote"),
+                changed_by="tests",
+            )
+            run_open_discovery(
+                session,
+                project_id="search_project",
+                profile=profile,
+                created_by="tests",
+            )
+            person = _candidate_by_text(session, "Dra. Valentina Orbe")
+            place = _candidate_by_text(session, "ciudad de Puerto Niebla")
+            created = accept_discovery_candidates_as_new_authorities(
+                session,
+                project_id="search_project",
+                candidate_ids=(person.id, place.id),
+                decided_by="alex",
+                source="ui",
+            )
+            assert len(created) == 2
+            authorities = list(session.scalars(select(AuthorityRecord)))
+            assert {row.preferred_name for row in authorities} == {
+                "Dra. Valentina Orbe",
+                "ciudad de Puerto Niebla",
+            }
+            assert {row.review_status for row in authorities} == {"unreviewed"}
+            assert len(list(session.scalars(select(EntityMention)))) == 2
+
+            work = _candidate_by_text(session, "Cuaderno del Delta")
+            rejected = reject_discovery_candidates(
+                session,
+                project_id="search_project",
+                candidate_ids=(work.id,),
+                decided_by="alex",
+                source="ui",
+            )
+            assert rejected[0].candidate_status == "rejected"
+            assert work.status == "rejected"
+
+            restored = restore_rejected_discovery_candidate(
+                session,
+                project_id="search_project",
+                candidate_id=work.id,
+                restored_by="alex",
+                source="ui",
+            )
+            assert restored.decision_type == "restore"
+            assert restored.candidate_status == "pending"
+            assert work.status == "pending"
+            history = list(
+                session.scalars(
+                    select(DiscoveryDecision)
+                    .where(DiscoveryDecision.candidate_id == work.id)
+                    .order_by(DiscoveryDecision.decision_number)
+                )
+            )
+            assert [row.decision_type for row in history] == ["reject", "restore"]
+    finally:
+        engine.dispose()
+
+
+def test_rc19_accept_can_correct_reference_without_intermediate_modify(tmp_path: Path) -> None:
+    from archive_workbench.discovery_review import review_discovery_candidate
+
+    root = tmp_path / "discovery_rc19_correct_accept"
+    _seed_discovery_project(root)
+    engine = create_sqlite_engine(database_path(root))
+    try:
+        with session_scope(engine) as session:
+            profile = save_discovery_profile(
+                session,
+                project_id="search_project",
+                values=DiscoveryProfileValues(name="RC19 aceptar corrigiendo"),
+                changed_by="tests",
+            )
+            run_open_discovery(
+                session,
+                project_id="search_project",
+                profile=profile,
+                created_by="tests",
+            )
+            person = _candidate_by_text(session, "Dra. Valentina Orbe")
+            summary = review_discovery_candidate(
+                session,
+                project_id="search_project",
+                candidate_id=person.id,
+                decision_type="accept",
+                reviewed_text="Valentina Orbe",
+                semantic_family="actor",
+                reviewed_subtype="person",
+                acceptance_mode="new_authority",
+                new_authority_name="Valentina Orbe",
+                confirm_new_authority=True,
+                decided_by="alex",
+                source="ui",
+            )
+            assert summary.decision_number == 1
+            assert summary.decision_type == "accept"
+            created = session.get(AuthorityRecord, summary.target_authority_id)
+            assert created is not None
+            assert created.preferred_name == "Valentina Orbe"
+            assert created.review_status == "unreviewed"
+    finally:
+        engine.dispose()

@@ -24,19 +24,24 @@ from archive_workbench.google_drive_transport import (
     GoogleDriveToken,
     GoogleOAuthClient,
     _safe_download_name,
+    _upload_resumable_file,
     build_authorization_url,
     connection_status,
+    download_archive_workbench_zip_from_drive,
     download_exchange_bundle_from_drive,
     load_oauth_client,
     load_token,
     save_token,
+    upload_archive_workbench_zip_to_drive,
     upload_exchange_bundle_to_drive,
 )
 
 
 class _FakeResponse:
-    def __init__(self, payload: bytes):
+    def __init__(self, payload: bytes, *, headers: dict[str, str] | None = None):
         self.payload = payload
+        self.headers = headers or {}
+        self._offset = 0
 
     def __enter__(self):
         return self
@@ -44,8 +49,14 @@ class _FakeResponse:
     def __exit__(self, exc_type, exc, tb):
         return False
 
-    def read(self) -> bytes:
-        return self.payload
+    def read(self, size: int = -1) -> bytes:
+        if size is None or size < 0:
+            data = self.payload[self._offset :]
+            self._offset = len(self.payload)
+            return data
+        data = self.payload[self._offset : self._offset + size]
+        self._offset += len(data)
+        return data
 
 
 def _client_secret(path: Path) -> Path:
@@ -85,7 +96,7 @@ def _bundle(path: Path, *, project_id: str = "project-1", source_workspace_id: s
         source_workspace_id=source_workspace_id,
         source_workspace_name="Remota",
         app_version="0.87.0",
-        database_revision="0046_audiovisual_timeline_annotations",
+        database_revision="0047_authority_relation_profiles",
         created_by="tests",
         base_checkpoint_id="remote-base",
         base_checkpoint_label="base",
@@ -148,23 +159,27 @@ def test_upload_valid_bundle_sets_archive_workbench_properties(tmp_path: Path, m
     bundle = _bundle(tmp_path / "exchange.zip")
     local_sha = hashlib.sha256(bundle.read_bytes()).hexdigest()
     calls = []
+    response = {
+        "id": "drive-file-1",
+        "name": "exchange.zip",
+        "mimeType": "application/zip",
+        "size": str(bundle.stat().st_size),
+        "webViewLink": "https://drive.google.com/file/d/drive-file-1/view",
+        "appProperties": {
+            "archive_workbench_kind": "exchange_bundle",
+            "archive_workbench_sha256": local_sha,
+            "archive_workbench_bundle_id": "bundle-1",
+            "archive_workbench_project_id": "project-1",
+        },
+    }
+    responses = [
+        _FakeResponse(b"", headers={"Location": "https://upload.example/session"}),
+        _FakeResponse(json.dumps(response).encode("utf-8")),
+    ]
 
     def fake_urlopen(request, timeout=0):
         calls.append(request)
-        response = {
-            "id": "drive-file-1",
-            "name": "exchange.zip",
-            "mimeType": "application/zip",
-            "size": str(bundle.stat().st_size),
-            "webViewLink": "https://drive.google.com/file/d/drive-file-1/view",
-            "appProperties": {
-                "archive_workbench_kind": "exchange_bundle",
-                "archive_workbench_sha256": local_sha,
-                "archive_workbench_bundle_id": "bundle-1",
-                "archive_workbench_project_id": "project-1",
-            },
-        }
-        return _FakeResponse(json.dumps(response).encode("utf-8"))
+        return responses.pop(0)
 
     monkeypatch.setattr("urllib.request.urlopen", fake_urlopen)
     summary = upload_exchange_bundle_to_drive(
@@ -175,13 +190,123 @@ def test_upload_valid_bundle_sets_archive_workbench_properties(tmp_path: Path, m
     assert summary.metadata.file_id == "drive-file-1"
     assert summary.local_sha256 == local_sha
     assert summary.bundle_id == "bundle-1"
-    assert len(calls) == 1
-    body = calls[0].data
-    assert body is not None
-    assert b"archive_workbench_sha256" in body
-    assert local_sha.encode("ascii") in body
-    assert bundle.read_bytes() in body
+    assert summary.artifact_kind == "exchange_bundle"
+    assert len(calls) == 2
+    assert "uploadType=resumable" in calls[0].full_url
+    assert calls[0].headers["X-upload-content-length"] == str(bundle.stat().st_size)
+    assert calls[1].headers["Content-range"].startswith("bytes 0-")
+    assert calls[1].data == bundle.read_bytes()
 
+
+def test_resumable_upload_streams_multiple_chunks(tmp_path: Path, monkeypatch):
+    source = tmp_path / "large.zip"
+    source.write_bytes(b"x" * (512 * 1024 + 17))
+    token = GoogleDriveToken(
+        access_token="access",
+        refresh_token=None,
+        expires_at=time.time() + 3600,
+    )
+    calls = []
+
+    def fake_urlopen(request, timeout=0):
+        calls.append(request)
+        if len(calls) == 1:
+            import urllib.error
+            raise urllib.error.HTTPError(
+                request.full_url,
+                308,
+                "Resume Incomplete",
+                {"Range": "bytes=0-262143"},
+                None,
+            )
+        return _FakeResponse(json.dumps({"id": "done"}).encode("utf-8"))
+
+    monkeypatch.setattr("urllib.request.urlopen", fake_urlopen)
+    result = _upload_resumable_file(
+        source=source,
+        session_url="https://upload.example/session",
+        token=token,
+        chunk_size=256 * 1024,
+    )
+    assert result["id"] == "done"
+    assert len(calls) == 2
+    assert len(calls[0].data) == 256 * 1024
+    assert calls[1].headers["Content-range"].startswith("bytes 262144-")
+
+def test_upload_non_zip_fails_before_network_with_plain_error(tmp_path: Path, monkeypatch):
+    secret = _client_secret(tmp_path / "client.json")
+    token_path = _token(tmp_path / "token.json")
+    invalid = tmp_path / "not-a-bundle.zip"
+    invalid.write_text("esto no es un ZIP", encoding="utf-8")
+
+    def fail_urlopen(*_args, **_kwargs):
+        raise AssertionError("No debe intentar acceder a Google Drive")
+
+    monkeypatch.setattr("urllib.request.urlopen", fail_urlopen)
+    try:
+        upload_exchange_bundle_to_drive(
+            invalid,
+            client_secret_path=secret,
+            token_path=token_path,
+        )
+    except ValueError as exc:
+        message = str(exc)
+    else:
+        raise AssertionError("Se esperaba ValueError para un archivo que no es ZIP")
+
+    assert "no es un ZIP válido" in message
+
+
+def test_upload_team_copy_zip_is_supported_by_generic_drive_transport(
+    tmp_path: Path, monkeypatch
+):
+    secret = _client_secret(tmp_path / "client.json")
+    token_path = _token(tmp_path / "token.json")
+    team_copy = tmp_path / "copia-trabajo.zip"
+    manifest = {
+        "format": "archive-workbench-team-copy-v1",
+        "package_id": "team-1",
+        "project_id": "project-1",
+        "project_name": "Proyecto",
+        "base_checkpoint_label": "team_base_1",
+        "base_state_sha256": "a" * 64,
+        "content_profile": "review",
+        "included_content_groups": ["derivatives"],
+        "omitted_content_groups": ["originals"],
+    }
+    with zipfile.ZipFile(team_copy, "w") as archive:
+        archive.writestr("proyecto/TEAM_COPY_MANIFEST.json", json.dumps(manifest))
+        archive.writestr("proyecto/exchange/team_copy.json", json.dumps(manifest))
+        archive.writestr("proyecto/data/archive_workbench.sqlite3", b"sqlite")
+    responses = [
+        _FakeResponse(b"", headers={"Location": "https://upload.example/session"}),
+        _FakeResponse(
+            json.dumps(
+                {
+                    "id": "drive-team-1",
+                    "name": team_copy.name,
+                    "mimeType": "application/zip",
+                    "size": str(team_copy.stat().st_size),
+                    "appProperties": {
+                        "archive_workbench_kind": "team_copy",
+                        "archive_workbench_team_copy_id": "team-1",
+                        "archive_workbench_project_id": "project-1",
+                    },
+                }
+            ).encode("utf-8")
+        ),
+    ]
+    monkeypatch.setattr(
+        "urllib.request.urlopen", lambda request, timeout=0: responses.pop(0)
+    )
+    summary = upload_archive_workbench_zip_to_drive(
+        team_copy,
+        client_secret_path=secret,
+        token_path=token_path,
+    )
+    assert summary.artifact_kind == "team_copy"
+    assert summary.team_copy_id == "team-1"
+    assert summary.project_id == "project-1"
 
 def test_download_valid_bundle_is_atomic_and_verified(tmp_path: Path, monkeypatch):
     secret = _client_secret(tmp_path / "client.json")
@@ -222,6 +347,61 @@ def test_download_valid_bundle_is_atomic_and_verified(tmp_path: Path, monkeypatc
     assert summary.local_sha256 == digest
     assert not summary.destination.with_suffix(summary.destination.suffix + ".tmp").exists()
 
+
+
+def test_download_team_copy_from_drive_is_verified_without_applying_it(
+    tmp_path: Path, monkeypatch
+):
+    secret = _client_secret(tmp_path / "client.json")
+    token_path = _token(tmp_path / "token.json")
+    team_copy = tmp_path / "team.zip"
+    manifest = {
+        "format": "archive-workbench-team-copy-v1",
+        "package_id": "team-download-1",
+        "project_id": "project-1",
+        "project_name": "Proyecto",
+        "base_checkpoint_label": "team_base_1",
+        "base_state_sha256": "a" * 64,
+        "content_profile": "review",
+        "included_content_groups": ["derivatives"],
+        "omitted_content_groups": ["originals"],
+    }
+    with zipfile.ZipFile(team_copy, "w") as archive:
+        archive.writestr("proyecto/TEAM_COPY_MANIFEST.json", json.dumps(manifest))
+        archive.writestr("proyecto/exchange/team_copy.json", json.dumps(manifest))
+        archive.writestr("proyecto/data/archive_workbench.sqlite3", b"sqlite")
+    payload = team_copy.read_bytes()
+    digest = hashlib.sha256(payload).hexdigest()
+    responses = [
+        _FakeResponse(
+            json.dumps(
+                {
+                    "id": "drive-team-download",
+                    "name": "team.zip",
+                    "mimeType": "application/zip",
+                    "size": str(len(payload)),
+                    "appProperties": {
+                        "archive_workbench_kind": "team_copy",
+                        "archive_workbench_sha256": digest,
+                    },
+                }
+            ).encode("utf-8")
+        ),
+        _FakeResponse(payload),
+    ]
+    monkeypatch.setattr(
+        "urllib.request.urlopen", lambda request, timeout=0: responses.pop(0)
+    )
+    result = download_archive_workbench_zip_from_drive(
+        "drive-team-download",
+        project_root=tmp_path / "project",
+        client_secret_path=secret,
+        token_path=token_path,
+    )
+    assert result.artifact_kind == "team_copy"
+    assert result.team_copy_id == "team-download-1"
+    assert result.destination.is_file()
+    assert result.local_sha256 == digest
 
 def test_download_rejects_declared_sha_mismatch_and_removes_file(tmp_path: Path, monkeypatch):
     secret = _client_secret(tmp_path / "client.json")
@@ -322,14 +502,20 @@ def test_manifest_comparison_is_informative_and_does_not_apply_bundle(tmp_path: 
         engine.dispose()
 
 
-def test_exchange_ui_keeps_google_drive_secondary_and_persistent():
+def test_exchange_ui_integrates_google_drive_into_send_prepare_and_receive():
     source = (Path(__file__).parents[1] / "src" / "archive_workbench" / "review_app.py").read_text(
         encoding="utf-8"
     )
-    assert 'st.toggle(\n        "Google Drive (opcional)"' in source
-    assert 'with st.expander("Google Drive' not in source
-    assert "Drive sólo transporta paquetes ZIP" in source
-    assert "Simular evaluación del paquete descargado" in source
+    assert '"more": "Más opciones"' not in source
+    assert 'key="exchange_secondary_task"' not in source
+    assert "Google Drive se usa sólo para trasladar ZIP entre copias" not in source
+    assert "def _render_google_drive_receive" in source
+    assert "def _render_receive_zip_source" in source
+    assert "Subir a Google Drive" in source
+    assert "Desde Google Drive" in source
+    assert "Elegir ZIP en Google Drive" in source
+    assert "Revisar los cambios de este ZIP" in source
+    assert "Detalles de compatibilidad y archivo" in source
 
 
 def test_validation_generator_creates_review_app_compatible_projects(tmp_path: Path):
@@ -357,4 +543,4 @@ def test_validation_generator_creates_review_app_compatible_projects(tmp_path: P
         assert decisions.project_id == "int01-google-drive-validation"
         assert decisions.project_name == "Validación INT-01 Google Drive"
         assert database_path(root).is_file()
-        assert current_revision(root) == "0046_audiovisual_timeline_annotations"
+        assert current_revision(root) == "0047_authority_relation_profiles"

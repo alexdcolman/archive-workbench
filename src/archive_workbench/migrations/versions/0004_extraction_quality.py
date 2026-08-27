@@ -1,4 +1,4 @@
-"""Estado de calidad y revisión humana de las extracciones.
+"""Estado de calidad y revisión manual de las extracciones.
 
 Revision ID: 0004_extraction_quality
 Revises: 0003_extraction_objects

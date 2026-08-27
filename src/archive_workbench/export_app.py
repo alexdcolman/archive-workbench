@@ -1,8 +1,17 @@
 from __future__ import annotations
 
+from archive_workbench.ui_dates import DATE_INPUT_MIN, DATE_INPUT_MAX
+from archive_workbench.ui_help import TAB_HELP, TASK_HELP
 from datetime import date
+from pathlib import Path
 
-from archive_workbench.audiovisual import export_transcript_segments_bytes
+from archive_workbench.audiovisual import (
+    AudiovisualExportOptions,
+    audiovisual_media_rows,
+    default_audiovisual_export_filename,
+    preview_transcript_export,
+    run_audiovisual_export,
+)
 from archive_workbench.analysis_quality import (
     DEFAULT_AUTOMATIC_PAGE_REVIEW_STATUSES,
     analysis_quality_scope,
@@ -25,11 +34,11 @@ from archive_workbench.corpus_export import (
     set_export_profile_archived,
 )
 from archive_workbench.db import create_sqlite_engine, session_scope
-from archive_workbench.ui_navigation import rerun_view, tracked_tabs
+from archive_workbench.ui_navigation import mount_choice_help, rerun_view, section_heading, tracked_tabs
 from archive_workbench.visual_export import VisualExportOptions
 
 _AGGREGATION_LABELS = {
-    "object": "Un registro por objeto textual",
+    "object": "Un registro por bloque de texto",
     "page": "Un registro por página",
     "document_part": "Un registro por parte interna",
     "document": "Un registro por documento digital",
@@ -50,6 +59,21 @@ _OUTPUT_FORMAT_LABELS = {
     "jsonl": "JSONL · un registro por línea",
     "csv": "CSV · tabla",
     "visual_zip": "Exportar texto e imágenes (ZIP)",
+}
+
+_AUDIOVISUAL_TEXT_POLICY_LABELS = {
+    "corrected_fallback_original": "Texto corregido; usar la transcripción original si quedó vacío",
+    "corrected_only": "Solo texto corregido",
+    "original_only": "Solo transcripción original",
+}
+_AUDIOVISUAL_RUN_SCOPE_LABELS = {
+    "latest_completed_per_media": "Última transcripción completada de cada audio o video",
+    "all_completed": "Todas las transcripciones completadas",
+}
+_AUDIOVISUAL_REVIEW_LABELS = {
+    "unreviewed": "Sin revisar",
+    "reviewed": "Revisado",
+    "approved": "Aprobado",
 }
 
 _EXPORT_SELECTION_KEY = "export_profile_selected_id"
@@ -99,7 +123,7 @@ def _queue_profile_lifecycle_action(
         }
         verb = labels.get(action, "continuar")
         st.session_state[_EXPORT_LIFECYCLE_ERROR_KEY] = (
-            f"Marcá la confirmación antes de {verb} el perfil."
+            f"Marcá la confirmación antes de {verb} esta configuración de exportación."
         )
         return
 
@@ -129,7 +153,7 @@ def _process_pending_profile_lifecycle(
     action = str(pending.get("action") or "")
     profile_id = str(pending.get("profile_id") or "")
     if not profile_id:
-        st.error("No se pudo identificar el perfil solicitado.")
+        st.error("No se pudo identificar la configuración de exportación solicitada.")
         return
 
     try:
@@ -141,7 +165,7 @@ def _process_pending_profile_lifecycle(
                 archived=True,
                 actor=actor,
             )
-            notice = f"Perfil archivado: {name}"
+            notice = f"Configuración de exportación archivada: {name}"
             selected_id: str | None = None
         elif action == "restore":
             name = _set_profile_archived_action(
@@ -151,7 +175,7 @@ def _process_pending_profile_lifecycle(
                 archived=False,
                 actor=actor,
             )
-            notice = f"Perfil restaurado: {name}"
+            notice = f"Configuración de exportación restaurada: {name}"
             selected_id = profile_id
         elif action == "delete":
             name = _delete_profile_action(
@@ -160,12 +184,12 @@ def _process_pending_profile_lifecycle(
                 profile_id=profile_id,
             )
             notice = (
-                f"Perfil eliminado: {name}. "
+                f"Configuración de exportación eliminada: {name}. "
                 "Las exportaciones históricas se conservaron."
             )
             selected_id = None
         else:
-            st.error("La acción solicitada sobre el perfil no es válida.")
+            st.error("La acción solicitada sobre esta configuración de exportación no es válida.")
             return
     except (ValueError, RuntimeError, OSError) as exc:
         st.error(str(exc))
@@ -269,7 +293,7 @@ def _render_export_result(st, *, project_root) -> None:
         )
         if result.get("context_object_count"):
             st.caption(
-                f"El ZIP conserva {result['context_object_count']} objetos textuales de contexto "
+                f"El ZIP conserva {result['context_object_count']} bloques de texto de contexto "
                 "para las páginas y documentos incluidos."
             )
     else:
@@ -278,14 +302,17 @@ def _render_export_result(st, *, project_root) -> None:
             f"{result['row_count']} registros, {result['character_count']} caracteres, "
             f"formato {str(result['format']).upper()}."
         )
-    st.code(str(result["relative_path"]))
-    st.caption(f"SHA-256: `{result['sha256']}` · {result['byte_size']} bytes")
-
     output_path = project_root / str(result["relative_path"])
+    st.caption(f"Archivo creado: **{output_path.name}**")
+    with st.expander("Detalles técnicos de esta exportación", expanded=False):
+        st.write(f"Ruta dentro del proyecto: `{result['relative_path']}`")
+        st.write(f"Huella SHA-256: `{result['sha256']}`")
+        st.write(f"Tamaño del archivo: {result['byte_size']} bytes")
+
     download_col, dismiss_col = st.columns(2)
     if output_path.is_file():
         download_col.download_button(
-            "Descargar archivo",
+            "Descargar esta exportación",
             data=output_path.read_bytes(),
             file_name=output_path.name,
             mime=(
@@ -339,17 +366,45 @@ def _render_profile_editor(
         st.info(quality_scope_caption(default_page_statuses))
     else:
         st.warning(quality_scope_caption(default_page_statuses))
+    temporal_filter_open = st.toggle(
+        "Filtro temporal de entidades y relaciones",
+        value=False,
+        key="export_temporal_filter_open",
+    )
+    separator_options_open = st.toggle(
+        "Cómo separar páginas y bloques de texto en el archivo exportado",
+        value=False,
+        key="export_separator_options_open",
+    )
+    temporal_enabled = default_temporal_enabled
+    temporal_start = (
+        selected.temporal_start
+        if selected and selected.temporal_start
+        else date.today()
+    )
+    temporal_end = (
+        selected.temporal_end
+        if selected and selected.temporal_end
+        else date.today()
+    )
+    temporal_include_undated = (
+        bool(selected.temporal_include_undated) if selected else False
+    )
+    object_separator = selected.object_separator if selected else "\n\n"
+    page_separator = selected.page_separator if selected else "\n\n"
+    include_page_markers = bool(selected.include_page_markers) if selected else False
+
     form_key = f"corpus_export_profile_form_{selected.id if selected else 'new'}"
     with st.form(form_key, enter_to_submit=False):
-        name = st.text_input("Nombre del perfil", value=selected.name if selected else "")
+        name = st.text_input("Nombre de esta configuración de exportación", value=selected.name if selected else "")
         description = st.text_area(
-            "Descripción opcional",
+            "Descripción opcional de esta configuración",
             value=selected.description or "" if selected else "",
         )
         left, right = st.columns(2)
         with left:
             aggregation = st.selectbox(
-                "Agrupar",
+                "Cómo agrupar los textos en el archivo exportado",
                 options=list(AGGREGATION_LEVELS),
                 index=(
                     list(AGGREGATION_LEVELS).index(selected.aggregation_level)
@@ -359,7 +414,7 @@ def _render_profile_editor(
                 format_func=lambda value: _AGGREGATION_LABELS[value],
             )
             text_policy = st.selectbox(
-                "Texto",
+                "Qué versión del texto querés exportar",
                 options=list(TEXT_POLICIES),
                 index=(
                     list(TEXT_POLICIES).index(selected.text_policy) if selected else 0
@@ -367,7 +422,7 @@ def _render_profile_editor(
                 format_func=lambda value: _TEXT_POLICY_LABELS[value],
             )
             output_format = st.selectbox(
-                "Formato predeterminado",
+                "Formato de archivo predeterminado",
                 options=list(OUTPUT_FORMATS),
                 index=(
                     list(OUTPUT_FORMATS).index(selected.output_format) if selected else 0
@@ -376,19 +431,19 @@ def _render_profile_editor(
             )
         with right:
             include_types = st.multiselect(
-                "Tipos de objeto; vacío = todos",
+                "Tipos de bloques de texto que querés exportar",
                 options=object_types,
                 default=[value for value in default_types if value in object_types],
                 format_func=lambda value: object_type_labels.get(value, value),
             )
             include_statuses = st.multiselect(
-                "Estado de revisión del objeto; vacío = todos",
+                "Estados de revisión de los bloques de texto que querés exportar",
                 options=list(REVIEW_STATUSES),
                 default=default_object_statuses,
                 format_func=lambda value: _REVIEW_LABELS[value],
             )
             include_page_statuses = st.multiselect(
-                "Estado de revisión de la página; vacío = todos",
+                "Estados de revisión de las páginas que querés exportar",
                 options=list(REVIEW_STATUSES),
                 default=default_page_statuses,
                 format_func=lambda value: _REVIEW_LABELS[value],
@@ -398,7 +453,7 @@ def _render_profile_editor(
                 ),
             )
         broader_quality_scope_confirmed = st.checkbox(
-            "Confirmo que deseo incluir páginas no aprobadas en este análisis automático",
+            "Confirmo que esta exportación puede incluir páginas que todavía no fueron aprobadas",
             value=False,
             help=(
                 "Solo es necesaria cuando el alcance de páginas no es exactamente "
@@ -407,7 +462,7 @@ def _render_profile_editor(
             ),
         )
         quality_scope_reason = st.text_area(
-            "Fundamento del alcance ampliado",
+            "Por qué esta exportación debe incluir páginas todavía no aprobadas",
             value="",
             placeholder=(
                 "Explicá por qué este análisis debe incluir páginas que todavía no están aprobadas."
@@ -418,52 +473,50 @@ def _render_profile_editor(
             ),
             height=90,
         )
-        with st.expander("Filtro temporal de entidades y relaciones"):
-            temporal_enabled = st.checkbox(
-                "Filtrar registros por temporalidad vinculada",
-                value=default_temporal_enabled,
-                help=(
-                    "Incluye objetos que mencionan una entidad o participan en una relación "
-                    "cuyo período se superpone con el rango indicado."
-                ),
-            )
-            temporal_cols = st.columns(2)
-            temporal_start = temporal_cols[0].date_input(
-                "Desde",
-                value=(
-                    selected.temporal_start
-                    if selected and selected.temporal_start
-                    else date.today()
-                ),
-                key=f"export_temporal_start_{selected.id if selected else 'new'}",
-            )
-            temporal_end = temporal_cols[1].date_input(
-                "Hasta",
-                value=(
-                    selected.temporal_end
-                    if selected and selected.temporal_end
-                    else date.today()
-                ),
-                key=f"export_temporal_end_{selected.id if selected else 'new'}",
-            )
-            temporal_include_undated = st.checkbox(
-                "Incluir registros vinculados solo con entidades o relaciones sin fecha",
-                value=bool(selected.temporal_include_undated) if selected else False,
-            )
-        with st.expander("Separadores y marcas"):
-            object_separator = st.text_input(
-                "Separador entre objetos de una misma página",
-                value=selected.object_separator if selected else "\n\n",
-            )
-            page_separator = st.text_input(
-                "Separador entre páginas",
-                value=selected.page_separator if selected else "\n\n",
-            )
-            include_page_markers = st.checkbox(
-                "Agregar marcas [Página N]",
-                value=bool(selected.include_page_markers) if selected else False,
-            )
-        submitted = st.form_submit_button("Guardar perfil", type="primary")
+        if temporal_filter_open:
+            with st.container(border=True):
+                temporal_enabled = st.checkbox(
+                    "Incluir sólo textos vinculados con entidades o relaciones de un período",
+                    value=default_temporal_enabled,
+                    help=(
+                        "Incluye bloques de texto que mencionan una entidad o participan en una relación "
+                        "cuyo período se superpone con el rango indicado."
+                    ),
+                )
+                temporal_cols = st.columns(2)
+                temporal_start = temporal_cols[0].date_input(
+                    "Desde",
+                    value=temporal_start,
+                    min_value=DATE_INPUT_MIN,
+                    max_value=DATE_INPUT_MAX,
+                    key=f"export_temporal_start_{selected.id if selected else 'new'}",
+                )
+                temporal_end = temporal_cols[1].date_input(
+                    "Hasta",
+                    value=temporal_end,
+                    min_value=DATE_INPUT_MIN,
+                    max_value=DATE_INPUT_MAX,
+                    key=f"export_temporal_end_{selected.id if selected else 'new'}",
+                )
+                temporal_include_undated = st.checkbox(
+                    "Incluir registros vinculados solo con entidades o relaciones sin fecha",
+                    value=temporal_include_undated,
+                )
+        if separator_options_open:
+            with st.container(border=True):
+                object_separator = st.text_input(
+                    "Texto que separará los bloques de una misma página",
+                    value=object_separator,
+                )
+                page_separator = st.text_input(
+                    "Separador entre páginas",
+                    value=page_separator,
+                )
+                include_page_markers = st.checkbox(
+                    "Agregar marcas [Página N]",
+                    value=include_page_markers,
+                )
+        submitted = st.form_submit_button("Guardar esta configuración de exportación", type="primary")
 
     if submitted:
         try:
@@ -496,7 +549,7 @@ def _render_profile_editor(
         except (ValueError, RuntimeError, OSError, UnicodeDecodeError) as exc:
             st.error(str(exc))
         else:
-            st.session_state["export_notice"] = "Perfil guardado"
+            st.session_state["export_notice"] = "Configuración de exportación guardada"
             _request_profile_view_rebuild(st, selected_id=saved_id)
 
     if selected is not None:
@@ -508,11 +561,11 @@ def _render_profile_editor(
             enter_to_submit=False,
         ):
             st.checkbox(
-                "Confirmo que deseo archivar este perfil",
+                "Confirmo que deseo archivar esta configuración de exportación",
                 key=confirm_key,
             )
             st.form_submit_button(
-                "Archivar perfil",
+                "Archivar esta configuración de exportación",
                 on_click=_queue_profile_lifecycle_action,
                 args=(st,),
                 kwargs={
@@ -527,10 +580,10 @@ def _render_profile_editor(
 def _render_profile_dependencies(st, *, profile_id: str, runs) -> None:
     dependent = [row for row in runs if row.profile_id == profile_id]
     st.caption(
-        f"Exportaciones históricas vinculadas a este perfil: {len(dependent)}"
+        f"Archivos exportados anteriormente con esta configuración: {len(dependent)}"
     )
     if dependent:
-        with st.expander("Ver exportaciones vinculadas"):
+        with st.expander("Ver archivos exportados con esta configuración"):
             for row in dependent:
                 st.write(
                     f"**{row.output_format.upper()}** · {row.row_count} registros · "
@@ -549,8 +602,7 @@ def _render_archived_profile(
     actor: str,
 ) -> None:
     st.warning(
-        "Este perfil está archivado. No puede editarse ni ejecutar nuevas exportaciones "
-        "hasta restaurarlo."
+        "Esta configuración de exportación está archivada. No puede editarse ni usarse para crear nuevos archivos hasta que la restaures."
     )
     st.caption(
         f"Archivado por {selected.archived_by or '-'} · "
@@ -563,11 +615,11 @@ def _render_archived_profile(
         enter_to_submit=False,
     ):
         st.checkbox(
-            "Confirmo que deseo restaurar este perfil",
+            "Confirmo que deseo restaurar esta configuración de exportación",
             key=restore_confirm_key,
         )
         st.form_submit_button(
-            "Restaurar perfil",
+            "Restaurar esta configuración de exportación",
             on_click=_queue_profile_lifecycle_action,
             args=(st,),
             kwargs={
@@ -579,8 +631,7 @@ def _render_archived_profile(
 
     st.divider()
     st.caption(
-        "Eliminar el perfil no borra las exportaciones históricas: cada ejecución "
-        "conserva el nombre, la configuración completa y los hashes registrados."
+        "Eliminar esta configuración no borra los archivos exportados anteriormente: cada exportación conserva el nombre de la configuración, sus opciones y la huella registrada."
     )
     delete_confirm_key = f"export_confirm_delete_{selected.id}"
     with st.form(
@@ -588,11 +639,11 @@ def _render_archived_profile(
         enter_to_submit=False,
     ):
         st.checkbox(
-            "Confirmo la eliminación definitiva de este perfil archivado",
+            "Confirmo la eliminación definitiva de esta configuración archivada",
             key=delete_confirm_key,
         )
         st.form_submit_button(
-            "Eliminar perfil definitivamente",
+            "Eliminar definitivamente esta configuración de exportación",
             on_click=_queue_profile_lifecycle_action,
             args=(st,),
             kwargs={
@@ -601,6 +652,196 @@ def _render_archived_profile(
                 "confirm_key": delete_confirm_key,
             },
         )
+
+
+def _render_audiovisual_export_view(
+    st,
+    *,
+    project_root,
+    db_path,
+    project_id: str,
+    actor: str,
+) -> None:
+    _render_export_result(st, project_root=project_root)
+    engine = create_sqlite_engine(db_path)
+    try:
+        with session_scope(engine) as session:
+            media_rows = audiovisual_media_rows(
+                session, project_root=project_root, project_id=project_id
+            )
+            all_runs = export_run_rows(session, project_id=project_id)
+    finally:
+        engine.dispose()
+    audiovisual_runs = [
+        row
+        for row in all_runs
+        if row.profile_snapshot.get("material_type") == "audiovisual_transcript_segments"
+    ]
+    media_by_id = {row.media_id: row for row in media_rows}
+    media_options = list(media_by_id)
+
+    configure_tab, preview_tab, run_tab, history_tab = tracked_tabs(
+        st,
+        [
+            "Configurar qué exportar",
+            "Revisar textos que se exportarán",
+            "Crear archivo de exportación",
+            "Historial de exportaciones",
+        ],
+        key="export_audiovisual_tabs",
+        help_by_label=TAB_HELP["export_tabs"],
+    )
+
+    with configure_tab:
+        if not media_rows:
+            st.info("Todavía no hay audios o videos con transcripciones disponibles para exportar.")
+        selected_media = st.multiselect(
+            "Audios y videos cuyas transcripciones querés exportar",
+            options=media_options,
+            default=media_options,
+            format_func=lambda value: (
+                media_by_id[value].title
+                or media_by_id[value].original_filename
+                or media_by_id[value].source_key
+            ),
+            key="export_av_media_ids",
+        )
+        run_scope = st.selectbox(
+            "Qué versiones de las transcripciones querés incluir",
+            options=list(_AUDIOVISUAL_RUN_SCOPE_LABELS),
+            format_func=lambda value: _AUDIOVISUAL_RUN_SCOPE_LABELS[value],
+            key="export_av_run_scope",
+        )
+        text_policy = st.selectbox(
+            "Qué versión del texto de cada segmento querés exportar",
+            options=list(_AUDIOVISUAL_TEXT_POLICY_LABELS),
+            format_func=lambda value: _AUDIOVISUAL_TEXT_POLICY_LABELS[value],
+            key="export_av_text_policy",
+        )
+        include_statuses = st.multiselect(
+            "Estado de revisión de los segmentos que querés incluir",
+            options=list(_AUDIOVISUAL_REVIEW_LABELS),
+            default=list(_AUDIOVISUAL_REVIEW_LABELS),
+            format_func=lambda value: _AUDIOVISUAL_REVIEW_LABELS[value],
+            key="export_av_review_statuses",
+        )
+        include_annotations = st.checkbox(
+            "Incluir marcas temporales de hablantes y anotaciones",
+            value=True,
+            key="export_av_include_annotations",
+        )
+
+    options = AudiovisualExportOptions(
+        text_policy=text_policy,
+        include_review_statuses=tuple(include_statuses),
+        run_scope=run_scope,
+        media_ids=tuple(selected_media),
+        include_timeline_annotations=include_annotations,
+    )
+
+    with preview_tab:
+        preview = None
+        try:
+            engine = create_sqlite_engine(db_path)
+            try:
+                with session_scope(engine) as session:
+                    preview = preview_transcript_export(
+                        session, project_id=project_id, options=options, limit=20
+                    )
+            finally:
+                engine.dispose()
+        except (ValueError, RuntimeError, OSError) as exc:
+            st.warning(str(exc))
+        if preview is not None:
+            cols = st.columns(2)
+            cols[0].metric("Segmentos de transcripción que se exportarán", preview.total_records)
+            cols[1].metric("Caracteres de transcripción que se exportarán", preview.total_characters)
+            if not preview.records:
+                st.warning("La configuración actual no incluye ningún segmento de transcripción.")
+            for row in preview.records:
+                with st.container(border=True):
+                    title = row.get("media_title") or row.get("original_filename") or row.get("source_key")
+                    st.write(f"**{title}**")
+                    st.caption(
+                        f"{row['start_time']:.3f}–{row['end_time']:.3f} s · "
+                        f"{_AUDIOVISUAL_REVIEW_LABELS.get(str(row['review_status']), row['review_status'])} · "
+                        f"{row['text_source']}"
+                    )
+                    text = str(row.get("text") or "")
+                    st.text(text[:3000] + ("…" if len(text) > 3000 else ""))
+                    with st.expander("Detalles técnicos del segmento", expanded=False):
+                        st.code(str(row["segment_id"]), language=None)
+
+    with run_tab:
+        av_format = st.selectbox(
+            "Qué archivo querés crear",
+            options=("jsonl", "csv"),
+            format_func=lambda value: _OUTPUT_FORMAT_LABELS[value],
+            key="export_av_run_format",
+        )
+        suggested = default_audiovisual_export_filename(av_format)
+        output_relative = st.text_input(
+            "Nombre o ruta del archivo dentro del proyecto",
+            value=suggested,
+            help="Se guarda dentro de la carpeta del proyecto, normalmente en exports/.",
+            key=f"export_av_run_path_{av_format}",
+        )
+        if st.button(
+            "Crear archivo con las transcripciones seleccionadas",
+            type="primary",
+            key="export_av_create_file",
+        ):
+            try:
+                engine = create_sqlite_engine(db_path)
+                try:
+                    with session_scope(engine) as session:
+                        result = run_audiovisual_export(
+                            session,
+                            project_root=project_root,
+                            project_id=project_id,
+                            options=options,
+                            output_relative_path=output_relative,
+                            output_format=av_format,
+                            created_by=actor or "local_user",
+                        )
+                finally:
+                    engine.dispose()
+            except (ValueError, RuntimeError, OSError) as exc:
+                st.error(str(exc))
+            else:
+                st.session_state["export_last_run"] = {
+                    "run_id": result.run_id,
+                    "relative_path": str(result.output_path.relative_to(project_root)),
+                    "format": av_format,
+                    "row_count": result.row_count,
+                    "character_count": result.character_count,
+                    "byte_size": result.byte_size,
+                    "sha256": result.output_sha256,
+                }
+                rerun_view(st)
+
+    with history_tab:
+        if not audiovisual_runs:
+            st.info("Todavía no se creó ningún archivo de transcripciones para este proyecto.")
+        for row in audiovisual_runs:
+            with st.container(border=True):
+                st.write(
+                    f"**Transcripciones de audio y video** · "
+                    f"{_OUTPUT_FORMAT_LABELS.get(row.output_format, row.output_format.upper())}"
+                )
+                st.caption(
+                    f"{Path(row.output_relative_path).name} · "
+                    f"{row.row_count} segmentos · {row.character_count} caracteres · "
+                    f"{row.created_by} · {row.created_at}"
+                )
+                with st.expander("Detalles técnicos de la exportación", expanded=False):
+                    options_snapshot = dict(row.profile_snapshot.get("options") or {})
+                    st.write(f"Ruta dentro del proyecto: `{row.output_relative_path}`")
+                    st.write(f"Tamaño del archivo: {row.byte_size} bytes")
+                    st.write(f"Política de texto: `{options_snapshot.get('text_policy', '-')}`")
+                    st.write(f"Alcance de transcripciones: `{options_snapshot.get('run_scope', '-')}`")
+                    st.write(f"Huella del archivo: `{row.output_sha256}`")
+                    st.write(f"Huella del estado del corpus: `{row.corpus_state_sha256}`")
 
 
 def render_export_view(
@@ -619,9 +860,9 @@ def render_export_view(
         project_id=project_id,
         actor=actor,
     )
-    st.header("Exportar corpus")
+    section_heading(st, "Exportar corpus")
     export_surface = st.radio(
-        "Contenido",
+        "Tipo de material que querés exportar",
         options=("documentos", "audiovisual"),
         format_func=lambda value: (
             "Documentos revisados" if value == "documentos" else "Segmentos de audio y video"
@@ -629,60 +870,38 @@ def render_export_view(
         horizontal=True,
         key="export_surface",
     )
-    if export_surface == "audiovisual":
-        st.caption(
-            "Exportá la transcripción segmentada vigente con tiempos, revisión, backend e identidad verificable del original."
-        )
-        av_format = st.selectbox(
-            "Formato",
-            options=("jsonl", "csv"),
-            format_func=lambda value: _OUTPUT_FORMAT_LABELS[value],
-            key="export_av_format",
-        )
-        av_engine = create_sqlite_engine(db_path)
-        try:
-            with session_scope(av_engine) as session:
-                av_payload, av_rows = export_transcript_segments_bytes(
-                    session, project_id=project_id, output_format=av_format
-                )
-        finally:
-            av_engine.dispose()
-        st.metric("Segmentos", av_rows)
-        st.download_button(
-            "Descargar segmentos audiovisuales",
-            data=av_payload,
-            file_name=f"transcripciones_audiovisuales.{av_format}",
-            mime="application/x-ndjson" if av_format == "jsonl" else "text/csv",
-            type="primary",
-            key=f"export_av_download_{av_format}",
-        )
-        with st.expander("Campos incluidos", expanded=False):
-            st.write(
-                "Cada fila conserva source_key, objeto digital, nombre y SHA-256 del original, "
-                "corrida/backend/modelo/dispositivo, segmento, tiempos, texto, estado y revisión."
-            )
-        return
-    st.caption(
-        "Los perfiles definen qué contenido entra, cómo se agrupa y qué tipo de archivo se crea. "
-        "Cada exportación conserva la configuración exacta y la huella verificable del corpus."
+    export_surface_label = (
+        "Documentos revisados" if export_surface == "documentos" else "Segmentos de audio y video"
     )
-    with st.expander("Cómo preparar una exportación", expanded=False):
-        st.write(
-            "Primero configurá y guardá un perfil. Después revisá una muestra del contenido y, "
-            "cuando sea correcto, creá el archivo. El historial conserva las exportaciones "
-            "anteriores aunque el perfil se archive o se elimine."
+    mount_choice_help(
+        st,
+        key="export_surface",
+        label=export_surface_label,
+        help_text=TASK_HELP["export_surface"][export_surface_label],
+    )
+    if export_surface == "audiovisual":
+        _render_audiovisual_export_view(
+            st,
+            project_root=project_root,
+            db_path=db_path,
+            project_id=project_id,
+            actor=actor,
         )
+        return
 
     notice = st.session_state.pop("export_notice", None)
     if notice:
         st.success(str(notice))
     _render_export_result(st, project_root=project_root)
 
-    show_archived = st.checkbox(
-        "Mostrar perfiles archivados",
-        value=False,
-        key="export_show_archived",
-    )
+    profile_col, archived_col = st.columns([4, 1.3])
+    with archived_col:
+        show_archived = st.checkbox(
+            "Archivadas",
+            value=False,
+            key="export_show_archived",
+            help="Mostrar también configuraciones de exportación archivadas.",
+        )
     engine = create_sqlite_engine(db_path)
     try:
         with session_scope(engine) as session:
@@ -691,7 +910,11 @@ def render_export_view(
                 project_id=project_id,
                 include_archived=show_archived,
             )
-            runs = export_run_rows(session, project_id=project_id)
+            runs = [
+                row
+                for row in export_run_rows(session, project_id=project_id)
+                if row.profile_snapshot.get("material_type") != "audiovisual_transcript_segments"
+            ]
     finally:
         engine.dispose()
 
@@ -703,28 +926,31 @@ def render_export_view(
         st.session_state[_EXPORT_SELECTION_KEY] = None
 
     selector_epoch = int(st.session_state.get(_EXPORT_SELECTOR_EPOCH_KEY, 0))
-    selected_id = st.selectbox(
-        "Perfil de exportación",
-        options=options,
-        index=options.index(current_selection),
-        format_func=lambda value: (
-            "Crear un perfil nuevo"
-            if value is None
-            else (
-                f"[Archivado] {profile_by_id[value].name}"
-                if profile_by_id[value].lifecycle_status == "archived"
-                else profile_by_id[value].name
-            )
-        ),
-        key=f"export_profile_selector_{selector_epoch}",
-    )
+    with profile_col:
+        selected_id = st.selectbox(
+            "Configuración de exportación",
+            options=options,
+            index=options.index(current_selection),
+            format_func=lambda value: (
+                "Crear una configuración de exportación nueva"
+                if value is None
+                else (
+                    f"[Archivado] {profile_by_id[value].name}"
+                    if profile_by_id[value].lifecycle_status == "archived"
+                    else profile_by_id[value].name
+                )
+            ),
+            key=f"export_profile_selector_{selector_epoch}",
+            label_visibility="collapsed",
+        )
     st.session_state[_EXPORT_SELECTION_KEY] = selected_id
     selected = profile_by_id.get(selected_id)
 
     configure_tab, preview_tab, run_tab, history_tab = tracked_tabs(
         st,
-        ["Configurar perfil", "Revisar contenido", "Crear archivo", "Historial"],
+        ["Configurar qué exportar", "Revisar textos que se exportarán", "Crear archivo de exportación", "Historial de exportaciones"],
         key="export_tabs",
+        help_by_label=TAB_HELP["export_tabs"],
     )
     with configure_tab:
         if selected is not None and selected.lifecycle_status == "archived":
@@ -750,9 +976,9 @@ def render_export_view(
 
     with preview_tab:
         if selected is None:
-            st.info("Guardá o seleccioná un perfil para generar la vista previa.")
+            st.info("Guardá o seleccioná una configuración de exportación para ver una muestra de los textos que incluirá.")
         elif selected.lifecycle_status == "archived":
-            st.info("Restaurá el perfil para generar una vista previa.")
+            st.info("Restaurá esta configuración de exportación para volver a generar una muestra de textos.")
         else:
             preview = None
             engine = create_sqlite_engine(db_path)
@@ -760,7 +986,7 @@ def render_export_view(
                 with session_scope(engine) as session:
                     profile = session.get(type(selected), selected.id)
                     if profile is None:
-                        raise ValueError("El perfil ya no existe")
+                        raise ValueError("La configuración de exportación ya no existe")
                     preview = preview_export(
                         session,
                         project_id=project_id,
@@ -773,13 +999,12 @@ def render_export_view(
                 engine.dispose()
             if preview is None:
                 st.info(
-                    "La vista previa quedará disponible después de guardar el perfil "
-                    "con la política de calidad vigente."
+                    "La muestra de textos quedará disponible después de guardar la configuración de exportación con los estados de revisión elegidos."
                 )
             else:
                 cols = st.columns(2)
-                cols[0].metric("Registros", preview.total_records)
-                cols[1].metric("Caracteres", preview.total_characters)
+                cols[0].metric("Bloques de texto que se exportarán", preview.total_records)
+                cols[1].metric("Caracteres de texto que se exportarán", preview.total_characters)
                 if selected.temporal_start or selected.temporal_end:
                     st.caption(
                         "Filtro temporal: "
@@ -787,13 +1012,13 @@ def render_export_view(
                         f"{selected.temporal_end.isoformat() if selected.temporal_end else 'sin final'}"
                     )
                 if not preview.records:
-                    st.warning("El perfil no selecciona ningún texto.")
+                    st.warning("La configuración de exportación actual no incluye ningún texto.")
                 for row in preview.records:
                     with st.container(border=True):
                         st.write(f"**{row.titulo}**")
                         st.caption(
                             f"{row.aggregation_level} · páginas {row.page_start}–{row.page_end} · "
-                            f"{row.object_count} objetos"
+                            f"{row.object_count} bloques de texto"
                         )
                         st.text(row.texto[:3000] + ("…" if len(row.texto) > 3000 else ""))
                         with st.expander("Detalles técnicos del registro", expanded=False):
@@ -801,9 +1026,9 @@ def render_export_view(
 
     with run_tab:
         if selected is None:
-            st.info("Seleccioná un perfil guardado.")
+            st.info("Seleccioná una configuración de exportación guardada.")
         elif selected.lifecycle_status == "archived":
-            st.info("Restaurá el perfil antes de crear una nueva exportación.")
+            st.info("Restaurá esta configuración de exportación antes de crear un archivo nuevo.")
         else:
             format_value = st.selectbox(
                 "Qué archivo querés crear",
@@ -830,17 +1055,17 @@ def render_export_view(
                 if customize_visual:
                     st.write("**Imágenes incluidas**")
                     include_pages = st.checkbox(
-                        "Páginas completas",
+                        "Incluir imágenes de páginas completas",
                         value=True,
                         key=f"export_visual_pages_{selected.id}",
                     )
                     include_regions = st.checkbox(
-                        "Recortes regionales",
+                        "Recortes de zonas trabajadas por separado",
                         value=True,
                         key=f"export_visual_regions_{selected.id}",
                     )
                     include_figures = st.checkbox(
-                        "Figuras",
+                        "Incluir imágenes de figuras",
                         value=True,
                         key=f"export_visual_figures_{selected.id}",
                     )
@@ -851,26 +1076,25 @@ def render_export_view(
                     include_context=True,
                 )
                 st.caption(
-                    "También se incluye, como contexto, el texto de otros objetos de las páginas y "
-                    "documentos seleccionados. Ese texto queda separado del contenido principal."
+                    "También puede incluirse como contexto el texto de otros bloques de las páginas y documentos seleccionados. Ese texto se identifica por separado para no confundirlo con el contenido principal exportado."
                 )
             suggested = default_export_filename(selected.name, format_value)
             output_relative = st.text_input(
                 "Nombre o ruta del archivo dentro del proyecto",
                 value=suggested,
-                help="Se guarda dentro de project_data. Podés usar una subcarpeta, por ejemplo exports/corpus.jsonl.",
+                help="Se guarda dentro de la carpeta del proyecto. Podés usar una subcarpeta, por ejemplo exports/corpus.jsonl.",
                 key=f"export_run_path_{selected.id}_{format_value}",
             )
-            if st.button("Crear exportación", type="primary"):
+            if st.button("Crear archivo con los textos seleccionados", type="primary"):
                 try:
                     engine = create_sqlite_engine(db_path)
                     try:
                         with session_scope(engine) as session:
                             profile = session.get(type(selected), selected.id)
                             if profile is None:
-                                raise ValueError("El perfil ya no existe")
+                                raise ValueError("La configuración de exportación ya no existe")
                             if profile.lifecycle_status != "active":
-                                raise ValueError("El perfil está archivado")
+                                raise ValueError("La configuración de exportación está archivada")
                             result = run_export(
                                 session,
                                 project_root=project_root,
@@ -903,18 +1127,20 @@ def render_export_view(
 
     with history_tab:
         if not runs:
-            st.info("Todavía no hay exportaciones registradas.")
+            st.info("Todavía no se creó ningún archivo de exportación para este proyecto.")
         for row in runs:
             with st.container(border=True):
                 st.write(
                     f"**{row.profile_name}** · "
                     f"{_OUTPUT_FORMAT_LABELS.get(row.output_format, row.output_format.upper())}"
                 )
-                st.code(row.output_relative_path)
                 st.caption(
+                    f"{Path(row.output_relative_path).name} · "
                     f"{row.row_count} registros · {row.character_count} caracteres · "
-                    f"{row.byte_size} bytes · {row.created_by} · {row.created_at}"
+                    f"{row.created_by} · {row.created_at}"
                 )
                 with st.expander("Detalles técnicos de la exportación", expanded=False):
+                    st.write(f"Ruta dentro del proyecto: `{row.output_relative_path}`")
+                    st.write(f"Tamaño del archivo: {row.byte_size} bytes")
                     st.write(f"Huella del archivo: `{row.output_sha256}`")
                     st.write(f"Huella del estado del corpus: `{row.corpus_state_sha256}`")

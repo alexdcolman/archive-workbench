@@ -17,6 +17,7 @@ from archive_workbench.db.models import (
 )
 from archive_workbench.identity import new_id
 from archive_workbench.graph import (
+    GRAPH_EDGE_TYPES,
     GraphEdge,
     GraphNode,
     GraphView,
@@ -27,9 +28,16 @@ from archive_workbench.graph import (
     graph_parallel_edge_metadata,
     graph_payload,
 )
+from archive_workbench.graph_app import _DEFAULT_EDGE_TYPES
 from archive_workbench.relations import create_entity_relation
 from tests.test_search import _seed_search_project
 
+
+
+def test_graph_structural_layers_are_opt_in_by_default() -> None:
+    assert "hierarchy" not in _DEFAULT_EDGE_TYPES
+    assert "document" not in _DEFAULT_EDGE_TYPES
+    assert set(_DEFAULT_EDGE_TYPES) == set(GRAPH_EDGE_TYPES) - {"hierarchy", "document"}
 
 def _seed_graph(root: Path) -> tuple[str, str, str]:
     object_id, _page_id = _seed_search_project(root)
@@ -510,12 +518,42 @@ def test_graph_canvas_uses_curved_paths_arrows_and_automatic_label_displacement(
     assert "targetNodeRadius" in canvas._COMPONENT_JS
 
 
+def test_graph_canvas_supports_local_fullscreen_legend_and_quieter_structural_labels() -> None:
+    import archive_workbench.graph_canvas as canvas
+
+    assert 'data-action="fullscreen"' in canvas._COMPONENT_HTML
+    assert 'data-action="legend"' in canvas._COMPONENT_HTML
+    assert 'Abrir el grafo en pantalla completa' in canvas._COMPONENT_HTML
+    assert 'Unidad del catálogo' in canvas._COMPONENT_HTML
+    assert 'Estructura archivística' in canvas._COMPONENT_HTML
+    assert '<div class="awg-root">' in canvas._COMPONENT_HTML
+    assert "const root = parentElement.querySelector('.awg-root')" in canvas._COMPONENT_JS
+    assert "root.classList.toggle('awg-detail-labels'" in canvas._COMPONENT_JS
+    assert "parentElement.classList" not in canvas._COMPONENT_JS
+    assert "root.requestFullscreen" in canvas._COMPONENT_JS
+    assert "parentElement.requestFullscreen" not in canvas._COMPONENT_JS
+    assert 'document.exitFullscreen' in canvas._COMPONENT_JS
+    assert "legendButton.onclick" in canvas._COMPONENT_JS
+    assert "'contiene'" in canvas._COMPONENT_JS
+    assert "'contiene parte'" in canvas._COMPONENT_JS
+    assert "'es parte de'" in canvas._COMPONENT_JS
+    assert "'forma parte de'" in canvas._COMPONENT_JS
+    assert "repetitiveStructuralLabels.has(normalizedEdgeLabel)" in canvas._COMPONENT_JS
+    assert "['hierarchy', 'document', 'part'].includes(edge.edge_type)" in canvas._COMPONENT_JS
+    assert "state.scale >= 1.45" in canvas._COMPONENT_JS
+    assert '.awg-edge-label.repetitive { opacity: 0; }' in canvas._COMPONENT_CSS
+    assert '.awg-edge-group:hover .awg-edge-label.repetitive' in canvas._COMPONENT_CSS
+
+    local_controls = canvas._COMPONENT_JS[canvas._COMPONENT_JS.index('const syncLegend'):]
+    assert "setTriggerValue(" not in local_controls
+
+
 def test_graph_distance_filter_is_never_disabled_after_submit() -> None:
     source = (
         Path(__file__).parents[1] / "src" / "archive_workbench" / "graph_app.py"
     ).read_text(encoding="utf-8")
     block = source[
-        source.index('"Distancia desde el centro"') :
+        source.index('"Cantidad de relaciones a mostrar desde el elemento central"') :
         source.index("temporal_enabled = st.checkbox")
     ]
     assert "disabled=" not in block

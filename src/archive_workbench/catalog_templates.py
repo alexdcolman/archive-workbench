@@ -80,6 +80,37 @@ _BASE_COLUMNS: tuple[tuple[str, str, str], ...] = (
     ),
 )
 
+_BASE_EXAMPLES = {
+    "local_id": "archivo_principal",
+    "unit_id": "Dejar vacío al crear una unidad nueva",
+    "parent_local_id": "archivo_principal",
+    "parent_unit_id": "Dejar vacío si el padre también está en esta plantilla",
+    "action": "crear",
+    "level_key": "fondo",
+    "reference_code": "AR-APM-001",
+    "title": "Fondo Servicio de Informaciones",
+    "registration_status": "incomplete",
+    "completion_confirmed": "no",
+    "source_url": "https://ejemplo.org/catalogo",
+    "source_note": "Título transcripto del inventario institucional",
+}
+
+
+def _column_example(key: str, decisions: ProjectDecisions) -> str:
+    if key in _BASE_EXAMPLES:
+        return _BASE_EXAMPLES[key]
+    if key.startswith("field:"):
+        field_key = key.split(":", 1)[1]
+        definition = next((item for item in decisions.descriptive_fields if item.key == field_key), None)
+        if definition and definition.examples:
+            return "; ".join(definition.examples)
+        return "Ejemplo no configurado para este proyecto"
+    if key.startswith("field_state:"):
+        return "provided"
+    if key.startswith("field_note:"):
+        return "Fuente o aclaración específica del valor informado"
+    return ""
+
 
 @dataclass(slots=True)
 class CatalogTemplateIssue:
@@ -360,9 +391,9 @@ def export_catalog_template_bytes(
         "Completá la hoja CATALOGO. Cada fila representa una unidad archivística.",
         "Usá ID local para vincular padres e hijos dentro de la misma plantilla.",
         "No edites los ID internos exportados, salvo que estés reparando una plantilla bajo supervisión.",
-        "La hoja ESTRUCTURA define los padres permitidos. Puede restringir el proyecto, nunca ampliarlo.",
-        "La hoja LISTAS es auxiliar y permanece oculta para sostener los desplegables; no hace falta editarla.",
-        "Antes de importar se ejecuta una simulación completa. Ningún cambio se aplica si hay errores.",
+        "La hoja ESTRUCTURA indica qué tipos de unidades pueden contener a otros tipos de unidades. Por ejemplo, puede indicar que un Fondo puede contener una Serie o una Caja.",
+        "La hoja LISTAS es una hoja técnica oculta que alimenta los menús de opciones de las celdas. No hace falta verla ni editarla.",
+        "Antes de guardar cambios, Archive Workbench revisa toda la plantilla y muestra qué unidades crearía o modificaría. Si encuentra errores, no permite aplicar la importación.",
         "Los valores repetibles se separan con saltos de línea dentro de la misma celda.",
         "Los datos ausentes deben quedar vacíos; no los completes por inferencia.",
     ]
@@ -372,21 +403,28 @@ def export_catalog_template_bytes(
         instructions.cell(row=start + offset, column=2).alignment = Alignment(wrap_text=True)
 
     dictionary_row = start + len(guidance) + 3
-    dictionary_headers = ["Hoja", "Columna", "Clave", "Descripción"]
+    dictionary_headers = ["Hoja", "Columna", "Clave", "Descripción", "Ejemplo"]
     for column, value in enumerate(dictionary_headers, start=1):
         instructions.cell(row=dictionary_row, column=column, value=value)
     _style_header(instructions, dictionary_row)
-    dictionary_entries: list[tuple[str, str, str, str]] = []
+    dictionary_entries: list[tuple[str, str, str, str, str]] = []
     for key, label, description in _BASE_COLUMNS + tuple(_field_columns(decisions)):
-        dictionary_entries.append(("CATALOGO", label, key, description))
+        dictionary_entries.append(("CATALOGO", label, key, description, _column_example(key, decisions)))
     dictionary_entries.extend(
         [
-            ("ESTRUCTURA", "Padres del proyecto", "project_parent_keys", "Regla vigente en decisions.yaml."),
+            (
+                "ESTRUCTURA",
+                "Padres del proyecto",
+                "project_parent_keys",
+                "Niveles que este proyecto permite como unidad superior inmediata.",
+                "fondo, serie",
+            ),
             (
                 "ESTRUCTURA",
                 "Padres permitidos por la plantilla",
                 "template_parent_keys",
-                "Restricción distribuible. Debe ser igual o más estricta que el proyecto.",
+                "Combinaciones jerárquicas que la plantilla utilizará al validar sus filas. No puede agregar combinaciones que el proyecto no permita.",
+                "fondo, serie",
             ),
         ]
     )
@@ -397,7 +435,7 @@ def export_catalog_template_bytes(
                 vertical="top", wrap_text=True
             )
     instructions.freeze_panes = "A4"
-    _set_widths(instructions, {1: 22, 2: 60, 3: 30, 4: 74})
+    _set_widths(instructions, {1: 22, 2: 48, 3: 30, 4: 68, 5: 48})
 
     structure_headers = [
         ("level_key", "Clave de nivel"),
@@ -838,12 +876,15 @@ def validate_catalog_template(
         if level_key not in parsed.structure_parent_keys:
             _issue(
                 issues,
-                "error",
+                "warning",
                 "missing_structure_level",
                 "ESTRUCTURA",
                 None,
                 "level_key",
-                f"Falta el nivel habilitado {level_key}.",
+                (
+                    f"La plantilla no incluye el nivel {definition.label} que está disponible en este "
+                    "proyecto. Esto no impide importar las unidades que sí están definidas en la plantilla."
+                ),
             )
             continue
         template_parents = set(parsed.structure_parent_keys[level_key])

@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from datetime import datetime, timezone
 import hashlib
 import json
@@ -20,6 +20,7 @@ from archive_workbench.db.models import (
     DigitalObject,
     EditableObject,
     EntityMention,
+    EntityRelation,
     FileInstance,
     Project,
     SemanticSearchProfile,
@@ -28,10 +29,13 @@ from archive_workbench.graph import graph_consistency_issues
 from archive_workbench.project_init import PROJECT_DIRS
 from archive_workbench.search import search_index_status
 from archive_workbench.semantic_search import semantic_index_status
+from archive_workbench.team_copy import TEAM_COPY_MARKER
 from archive_workbench.version import __version__
 
 
 BACKUP_FORMAT = "archive-workbench-project-backup-v1"
+HEALTH_DISMISSALS_FORMAT = "archive-workbench-project-health-dismissals-v1"
+HEALTH_DISMISSALS_RELATIVE_PATH = Path("config") / "project_health_dismissals.json"
 
 
 @dataclass(slots=True)
@@ -40,6 +44,16 @@ class ProjectHealthIssue:
     code: str
     message: str
     detail: str | None = None
+    subject_key: str | None = None
+    dismissible: bool = False
+    entity_id: str | None = None
+    relation_id: str | None = None
+    mention_id: str | None = None
+    archival_unit_id: str | None = None
+    semantic_profile_id: str | None = None
+    export_run_id: str | None = None
+    export_material_type: str | None = None
+    resource_path: str | None = None
 
 
 @dataclass(slots=True)
@@ -47,6 +61,7 @@ class ProjectHealthReport:
     checked_at: str
     database_revision: str | None
     issues: list[ProjectHealthIssue]
+    dismissed_issues: list[ProjectHealthIssue] = field(default_factory=list)
 
     @property
     def error_count(self) -> int:
@@ -84,6 +99,120 @@ class ProjectRestoreSummary:
     database_revision: str | None
 
 
+
+
+def _health_dismissals_path(project_root: Path) -> Path:
+    return project_root.resolve() / HEALTH_DISMISSALS_RELATIVE_PATH
+
+
+def _read_health_dismissals(project_root: Path) -> dict[str, dict[str, str]]:
+    path = _health_dismissals_path(project_root)
+    if not path.is_file():
+        return {}
+    try:
+        payload = json.loads(path.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError) as exc:
+        raise ValueError("No se pudo leer la lista de avisos de integridad descartados") from exc
+    if payload.get("format") != HEALTH_DISMISSALS_FORMAT:
+        raise ValueError("La lista de avisos de integridad descartados tiene un formato incompatible")
+    rows = payload.get("dismissals")
+    if not isinstance(rows, list):
+        raise ValueError("La lista de avisos de integridad descartados es inválida")
+    result: dict[str, dict[str, str]] = {}
+    for row in rows:
+        if not isinstance(row, dict):
+            continue
+        code = str(row.get("code") or "").strip()
+        subject_key = str(row.get("subject_key") or "").strip()
+        if not code or not subject_key:
+            continue
+        result[f"{code}:{subject_key}"] = {
+            "code": code,
+            "subject_key": subject_key,
+            "dismissed_by": str(row.get("dismissed_by") or "local_user"),
+            "dismissed_at": str(row.get("dismissed_at") or ""),
+        }
+    return result
+
+
+def _write_health_dismissals(project_root: Path, rows: dict[str, dict[str, str]]) -> None:
+    path = _health_dismissals_path(project_root)
+    path.parent.mkdir(parents=True, exist_ok=True)
+    payload = {
+        "format": HEALTH_DISMISSALS_FORMAT,
+        "dismissals": sorted(rows.values(), key=lambda row: (row["code"], row["subject_key"])),
+    }
+    temporary = path.with_suffix(".json.tmp")
+    temporary.write_text(
+        json.dumps(payload, ensure_ascii=False, indent=2, sort_keys=True) + "\n",
+        encoding="utf-8",
+    )
+    os.replace(temporary, path)
+
+
+def dismiss_project_health_issue(
+    *,
+    project_root: Path,
+    issue: ProjectHealthIssue,
+    dismissed_by: str,
+) -> None:
+    if not issue.dismissible or not issue.subject_key:
+        raise ValueError("Este aviso de integridad no puede descartarse")
+    rows = _read_health_dismissals(project_root)
+    key = f"{issue.code}:{issue.subject_key}"
+    rows[key] = {
+        "code": issue.code,
+        "subject_key": issue.subject_key,
+        "dismissed_by": dismissed_by.strip() or "local_user",
+        "dismissed_at": datetime.now(timezone.utc).replace(microsecond=0).isoformat(),
+    }
+    _write_health_dismissals(project_root, rows)
+
+
+def restore_project_health_issue(
+    *,
+    project_root: Path,
+    issue: ProjectHealthIssue,
+) -> None:
+    if not issue.subject_key:
+        return
+    rows = _read_health_dismissals(project_root)
+    rows.pop(f"{issue.code}:{issue.subject_key}", None)
+    _write_health_dismissals(project_root, rows)
+
+
+def _team_copy_omitted_groups(project_root: Path) -> set[str]:
+    marker = project_root.resolve() / TEAM_COPY_MARKER
+    if not marker.is_file():
+        return set()
+    try:
+        payload = json.loads(marker.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError):
+        return set()
+    values = payload.get("omitted_content_groups")
+    if not isinstance(values, list):
+        return set()
+    return {str(value) for value in values if str(value).strip()}
+
+
+def _filter_dismissed_health_issues(
+    project_root: Path, issues: list[ProjectHealthIssue]
+) -> tuple[list[ProjectHealthIssue], list[ProjectHealthIssue]]:
+    dismissals = _read_health_dismissals(project_root)
+    active: list[ProjectHealthIssue] = []
+    dismissed: list[ProjectHealthIssue] = []
+    for issue in issues:
+        key = (
+            f"{issue.code}:{issue.subject_key}"
+            if issue.dismissible and issue.subject_key
+            else None
+        )
+        if key and key in dismissals:
+            dismissed.append(issue)
+        else:
+            active.append(issue)
+    return active, dismissed
+
 def _sha256_path(path: Path) -> str:
     digest = hashlib.sha256()
     with path.open("rb") as handle:
@@ -120,6 +249,7 @@ def check_project_health(
     issues: list[ProjectHealthIssue] = []
     db_path = root / "data" / "archive_workbench.sqlite3"
     revision = current_revision(root)
+    omitted_groups = _team_copy_omitted_groups(root)
 
     if not db_path.exists():
         issues.append(ProjectHealthIssue("error", "missing_database", "No existe la base SQLite."))
@@ -144,7 +274,12 @@ def check_project_health(
     for relative in PROJECT_DIRS:
         if not (root / relative).is_dir():
             issues.append(
-                ProjectHealthIssue("warning", "missing_directory", f"Falta el directorio del proyecto: {relative}")
+                ProjectHealthIssue(
+                    "warning",
+                    "missing_directory",
+                    f"Falta el directorio del proyecto: {relative}",
+                    resource_path=relative,
+                )
             )
 
     file_rows = session.execute(
@@ -153,6 +288,8 @@ def check_project_health(
         )
     ).all()
     for instance, digital in file_rows:
+        if "originals" in omitted_groups:
+            continue
         if instance.storage_root != "project":
             continue
         path = root / instance.relative_path
@@ -163,6 +300,7 @@ def check_project_health(
                     "missing_local_file",
                     f"No está disponible el archivo local {instance.relative_path}.",
                     f"Objeto digital {digital.id}",
+                    resource_path=instance.relative_path,
                 )
             )
             continue
@@ -173,6 +311,7 @@ def check_project_health(
                     "file_size_mismatch",
                     f"Cambió el tamaño del archivo {instance.relative_path}.",
                     f"Esperado {digital.byte_size}; actual {path.stat().st_size}",
+                    resource_path=instance.relative_path,
                 )
             )
         if instance.verified_sha256 and instance.verified_sha256 != digital.sha256:
@@ -181,6 +320,7 @@ def check_project_health(
                     "error",
                     "registered_hash_mismatch",
                     f"La verificación registrada no coincide con el objeto digital: {instance.relative_path}.",
+                    resource_path=instance.relative_path,
                 )
             )
 
@@ -202,12 +342,26 @@ def check_project_health(
     project = session.scalars(select(Project).order_by(Project.created_at)).first()
     if project is not None:
         for graph_issue in graph_consistency_issues(session, project_id=project.id):
+            relation = (
+                session.get(EntityRelation, graph_issue.relation_id)
+                if graph_issue.relation_id
+                else None
+            )
             issues.append(
                 ProjectHealthIssue(
                     graph_issue.severity,
                     f"graph_{graph_issue.code}",
                     graph_issue.message,
                     graph_issue.relation_id or graph_issue.mention_id or graph_issue.entity_id,
+                    entity_id=(
+                        graph_issue.entity_id
+                        or (relation.source_authority_id if relation is not None else None)
+                    ),
+                    relation_id=graph_issue.relation_id,
+                    mention_id=graph_issue.mention_id,
+                    archival_unit_id=(
+                        relation.target_archival_unit_id if relation is not None else None
+                    ),
                 )
             )
 
@@ -218,7 +372,10 @@ def check_project_health(
                 ProjectHealthIssue(
                     "info",
                     "search_index_pending",
-                    "El índice de búsqueda está pendiente de reconstrucción; se actualizará al buscar.",
+                    "Los textos usados por la búsqueda textual están pendientes de actualización.",
+                    f"Generación {index_state.indexed_generation} → {index_state.dirty_generation}",
+                    subject_key=f"{index_state.indexed_generation}:{index_state.dirty_generation}",
+                    dismissible=True,
                 )
             )
     except RuntimeError as exc:
@@ -242,36 +399,58 @@ def check_project_health(
                     ProjectHealthIssue(
                         "info",
                         "semantic_index_pending",
-                        f"El índice semántico '{semantic_profile.name}' requiere reconstrucción.",
+                        f"La búsqueda semántica con “{semantic_profile.name}” necesita actualizar su índice.",
                         semantic_state.reason,
+                        subject_key=(
+                            f"{semantic_profile.id}:{semantic_profile.revision}:"
+                            f"{semantic_state.current_corpus_state_sha256}:{semantic_state.reason}"
+                        ),
+                        dismissible=True,
+                        semantic_profile_id=semantic_profile.id,
                     )
                 )
 
     exports = session.scalars(select(CorpusExportRun).order_by(CorpusExportRun.created_at)).all()
-    for run in exports:
-        output = root / run.output_relative_path
-        if not output.exists():
-            issues.append(
-                ProjectHealthIssue(
-                    "warning",
-                    "missing_export_file",
-                    f"Ya no existe la exportación registrada {run.output_relative_path}.",
-                    run.id,
+    if "exports" not in omitted_groups:
+        for run in exports:
+            output = root / run.output_relative_path
+            material_type = str(run.profile_snapshot_json.get("material_type") or "documents")
+            if not output.exists():
+                issues.append(
+                    ProjectHealthIssue(
+                        "warning",
+                        "missing_export_file",
+                        f"Ya no existe el archivo exportado {run.output_relative_path}.",
+                        run.id,
+                        subject_key=run.id,
+                        dismissible=True,
+                        export_run_id=run.id,
+                        export_material_type=material_type,
+                        resource_path=run.output_relative_path,
+                    )
                 )
-            )
-        elif _sha256_path(output) != run.output_sha256:
-            issues.append(
-                ProjectHealthIssue(
-                    "warning",
-                    "modified_export_file",
-                    f"La exportación {run.output_relative_path} fue modificada después de generarse.",
-                    run.id,
+            elif _sha256_path(output) != run.output_sha256:
+                issues.append(
+                    ProjectHealthIssue(
+                        "warning",
+                        "modified_export_file",
+                        f"El archivo exportado {run.output_relative_path} cambió después de generarse.",
+                        run.id,
+                        export_run_id=run.id,
+                        export_material_type=material_type,
+                        resource_path=run.output_relative_path,
+                    )
                 )
-            )
 
     if not issues:
         issues.append(ProjectHealthIssue("info", "healthy", "No se detectaron problemas."))
-    return ProjectHealthReport(datetime.now(timezone.utc).isoformat(), revision, issues)
+    active, dismissed = _filter_dismissed_health_issues(root, issues)
+    return ProjectHealthReport(
+        datetime.now(timezone.utc).isoformat(),
+        revision,
+        active,
+        dismissed,
+    )
 
 
 def create_project_backup(

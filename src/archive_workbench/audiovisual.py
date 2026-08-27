@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import csv
 import difflib
+import hashlib
 import io
 import json
 import math
@@ -10,9 +11,10 @@ import os
 import re
 import shutil
 import subprocess
+import sys
 import threading
 import time
-from dataclasses import dataclass
+from dataclasses import asdict, dataclass
 from datetime import date
 from pathlib import Path
 from typing import Any, Protocol
@@ -35,6 +37,7 @@ from archive_workbench.db.models import (
     AudiovisualTimelineAnnotationRevision,
     DigitalObject,
     DigitalObjectUnitLink,
+    CorpusExportRun,
     FileInstance,
     SegmentEntityMention,
     SourceRegistration,
@@ -45,6 +48,7 @@ from archive_workbench.db.models import (
 )
 from archive_workbench.domain.enums import MediaType
 from archive_workbench.identity import new_id, sha256_file
+from archive_workbench.exchange import current_editable_state_sha256
 from archive_workbench.sources import PROCESSABLE_SOURCE_TYPES
 
 AUDIO_EXTENSIONS = {
@@ -57,6 +61,160 @@ _BROWSER_AUDIO_EXTENSIONS = {".mp3", ".wav", ".ogg", ".m4a", ".aac", ".flac"}
 _BROWSER_VIDEO_EXTENSIONS = {".mp4", ".webm", ".mov", ".m4v"}
 MENTION_STATUSES = ("pending", "accepted", "rejected", "modified")
 REVIEW_STATUSES = ("unreviewed", "reviewed", "approved")
+TRANSCRIPTION_DISCARDED_STATUS = "discarded"
+_TRANSCRIPTION_LIFECYCLE_HISTORY_KEY = "_lifecycle_history"
+
+
+AUDIOVISUAL_EXPORT_TEXT_POLICIES = (
+    "corrected_fallback_original",
+    "corrected_only",
+    "original_only",
+)
+AUDIOVISUAL_EXPORT_RUN_SCOPES = ("latest_completed_per_media", "all_completed")
+AUDIOVISUAL_EXPORT_FORMATS = ("jsonl", "csv")
+AUDIOVISUAL_EXPORT_SCHEMA_VERSION = "1.1"
+
+
+@dataclass(slots=True, frozen=True)
+class AudiovisualExportOptions:
+    text_policy: str = "corrected_fallback_original"
+    include_review_statuses: tuple[str, ...] = REVIEW_STATUSES
+    run_scope: str = "latest_completed_per_media"
+    media_ids: tuple[str, ...] | None = None
+    include_timeline_annotations: bool = True
+
+
+@dataclass(slots=True)
+class AudiovisualExportPreview:
+    total_records: int
+    total_characters: int
+    records: list[dict[str, Any]]
+
+
+@dataclass(slots=True)
+class AudiovisualExportRunResult:
+    run_id: str
+    output_path: Path
+    row_count: int
+    character_count: int
+    byte_size: int
+    output_sha256: str
+    corpus_state_sha256: str
+
+
+def _validate_audiovisual_export_options(options: AudiovisualExportOptions) -> AudiovisualExportOptions:
+    if options.text_policy not in AUDIOVISUAL_EXPORT_TEXT_POLICIES:
+        raise ValueError("Política de texto audiovisual inválida")
+    invalid_statuses = set(options.include_review_statuses) - set(REVIEW_STATUSES)
+    if invalid_statuses:
+        raise ValueError("Hay estados de revisión de segmentos inválidos")
+    if options.run_scope not in AUDIOVISUAL_EXPORT_RUN_SCOPES:
+        raise ValueError("Alcance de corridas de transcripción inválido")
+    return AudiovisualExportOptions(
+        text_policy=options.text_policy,
+        include_review_statuses=tuple(sorted(set(options.include_review_statuses))),
+        run_scope=options.run_scope,
+        media_ids=(
+            tuple(sorted(set(options.media_ids)))
+            if options.media_ids is not None
+            else None
+        ),
+        include_timeline_annotations=bool(options.include_timeline_annotations),
+    )
+
+
+def _audiovisual_export_text(segment: TranscriptSegment, policy: str) -> tuple[str, str]:
+    original = (segment.original_text or "").strip()
+    corrected = (segment.corrected_text or "").strip()
+    if policy == "original_only":
+        return original, "original_transcription"
+    if policy == "corrected_only":
+        return corrected, "corrected_transcription"
+    if corrected:
+        return corrected, "corrected_transcription"
+    return original, "original_transcription"
+
+
+def _transcription_lifecycle_entry(*, action: str, actor: str, from_status: str, to_status: str, note: str | None) -> dict[str, Any]:
+    return {
+        "action": action,
+        "actor": actor or "local_user",
+        "at": utc_now().isoformat(),
+        "from_status": from_status,
+        "to_status": to_status,
+        "note": _clean_optional(note),
+    }
+
+
+def discard_transcription_run(
+    session: Session,
+    *,
+    run_id: str,
+    actor: str,
+    note: str | None = None,
+) -> TranscriptionRun:
+    """Retira una transcripción completada de los recorridos normales sin borrar su contenido."""
+
+    run = session.get(TranscriptionRun, run_id)
+    if run is None:
+        raise ValueError("La transcripción no existe")
+    if run.status == TRANSCRIPTION_DISCARDED_STATUS:
+        return run
+    if run.status != "completed":
+        raise ValueError("Sólo se puede descartar una transcripción completada")
+    options = dict(run.options_json or {})
+    history = list(options.get(_TRANSCRIPTION_LIFECYCLE_HISTORY_KEY) or [])
+    history.append(
+        _transcription_lifecycle_entry(
+            action="discard",
+            actor=actor,
+            from_status=run.status,
+            to_status=TRANSCRIPTION_DISCARDED_STATUS,
+            note=note,
+        )
+    )
+    options[_TRANSCRIPTION_LIFECYCLE_HISTORY_KEY] = history
+    options["_discarded_from_status"] = run.status
+    run.options_json = options
+    run.status = TRANSCRIPTION_DISCARDED_STATUS
+    session.flush()
+    return run
+
+
+def restore_transcription_run(
+    session: Session,
+    *,
+    run_id: str,
+    actor: str,
+    note: str | None = None,
+) -> TranscriptionRun:
+    """Restaura una transcripción descartada conservando la traza del descarte."""
+
+    run = session.get(TranscriptionRun, run_id)
+    if run is None:
+        raise ValueError("La transcripción no existe")
+    if run.status != TRANSCRIPTION_DISCARDED_STATUS:
+        raise ValueError("La transcripción seleccionada no está descartada")
+    options = dict(run.options_json or {})
+    restore_status = str(options.get("_discarded_from_status") or "completed")
+    if restore_status != "completed":
+        restore_status = "completed"
+    history = list(options.get(_TRANSCRIPTION_LIFECYCLE_HISTORY_KEY) or [])
+    history.append(
+        _transcription_lifecycle_entry(
+            action="restore",
+            actor=actor,
+            from_status=TRANSCRIPTION_DISCARDED_STATUS,
+            to_status=restore_status,
+            note=note,
+        )
+    )
+    options[_TRANSCRIPTION_LIFECYCLE_HISTORY_KEY] = history
+    options.pop("_discarded_from_status", None)
+    run.options_json = options
+    run.status = restore_status
+    session.flush()
+    return run
 
 
 def _process_rss_mib() -> float | None:
@@ -83,7 +241,7 @@ def _gpu_memory_mib_for_pid(pid: int) -> float | None:
         result = subprocess.run(
             [
                 "nvidia-smi",
-                "--query-compute-apps=pid,used_memory",
+                "--query-compute-apps=pid,process_name,used_memory",
                 "--format=csv,noheader,nounits",
             ],
             capture_output=True,
@@ -95,18 +253,44 @@ def _gpu_memory_mib_for_pid(pid: int) -> float | None:
         return None
     if result.returncode != 0:
         return None
-    values: list[float] = []
+
+    rows: list[tuple[int, str, float]] = []
     for line in result.stdout.splitlines():
-        parts = [part.strip() for part in line.split(",", 1)]
-        if len(parts) != 2:
+        parts = [part.strip() for part in line.split(",", 2)]
+        if len(parts) != 3:
             continue
         try:
             row_pid = int(parts[0])
-            memory = float(parts[1])
+            memory = float(parts[2])
         except ValueError:
             continue
-        if row_pid == pid:
-            values.append(memory)
+        rows.append((row_pid, parts[1], memory))
+
+    direct = [memory for row_pid, _name, memory in rows if row_pid == pid]
+    if direct:
+        return sum(direct)
+
+    containerized = bool(os.environ.get("ARCHIVE_WORKBENCH_RUNTIME_VARIANT")) or Path(
+        "/.dockerenv"
+    ).exists()
+    if not containerized:
+        return None
+
+    # NVIDIA reports host-namespace PIDs even when nvidia-smi runs inside a
+    # container, while os.getpid() belongs to the container PID namespace.
+    # If exactly one compute process has the same executable basename as this
+    # Python process, it is safe to use that host PID for this single-process
+    # local application. Ambiguous matches deliberately remain unmeasured.
+    executable = Path(sys.executable).name
+    matching_pids = {
+        row_pid
+        for row_pid, process_name, _memory in rows
+        if Path(process_name).name == executable
+    }
+    if len(matching_pids) != 1:
+        return None
+    host_pid = next(iter(matching_pids))
+    values = [memory for row_pid, _name, memory in rows if row_pid == host_pid]
     return sum(values) if values else None
 
 
@@ -317,6 +501,48 @@ def register_transcription_backend(backend: TranscriptionBackend) -> None:
 
 def transcription_backend_keys() -> tuple[str, ...]:
     return tuple(sorted(_BACKENDS))
+
+
+_FASTER_WHISPER_MODELS = (
+    "tiny",
+    "base",
+    "small",
+    "medium",
+    "large-v1",
+    "large-v2",
+    "large-v3",
+    "turbo",
+)
+
+
+def transcription_model_names(backend: str) -> tuple[str, ...]:
+    if backend == "faster_whisper":
+        return _FASTER_WHISPER_MODELS
+    return ()
+
+
+def transcription_compute_types(device: str) -> tuple[str, ...]:
+    normalized = "cuda" if device == "cuda" else "cpu"
+    fallback = (
+        ("float16", "int8_float16", "int8", "float32", "int8_float32")
+        if normalized == "cuda"
+        else ("int8", "float32", "int8_float32", "int16")
+    )
+    try:
+        import ctranslate2
+
+        supported = set(ctranslate2.get_supported_compute_types(normalized))
+    except Exception:  # pragma: no cover - depende del runtime opcional y del hardware
+        return fallback
+
+    preferred_order = (
+        ("float16", "int8_float16", "int8", "float32", "int8_float32", "bfloat16", "int16")
+        if normalized == "cuda"
+        else ("int8", "float32", "int8_float32", "int16", "bfloat16")
+    )
+    ordered = tuple(item for item in preferred_order if item in supported)
+    extras = tuple(sorted(supported.difference(ordered)))
+    return ordered + extras or fallback
 
 
 def _parse_fraction(value: object) -> float | None:
@@ -545,7 +771,10 @@ def audiovisual_media_rows(
                 break
         latest = session.scalar(
             select(TranscriptionRun)
-            .where(TranscriptionRun.audiovisual_media_id == media.id)
+            .where(
+                TranscriptionRun.audiovisual_media_id == media.id,
+                TranscriptionRun.status != TRANSCRIPTION_DISCARDED_STATUS,
+            )
             .order_by(TranscriptionRun.created_at.desc())
         )
         count = 0
@@ -796,6 +1025,9 @@ def transcribe_audiovisual(
     )
     root = Path(project_root).resolve()
     source = root / source_asset.relative_path
+    effective_options = dict(request.options)
+    effective_options.setdefault("beam_size", 5)
+    effective_options.setdefault("vad_filter", True)
     run = TranscriptionRun(
         id=new_id(),
         audiovisual_media_id=media.id,
@@ -805,7 +1037,7 @@ def transcribe_audiovisual(
         model_name=request.model_name,
         device=request.device,
         language=request.language,
-        options_json=dict(request.options),
+        options_json=dict(effective_options),
         status="running",
         created_by=actor or "local_user",
         created_at=utc_now(),
@@ -822,7 +1054,7 @@ def transcribe_audiovisual(
             model_name=request.model_name,
             device=request.device,
             language=request.language,
-            options=dict(request.options),
+            options=dict(effective_options),
         )
         previous_end = 0.0
         for index, item in enumerate(segments):
@@ -1467,6 +1699,117 @@ def assign_speaker_from_time(
     )
 
 
+def assign_speaker_to_segment(
+    session: Session,
+    *,
+    media_id: str,
+    start_time: float,
+    end_time: float,
+    label: str,
+    authority_id: str | None,
+    actor: str,
+) -> AudiovisualTimelineAnnotation:
+    """Asigna un hablante sólo al segmento indicado sin alterar los tramos vecinos."""
+
+    media = session.get(AudiovisualMedia, media_id)
+    if media is None:
+        raise ValueError("No se encontró el medio audiovisual seleccionado.")
+    start = max(0.0, float(start_time))
+    end = max(start, float(end_time))
+    duration = float(media.duration_seconds or 0.0)
+    if duration > 0:
+        start = min(start, duration)
+        end = min(max(start, end), duration)
+    if end <= start:
+        raise ValueError("El segmento seleccionado no tiene una duración válida.")
+
+    clean_label = " ".join(label.split()).strip()
+    if not clean_label:
+        raise ValueError("Elegí o escribí quién está hablando.")
+    if authority_id:
+        authority = session.get(AuthorityRecord, authority_id)
+        if authority is None:
+            raise ValueError("La autoridad seleccionada ya no existe.")
+        digital = session.get(DigitalObject, media.digital_object_id)
+        if digital is None or authority.project_id != digital.project_id:
+            raise ValueError("La autoridad seleccionada pertenece a otro proyecto.")
+
+    speakers = session.scalars(
+        select(AudiovisualTimelineAnnotation)
+        .where(
+            AudiovisualTimelineAnnotation.audiovisual_media_id == media_id,
+            AudiovisualTimelineAnnotation.annotation_type == "speaker",
+            AudiovisualTimelineAnnotation.status == "active",
+        )
+        .order_by(
+            AudiovisualTimelineAnnotation.start_time,
+            AudiovisualTimelineAnnotation.id,
+        )
+    ).all()
+    epsilon = 0.001
+
+    # Si el mismo hablante ya cubre por completo el segmento, no se crea una marca redundante.
+    for row in speakers:
+        if (
+            row.label == clean_label
+            and row.authority_id == authority_id
+            and float(row.start_time) <= start + epsilon
+            and float(row.end_time) >= end - epsilon
+        ):
+            return row
+
+    overlapping = [
+        row
+        for row in speakers
+        if float(row.end_time) > start + epsilon and float(row.start_time) < end - epsilon
+    ]
+    for row in overlapping:
+        old_start = float(row.start_time)
+        old_end = float(row.end_time)
+        old_label = row.label
+        old_authority_id = row.authority_id
+
+        if old_start < start - epsilon and old_end > end + epsilon:
+            # El turno existente atraviesa todo el segmento: se conservan sus dos lados.
+            _update_timeline_annotation(
+                session, row=row, end_time=start, actor=actor
+            )
+            create_timeline_annotation(
+                session,
+                media_id=media_id,
+                annotation_type="speaker",
+                start_time=end,
+                end_time=old_end,
+                label=old_label,
+                authority_id=old_authority_id,
+                actor=actor,
+            )
+        elif old_start < start - epsilon:
+            # Se conserva sólo la parte anterior al segmento.
+            _update_timeline_annotation(
+                session, row=row, end_time=start, actor=actor
+            )
+        elif old_end > end + epsilon:
+            # Se conserva sólo la parte posterior al segmento.
+            _update_timeline_annotation(
+                session, row=row, start_time=end, actor=actor
+            )
+        else:
+            # La marca existente está enteramente dentro del segmento reemplazado.
+            archive_timeline_annotation(session, annotation_id=row.id, actor=actor)
+
+    return create_timeline_annotation(
+        session,
+        media_id=media_id,
+        annotation_type="speaker",
+        start_time=start,
+        end_time=end,
+        label=clean_label,
+        authority_id=authority_id,
+        actor=actor,
+    )
+
+
 def timeline_annotation_rows(
     session: Session,
     *,
@@ -1678,8 +2021,61 @@ def format_timestamp(seconds: float) -> str:
     return f"{minutes:02d}:{secs:02d}.{milliseconds:03d}"
 
 
-def _export_rows(session: Session, *, project_id: str) -> list[dict[str, Any]]:
-    rows = session.execute(
+def _selected_transcription_run_ids(
+    session: Session,
+    *,
+    project_id: str,
+    options: AudiovisualExportOptions,
+) -> set[str]:
+    query = (
+        select(TranscriptionRun)
+        .join(AudiovisualMedia, TranscriptionRun.audiovisual_media_id == AudiovisualMedia.id)
+        .join(DigitalObject, AudiovisualMedia.digital_object_id == DigitalObject.id)
+        .where(
+            DigitalObject.project_id == project_id,
+            TranscriptionRun.status == "completed",
+        )
+    )
+    if options.media_ids is not None:
+        if not options.media_ids:
+            return set()
+        query = query.where(AudiovisualMedia.id.in_(options.media_ids))
+    runs = session.scalars(
+        query.order_by(
+            TranscriptionRun.audiovisual_media_id,
+            TranscriptionRun.created_at,
+            TranscriptionRun.id,
+        )
+    ).all()
+    if options.run_scope == "all_completed":
+        return {row.id for row in runs}
+    latest_by_media: dict[str, TranscriptionRun] = {}
+    for row in runs:
+        latest_by_media[row.audiovisual_media_id] = row
+    return {row.id for row in latest_by_media.values()}
+
+
+def _export_rows(
+    session: Session,
+    *,
+    project_id: str,
+    options: AudiovisualExportOptions | None = None,
+) -> list[dict[str, Any]]:
+    selected_options = _validate_audiovisual_export_options(
+        options or AudiovisualExportOptions(
+            run_scope="all_completed", include_review_statuses=REVIEW_STATUSES
+        )
+    )
+    run_ids = _selected_transcription_run_ids(
+        session,
+        project_id=project_id,
+        options=selected_options,
+    )
+    if not run_ids:
+        return []
+    if not selected_options.include_review_statuses:
+        return []
+    query = (
         select(
             TranscriptSegment,
             TranscriptionRun,
@@ -1694,14 +2090,25 @@ def _export_rows(session: Session, *, project_id: str) -> list[dict[str, Any]]:
         .where(
             DigitalObject.project_id == project_id,
             SourceRegistration.source_type.in_(PROCESSABLE_SOURCE_TYPES),
-            TranscriptionRun.status == "completed",
+            TranscriptionRun.id.in_(run_ids),
         )
-        .order_by(DigitalObject.original_filename, TranscriptionRun.created_at, TranscriptSegment.segment_index)
+    )
+    if selected_options.include_review_statuses:
+        query = query.where(
+            TranscriptSegment.review_status.in_(selected_options.include_review_statuses)
+        )
+    rows = session.execute(
+        query.order_by(
+            DigitalObject.original_filename,
+            TranscriptionRun.created_at,
+            TranscriptSegment.segment_index,
+        )
     ).all()
     media_ids = {media.id for _, _, media, _, _ in rows}
     annotation_map: dict[str, list[TimelineAnnotationRow]] = {media_id: [] for media_id in media_ids}
-    for media_id in media_ids:
-        annotation_map[media_id] = timeline_annotation_rows(session, media_id=media_id)
+    if selected_options.include_timeline_annotations:
+        for media_id in media_ids:
+            annotation_map[media_id] = timeline_annotation_rows(session, media_id=media_id)
 
     result: list[dict[str, Any]] = []
     seen: set[str] = set()
@@ -1709,6 +2116,9 @@ def _export_rows(session: Session, *, project_id: str) -> list[dict[str, Any]]:
         if segment.id in seen:
             continue
         seen.add(segment.id)
+        text, text_source = _audiovisual_export_text(segment, selected_options.text_policy)
+        if not text:
+            continue
         platform_payload = (registration.source_payload_json or {}).get("platform_import")
         if not isinstance(platform_payload, dict):
             platform_payload = {}
@@ -1719,7 +2129,12 @@ def _export_rows(session: Session, *, project_id: str) -> list[dict[str, Any]]:
         ]
         result.append(
             {
+                "export_schema_version": AUDIOVISUAL_EXPORT_SCHEMA_VERSION,
+                "record_type": "archive_workbench.audiovisual_transcript_segment",
+                "project_id": project_id,
+                "export_configuration": asdict(selected_options),
                 "source_key": registration.source_key,
+                "source_type": registration.source_type,
                 "source_origin": (registration.source_payload_json or {}).get("origin"),
                 "platform": platform_payload.get("platform"),
                 "platform_id": platform_payload.get("platform_id"),
@@ -1729,16 +2144,21 @@ def _export_rows(session: Session, *, project_id: str) -> list[dict[str, Any]]:
                 "original_filename": digital.original_filename,
                 "original_sha256": digital.sha256,
                 "media_type": digital.media_type,
+                "media_id": media.id,
                 "media_title": media.title,
                 "transcription_run_id": run.id,
+                "transcription_run_created_at": run.created_at.isoformat(),
                 "backend": run.backend,
+                "backend_version": run.backend_version,
                 "model_name": run.model_name,
                 "device": run.device,
+                "language": run.language,
                 "segment_id": segment.id,
                 "segment_index": segment.segment_index,
                 "start_time": segment.start_time,
                 "end_time": segment.end_time,
-                "text": segment.corrected_text if segment.corrected_text is not None else segment.original_text,
+                "text": text,
+                "text_source": text_source,
                 "original_text": segment.original_text,
                 "corrected_text": segment.corrected_text,
                 "review_status": segment.review_status,
@@ -1759,27 +2179,165 @@ def _export_rows(session: Session, *, project_id: str) -> list[dict[str, Any]]:
     return result
 
 
+def _serialize_audiovisual_rows(rows: list[dict[str, Any]], output_format: str) -> bytes:
+    if output_format == "jsonl":
+        payload = "".join(
+            json.dumps(row, ensure_ascii=False, sort_keys=True) + "\n" for row in rows
+        )
+        return payload.encode("utf-8")
+    if output_format == "csv":
+        buffer = io.StringIO(newline="")
+        fieldnames = list(rows[0]) if rows else [
+            "export_schema_version", "record_type", "project_id", "export_configuration",
+            "source_key", "source_type",
+            "source_origin", "platform", "platform_id", "source_url",
+            "source_access_conditions", "digital_object_id", "original_filename",
+            "original_sha256", "media_type", "media_id", "media_title",
+            "transcription_run_id", "transcription_run_created_at", "backend",
+            "backend_version", "model_name", "device", "language", "segment_id",
+            "segment_index", "start_time", "end_time", "text", "text_source",
+            "original_text", "corrected_text", "review_status", "revision_number",
+            "timeline_annotations",
+        ]
+        writer = csv.DictWriter(buffer, fieldnames=fieldnames)
+        writer.writeheader()
+        for row in rows:
+            payload = dict(row)
+            if isinstance(payload.get("export_configuration"), dict):
+                payload["export_configuration"] = json.dumps(
+                    payload["export_configuration"], ensure_ascii=False
+                )
+            payload["timeline_annotations"] = json.dumps(
+                payload.get("timeline_annotations") or [], ensure_ascii=False
+            )
+            writer.writerow(payload)
+        return buffer.getvalue().encode("utf-8")
+    raise ValueError("Formato audiovisual de exportación inválido")
+
+
 def export_transcript_segments_bytes(
     session: Session,
     *,
     project_id: str,
     output_format: str,
+    options: AudiovisualExportOptions | None = None,
 ) -> tuple[bytes, int]:
-    rows = _export_rows(session, project_id=project_id)
-    if output_format == "jsonl":
-        payload = "".join(json.dumps(row, ensure_ascii=False, sort_keys=True) + "\n" for row in rows)
-        return payload.encode("utf-8"), len(rows)
-    if output_format == "csv":
-        buffer = io.StringIO(newline="")
-        fieldnames = list(rows[0]) if rows else [
-            "source_key", "source_origin", "platform", "platform_id", "source_url",
-            "source_access_conditions", "digital_object_id", "original_filename", "original_sha256", "media_type",
-            "media_title", "transcription_run_id", "backend", "model_name", "device", "segment_id",
-            "segment_index", "start_time", "end_time", "text", "original_text", "corrected_text",
-            "review_status", "revision_number",
-        ]
-        writer = csv.DictWriter(buffer, fieldnames=fieldnames)
-        writer.writeheader()
-        writer.writerows(rows)
-        return buffer.getvalue().encode("utf-8"), len(rows)
-    raise ValueError("Formato audiovisual de exportación inválido")
+    if output_format not in AUDIOVISUAL_EXPORT_FORMATS:
+        raise ValueError("Formato audiovisual de exportación inválido")
+    rows = _export_rows(session, project_id=project_id, options=options)
+    return _serialize_audiovisual_rows(rows, output_format), len(rows)
+
+
+def preview_transcript_export(
+    session: Session,
+    *,
+    project_id: str,
+    options: AudiovisualExportOptions,
+    limit: int = 20,
+) -> AudiovisualExportPreview:
+    rows = _export_rows(session, project_id=project_id, options=options)
+    return AudiovisualExportPreview(
+        total_records=len(rows),
+        total_characters=sum(len(str(row.get("text") or "")) for row in rows),
+        records=rows[: max(0, limit)],
+    )
+
+
+def default_audiovisual_export_filename(output_format: str) -> str:
+    if output_format not in AUDIOVISUAL_EXPORT_FORMATS:
+        raise ValueError("Formato audiovisual de exportación inválido")
+    timestamp = utc_now().strftime("%Y%m%dT%H%M%SZ")
+    return f"exports/transcripciones_audiovisuales_{timestamp}.{output_format}"
+
+
+def _safe_audiovisual_export_output_path(
+    project_root: Path, relative_path: str, output_format: str
+) -> tuple[Path, str]:
+    raw = relative_path.strip()
+    if not raw:
+        raise ValueError("Indicá una ruta de salida relativa a la carpeta del proyecto")
+    candidate = (project_root / raw).resolve()
+    try:
+        relative = candidate.relative_to(project_root.resolve())
+    except ValueError as exc:
+        raise ValueError("La exportación debe quedar dentro de la carpeta del proyecto") from exc
+    extension = f".{output_format}"
+    if candidate.suffix.lower() != extension:
+        candidate = candidate.with_suffix(extension)
+        relative = candidate.relative_to(project_root.resolve())
+    return candidate, relative.as_posix()
+
+
+def run_audiovisual_export(
+    session: Session,
+    *,
+    project_root: Path,
+    project_id: str,
+    options: AudiovisualExportOptions,
+    output_relative_path: str,
+    output_format: str,
+    created_by: str,
+    overwrite: bool = False,
+) -> AudiovisualExportRunResult:
+    if output_format not in AUDIOVISUAL_EXPORT_FORMATS:
+        raise ValueError("Formato audiovisual de exportación inválido")
+    selected_options = _validate_audiovisual_export_options(options)
+    rows = _export_rows(session, project_id=project_id, options=selected_options)
+    output_path, relative = _safe_audiovisual_export_output_path(
+        project_root, output_relative_path, output_format
+    )
+    if output_path.exists() and not overwrite:
+        raise ValueError(
+            f"La salida ya existe: {relative}. Elegí otro nombre o habilitá sobrescritura explícita."
+        )
+    output_path.parent.mkdir(parents=True, exist_ok=True)
+    state_digest = current_editable_state_sha256(session, project_id)
+    run_id = new_id()
+    exported_at = utc_now()
+    for row in rows:
+        row["export_run_id"] = run_id
+        row["exported_at"] = exported_at.isoformat()
+        row["corpus_state_sha256"] = state_digest
+    payload = _serialize_audiovisual_rows(rows, output_format)
+    temporary = output_path.with_name(output_path.name + ".tmp")
+    try:
+        temporary.write_bytes(payload)
+        temporary.replace(output_path)
+    finally:
+        temporary.unlink(missing_ok=True)
+    digest = hashlib.sha256(payload).hexdigest()
+    snapshot = {
+        "material_type": "audiovisual_transcript_segments",
+        "schema_version": AUDIOVISUAL_EXPORT_SCHEMA_VERSION,
+        "options": asdict(selected_options),
+    }
+    character_count = sum(len(str(row.get("text") or "")) for row in rows)
+    session.add(
+        CorpusExportRun(
+            id=run_id,
+            project_id=project_id,
+            profile_id=None,
+            profile_name="Transcripciones de audio y video",
+            profile_snapshot_json=snapshot,
+            corpus_state_sha256=state_digest,
+            output_format=output_format,
+            output_relative_path=relative,
+            row_count=len(rows),
+            character_count=character_count,
+            byte_size=output_path.stat().st_size,
+            output_sha256=digest,
+            created_by=created_by or "local_user",
+            created_at=exported_at,
+        )
+    )
+    session.flush()
+    return AudiovisualExportRunResult(
+        run_id=run_id,
+        output_path=output_path,
+        row_count=len(rows),
+        character_count=character_count,
+        byte_size=output_path.stat().st_size,
+        output_sha256=digest,
+        corpus_state_sha256=state_digest,
+    )
+

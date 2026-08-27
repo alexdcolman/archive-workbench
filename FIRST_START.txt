@@ -1,0 +1,70 @@
+ARCHIVE WORKBENCH 0.89.0 RC79 - PRIMER INICIO
+
+Archive Workbench se ejecuta dentro de una imagen preparada de Docker. No instala Python ni las dependencias del programa en tu sistema.
+
+AL ABRIR ARCHIVE WORKBENCH
+
+El lanzador ofrece dos caminos:
+
+1. Elegir un proyecto que ya existe en esta computadora.
+   Seleccioná la carpeta principal del proyecto, la que contiene config/decisions.yaml.
+   Docker monta únicamente esa carpeta y Archive Workbench la abre directamente.
+
+2. Abrir el inicio de Archive Workbench.
+   Desde ahí podés crear un proyecto nuevo o abrir uno guardado dentro de ArchiveWorkbenchData/Projects.
+
+No hace falta copiar un proyecto existente a ArchiveWorkbenchData para abrirlo.
+
+GOOGLE DRIVE, ONEDRIVE, DROPBOX E ICLOUD
+
+No abras como proyecto de trabajo una carpeta que se esté sincronizando en vivo con un servicio de nube. El proyecto contiene una base SQLite que Archive Workbench modifica mientras trabajás.
+
+Para trasladar un proyecto entre computadoras, descargá o copiá primero una copia completa a una carpeta local y elegí esa carpeta local al iniciar Archive Workbench. Google Drive puede usarse para transportar archivos o copias, pero no como ubicación de una base SQLite abierta simultáneamente.
+
+CARPETA ARCHIVEWORKBENCHDATA
+
+ArchiveWorkbenchData/
+  Projects/            proyectos creados o guardados por el modo administrado
+  Imports/Documents/   documentos que quieras incorporar por lote
+  Imports/AudioVideo/  audios y videos que quieras incorporar
+  Settings/            preferencias y cachés de modelos
+
+ArchiveWorkbenchData queda fuera del contenedor. Actualizar o reemplazar la imagen no reemplaza su contenido.
+
+WINDOWS
+
+1. Instalá Docker Desktop y abrilo.
+2. Para cualquier equipo, hacé doble clic en:
+   Start Archive Workbench - Windows.bat
+3. Si el equipo tiene una placa NVIDIA compatible y Docker Desktop usa WSL2, podés usar:
+   Start Archive Workbench - GPU - Windows.bat
+4. Elegí un proyecto existente o el inicio general cuando aparezca el selector.
+5. El navegador se abre en http://localhost:8501
+
+macOS
+
+1. Instalá Docker Desktop y abrilo.
+2. Hacé doble clic en:
+   Start Archive Workbench - macOS.command
+3. Elegí un proyecto existente o el inicio general cuando aparezca el selector.
+4. El navegador se abre en http://localhost:8501
+
+La ejecución local mediante Docker Desktop en macOS usa la imagen CPU. La imagen NVIDIA no se ofrece en macOS.
+
+LINUX
+
+1. Para CPU, instalá Docker Desktop o Docker Engine con Compose.
+2. Ejecutá:
+   Start Archive Workbench - Linux.sh
+3. Elegí un proyecto existente o el inicio general cuando aparezca el selector.
+4. Para GPU NVIDIA se necesita Docker Engine con NVIDIA Container Toolkit configurado. Después podés ejecutar:
+   Start Archive Workbench - GPU - Linux.sh
+
+CPU Y GPU
+
+La imagen CPU funciona sin placa NVIDIA y es la opción segura para cualquier equipo compatible con Docker.
+La imagen GPU contiene las bibliotecas CUDA necesarias para el procesamiento que puede usar una placa NVIDIA. El controlador de la placa sigue perteneciendo al sistema anfitrión y Docker debe poder acceder a él.
+
+DETENER
+
+Usá el archivo Stop correspondiente a tu sistema operativo. Los proyectos y archivos del equipo permanecen fuera de la imagen Docker.

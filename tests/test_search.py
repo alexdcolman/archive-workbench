@@ -20,7 +20,11 @@ from archive_workbench.db.models import (
     SourceRegistration,
 )
 from archive_workbench.identity import new_id
-from archive_workbench.review_app import _apply_pending_navigation, _highlight_search_snippet
+from archive_workbench.review_app import (
+    _apply_pending_navigation,
+    _highlight_search_snippet,
+)
+from archive_workbench.ui_navigation import request_app_view
 from archive_workbench.search import (
     build_match_expression,
     rebuild_search_index,
@@ -289,7 +293,7 @@ def test_database_triggers_mark_search_index_dirty(tmp_path: Path) -> None:
         engine.dispose()
 
 
-def test_pending_search_navigation_selects_document_page_and_object() -> None:
+def test_pending_search_navigation_sets_review_document_page_and_object() -> None:
     class Document:
         editable_pages = [1, 2]
 
@@ -300,15 +304,33 @@ def test_pending_search_navigation_selects_document_page_and_object() -> None:
                     "source_key": "doc",
                     "page": 2,
                     "object_id": "object-2",
-                }
+                },
             }
 
     st = FakeStreamlit()
     _apply_pending_navigation(st, {"doc": Document()})
     assert st.session_state["review_app_mode"] == "review"
     assert st.session_state["review_source_key"] == "doc"
+    assert st.session_state["review_page_source"] == "doc"
     assert st.session_state["review_page_number"] == 2
     assert st.session_state["review_pending_object_id"] == "object-2"
+
+
+def test_bbox_selection_changes_only_object_state_not_document_or_page() -> None:
+    state = {
+        "review_source_key": "doc-target",
+        "review_page_source": "doc-target",
+        "review_page_number": 4,
+        "review_object_doc-target_4_False": "object-target",
+    }
+
+    # El clic visual no llega a Python. Sólo una confirmación explícita puede actualizar
+    # la selección del objeto y esa escritura no toca documento ni página.
+    state["review_object_doc-target_4_False"] = "object-other"
+
+    assert state["review_source_key"] == "doc-target"
+    assert state["review_page_source"] == "doc-target"
+    assert state["review_page_number"] == 4
 
 
 def test_search_snippet_escapes_html_and_preserves_highlight() -> None:
@@ -744,3 +766,123 @@ def test_literal_search_filters_results_by_entity_period(tmp_path: Path) -> None
         assert outside == []
     finally:
         engine.dispose()
+
+
+def test_literal_search_respects_gap_in_discontinuous_entity_period(tmp_path: Path) -> None:
+    from datetime import date
+    from archive_workbench.authorities import create_authority, create_mention
+
+    root = tmp_path / "project"
+    object_id, _page_id = _seed_search_project(root)
+    engine = create_sqlite_engine(database_path(root))
+    try:
+        with session_scope(engine) as session:
+            entity = create_authority(
+                session,
+                project_id="search_project",
+                entity_type="organization",
+                preferred_name="SIDE",
+                temporal_expression="1946 - 2015; desde 2024",
+                created_by="tests",
+            )
+            create_mention(
+                session,
+                object_id=object_id,
+                mention_text="teatral",
+                authority_id=entity.id,
+                created_by="tests",
+            )
+            rebuild_search_index(session)
+            gap = search_editable_objects(
+                session,
+                query="teatral",
+                fields=["current_text"],
+                temporal_start=date(2018, 1, 1),
+                temporal_end=date(2018, 12, 31),
+            )
+            reconstituted = search_editable_objects(
+                session,
+                query="teatral",
+                fields=["current_text"],
+                temporal_start=date(2025, 1, 1),
+                temporal_end=date(2025, 12, 31),
+            )
+        assert gap == []
+        assert [row.object_id for row in reconstituted] == [object_id]
+    finally:
+        engine.dispose()
+
+
+def test_concordance_occurrences_split_all_marked_hits() -> None:
+    from archive_workbench.search import concordance_occurrences
+
+    rows = concordance_occurrences(
+        "Antes de [[HIT]]memoria[[/HIT]] viene contexto y después otra "
+        "[[HIT]]memoria[[/HIT]] para comparar.",
+        context_chars=24,
+    )
+
+    assert [row.hit for row in rows] == ["memoria", "memoria"]
+    assert rows[0].left_context.endswith("Antes de")
+    assert "viene contexto" in rows[0].right_context
+    assert "otra" in rows[1].left_context
+    assert rows[1].right_context.startswith("para comparar")
+
+
+def test_literal_search_exposes_all_hits_for_kwic(tmp_path: Path) -> None:
+    from archive_workbench.search import concordance_occurrences
+
+    root = tmp_path / "kwic_project"
+    object_id, _page_id = _seed_search_project(root)
+    engine = create_sqlite_engine(database_path(root))
+    try:
+        with session_scope(engine) as session:
+            obj = session.get(EditableObject, object_id)
+            assert obj is not None
+            obj.current_text = "memoria institucional y memoria colectiva"
+            rebuild_search_index(session)
+            rows = search_editable_objects(
+                session,
+                query="memoria",
+                fields=["current_text"],
+            )
+    finally:
+        engine.dispose()
+
+    assert len(rows) == 1
+    assert rows[0].match_scope == "Texto revisado"
+    assert rows[0].match_text.count("[[HIT]]") == 2
+    assert [item.hit for item in concordance_occurrences(rows[0].match_text)] == [
+        "memoria",
+        "memoria",
+    ]
+
+
+def test_search_navigation_payload_preserves_result_order() -> None:
+    from types import SimpleNamespace
+    from archive_workbench.review_app import _search_navigation_entries
+
+    results = [
+        SimpleNamespace(
+            source_key="doc_a",
+            page_number=2,
+            object_id="obj_a",
+            document_title="Documento A",
+            order_index=4,
+            match_scope="Texto revisado",
+        ),
+        SimpleNamespace(
+            source_key="doc_b",
+            page_number=7,
+            object_id="obj_b",
+            document_title="Documento B",
+            order_index=1,
+            match_scope="Comentario",
+        ),
+    ]
+
+    entries = _search_navigation_entries(results)
+    assert [(row["source_key"], row["page"], row["object_id"]) for row in entries] == [
+        ("doc_a", 2, "obj_a"),
+        ("doc_b", 7, "obj_b"),
+    ]

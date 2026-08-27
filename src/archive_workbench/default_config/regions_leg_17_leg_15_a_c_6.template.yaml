@@ -1,0 +1,118 @@
+schema_version: "1.0"
+template_key: side_message_form_v1
+profile_key: tesseract_side_form_regions_es_v1
+source_key: leg_17_leg_15_a_c_6
+description: >-
+  Plantilla inicial para un formulario SIDE con texto mecanografiado, sellos y
+  anotaciones manuscritas. Las coordenadas son normalizadas y deben verificarse
+  con render-regions antes de extraer.
+tesseract_command: tesseract
+timeout_seconds: 900
+regions:
+  - region_key: header_form_fields
+    label: Encabezado y campos impresos del formulario
+    page: 1
+    reading_order: 10
+    bbox: {x0: 0.10, y0: 0.05, x1: 0.98, y1: 0.34}
+    mode: ocr
+    object_type: form_field
+    hidden_by_default: false
+    ocr:
+      image_variant: original
+      psm: 11
+      languages: [spa]
+      object_granularity: line
+      minimum_characters_warning: 40
+    note: Texto impreso y mecanografiado disperso; PSM 11 evita imponer un bloque único.
+
+  - region_key: typed_message
+    label: Asunto y cuerpo mecanografiado
+    page: 1
+    reading_order: 20
+    bbox: {x0: 0.11, y0: 0.34, x1: 0.97, y1: 0.53}
+    mode: ocr
+    object_type: paragraph
+    hidden_by_default: false
+    ocr:
+      image_variant: grayscale_autocontrast
+      psm: 6
+      languages: [spa]
+      object_granularity: paragraph
+      minimum_characters_warning: 120
+    note: Zona de texto corrido; al recortarla deja de ser una página compleja y puede tratarse como bloque.
+
+  - region_key: entry_stamp
+    label: Sello de entrada de la Gobernación del Chubut
+    page: 1
+    reading_order: 30
+    bbox: {x0: 0.12, y0: 0.50, x1: 0.38, y1: 0.65}
+    mode: manual
+    object_type: stamp
+    hidden_by_default: false
+    note: Conservar recorte y transcribir manualmente; Tesseract no debe declararlo texto confiable.
+
+  - region_key: routing_stamp
+    label: Sello de tramitación inferior
+    page: 1
+    reading_order: 40
+    bbox: {x0: 0.31, y0: 0.64, x1: 0.92, y1: 0.76}
+    mode: manual
+    object_type: stamp
+    hidden_by_default: false
+    note: El sello contiene texto tenue y anotaciones superpuestas.
+
+  - region_key: routing_handwriting
+    label: Anotaciones manuscritas sobre el sello inferior
+    page: 1
+    reading_order: 50
+    bbox: {x0: 0.61, y0: 0.64, x1: 0.97, y1: 0.77}
+    mode: manual
+    object_type: handwritten_region
+    hidden_by_default: false
+    note: Región superpuesta al sello; requiere transcripción de referencia independiente.
+
+  - region_key: footer_form_fields
+    label: Campos de tráfico y pie del formulario
+    page: 1
+    reading_order: 60
+    bbox: {x0: 0.10, y0: 0.77, x1: 0.98, y1: 0.96}
+    mode: ocr
+    object_type: form_field
+    hidden_by_default: false
+    ocr:
+      image_variant: original
+      psm: 11
+      languages: [spa]
+      object_granularity: line
+      minimum_characters_warning: 35
+    note: Campos impresos dispersos y algunos valores mecanografiados.
+
+  - region_key: left_vertical_margin
+    label: Leyenda vertical del margen izquierdo
+    page: 1
+    reading_order: 70
+    bbox: {x0: 0.00, y0: 0.15, x1: 0.12, y1: 0.79}
+    mode: manual
+    object_type: marginalia
+    hidden_by_default: true
+    note: Texto vertical; se preserva para una futura OCR con rotación regional controlada.
+
+  - region_key: top_red_annotation
+    label: Código manuscrito rojo superior
+    page: 1
+    reading_order: 80
+    bbox: {x0: 0.79, y0: 0.00, x1: 1.00, y1: 0.11}
+    mode: manual
+    object_type: handwritten_region
+    hidden_by_default: false
+    note: Anotación manuscrita roja.
+
+  - region_key: left_blue_annotation
+    label: Anotación manuscrita azul del margen inferior izquierdo
+    page: 1
+    reading_order: 90
+    bbox: {x0: 0.00, y0: 0.79, x1: 0.13, y1: 0.97}
+    mode: manual
+    object_type: handwritten_region
+    hidden_by_default: false
+    note: Anotación manuscrita azul.

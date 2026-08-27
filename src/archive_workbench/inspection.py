@@ -14,6 +14,15 @@ from archive_workbench.audiovisual import AUDIO_EXTENSIONS, VIDEO_EXTENSIONS
 _TIFF_SIGNATURES = (b"II*\x00", b"MM\x00*", b"II+\x00", b"MM\x00+")
 _PDF_SIGNATURE = b"%PDF-"
 
+PROCESSABLE_RASTER_SUFFIXES = frozenset({".png", ".jpg", ".jpeg", ".webp"})
+PROCESSABLE_DOCUMENT_SUFFIXES = frozenset(
+    {".pdf", ".tif", ".tiff", *PROCESSABLE_RASTER_SUFFIXES}
+)
+
+
+def is_processable_document_path(path: str | Path) -> bool:
+    return Path(path).suffix.lower() in PROCESSABLE_DOCUMENT_SUFFIXES
+
 
 def detect_media_type(path: str | Path) -> MediaType:
     source = Path(path)
@@ -24,7 +33,7 @@ def detect_media_type(path: str | Path) -> MediaType:
     if any(signature.startswith(candidate) for candidate in _TIFF_SIGNATURES):
         return MediaType.TIFF
     suffix = source.suffix.lower()
-    if suffix in {".png", ".jpg", ".jpeg", ".bmp", ".webp"}:
+    if suffix in PROCESSABLE_RASTER_SUFFIXES:
         return MediaType.IMAGE
     if suffix in AUDIO_EXTENSIONS:
         return MediaType.AUDIO
@@ -58,8 +67,10 @@ def inspect_input(path: str | Path) -> InputInspection:
         )
     return InputInspection(
         **common,
-        warnings=["Formato todavía no inspeccionable por el módulo inicial."],
-        recommendations=["Registrar el archivo, pero no enviarlo todavía a extracción."],
+        warnings=["Formato no admitido para procesamiento documental."],
+        recommendations=[
+            "Conservar el original; para procesarlo, convertir una copia a PDF, TIFF, PNG, JPEG o WebP."
+        ],
     )
 
 

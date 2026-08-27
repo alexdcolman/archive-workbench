@@ -1,0 +1,31 @@
+<!doctype html>
+<html lang="es-AR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Tutorial · Archive Workbench</title>
+<meta name="description" content="Tutorial de Archive Workbench desde la incorporación de documentos hasta la revisión, análisis, exportación y resguardo.">
+<meta name="theme-color" content="#f4f0e6">
+<link rel="stylesheet" href="assets/site.css">
+</head>
+<body>
+<a class="skip" href="#contenido">Saltar al contenido</a>
+<header class="site-head"><div class="head-inner"><div class="brand"><a href="index.html">Archive Workbench</a><span>documentación pública · 0.89.0</span></div><nav aria-label="Navegación principal"><ul><li><a href="index.html">Inicio</a></li><li><a href="instalacion.html">Instalación</a></li><li><a href="tutorial.html" aria-current="page">Tutorial</a></li><li><a href="catalogo.html">Catálogo</a></li><li><a href="procesamiento.html">Procesamiento</a></li><li><a href="revision.html">Revisión</a></li><li><a href="entidades.html">Entidades</a></li><li><a href="busquedas.html">Búsquedas</a></li><li><a href="relaciones.html">Relaciones</a></li><li><a href="audiovisual.html">Audio y video</a></li><li><a href="exportacion.html">Exportación</a></li><li><a href="intercambio.html">Intercambio</a></li><li><a href="resguardo.html">Resguardo</a></li><li><a href="conceptos.html">Conceptos</a></li><li><a href="referencia.html">Referencia</a></li><li><a href="problemas.html">Problemas frecuentes</a></li></ul></nav></div></header>
+<main id="contenido">
+<p class="kicker">Recorrido reproducible</p><h1>Del archivo original a un corpus revisado</h1><p class="lead">Este recorrido usa un proyecto local con documentos digitalizados ya autorizados para el equipo. Cada paso indica qué se crea y qué sigue siendo candidato.</p>
+<p class="callout">Las capturas reales de este tutorial se incorporarán después de la producción editorial sobre un mismo corpus y versión. El procedimiento ya puede seguirse sin ellas.</p>
+<ol class="steps"><li><h3>Crear o abrir el proyecto</h3><p>Ejecutá <span class="path">archive-workbench review-app</span>. En la pantalla inicial elegí <strong>Abrir un proyecto existente</strong> o <strong>Crear un proyecto nuevo</strong>.</p></li>
+<li><h3>Describir el catálogo</h3><p>Abrí <strong>Catálogo &gt; Unidades del catálogo</strong>. Seleccioná una unidad o creá la estructura necesaria. La ubicación puede representar custodia, jerarquía documental o ubicación física según los niveles involucrados.</p></li>
+<li><h3>Incorporar originales</h3><p>En <strong>Catálogo &gt; Incorporar archivos</strong>, revisá los archivos y su asociación con unidades antes de registrarlos. Archive Workbench conserva el original y registra su identidad.</p></li>
+<li><h3>Preparar y extraer texto</h3><p>En <strong>Procesar documentos</strong>, prepará las páginas y ejecutá una extracción. La salida es una <em>candidata</em>; no reemplaza todavía ninguna decisión de revisión.</p></li>
+<li><h3>Elegir texto para revisar</h3><p>Compará las extracciones disponibles y elegí explícitamente cuál utilizar en cada página. La selección queda registrada y alimenta la capa editable.</p></li>
+<li><h3>Revisar imagen y texto</h3><p>En <strong>Revisar documentos</strong>, elegí un bloque desde la imagen o la lista, corregí el texto y guardá la modificación mediante el botón correspondiente.</p></li>
+<li><h3>Registrar entidades y menciones</h3><p>En <strong>Entidades y menciones</strong>, creá o elegí una entidad y vinculá sus menciones con evidencia documental. <strong>Buscar nuevas entidades</strong> propone candidatos que requieren revisión.</p></li>
+<li><h3>Buscar y explorar</h3><p>Usá <strong>Búsqueda textual</strong> para coincidencias literales y <strong>Búsqueda semántica</strong> cuando exista un índice local. <strong>Explorar relaciones</strong> deriva un grafo a partir de la información registrada.</p></li>
+<li><h3>Exportar</h3><p>En <strong>Exportar corpus</strong>, configurá el alcance, revisá la muestra y recién entonces creá CSV, JSONL o el paquete de texto e imágenes. La salida registra configuración y huellas.</p></li>
+<li><h3>Resguardar el proyecto</h3><p>En <strong>Administrar y recuperar</strong>, comprobá integridad, creá backups y usá las pruebas no destructivas de recuperación antes de necesitar una restauración real.</p></li></ol>
+<h2>Audio y video</h2><p>Los medios siguen un circuito paralelo de incorporación, transcripción temporal y revisión sincronizada. Consultá <a href="audiovisual.html">Audio y video</a>.</p>
+</main>
+<footer class="site-foot"><p>Archive Workbench · software libre AGPL-3.0-or-later · <a href="https://github.com/alexdcolman/archive-workbench">repositorio</a> · <a href="https://github.com/alexdcolman/archive-workbench/blob/main/CITATION.cff">cita</a> · <a href="https://github.com/alexdcolman/archive-workbench/blob/main/CHANGELOG.md">cambios</a></p></footer>
+</body>
+</html>

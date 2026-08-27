@@ -19,6 +19,7 @@ from archive_workbench.analysis_quality import (
 from archive_workbench.authority_dictionary import (
     apply_authority_dictionary,
     authority_dictionary_schema_bytes,
+    export_authority_dictionary_bytes,
     validate_authority_dictionary,
 )
 from archive_workbench.authorities import (
@@ -69,6 +70,7 @@ from archive_workbench.db import (
 )
 from archive_workbench.db.models import Project, SourceRegistration, WorkAssignment
 from archive_workbench.decisions import load_decisions
+from archive_workbench.user_preferences import load_user_preferences, streamlit_theme_cli_args
 from archive_workbench.document_plans import (
     create_document_plan_template,
     document_part_status_rows,
@@ -166,6 +168,7 @@ from archive_workbench.region_extraction import (
     validate_region_template,
 )
 from archive_workbench.project_init import initialize_project
+from archive_workbench.project_setup import bundled_template_root
 from archive_workbench.operational import (
     operational_readiness,
     recovery_check_rows,
@@ -335,16 +338,31 @@ def inspect_test_corpus(
 
 @app.command("inspect-input")
 def inspect_input_command(path: Path, pretty: bool = True) -> None:
-    """Inspecciona un PDF, TIFF o imagen sin modificarlo."""
+    """Inspecciona un archivo sin modificarlo y clasifica si es procesable."""
     inspection = inspect_input(path)
     payload = inspection.model_dump(mode="json", exclude_none=True)
     typer.echo(json.dumps(payload, ensure_ascii=False, indent=2 if pretty else None))
 
 
 @app.command("init-project")
-def init_project(path: Path, templates: Path | None = None) -> None:
+def init_project(
+    path: Path,
+    templates: Path | None = None,
+    complete_existing: bool = typer.Option(
+        False,
+        "--complete-existing",
+        help="Completa carpetas y archivos de configuración faltantes sin reemplazar los existentes.",
+    ),
+) -> None:
     """Crea la estructura inicial de carpetas de un proyecto."""
-    root = initialize_project(path, templates)
+    try:
+        root = initialize_project(
+            path,
+            templates if templates is not None else bundled_template_root(),
+            allow_existing=complete_existing,
+        )
+    except FileExistsError as exc:
+        raise typer.BadParameter(str(exc)) from exc
     typer.echo(f"Proyecto inicializado en: {root}")
 
 
@@ -2701,7 +2719,9 @@ def exchange_fork_copy_command(
         raise typer.BadParameter(
             "Use --confirm-copy únicamente después de duplicar físicamente el proyecto"
         )
-    initialize_project(project_root)
+    # Esta operación es, por definición, explícita sobre una copia física ya existente.
+    # Sólo recompone directorios operativos faltantes; no reemplaza archivos existentes.
+    initialize_project(project_root, allow_existing=True)
     _require_current_database(project_root)
     engine = create_sqlite_engine(database_path(project_root))
     try:
@@ -2999,7 +3019,7 @@ def exchange_resolution_status_command(
     project_root: Path = typer.Argument(..., help="Raíz del proyecto operativo"),
     bundle: str = typer.Argument(..., help="ID del bundle o ruta al ZIP evaluado"),
 ) -> None:
-    """Resume el avance de la resolución humana de un bundle."""
+    """Resume el avance de la resolución manual de un bundle."""
     _require_current_database(project_root)
     engine = create_sqlite_engine(database_path(project_root))
     try:
@@ -3111,6 +3131,27 @@ def authority_dictionary_schema_command(
     typer.echo(f"OK: esquema escrito en {output}")
 
 
+@app.command("authority-dictionary-export")
+def authority_dictionary_export_command(
+    project_root: Path = typer.Argument(..., help="Raíz del proyecto operativo"),
+    output: Path = typer.Argument(..., help="Archivo JSON editable de salida"),
+) -> None:
+    """Exporta las fichas actuales para editarlas y reimportarlas."""
+    _require_current_database(project_root)
+    engine = create_sqlite_engine(database_path(project_root))
+    try:
+        with session_scope(engine) as session:
+            project_id = _single_project_id(session)
+            content = export_authority_dictionary_bytes(
+                session, project_id=project_id
+            )
+    finally:
+        engine.dispose()
+    output.parent.mkdir(parents=True, exist_ok=True)
+    output.write_bytes(content)
+    typer.echo(f"OK: fichas exportadas en {output}")
+
+
 @app.command("authority-dictionary-validate")
 def authority_dictionary_validate_command(
     project_root: Path = typer.Argument(..., help="Raíz del proyecto operativo"),
@@ -3207,10 +3248,12 @@ def authority_dictionary_import_command(
     typer.echo(
         "OK: "
         f"entidades +{result.authorities_created}, "
+        f"actualizadas {result.authorities_updated}, "
         f"reutilizadas {result.authorities_reused}, "
         f"omitidas {result.authorities_skipped}, "
         f"alias +{result.aliases_added}, "
         f"relaciones +{result.relations_created}, "
+        f"relaciones actualizadas {result.relations_updated}, "
         f"relaciones omitidas {result.relations_skipped}"
     )
 
@@ -4319,7 +4362,7 @@ def discovery_decide_command(
     temporal_expression: str | None = typer.Option(None, "--temporal-expression"),
     confirm_new_authority: bool = typer.Option(False, "--confirm-new-authority"),
 ) -> None:
-    """Registra una decisión humana append-only sobre un candidato."""
+    """Registra una decisión explícita append-only sobre un candidato."""
     if decision not in DISCOVERY_DECISION_TYPES:
         raise typer.BadParameter(
             "Decisión inválida: " + decision + ". Usá " + ", ".join(DISCOVERY_DECISION_TYPES)
@@ -5232,27 +5275,32 @@ def work_summary_command(
 
 @app.command("review-app")
 def review_app_command(
-    project_root: Path = typer.Argument(..., help="Raíz del proyecto operativo"),
+    project_root: Path | None = typer.Argument(
+        None, help="Raíz de un proyecto. Si se omite, abre el inicio de Archive Workbench."
+    ),
     host: str = typer.Option("127.0.0.1", "--host"),
     port: int = typer.Option(8501, "--port", min=1, max=65535),
     open_browser: bool = typer.Option(
         True, "--open-browser/--no-browser", help="Abrir la interfaz en el navegador"
     ),
 ) -> None:
-    """Inicia la primera interfaz local de revisión versionada."""
+    """Abre Archive Workbench con un proyecto concreto o con el inicio general."""
     if importlib.util.find_spec("streamlit") is None:
         raise typer.BadParameter(
             "Streamlit no está instalado. Ejecutá: "
             'pip install -e ".[dev,extraction,streamlit]"'
         )
-    project_root = project_root.expanduser().resolve()
-    decisions_path = project_root / "config" / "decisions.yaml"
-    if not decisions_path.is_file():
-        raise typer.BadParameter(
-            f"No se encontró la configuración del proyecto: {decisions_path}"
-        )
-    _require_current_database(project_root)
+    resolved_root: Path | None = None
+    if project_root is not None:
+        resolved_root = project_root.expanduser().resolve()
+        decisions_path = resolved_root / "config" / "decisions.yaml"
+        if not decisions_path.is_file():
+            raise typer.BadParameter(
+                f"No se encontró la configuración del proyecto: {decisions_path}"
+            )
+        _require_current_database(resolved_root)
     script = Path(__file__).with_name("review_app.py")
+    preferences = load_user_preferences()
     command = [
         sys.executable,
         "-m",
@@ -5265,10 +5313,10 @@ def review_app_command(
         str(port),
         "--server.headless",
         "false" if open_browser else "true",
-        "--",
-        "--project-root",
-        str(project_root),
+        *streamlit_theme_cli_args(preferences.palette),
     ]
+    if resolved_root is not None:
+        command.extend(["--", "--project-root", str(resolved_root)])
     typer.echo(f"Interfaz: http://{host}:{port}")
     typer.echo("Para detenerla, presioná Ctrl+C.")
     try:
@@ -5463,7 +5511,7 @@ def project_backup_create_command(
     note: str | None = typer.Option(None, "--note"),
     out: Path | None = typer.Option(None, "--out", help="ZIP de salida opcional"),
 ) -> None:
-    """Crea un backup verificable de SQLite y config, sin copiar PDF/TIFF."""
+    """Crea un backup verificable de SQLite y config, sin copiar originales."""
     # Un backup debe capturar el estado existente. Migrar antes de copiar haría
     # imposible obtener un respaldo real de la revisión anterior.
     try:

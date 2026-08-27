@@ -11,12 +11,16 @@ from archive_workbench.catalog_management import (
     archival_field_rows,
     archival_revision_rows,
     catalog_summary,
+    archival_unit_delete_blockers,
     catalog_unit_rows,
+    change_archival_unit_level,
     create_archival_unit,
+    delete_archival_unit,
     move_archival_unit,
     undo_last_archival_move,
     unlink_digital_object_from_unit,
     remove_file_instance,
+    register_external_file,
     register_local_file,
     register_uploaded_file,
     search_catalog_units,
@@ -513,5 +517,141 @@ def test_remove_file_instance_can_delete_physical_file_with_explicit_flag(tmp_pa
             )
             assert removal.physical_deleted is True
             assert not pdf_path.exists()
+    finally:
+        engine.dispose()
+
+
+def test_register_external_file_copies_and_registers_without_modifying_source(tmp_path: Path) -> None:
+    root, decisions, engine = _setup(tmp_path)
+    source = tmp_path / "outside" / "documento.pdf"
+    _write_pdf(source, "contenido externo")
+    source_before = source.read_bytes()
+    try:
+        with session_scope(engine) as session:
+            unit = create_archival_unit(
+                session,
+                decisions=decisions,
+                project_id=decisions.project_id,
+                parent_id=None,
+                level_key="archivo",
+                title="Archivo",
+                created_by="Alex",
+            )
+            result = register_external_file(
+                session,
+                project_root=root,
+                project_id=decisions.project_id,
+                archival_unit_id=unit.id,
+                source_path=source,
+                destination_dir="corpus/lote",
+                page_start=1,
+                page_end=1,
+                registered_by="Alex",
+            )
+            relative = result.relative_path
+        assert relative == "corpus/lote/documento.pdf"
+        assert (root / relative).read_bytes() == source_before
+        assert source.read_bytes() == source_before
+        with session_scope(engine) as session:
+            assert session.scalar(select(FileInstance).where(FileInstance.relative_path == relative)) is not None
+    finally:
+        engine.dispose()
+
+
+
+def test_change_level_is_validated_and_audited(tmp_path: Path) -> None:
+    _root, decisions, engine = _setup(tmp_path)
+    try:
+        with session_scope(engine) as session:
+            archivo = create_archival_unit(
+                session, decisions=decisions, project_id=decisions.project_id,
+                parent_id=None, level_key="archivo", title="Archivo", created_by="Alex",
+            )
+            fondo = create_archival_unit(
+                session, decisions=decisions, project_id=decisions.project_id,
+                parent_id=archivo.id, level_key="fondo", title="rememorARTE", created_by="Alex",
+            )
+            changed = change_archival_unit_level(
+                session, decisions=decisions, unit_id=fondo.id,
+                new_level_key="coleccion", changed_by="Alex",
+            )
+            assert changed.level_key == "coleccion"
+            assert changed.id == fondo.id
+            assert archival_revision_rows(session, fondo.id)[0].operation == "change_level"
+    finally:
+        engine.dispose()
+
+
+def test_change_level_rejects_incompatible_children(tmp_path: Path) -> None:
+    _root, decisions, engine = _setup(tmp_path)
+    try:
+        with session_scope(engine) as session:
+            archivo = create_archival_unit(
+                session, decisions=decisions, project_id=decisions.project_id,
+                parent_id=None, level_key="archivo", title="Archivo", created_by="Alex",
+            )
+            fondo = create_archival_unit(
+                session, decisions=decisions, project_id=decisions.project_id,
+                parent_id=archivo.id, level_key="fondo", title="Fondo", created_by="Alex",
+            )
+            create_archival_unit(
+                session, decisions=decisions, project_id=decisions.project_id,
+                parent_id=fondo.id, level_key="caja", title="Caja", created_by="Alex",
+            )
+            with pytest.raises(ValueError, match="unidades hijas"):
+                change_archival_unit_level(
+                    session, decisions=decisions, unit_id=fondo.id,
+                    new_level_key="coleccion", changed_by="Alex",
+                )
+    finally:
+        engine.dispose()
+
+
+def test_delete_archival_unit_only_when_empty(tmp_path: Path) -> None:
+    _root, decisions, engine = _setup(tmp_path)
+    try:
+        with session_scope(engine) as session:
+            archivo = create_archival_unit(
+                session, decisions=decisions, project_id=decisions.project_id,
+                parent_id=None, level_key="archivo", title="Archivo", created_by="Alex",
+            )
+            fondo = create_archival_unit(
+                session, decisions=decisions, project_id=decisions.project_id,
+                parent_id=archivo.id, level_key="fondo", title="Vacío", created_by="Alex",
+            )
+            assert archival_unit_delete_blockers(session, fondo.id) == []
+            assert delete_archival_unit(session, unit_id=fondo.id, deleted_by="Alex") == "Vacío"
+            assert session.get(ArchivalUnit, fondo.id) is None
+            assert session.get(ArchivalUnit, archivo.id) is not None
+    finally:
+        engine.dispose()
+
+
+def test_delete_archival_unit_rejects_children_and_digital_links(tmp_path: Path) -> None:
+    root, decisions, engine = _setup(tmp_path)
+    _write_pdf(root / "corpus" / "vinculado.pdf", "contenido")
+    try:
+        with session_scope(engine) as session:
+            archivo = create_archival_unit(
+                session, decisions=decisions, project_id=decisions.project_id,
+                parent_id=None, level_key="archivo", title="Archivo", created_by="Alex",
+            )
+            fondo = create_archival_unit(
+                session, decisions=decisions, project_id=decisions.project_id,
+                parent_id=archivo.id, level_key="fondo", title="Fondo", created_by="Alex",
+            )
+            create_archival_unit(
+                session, decisions=decisions, project_id=decisions.project_id,
+                parent_id=fondo.id, level_key="documento", title="Hijo", created_by="Alex",
+            )
+            register_local_file(
+                session, project_root=root, project_id=decisions.project_id,
+                archival_unit_id=fondo.id, relative_path="corpus/vinculado.pdf",
+            )
+            blockers = archival_unit_delete_blockers(session, fondo.id)
+            assert any("hija" in item for item in blockers)
+            assert any("contenidos digitales" in item for item in blockers)
+            with pytest.raises(ValueError, match="no puede eliminarse"):
+                delete_archival_unit(session, unit_id=fondo.id, deleted_by="Alex")
     finally:
         engine.dispose()

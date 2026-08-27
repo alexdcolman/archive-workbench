@@ -4,6 +4,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 
 import fitz
+import pytest
 from PIL import Image, ImageDraw
 from sqlalchemy import select
 
@@ -18,7 +19,12 @@ from archive_workbench.db import (
 )
 from archive_workbench.db.models import DerivativeAsset, PreprocessingRun
 from archive_workbench.decisions import load_decisions
-from archive_workbench.preprocessing import prepare_derivatives, preprocessing_status_rows
+from archive_workbench.contracts.preprocessing import DerivativeProfile
+from archive_workbench.preprocessing import (
+    _render_raster_pyvips,
+    prepare_derivatives,
+    preprocessing_status_rows,
+)
 
 
 def _write_pdf(path: Path, pages: int = 2) -> None:
@@ -37,6 +43,13 @@ def _write_tiff(path: Path) -> None:
     draw = ImageDraw.Draw(image)
     draw.text((50, 50), "Texto horizontal legible", fill="black")
     image.save(path, format="TIFF", dpi=(300, 300), compression="tiff_deflate")
+
+def _write_raster(path: Path, *, image_format: str) -> None:
+    path.parent.mkdir(parents=True, exist_ok=True)
+    image = Image.new("RGB", (320, 180), "white")
+    draw = ImageDraw.Draw(image)
+    draw.text((20, 20), "Texto de prueba", fill="black")
+    image.save(path, format=image_format)
 
 
 def _corpus(documents: list[dict]) -> CorpusDefinition:
@@ -87,7 +100,7 @@ def test_pdf_derivatives_are_created_and_reused(tmp_path: Path) -> None:
     corpus = _corpus([_document("pdf_a", "corpus/caja/a.pdf", "pdf", "PDF A")])
 
     upgrade_database(root)
-    assert current_revision(root) == "0046_audiovisual_timeline_annotations"
+    assert current_revision(root) == "0047_authority_relation_profiles"
     engine = create_sqlite_engine(database_path(root))
     try:
         with session_scope(engine) as session:
@@ -166,6 +179,165 @@ def test_tiff_derivatives_keep_native_orientation_and_resolution(tmp_path: Path)
     assert preview.width > preview.height
     assert status[0].run_status == "completed"
     assert status[0].assets == 2
+
+
+
+@pytest.mark.parametrize(
+    ("suffix", "image_format"),
+    [("png", "PNG"), ("jpg", "JPEG"), ("jpeg", "JPEG"), ("webp", "WEBP")],
+)
+def test_declared_raster_formats_create_document_derivatives(
+    tmp_path: Path, suffix: str, image_format: str
+) -> None:
+    root = tmp_path / "project"
+    relative = f"corpus/imagenes/control.{suffix}"
+    _write_raster(root / relative, image_format=image_format)
+    decisions = load_decisions(Path(__file__).parents[1] / "config/decisions.yaml")
+    decisions.tiff.use_pyvips_when_available = False
+    corpus = _corpus([_document(f"image_{suffix}", relative, "image", f"Imagen {suffix}")])
+
+    upgrade_database(root)
+    engine = create_sqlite_engine(database_path(root))
+    try:
+        with session_scope(engine) as session:
+            register_test_corpus(
+                session,
+                project_root=root,
+                decisions=decisions,
+                corpus=corpus,
+            )
+        with session_scope(engine) as session:
+            summary = prepare_derivatives(
+                session,
+                project_root=root,
+                decisions=decisions,
+            )
+        with session_scope(engine) as session:
+            assets = session.scalars(select(DerivativeAsset)).all()
+    finally:
+        engine.dispose()
+
+    assert summary.runs_created == 1
+    assert summary.failed == 0
+    assert len(assets) == 2
+    assert {asset.kind for asset in assets} == {"ocr", "preview"}
+    assert all((root / asset.relative_path).is_file() for asset in assets)
+
+
+def test_bmp_is_rejected_by_document_preprocessing_even_for_legacy_image_record(
+    tmp_path: Path,
+) -> None:
+    root = tmp_path / "project"
+    relative = "corpus/imagenes/control.bmp"
+    _write_raster(root / relative, image_format="BMP")
+    decisions = load_decisions(Path(__file__).parents[1] / "config/decisions.yaml")
+    corpus = _corpus([_document("image_bmp", relative, "image", "Imagen BMP")])
+
+    upgrade_database(root)
+    engine = create_sqlite_engine(database_path(root))
+    try:
+        with session_scope(engine) as session:
+            register_test_corpus(
+                session,
+                project_root=root,
+                decisions=decisions,
+                corpus=corpus,
+            )
+            run = session.scalar(select(PreprocessingRun))
+            assert run is None
+            from archive_workbench.db.models import DigitalObject
+
+            digital = session.scalar(select(DigitalObject))
+            assert digital is not None
+            digital.media_type = "image"
+        with session_scope(engine) as session:
+            summary = prepare_derivatives(
+                session,
+                project_root=root,
+                decisions=decisions,
+            )
+    finally:
+        engine.dispose()
+
+    assert summary.failed == 1
+    assert summary.runs_created == 0
+    assert "Formato no admitido" in summary.warnings[0]
+    assert "PDF, TIFF, PNG, JPEG o WebP" in summary.warnings[0]
+
+
+def test_pyvips_sequential_tiff_reopens_page_for_preview(tmp_path: Path) -> None:
+    class FakeImage:
+        def __init__(self, *, width: int = 1200, height: int = 600) -> None:
+            self.width = width
+            self.height = height
+            self.bands = 3
+            self.xres = 300 / 25.4
+            self.yres = 300 / 25.4
+            self.consumed = False
+
+        def flatten(self, **_kwargs):
+            return self
+
+        def colourspace(self, _space: str):
+            return self
+
+        def resize(self, scale: float):
+            if self.consumed:
+                raise RuntimeError("out of order read: sequential image reused")
+            return FakeImage(
+                width=max(1, round(self.width * scale)),
+                height=max(1, round(self.height * scale)),
+            )
+
+        def write_to_file(self, path: str, **_kwargs) -> None:
+            if self.consumed:
+                raise RuntimeError("out of order read: sequential image reused")
+            self.consumed = True
+            Path(path).write_bytes(b"fake-vips-output")
+
+    class FakeVipsImageFactory:
+        calls: list[dict[str, object]] = []
+
+        @classmethod
+        def new_from_file(cls, _path: str, **kwargs):
+            cls.calls.append(dict(kwargs))
+            return FakeImage()
+
+    class FakePyvips:
+        Image = FakeVipsImageFactory
+
+    root = tmp_path / "project"
+    source = root / "corpus/legajo/a.tiff"
+    source.parent.mkdir(parents=True, exist_ok=True)
+    source.write_bytes(b"source-placeholder")
+    output = root / "derivatives/test"
+    profile = DerivativeProfile(
+        preview_dpi=150,
+        ocr_dpi=300,
+        preview_format="webp",
+        ocr_format="png",
+    )
+
+    assets, warnings, backend, _version = _render_raster_pyvips(
+        source,
+        page_count=1,
+        project_root=root,
+        output_dir=output,
+        run_id="run_test",
+        digital_object_id="digital_test",
+        profile=profile,
+        pyvips=FakePyvips,
+    )
+
+    assert backend == "pyvips"
+    assert warnings == []
+    assert len(assets) == 2
+    assert {asset.kind for asset in assets} == {"ocr", "preview"}
+    assert len(FakeVipsImageFactory.calls) == 2
+    assert all(call["access"] == "sequential" for call in FakeVipsImageFactory.calls)
+    assert all(call["page"] == 0 for call in FakeVipsImageFactory.calls)
+    assert all(call["n"] == 1 for call in FakeVipsImageFactory.calls)
+    assert all((root / asset.relative_path).is_file() for asset in assets)
 
 
 def test_modified_source_is_not_preprocessed_under_old_identity(tmp_path: Path) -> None:

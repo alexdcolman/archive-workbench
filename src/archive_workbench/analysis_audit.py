@@ -4,7 +4,7 @@ from dataclasses import dataclass
 from datetime import datetime
 from typing import Any, Mapping
 
-from sqlalchemy import select
+from sqlalchemy import or_, select
 from sqlalchemy.orm import Session
 
 from archive_workbench.analysis_quality import (
@@ -86,20 +86,112 @@ def record_automatic_analysis_authorization(
     return row
 
 
+@dataclass(frozen=True, slots=True)
+class AutomaticAnalysisAuthorizationFilterOptions:
+    analysis_kinds: tuple[tuple[str, str], ...]
+    confirmed_by: tuple[str, ...]
+    sources: tuple[str, ...]
+    scope_keys: tuple[str, ...]
+
+
+def automatic_analysis_authorization_filter_options(
+    session: Session,
+    *,
+    project_id: str,
+) -> AutomaticAnalysisAuthorizationFilterOptions:
+    kinds = tuple(
+        str(value)
+        for value in session.scalars(
+            select(AutomaticAnalysisAuthorization.analysis_kind)
+            .where(AutomaticAnalysisAuthorization.project_id == project_id)
+            .distinct()
+            .order_by(AutomaticAnalysisAuthorization.analysis_kind)
+        ).all()
+        if str(value).strip()
+    )
+    confirmed_by = tuple(
+        str(value)
+        for value in session.scalars(
+            select(AutomaticAnalysisAuthorization.confirmed_by)
+            .where(AutomaticAnalysisAuthorization.project_id == project_id)
+            .distinct()
+            .order_by(AutomaticAnalysisAuthorization.confirmed_by)
+        ).all()
+        if str(value).strip()
+    )
+    sources = tuple(
+        str(value)
+        for value in session.scalars(
+            select(AutomaticAnalysisAuthorization.source)
+            .where(AutomaticAnalysisAuthorization.project_id == project_id)
+            .distinct()
+            .order_by(AutomaticAnalysisAuthorization.source)
+        ).all()
+        if str(value).strip()
+    )
+    scope_keys = tuple(
+        str(value)
+        for value in session.scalars(
+            select(AutomaticAnalysisAuthorization.scope_key)
+            .where(AutomaticAnalysisAuthorization.project_id == project_id)
+            .distinct()
+            .order_by(AutomaticAnalysisAuthorization.scope_key)
+        ).all()
+        if str(value).strip()
+    )
+    return AutomaticAnalysisAuthorizationFilterOptions(
+        analysis_kinds=tuple((kind, automatic_analysis_spec(kind).label) for kind in kinds),
+        confirmed_by=confirmed_by,
+        sources=sources,
+        scope_keys=scope_keys,
+    )
+
+
 def automatic_analysis_authorization_rows(
     session: Session,
     *,
     project_id: str,
+    analysis_kind: str | None = None,
+    confirmed_by: str | None = None,
+    source: str | None = None,
+    scope_key: str | None = None,
+    query: str | None = None,
     limit: int = 100,
 ) -> list[AutomaticAnalysisAuthorizationRow]:
+    statement = select(AutomaticAnalysisAuthorization).where(
+        AutomaticAnalysisAuthorization.project_id == project_id
+    )
+    if analysis_kind:
+        statement = statement.where(
+            AutomaticAnalysisAuthorization.analysis_kind == analysis_kind
+        )
+    if confirmed_by:
+        statement = statement.where(
+            AutomaticAnalysisAuthorization.confirmed_by == confirmed_by
+        )
+    if source:
+        statement = statement.where(AutomaticAnalysisAuthorization.source == source)
+    if scope_key:
+        statement = statement.where(
+            AutomaticAnalysisAuthorization.scope_key == scope_key
+        )
+    clean_query = " ".join((query or "").split()).lower()
+    if clean_query:
+        pattern = f"%{clean_query}%"
+        statement = statement.where(
+            or_(
+                AutomaticAnalysisAuthorization.analysis_kind.ilike(pattern),
+                AutomaticAnalysisAuthorization.confirmed_by.ilike(pattern),
+                AutomaticAnalysisAuthorization.confirmation_reason.ilike(pattern),
+                AutomaticAnalysisAuthorization.target_type.ilike(pattern),
+                AutomaticAnalysisAuthorization.target_id.ilike(pattern),
+            )
+        )
     rows = session.scalars(
-        select(AutomaticAnalysisAuthorization)
-        .where(AutomaticAnalysisAuthorization.project_id == project_id)
-        .order_by(
+        statement.order_by(
             AutomaticAnalysisAuthorization.created_at.desc(),
             AutomaticAnalysisAuthorization.id.desc(),
-        )
-        .limit(max(1, int(limit)))
+        ).limit(max(1, int(limit)))
     ).all()
     result: list[AutomaticAnalysisAuthorizationRow] = []
     for row in rows:

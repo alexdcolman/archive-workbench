@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 import hashlib
+import shutil
 from datetime import datetime, timezone
 from pathlib import Path, PurePosixPath
 from typing import Any
@@ -18,6 +19,7 @@ from archive_workbench.db.models import (
     DigitalObject,
     DigitalObjectUnitLink,
     EditablePage,
+    EntityRelation,
     ExtractionPageSelection,
     ExtractionRun,
     FileInstance,
@@ -409,6 +411,169 @@ def update_archival_unit(
     _append_revision(session, unit, operation="update", changed_by=actor, note=note)
     return unit
 
+
+
+def change_archival_unit_level(
+    session: Session,
+    *,
+    decisions: ProjectDecisions,
+    unit_id: str,
+    new_level_key: str,
+    changed_by: str,
+    note: str | None = None,
+) -> ArchivalUnit:
+    unit = session.get(ArchivalUnit, unit_id)
+    if unit is None:
+        raise ValueError("La unidad archivística no existe")
+    if unit.level_key == new_level_key:
+        return unit
+
+    levels = _level_map(decisions)
+    if new_level_key not in levels:
+        raise ValueError(f"Nivel archivístico desconocido: {new_level_key}")
+
+    # El nuevo tipo debe seguir siendo válido en la ubicación actual.
+    _validate_parent(
+        session,
+        decisions,
+        project_id=unit.project_id,
+        level_key=new_level_key,
+        parent_id=unit.parent_id,
+        moving_unit_id=unit.id,
+    )
+
+    # Ninguna unidad hija puede quedar en una relación jerárquica inválida.
+    children = session.scalars(
+        select(ArchivalUnit)
+        .where(ArchivalUnit.parent_id == unit.id)
+        .order_by(ArchivalUnit.title, ArchivalUnit.id)
+    ).all()
+    incompatible_children = [
+        child
+        for child in children
+        if child.level_key not in levels or new_level_key not in levels[child.level_key].parent_keys
+    ]
+    if incompatible_children:
+        details = ", ".join(
+            f"{levels.get(child.level_key).label if child.level_key in levels else child.level_key}: {child.title}"
+            for child in incompatible_children[:5]
+        )
+        suffix = "" if len(incompatible_children) <= 5 else f" y {len(incompatible_children) - 5} más"
+        raise ValueError(
+            "No se puede cambiar el tipo porque quedarían unidades hijas en una ubicación no permitida: "
+            + details
+            + suffix
+        )
+
+    # No se descartan silenciosamente campos descriptivos que dejen de ser aplicables.
+    field_definitions = _field_map(decisions)
+    existing_field_keys = set(
+        session.scalars(
+            select(ArchivalFieldValue.field_key).where(ArchivalFieldValue.archival_unit_id == unit.id)
+        ).all()
+    )
+    incompatible_fields = sorted(
+        key
+        for key in existing_field_keys
+        if key in field_definitions
+        and "all" not in field_definitions[key].applies_to_levels
+        and new_level_key not in field_definitions[key].applies_to_levels
+    )
+    if incompatible_fields:
+        labels = ", ".join(field_definitions[key].label for key in incompatible_fields)
+        raise ValueError(
+            "No se puede cambiar el tipo sin revisar antes estos campos descriptivos, porque el nuevo "
+            f"tipo no los admite: {labels}."
+        )
+
+    actor = changed_by.strip() or "local_user"
+    _ensure_baseline(session, unit)
+    previous_level = unit.level_key
+    unit.level_key = new_level_key
+    unit.revision += 1
+    unit.updated_by = actor
+    unit.updated_at = _utc_now()
+    session.flush()
+    _append_revision(
+        session,
+        unit,
+        operation="change_level",
+        changed_by=actor,
+        note=note or f"Tipo de unidad cambiado de {previous_level} a {new_level_key}.",
+    )
+    return unit
+
+
+def archival_unit_delete_blockers(session: Session, unit_id: str) -> list[str]:
+    unit = session.get(ArchivalUnit, unit_id)
+    if unit is None:
+        raise ValueError("La unidad archivística no existe")
+
+    blockers: list[str] = []
+    child_count = int(
+        session.scalar(
+            select(func.count()).select_from(ArchivalUnit).where(ArchivalUnit.parent_id == unit.id)
+        )
+        or 0
+    )
+    if child_count:
+        blockers.append(f"contiene {child_count} unidad(es) hija(s)")
+
+    link_count = int(
+        session.scalar(
+            select(func.count()).select_from(DigitalObjectUnitLink).where(
+                DigitalObjectUnitLink.archival_unit_id == unit.id
+            )
+        )
+        or 0
+    )
+    if link_count:
+        blockers.append(f"tiene {link_count} vínculo(s) con contenidos digitales")
+
+    registration_count = int(
+        session.scalar(
+            select(func.count()).select_from(SourceRegistration).where(
+                SourceRegistration.archival_unit_id == unit.id
+            )
+        )
+        or 0
+    )
+    if registration_count:
+        blockers.append(f"tiene {registration_count} registro(s) de procedencia asociado(s)")
+
+    relation_count = int(
+        session.scalar(
+            select(func.count()).select_from(EntityRelation).where(
+                EntityRelation.target_archival_unit_id == unit.id
+            )
+        )
+        or 0
+    )
+    if relation_count:
+        blockers.append(f"tiene {relation_count} relación(es) con personas u organizaciones")
+    return blockers
+
+
+def delete_archival_unit(
+    session: Session,
+    *,
+    unit_id: str,
+    deleted_by: str,
+) -> str:
+    unit = session.get(ArchivalUnit, unit_id)
+    if unit is None:
+        raise ValueError("La unidad archivística no existe")
+    blockers = archival_unit_delete_blockers(session, unit_id)
+    if blockers:
+        raise ValueError(
+            "La unidad no puede eliminarse todavía porque " + "; ".join(blockers) + "."
+        )
+    title = unit.title
+    # Los campos y revisiones propios de la unidad se eliminan por cascada. No se elimina ningún
+    # archivo físico ni contenido digital: una unidad con esos vínculos queda bloqueada arriba.
+    session.delete(unit)
+    session.flush()
+    return title
 
 def move_archival_unit(
     session: Session,
@@ -860,6 +1025,17 @@ def _safe_upload_filename(value: str) -> str:
     return name
 
 
+def _sha256_path(path: Path, *, chunk_size: int = 1024 * 1024) -> str:
+    digest = hashlib.sha256()
+    with path.open("rb") as handle:
+        while True:
+            chunk = handle.read(chunk_size)
+            if not chunk:
+                break
+            digest.update(chunk)
+    return digest.hexdigest()
+
+
 def _uploaded_destination(
     project_root: Path,
     *,
@@ -881,7 +1057,7 @@ def _uploaded_destination(
     candidate = directory / clean_name
     index = 2
     while candidate.exists():
-        if candidate.is_file() and hashlib.sha256(candidate.read_bytes()).hexdigest() == content_sha256:
+        if candidate.is_file() and _sha256_path(candidate) == content_sha256:
             relative = candidate.relative_to(root).as_posix()
             return candidate, relative, True
         candidate = directory / f"{stem}_{index}{suffix}"
@@ -941,6 +1117,85 @@ def register_uploaded_file(
         reused_existing_path=reused,
         registration=registration,
     )
+
+def register_external_file(
+    session: Session,
+    *,
+    project_root: str | Path,
+    project_id: str,
+    archival_unit_id: str,
+    source_path: str | Path,
+    destination_dir: str = "corpus/importados",
+    relation_type: str = "represents",
+    page_start: int | None = None,
+    page_end: int | None = None,
+    registered_by: str = "local_user",
+) -> RegisterUploadedFileResult:
+    source = Path(source_path).expanduser().resolve()
+    if not source.is_file():
+        raise FileNotFoundError(f"No se encontró el archivo de origen: {source}")
+    root = Path(project_root).resolve()
+    try:
+        source.relative_to(root)
+    except ValueError:
+        pass
+    else:
+        relative = source.relative_to(root).as_posix()
+        registration = register_local_file(
+            session,
+            project_root=root,
+            project_id=project_id,
+            archival_unit_id=archival_unit_id,
+            relative_path=relative,
+            relation_type=relation_type,
+            page_start=page_start,
+            page_end=page_end,
+            registered_by=registered_by,
+        )
+        return RegisterUploadedFileResult(
+            relative_path=relative,
+            reused_existing_path=True,
+            registration=registration,
+        )
+
+    digest = _sha256_path(source)
+    destination, relative_path, reused = _uploaded_destination(
+        root,
+        destination_dir=destination_dir,
+        filename=source.name,
+        content_sha256=digest,
+    )
+    wrote_file = False
+    if not reused:
+        temporary = destination.with_name(destination.name + ".copying")
+        shutil.copy2(source, temporary)
+        if _sha256_path(temporary) != digest:
+            temporary.unlink(missing_ok=True)
+            raise OSError("La copia no coincide con la huella del archivo de origen")
+        temporary.replace(destination)
+        wrote_file = True
+    try:
+        registration = register_local_file(
+            session,
+            project_root=root,
+            project_id=project_id,
+            archival_unit_id=archival_unit_id,
+            relative_path=relative_path,
+            relation_type=relation_type,
+            page_start=page_start,
+            page_end=page_end,
+            registered_by=registered_by,
+        )
+    except Exception:
+        if wrote_file:
+            destination.unlink(missing_ok=True)
+        raise
+    return RegisterUploadedFileResult(
+        relative_path=relative_path,
+        reused_existing_path=reused,
+        registration=registration,
+    )
+
 
 def register_local_file(
     session: Session,

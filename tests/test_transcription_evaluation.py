@@ -1,10 +1,14 @@
 from __future__ import annotations
 
 from pathlib import Path
+import subprocess
+import sys
 import wave
 
 import yaml
 from sqlalchemy import select
+
+import archive_workbench.audiovisual as audiovisual_module
 
 from archive_workbench.audiovisual import (
     register_transcription_backend,
@@ -118,6 +122,49 @@ def _project(tmp_path: Path):
         media_id = media.id
     return root, engine, media_id
 
+
+
+def test_gpu_memory_monitor_uses_direct_pid_when_visible(monkeypatch) -> None:
+    monkeypatch.setattr(audiovisual_module.shutil, "which", lambda _name: "/usr/bin/nvidia-smi")
+    monkeypatch.setattr(
+        audiovisual_module.subprocess,
+        "run",
+        lambda *args, **kwargs: subprocess.CompletedProcess(
+            args[0], 0, "123, /opt/archive-workbench/.venv/bin/python, 4096\n", ""
+        ),
+    )
+    assert audiovisual_module._gpu_memory_mib_for_pid(123) == 4096.0
+
+
+def test_gpu_memory_monitor_maps_container_pid_by_unique_process_name(monkeypatch) -> None:
+    monkeypatch.setenv("ARCHIVE_WORKBENCH_RUNTIME_VARIANT", "gpu")
+    monkeypatch.setattr(audiovisual_module.shutil, "which", lambda _name: "/usr/bin/nvidia-smi")
+    process_name = f"/opt/archive-workbench/.venv/bin/{Path(sys.executable).name}"
+    monkeypatch.setattr(
+        audiovisual_module.subprocess,
+        "run",
+        lambda *args, **kwargs: subprocess.CompletedProcess(
+            args[0], 0, f"1227410, {process_name}, 5394\n", ""
+        ),
+    )
+    assert audiovisual_module._gpu_memory_mib_for_pid(74) == 5394.0
+
+
+def test_gpu_memory_monitor_keeps_container_fallback_ambiguous(monkeypatch) -> None:
+    monkeypatch.setenv("ARCHIVE_WORKBENCH_RUNTIME_VARIANT", "gpu")
+    monkeypatch.setattr(audiovisual_module.shutil, "which", lambda _name: "/usr/bin/nvidia-smi")
+    process_name = f"/opt/archive-workbench/.venv/bin/{Path(sys.executable).name}"
+    monkeypatch.setattr(
+        audiovisual_module.subprocess,
+        "run",
+        lambda *args, **kwargs: subprocess.CompletedProcess(
+            args[0],
+            0,
+            f"1227410, {process_name}, 5394\n1227420, {process_name}, 2048\n",
+            "",
+        ),
+    )
+    assert audiovisual_module._gpu_memory_mib_for_pid(74) is None
 
 def test_transcription_run_records_runtime_metrics_without_schema_change(tmp_path: Path) -> None:
     root, engine, media_id = _project(tmp_path)
@@ -424,36 +471,47 @@ def test_audiovisual_ui_exposes_av03_evaluation_without_duplication() -> None:
     ui = (root / "src" / "archive_workbench" / "audiovisual_app.py").read_text(encoding="utf-8")
 
     for literal in (
-        "Corrida",
-        "Evaluar transcripción",
-        "Rendimiento de la corrida",
-        "Factor tiempo-real",
-        "Segmentación",
-        "Muestra reproducible de corrección humana",
+        "Evaluar la calidad de esta versión de la transcripción",
+        "Tiempo y uso de memoria de esta transcripción automática",
+        "Tiempo de procesamiento respecto de la duración del audio",
+        "Pico de memoria RAM durante la transcripción",
+        "Cómo quedó dividida la transcripción",
+        "Cinco fragmentos revisados para comparar transcripciones",
         "Transcripción completa",
-        "Guardar transcripción",
+        "Guardar las correcciones de esta transcripción",
+        "Caracteres diferentes respecto de la referencia",
+        "Palabras diferentes respecto de la referencia",
+        "Descargar evaluación de transcripción",
+        "Comparar esta versión con otra transcripción del mismo audio",
+        "Ver comparación de los cinco fragmentos revisados",
+        "Ver transcripciones automáticas completas",
+        "Descargar large-v3 original",
+    ):
+        assert literal in ui
+    for obsolete in (
+        "Factor tiempo-real",
+        "Muestra reproducible de corrección humana",
         "Navegar por tiempos y segmentos",
         "Segmento temporal",
         "CER de corrección",
         "WER de corrección",
         "Descargar evaluación AV-03",
         "Ver comparación de las cinco referencias humanas",
-        "Ver transcripciones automáticas completas",
-        "Descargar small original",
-        "Descargar large-v3 original",
+        "Probar reconocimiento de mayor calidad (GPU)",
     ):
-        assert literal in ui
+        assert obsolete not in ui
     assert 'evaluation_key = f"av_evaluation_open_{selected_run_id}"' in ui
     assert 'st.session_state[evaluation_key] = False' in ui
+    assert 'comparison_open = st.toggle(' in ui
+    assert '"Comparar esta versión con otra transcripción del mismo audio"' in ui
     assert "Corregilos con el bloque principal" not in ui
     assert "Corrección del segmento" not in ui
     assert "st.session_state[editor_key] = transcript_text.strip()" not in ui
-    assert ui.count("st.session_state[navigation_key] = True") == 1
     assert 'getattr(st, "iframe", None)' in ui
     assert "iframe(script, height=1, width=1)" in ui
     assert "component_html(script, height=1, width=1)" in ui
     assert "height=0" not in ui
-    assert "large-v3 · contexto temporal" in ui
+    assert "Salida large-v3 en el mismo tramo temporal" in ui
     assert "large-v3 original alineado" not in ui
     assert "WER large-v3" not in ui
 
@@ -527,13 +585,16 @@ def test_audiovisual_ui_exposes_gpu_quality_comparison() -> None:
     backend = (root / "src" / "archive_workbench" / "audiovisual.py").read_text(encoding="utf-8")
 
     for literal in (
-        "Comparar reconocimiento",
+        "Comparar esta versión con otra transcripción del mismo audio",
         "Vocabulario esperado (opcional)",
-        "Probar reconocimiento de mayor calidad (GPU)",
+        "Generar comparación con large-v3 en GPU",
         'model_name="large-v3"',
         'device="cuda"',
         '"compute_type": "float16"',
         '"_av03_profile": quality_profile',
+        "selected_is_large_gpu",
+        "La versión seleccionada ya fue creada con large-v3 en GPU",
     ):
         assert literal in ui
+    assert "Probar reconocimiento de mayor calidad (GPU)" not in ui
     assert 'transcribe_kwargs["hotwords"] = hotwords' in backend

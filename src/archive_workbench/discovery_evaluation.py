@@ -235,6 +235,7 @@ def evaluate_discovery_provider(
                     "subtype": detection.subtype,
                     "confidence": detection.confidence,
                     "explanation": detection.explanation,
+                    "source": record.source,
                 }
             )
 

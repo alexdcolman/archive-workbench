@@ -27,6 +27,7 @@ from archive_workbench.db.models import (
     CorpusExportProfile,
     CorpusExportRun,
     DocumentPart,
+    DigitalObject,
     EditableObject,
     EditableObjectTag,
     EditablePage,
@@ -38,13 +39,14 @@ from archive_workbench.db.models import (
 )
 from archive_workbench.exchange import current_editable_state_sha256
 from archive_workbench.identity import new_id
-from archive_workbench.temporal import format_temporal_range, temporal_overlap
+from archive_workbench.temporal import format_temporal_range, temporal_expression_overlap
 
 AGGREGATION_LEVELS = ("object", "page", "document_part", "document", "archival_unit")
 TEXT_POLICIES = ("corrected_fallback_original", "corrected_only", "original_only")
 OUTPUT_FORMATS = ("jsonl", "csv")
 RUN_OUTPUT_FORMATS = ("jsonl", "csv", "visual_zip")
 REVIEW_STATUSES = ("unreviewed", "needs_review", "reviewed", "approved")
+CORPUS_EXPORT_RECORD_SCHEMA_VERSION = "1.1"
 
 
 @dataclass(slots=True)
@@ -72,11 +74,30 @@ class ExportRecord:
     codigo: str
     titulo: str
     texto: str
+    export_schema_version: str
+    record_type: str
+    project_id: str
+    export_run_id: str | None
+    exported_at: str | None
+    corpus_state_sha256: str | None
+    export_profile_id: str
+    export_profile_name: str
+    export_profile_revision: int
+    export_configuration: dict[str, Any]
+    text_policy: str
     source_key: str | None
     source_keys: list[str]
+    source_types: list[str]
+    source_origins: list[str]
     digital_object_id: str | None
     digital_object_ids: list[str]
+    original_filenames: list[str]
+    original_sha256s: list[str]
+    media_types: list[str]
+    source_documents: list[dict[str, Any]]
     archival_unit_id: str | None
+    archival_unit_title: str | None
+    archival_unit_level: str | None
     reference_code: str | None
     hierarchy_path: str | None
     document_part_id: str | None
@@ -84,11 +105,13 @@ class ExportRecord:
     document_part_title: str | None
     page_start: int
     page_end: int
+    page_numbers: list[int]
     object_count: int
     object_ids: list[str]
     object_types: list[str]
     object_review_statuses: list[str]
     page_review_statuses: list[str]
+    object_provenance: list[dict[str, Any]]
     tags: list[str]
     entities: list[str]
     entity_temporal_ranges: list[str]
@@ -122,6 +145,7 @@ class ExportRunRow:
     run_id: str
     profile_id: str | None
     profile_name: str
+    profile_snapshot: dict[str, Any]
     output_format: str
     output_relative_path: str
     row_count: int
@@ -137,11 +161,17 @@ class ExportRunRow:
 class _Atom:
     object_id: str
     digital_object_id: str
+    original_filename: str
+    original_sha256: str
+    media_type: str
     source_key: str | None
+    source_type: str | None
+    source_origin: str | None
     archival_unit_id: str | None
     reference_code: str | None
     hierarchy_path: str | None
     unit_title: str | None
+    unit_level: str | None
     part_id: str | None
     part_key: str | None
     part_title: str | None
@@ -151,6 +181,7 @@ class _Atom:
     object_review_status: str
     page_review_status: str
     text: str
+    text_source: str
     tags: tuple[str, ...]
     entities: tuple[str, ...]
     entity_temporal_ranges: tuple[str, ...]
@@ -467,12 +498,22 @@ def _unit_paths(units: Iterable[ArchivalUnit]) -> dict[str, str]:
     return cache
 
 
-def _selected_text(current: str, original: str | None, policy: str) -> str:
+def _selected_text_with_source(
+    current: str, original: str | None, policy: str
+) -> tuple[str, str]:
+    corrected = current.strip()
+    ocr_original = (original or "").strip()
     if policy == "original_only":
-        return (original or "").strip()
+        return ocr_original, "ocr_original"
     if policy == "corrected_only":
-        return current.strip()
-    return current.strip() or (original or "").strip()
+        return corrected, "corrected"
+    if corrected:
+        return corrected, "corrected"
+    return ocr_original, "ocr_original"
+
+
+def _selected_text(current: str, original: str | None, policy: str) -> str:
+    return _selected_text_with_source(current, original, policy)[0]
 
 
 def _load_atoms(
@@ -489,6 +530,15 @@ def _load_atoms(
     if not object_rows:
         return []
     digital_ids = {row[0].digital_object_id for row in object_rows}
+    digital_by_id = {
+        row.id: row
+        for row in session.scalars(
+            select(DigitalObject).where(
+                DigitalObject.project_id == project_id,
+                DigitalObject.id.in_(digital_ids),
+            )
+        ).all()
+    }
     registrations = session.scalars(
         select(SourceRegistration)
         .where(
@@ -569,7 +619,8 @@ def _load_atoms(
         }
         if values.temporal_start is not None or values.temporal_end is not None:
             temporal_matches = [
-                temporal_overlap(
+                temporal_expression_overlap(
+                    expression=authority.temporal_expression,
                     item_start=authority.temporal_start,
                     item_end=authority.temporal_end,
                     query_start=values.temporal_start,
@@ -578,7 +629,8 @@ def _load_atoms(
                 )
                 for authority in linked_authorities
             ] + [
-                temporal_overlap(
+                temporal_expression_overlap(
+                    expression=relation.temporal_expression,
                     item_start=relation.temporal_start,
                     item_end=relation.temporal_end,
                     query_start=values.temporal_start,
@@ -589,24 +641,36 @@ def _load_atoms(
             ]
             if not temporal_matches or not any(temporal_matches):
                 continue
-        text = _selected_text(
+        text, text_source = _selected_text_with_source(
             editable.current_text,
             original.original_text if original is not None else None,
             values.text_policy,
         )
         if not text:
             continue
+        digital = digital_by_id.get(editable.digital_object_id)
+        if digital is None:
+            continue
         registration = registration_by_digital.get(editable.digital_object_id)
+        source_payload = dict(registration.source_payload_json or {}) if registration else {}
+        source_origin = source_payload.get("origin")
+        registration_origin = str(source_origin).strip() if source_origin not in (None, "") else None
         unit = unit_by_id.get(registration.archival_unit_id) if registration and registration.archival_unit_id else None
         atoms.append(
             _Atom(
                 object_id=editable.id,
                 digital_object_id=editable.digital_object_id,
+                original_filename=digital.original_filename,
+                original_sha256=digital.sha256,
+                media_type=digital.media_type,
                 source_key=registration.source_key if registration else None,
+                source_type=registration.source_type if registration else None,
+                source_origin=registration_origin,
                 archival_unit_id=unit.id if unit else None,
                 reference_code=unit.reference_code if unit else None,
                 hierarchy_path=paths.get(unit.id) if unit else None,
                 unit_title=unit.title if unit else None,
+                unit_level=unit.level_key if unit else None,
                 part_id=part.id if part else None,
                 part_key=part.part_key if part else None,
                 part_title=part.title if part else None,
@@ -616,6 +680,7 @@ def _load_atoms(
                 object_review_status=editable.review_status,
                 page_review_status=page.review_status,
                 text=text,
+                text_source=text_source,
                 tags=tuple(sorted(set(tags_by_object.get(editable.id, [])))),
                 entities=tuple(sorted({authority.preferred_name for authority in linked_authorities})),
                 entity_temporal_ranges=tuple(sorted({
@@ -709,11 +774,41 @@ def build_export_rows(
                 codigo=record_id,
                 titulo=title,
                 texto=_combine_text(members, values),
+                export_schema_version=CORPUS_EXPORT_RECORD_SCHEMA_VERSION,
+                record_type="archive_workbench.corpus_export_record",
+                project_id=project_id,
+                export_run_id=None,
+                exported_at=None,
+                corpus_state_sha256=None,
+                export_profile_id=profile.id,
+                export_profile_name=profile.name,
+                export_profile_revision=profile.revision,
+                export_configuration=profile_snapshot(profile),
+                text_policy=values.text_policy,
                 source_key=(first.source_key if all(row.source_key == first.source_key for row in members) else None),
                 source_keys=sorted({row.source_key for row in members if row.source_key}),
+                source_types=sorted({row.source_type for row in members if row.source_type}),
+                source_origins=sorted({row.source_origin for row in members if row.source_origin}),
                 digital_object_id=(first.digital_object_id if all(row.digital_object_id == first.digital_object_id for row in members) else None),
                 digital_object_ids=sorted({row.digital_object_id for row in members}),
+                original_filenames=sorted({row.original_filename for row in members}),
+                original_sha256s=sorted({row.original_sha256 for row in members}),
+                media_types=sorted({row.media_type for row in members}),
+                source_documents=[
+                    {
+                        "digital_object_id": digital_id,
+                        "original_filename": next(row.original_filename for row in members if row.digital_object_id == digital_id),
+                        "sha256": next(row.original_sha256 for row in members if row.digital_object_id == digital_id),
+                        "media_type": next(row.media_type for row in members if row.digital_object_id == digital_id),
+                        "source_key": next((row.source_key for row in members if row.digital_object_id == digital_id and row.source_key), None),
+                        "source_type": next((row.source_type for row in members if row.digital_object_id == digital_id and row.source_type), None),
+                        "source_origin": next((row.source_origin for row in members if row.digital_object_id == digital_id and row.source_origin), None),
+                    }
+                    for digital_id in sorted({row.digital_object_id for row in members})
+                ],
                 archival_unit_id=first.archival_unit_id,
+                archival_unit_title=first.unit_title,
+                archival_unit_level=first.unit_level,
                 reference_code=first.reference_code,
                 hierarchy_path=first.hierarchy_path,
                 document_part_id=first.part_id if all(row.part_id == first.part_id for row in members) else None,
@@ -721,11 +816,26 @@ def build_export_rows(
                 document_part_title=first.part_title if all(row.part_title == first.part_title for row in members) else None,
                 page_start=min(row.page_number for row in members),
                 page_end=max(row.page_number for row in members),
+                page_numbers=sorted({row.page_number for row in members}),
                 object_count=len(members),
                 object_ids=[row.object_id for row in members],
                 object_types=sorted({row.object_type for row in members}),
                 object_review_statuses=sorted({row.object_review_status for row in members}),
                 page_review_statuses=sorted({row.page_review_status for row in members}),
+                object_provenance=[
+                    {
+                        "object_id": row.object_id,
+                        "digital_object_id": row.digital_object_id,
+                        "source_key": row.source_key,
+                        "page_number": row.page_number,
+                        "order_index": row.order_index,
+                        "object_type": row.object_type,
+                        "object_review_status": row.object_review_status,
+                        "page_review_status": row.page_review_status,
+                        "text_source": row.text_source,
+                    }
+                    for row in members
+                ],
                 tags=sorted({tag for row in members for tag in row.tags}),
                 entities=sorted({entity for row in members for entity in row.entities}),
                 entity_temporal_ranges=sorted({
@@ -756,12 +866,12 @@ def preview_export(
 def _safe_output_path(project_root: Path, relative_path: str, output_format: str) -> tuple[Path, str]:
     raw = relative_path.strip()
     if not raw:
-        raise ValueError("Indicá una ruta de salida relativa a project_data")
+        raise ValueError("Indicá una ruta de salida relativa a la carpeta del proyecto")
     candidate = (project_root / raw).resolve()
     try:
         relative = candidate.relative_to(project_root.resolve())
     except ValueError as exc:
-        raise ValueError("La exportación debe quedar dentro de project_data") from exc
+        raise ValueError("La exportación debe quedar dentro de la carpeta del proyecto") from exc
     extension = ".zip" if output_format == "visual_zip" else f".{output_format}"
     if candidate.suffix.lower() != extension:
         candidate = candidate.with_suffix(extension)
@@ -787,9 +897,11 @@ def _write_csv(path: Path, rows: list[ExportRecord]) -> None:
         for row in rows:
             payload = _jsonable_record(row)
             for key in (
-                "source_keys", "digital_object_ids", "object_ids", "object_types", "object_review_statuses",
-                "page_review_statuses", "tags", "entities", "entity_temporal_ranges",
-                "relation_temporal_ranges",
+                "export_configuration", "source_keys", "source_types", "source_origins", "digital_object_ids",
+                "original_filenames", "original_sha256s", "media_types", "source_documents", "page_numbers",
+                "object_ids", "object_types", "object_review_statuses",
+                "page_review_statuses", "object_provenance", "tags", "entities",
+                "entity_temporal_ranges", "relation_temporal_ranges",
             ):
                 payload[key] = json.dumps(payload[key], ensure_ascii=False)
             writer.writerow(payload)
@@ -823,6 +935,12 @@ def run_export(
         )
     output_path.parent.mkdir(parents=True, exist_ok=True)
     state_digest = current_editable_state_sha256(session, project_id)
+    run_id = new_id()
+    exported_at = utc_now()
+    for row in rows:
+        row.export_run_id = run_id
+        row.exported_at = exported_at.isoformat()
+        row.corpus_state_sha256 = state_digest
     visual_result = None
     if selected_format == "visual_zip":
         from archive_workbench.visual_export import VisualExportOptions, build_text_image_package
@@ -857,7 +975,7 @@ def run_export(
             "manifest_schema_version": visual_result.manifest["schema_version"],
         }
     run = CorpusExportRun(
-        id=new_id(),
+        id=run_id,
         project_id=project_id,
         profile_id=profile.id,
         profile_name=profile.name,
@@ -870,7 +988,7 @@ def run_export(
         byte_size=output_path.stat().st_size,
         output_sha256=digest,
         created_by=created_by,
-        created_at=utc_now(),
+        created_at=exported_at,
     )
     session.add(run)
     session.flush()
@@ -900,6 +1018,7 @@ def export_run_rows(session: Session, *, project_id: str) -> list[ExportRunRow]:
             run_id=row.id,
             profile_id=row.profile_id,
             profile_name=row.profile_name,
+            profile_snapshot=dict(row.profile_snapshot_json or {}),
             output_format=row.output_format,
             output_relative_path=row.output_relative_path,
             row_count=row.row_count,

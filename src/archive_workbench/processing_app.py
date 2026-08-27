@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from archive_workbench.ui_help import TAB_HELP
 from pathlib import Path
 import json
 import re
@@ -7,18 +8,24 @@ import re
 from sqlalchemy import func, select
 
 from archive_workbench.db import create_sqlite_engine, session_scope
-from archive_workbench.db.models import EditablePage
+from archive_workbench.db.models import EditableObject, EditablePage
 from archive_workbench.candidate_review import (
     ADOPTION_ALREADY,
     ADOPTION_MANUAL,
     ADOPTION_NOT_INITIALIZED,
     adopt_candidate_page,
+    add_editable_object_from_regional_candidate,
     assess_candidate_adoption,
     compare_candidate_page,
+    prepare_candidate_run_for_review,
     render_candidate_overlay,
+    replace_editable_object_text_from_regional_candidate,
     resolve_candidate_keep_edits,
 )
 from archive_workbench.editing import bootstrap_editable_layer
+from archive_workbench.review import ReviewObjectRow
+from archive_workbench.review_canvas import clickable_review_canvas, review_canvas_with_drawing
+from archive_workbench.page_actions import execute_page_action
 from archive_workbench.editable_rebase import (
     apply_editable_rebase,
     preview_editable_rebase,
@@ -32,6 +39,7 @@ from archive_workbench.extraction import (
 )
 from archive_workbench.contracts.regions import RegionOcrOptions
 from archive_workbench.region_canvas import regional_region_canvas
+from archive_workbench.surya_engine import stop_surya_servers
 from archive_workbench.region_extraction import extract_regions, load_region_template
 from archive_workbench.regional_workflow import (
     REGION_ROLE_DEFAULT_MODE,
@@ -48,7 +56,7 @@ from archive_workbench.preprocessing import (
     prepare_derivatives,
     profile_for_preprocessing,
 )
-from archive_workbench.ui_navigation import rerun_app, rerun_view, request_app_view, request_tab, tracked_tabs
+from archive_workbench.ui_navigation import rerun_app, rerun_view, request_app_view, request_tab, section_heading, tracked_tabs
 from archive_workbench.page_quality import (
     QUALITY_ATTENTION,
     QUALITY_CLEAR,
@@ -69,28 +77,34 @@ from archive_workbench.processing import (
 
 _STATUS_LABELS = {
     "missing_local_file": "Sin archivo local",
-    "file_available": "Archivo disponible",
-    "pending_preparation": "Pendiente de preparación",
-    "prepared": "Preparado",
-    "pending_extraction": "Pendiente de extracción",
-    "incomplete_extraction": "Extracción incompleta",
-    "pending_selection": "Pendiente de selección",
-    "ready_for_review": "Listo para revisión",
+    "file_available": "Falta preparar imágenes",
+    "pending_preparation": "Falta preparar imágenes",
+    "prepared": "Imágenes listas para extraer texto",
+    "pending_extraction": "Extrayendo texto",
+    "incomplete_extraction": "Extracción de texto incompleta",
+    "pending_selection": "Texto extraído; falta elegirlo para revisión",
+    "ready_for_review": "Texto elegido; listo para revisión",
     "in_review": "En revisión",
     "completed": "Completado",
     "error": "Con errores",
 }
 _OPERATION_LABELS = {
-    "prepare": "Preparar páginas",
-    "extract": "Extraer texto",
-    "retry_failed": "Reintentar páginas fallidas",
-    "bootstrap": "Inicializar capa editable",
+    "prepare": "1. Preparar imágenes para extraer texto",
+    "extract": "2. Extraer texto de las imágenes preparadas",
+    "retry_failed": "Reintentar páginas con error de extracción",
+    "bootstrap": "Enviar texto elegido a Revisar documentos",
 }
 _AUTO_QUALITY_LABELS = {
     "clear": "Sin alertas detectadas",
     "attention": "Revisar",
     "critical": "Problema probable",
 }
+_REGIONAL_TAB_LABEL = "Leer una zona"
+_SELECTION_TAB_LABEL = "Elegir texto"
+_REGIONAL_INTEGRATION_TAB_LABEL = "Corregir o agregar"
+_BULK_REVIEW_TAB_LABEL = "Enviar a revisión"
+
+
 _RUN_QUALITY_LABELS = {
     "unreviewed": "Sin revisar",
     "needs_review": "Requiere revisión",
@@ -155,6 +169,33 @@ def _rebase_text_occurrences(text: str, fragment: str) -> list[tuple[int, int]]:
     ]
 
 
+def _compact_text(text: str, limit: int = 90) -> str:
+    compact = " ".join((text or "").split())
+    if len(compact) <= limit:
+        return compact or "[sin texto]"
+    return compact[: limit - 1] + "…"
+
+
+def _profile_ui_label(path: Path, profile) -> str:
+    method = {
+        "surya_cli": "Reconocimiento de texto y estructura (Surya)",
+        "tesseract": "Reconocimiento de texto (Tesseract)",
+        "docling_cli": "Extracción de texto y estructura (Docling)",
+    }.get(profile.backend, "Extracción de texto")
+    return f"{path.name} · {method}"
+
+
+def _extraction_run_ui_label(run) -> str:
+    """Nombre visible del motor que produjo una corrida guardada."""
+
+    return {
+        "surya_cli": "Surya",
+        "docling_cli": "Docling",
+        "tesseract_tsv": "Tesseract",
+        "tesseract_regions": "Tesseract · lectura de zona",
+    }.get(run.engine, run.profile_key or run.engine)
+
+
 def _percentage(value) -> str:
     if value is None:
         return "—"
@@ -163,26 +204,21 @@ def _percentage(value) -> str:
 
 def _render_automatic_quality(st, assessment) -> None:
     if assessment is None:
-        st.caption("Control automático: todavía no evaluado.")
+        st.badge("Control automático sin evaluar", color="gray")
         return
     label = _AUTO_QUALITY_LABELS.get(assessment.status, assessment.status)
     alert_count = len(assessment.flags)
     suffix = "" if not alert_count else f" · {alert_count} alerta{'s' if alert_count != 1 else ''}"
-    message = f"Control automático: **{label}**{suffix}"
-    if assessment.status == QUALITY_CLEAR:
-        st.success(message)
-    elif assessment.status == QUALITY_ATTENTION:
-        st.warning(message)
-    else:
-        st.error(message)
+    color = {QUALITY_CLEAR: "green", QUALITY_ATTENTION: "orange"}.get(assessment.status, "red")
+    st.badge(f"Control automático: {label}{suffix}", color=color)
 
     with st.expander(
-        "Ver indicadores del control automático",
-        expanded=assessment.status != QUALITY_CLEAR,
+        "Indicadores del control automático",
+        expanded=False,
     ):
         st.caption(
             "Estos indicadores señalan riesgos observables; no miden la exactitud del OCR "
-            "ni reemplazan la revisión humana."
+            "ni reemplazan la revisión manual."
         )
         metrics = assessment.metrics
         image_rows = [
@@ -193,7 +229,7 @@ def _render_automatic_quality(st, assessment) -> None:
         ]
         extraction_rows = [
             {"Indicador": "Objetos", "Valor": str(metrics.get("object_count", "—"))},
-            {"Indicador": "Caracteres", "Valor": str(metrics.get("character_count", "—"))},
+            {"Indicador": "Caracteres del texto", "Valor": str(metrics.get("character_count", "—"))},
             {"Indicador": "Objetos mínimos", "Valor": _percentage(metrics.get("tiny_object_ratio"))},
             {"Indicador": "Bboxes solapados", "Valor": _percentage(metrics.get("overlapping_bbox_ratio"))},
         ]
@@ -229,13 +265,13 @@ def _render_automatic_quality(st, assessment) -> None:
             )
         if checkbox_candidates:
             state_labels = {
-                "marked": "Marcado (candidato)",
-                "unmarked": "No marcado (candidato)",
+                "marked": "Posible marcado",
+                "unmarked": "Posible no marcado",
                 "indeterminate": "Indeterminado",
             }
             method_labels = {
                 "html_control": "control conservado en el HTML de Surya",
-                "explicit_text": "símbolo y rótulo en el mismo bloque",
+                "explicit_text": "símbolo y rótulo en el mismo fragmento de texto",
                 "spatial": "marca próxima al rótulo",
                 "reading_order": "asociación por orden de lectura",
                 "unlinked": "sin rótulo asociado",
@@ -244,7 +280,7 @@ def _render_automatic_quality(st, assessment) -> None:
             st.dataframe(
                 [
                     {
-                        "Estado candidato": state_labels.get(item.get("state"), item.get("state", "—")),
+                        "Estado detectado": state_labels.get(item.get("state"), item.get("state", "—")),
                         "Rótulo asociado": item.get("label") or "Sin rótulo",
                         "Marca": item.get("marker", "—"),
                         "Detección": method_labels.get(item.get("method"), item.get("method", "—")),
@@ -255,7 +291,7 @@ def _render_automatic_quality(st, assessment) -> None:
                 use_container_width=True,
             )
             st.caption(
-                "Los casilleros vacíos que no produzcan ningún bloque OCR no pueden inferirse "
+                "Los casilleros vacíos que no produzcan ningún texto reconocido no pueden inferirse "
                 "con seguridad y deben revisarse directamente sobre la imagen."
             )
 
@@ -269,7 +305,7 @@ def _render_automatic_quality(st, assessment) -> None:
                 "reconocido sea correcto."
             )
         if assessment.suggestions:
-            st.write("**Sugerencias conservadoras**")
+            st.write("**Sugerencias conservadoras sobre la extracción**")
             for item in assessment.suggestions:
                 st.write(f"• {item}")
         assessed_at = (
@@ -364,8 +400,8 @@ def _summary_message(operation: str, summary) -> tuple[str, str, dict]:
             "warnings": list(summary.warnings),
         }
         message = (
-            f"Derivados: {summary.runs_created} corridas nuevas, "
-            f"{summary.runs_reused} reutilizadas y {summary.assets_created} archivos."
+            f"Preparación: {summary.runs_created} versiones nuevas, "
+            f"{summary.runs_reused} preparaciones ya existentes reutilizadas y {summary.assets_created} archivos derivados creados."
         )
         if summary.failed:
             return "failed", message, detail
@@ -385,10 +421,18 @@ def _summary_message(operation: str, summary) -> tuple[str, str, dict]:
             "warnings": list(summary.warnings),
         }
         message = (
-            f"Extracción: {summary.pages_processed} páginas, {summary.objects_created} objetos "
+            f"Extracción de texto: {summary.pages_processed} páginas, {summary.objects_created} fragmentos de texto "
             f"y {summary.characters_created} caracteres."
         )
         if summary.failed:
+            warnings = list(summary.warnings)
+            if warnings:
+                first = str(warnings[0])
+                if "no tiene una corrida de preprocesamiento vigente" in first:
+                    message = "No se pudo extraer texto porque el documento todavía no tenía imágenes preparadas."
+                else:
+                    reason = first.split(": ", 1)[-1].strip()
+                    message = f"No se pudo extraer texto: {reason}"
             return "failed", message, detail
         if summary.warnings:
             return "warning", message, detail
@@ -402,8 +446,8 @@ def _summary_message(operation: str, summary) -> tuple[str, str, dict]:
         "warnings": list(summary.warnings),
     }
     message = (
-        f"Capa editable: {summary.pages_created} páginas nuevas, "
-        f"{summary.pages_reused} reutilizadas y {summary.objects_created} objetos."
+        f"Envío a Revisar documentos: {summary.pages_created} páginas nuevas, "
+        f"{summary.pages_reused} ya disponibles reutilizadas y {summary.objects_created} fragmentos de texto disponibles para revisar."
     )
     if summary.warnings:
         return "warning", message, detail
@@ -420,13 +464,16 @@ def _execute_batch(
     actor: str,
     operation: str,
     source_keys: list[str],
+    source_labels: dict[str, str] | None,
     profile_path: Path | None,
     ocr_treatment: str,
     geometry_mode: str,
     force: bool,
 ) -> None:
     profile = None
+    runtime_profile = None
     derivative_profile = None
+    cleanup_surya = False
     parameters: dict = {"force": force}
     if operation == "prepare":
         derivative_profile = profile_for_preprocessing(
@@ -439,16 +486,24 @@ def _execute_batch(
         )
     if operation in {"extract", "retry_failed"}:
         if profile_path is None:
-            st.error("Debe elegir un perfil de extracción.")
+            st.error("Elegí un método de extracción.")
             return
         profile = load_extraction_profile(profile_path)
         resolution = resolve_extraction_profile(project_root, profile)
         if not resolution.ready:
-            st.error("El entorno requerido por el perfil y su fallback no está listo.")
+            st.error("El método de extracción elegido no está disponible en este equipo y tampoco está disponible su alternativa configurada.")
             for check in resolution.effective_report.checks:
                 if check.required and not check.ok:
                     st.write(f"**{check.name}:** {check.detail}")
             return
+        runtime_profile = profile
+        if profile.backend == "surya_cli" and not resolution.fallback_used:
+            # La interfaz es dueña del ciclo de vida del servidor: se conserva sólo
+            # durante un lote y se libera al finalizar la tarea completa.
+            runtime_profile = profile.model_copy(
+                update={"surya_keep_server": len(source_keys) > 1}
+            )
+            cleanup_surya = True
         parameters.update(
             profile_path=profile_path.relative_to(project_root).as_posix(),
             profile_key=profile.profile_key,
@@ -458,6 +513,7 @@ def _execute_batch(
             effective_backend=resolution.effective.backend,
             automatic_fallback=resolution.fallback_used,
             selection_policy="never",
+            resource_cleanup="automatic_after_job",
         )
 
     engine = create_sqlite_engine(db_path)
@@ -478,90 +534,97 @@ def _execute_batch(
 
     progress = st.progress(0.0)
     status_box = st.empty()
-    for index, source_key in enumerate(source_keys, start=1):
-        status_box.write(f"Procesando **{source_key}** ({index}/{len(source_keys)})")
-        _mark_item(
-            db_path=db_path,
-            job_id=job_id,
-            source_key=source_key,
-            status="running",
-        )
-        pages: list[int] = []
-        try:
-            engine = create_sqlite_engine(db_path)
+    try:
+        for index, source_key in enumerate(source_keys, start=1):
+            status_box.write(
+                f"Procesando **{(source_labels or {}).get(source_key, 'documento seleccionado')}** "
+                f"({index}/{len(source_keys)})"
+            )
+            _mark_item(
+                db_path=db_path,
+                job_id=job_id,
+                source_key=source_key,
+                status="running",
+            )
+            pages: list[int] = []
             try:
-                with session_scope(engine) as session:
-                    if operation == "prepare":
-                        summary = prepare_derivatives(
-                            session,
-                            project_root=project_root,
-                            decisions=decisions,
-                            source_keys={source_key},
-                            force=force,
-                            profile=derivative_profile,
-                        )
-                    elif operation == "extract":
-                        assert profile is not None
-                        summary = extract_documents_preferred(
-                            session,
-                            project_root=project_root,
-                            decisions=decisions,
-                            profile=profile,
-                            source_keys={source_key},
-                            force=force,
-                            created_by=actor or "local_user",
-                            selection_policy="never",
-                        )
-                    elif operation == "retry_failed":
-                        assert profile is not None
-                        pages = failed_extraction_pages(session, source_key=source_key)
-                        if not pages:
-                            raise ValueError("No hay páginas fallidas registradas para reintentar")
-                        summary = extract_documents_preferred(
-                            session,
-                            project_root=project_root,
-                            decisions=decisions,
-                            profile=profile,
-                            source_keys={source_key},
-                            selected_pages=set(pages),
-                            force=True,
-                            created_by=actor or "local_user",
-                            selection_policy="never",
-                        )
-                    else:
-                        summary = bootstrap_editable_layer(
-                            session,
-                            decisions=decisions,
-                            created_by=actor or "local_user",
-                            source_keys={source_key},
-                        )
-            finally:
-                engine.dispose()
-            item_status, message, detail = _summary_message(operation, summary)
-            _mark_item(
-                db_path=db_path,
-                job_id=job_id,
-                source_key=source_key,
-                status=item_status,
-                pages=pages,
-                message=message,
-                detail=detail,
-            )
-        except (ValueError, RuntimeError, OSError, FileNotFoundError) as exc:
-            _mark_item(
-                db_path=db_path,
-                job_id=job_id,
-                source_key=source_key,
-                status="failed",
-                pages=pages,
-                message=str(exc),
-                detail={"exception_type": type(exc).__name__},
-            )
-        progress.progress(index / len(source_keys))
+                engine = create_sqlite_engine(db_path)
+                try:
+                    with session_scope(engine) as session:
+                        if operation == "prepare":
+                            summary = prepare_derivatives(
+                                session,
+                                project_root=project_root,
+                                decisions=decisions,
+                                source_keys={source_key},
+                                force=force,
+                                profile=derivative_profile,
+                            )
+                        elif operation == "extract":
+                            assert runtime_profile is not None
+                            summary = extract_documents_preferred(
+                                session,
+                                project_root=project_root,
+                                decisions=decisions,
+                                profile=runtime_profile,
+                                source_keys={source_key},
+                                force=force,
+                                created_by=actor or "local_user",
+                                selection_policy="never",
+                            )
+                        elif operation == "retry_failed":
+                            assert runtime_profile is not None
+                            pages = failed_extraction_pages(session, source_key=source_key)
+                            if not pages:
+                                raise ValueError("No hay páginas fallidas registradas para reintentar")
+                            summary = extract_documents_preferred(
+                                session,
+                                project_root=project_root,
+                                decisions=decisions,
+                                profile=runtime_profile,
+                                source_keys={source_key},
+                                selected_pages=set(pages),
+                                force=True,
+                                created_by=actor or "local_user",
+                                selection_policy="never",
+                            )
+                        else:
+                            summary = bootstrap_editable_layer(
+                                session,
+                                decisions=decisions,
+                                created_by=actor or "local_user",
+                                source_keys={source_key},
+                            )
+                finally:
+                    engine.dispose()
+                item_status, message, detail = _summary_message(operation, summary)
+                _mark_item(
+                    db_path=db_path,
+                    job_id=job_id,
+                    source_key=source_key,
+                    status=item_status,
+                    pages=pages,
+                    message=message,
+                    detail=detail,
+                )
+            except (ValueError, RuntimeError, OSError, FileNotFoundError) as exc:
+                _mark_item(
+                    db_path=db_path,
+                    job_id=job_id,
+                    source_key=source_key,
+                    status="failed",
+                    pages=pages,
+                    message=str(exc),
+                    detail={"exception_type": type(exc).__name__},
+                )
+            progress.progress(index / len(source_keys))
+    finally:
+        if cleanup_surya:
+            stop_surya_servers()
     _finish_job(db_path=db_path, job_id=job_id)
     st.session_state["processing_flash"] = (
         f"Trabajo {_OPERATION_LABELS[operation].lower()} finalizado. "
-        "La selección canónica no fue modificada automáticamente."
+        "El texto elegido para revisar no fue modificado automáticamente."
     )
     rerun_view(st)
 
@@ -650,13 +713,24 @@ def _render_geometry_diagnostics(
             hide_index=True,
             use_container_width=True,
         )
+        base_page_labels = [f"{row.title} · página {row.page}" for row in rows]
+        label_counts: dict[str, int] = {}
+        for label in base_page_labels:
+            label_counts[label.casefold()] = label_counts.get(label.casefold(), 0) + 1
+        page_positions: dict[str, int] = {}
+        page_labels = []
+        for label in base_page_labels:
+            key = label.casefold()
+            if label_counts[key] > 1:
+                page_positions[key] = page_positions.get(key, 0) + 1
+                page_labels.append(f"{label} · documento {page_positions[key]}")
+            else:
+                page_labels.append(label)
         options = list(range(len(rows)))
         selected = st.selectbox(
             "Página diagnóstica",
             options=options,
-            format_func=lambda index: (
-                f"{rows[index].title} · página {rows[index].page}"
-            ),
+            format_func=lambda index: page_labels[index],
             key="processing_geometry_diagnostic_page",
         )
         row = rows[selected]
@@ -700,31 +774,26 @@ def _render_regional_extraction_builder(
     inventory,
     actor: str,
 ) -> None:
-    st.caption(
-        "Definí zonas sobre una página visible y creá una extracción candidata. "
-        "La corrida no cambia la selección canónica ni la capa editable."
-    )
-    prepared = [
+    prepared = _unique_processing_rows([
         row
         for row in inventory
         if row.preprocessing_status in {"completed", "completed_with_warnings"}
-    ]
+    ])
     if not prepared:
-        st.info(
-            "Primero prepará al menos un documento en la pestaña Ejecutar. "
-            "El OCR regional necesita una imagen derivada por página."
-        )
+        st.info("No hay documentos con imágenes preparadas para trabajar una zona.")
         return
 
-    st.subheader("1. Documento")
-    source_key = st.selectbox(
-        "Documento para OCR regional",
-        options=[row.source_key for row in prepared],
-        format_func=lambda value: next(
-            f"{row.title} · {value}" for row in prepared if row.source_key == value
-        ),
-        key="regional_source_key",
+    prepared_by_id = {_processing_row_identity(row): row for row in prepared}
+    prepared_labels = _processing_document_labels(prepared)
+    st.markdown("**1. Elegir el documento y la página**")
+    selector_cols = st.columns([2, 1])
+    selected_document_id = selector_cols[0].selectbox(
+        "Documento",
+        options=list(prepared_by_id),
+        format_func=lambda value: prepared_labels[value],
+        key="regional_document_id",
     )
+    source_key = prepared_by_id[selected_document_id].source_key
 
     engine = create_sqlite_engine(db_path)
     try:
@@ -737,120 +806,130 @@ def _render_regional_extraction_builder(
         engine.dispose()
 
     if not assets:
-        st.warning("El documento no tiene páginas preparadas para OCR regional.")
+        st.warning("Este documento no tiene imágenes preparadas para trabajar una zona.")
         return
 
-    st.subheader("2. Página")
-    page = st.selectbox(
-        "Página visible",
+    page = selector_cols[1].selectbox(
+        "Página",
         options=[item.page for item in assets],
-        key=f"regional_page_{source_key}",
+        key=f"regional_page_{selected_document_id}",
     )
     asset = next(item for item in assets if item.page == page)
     image_path = project_root / asset.preview_relative_path
 
-    drafts_key = f"regional_drafts_{source_key}"
-    pending_key = f"regional_pending_box_{source_key}_{page}"
+    drafts_key = f"regional_drafts_{selected_document_id}"
+    pending_key = f"regional_pending_box_{selected_document_id}_{page}"
     drafts = list(st.session_state.get(drafts_key, []))
-
-    st.subheader("3. Dibujar o revisar las zonas")
-    st.caption(
-        "La página se muestra aquí. Azul: zona OCR. Naranja: zona manual. "
-        "Rojo: zona recién dibujada todavía no agregada."
-    )
     templates = available_region_templates(project_root, source_key=source_key)
-    with st.expander("Cargar zonas desde una plantilla guardada", expanded=False):
-        if not templates:
-            st.caption("No hay plantillas guardadas para este documento.")
-        else:
-            selected_template = st.selectbox(
-                "Plantilla",
+
+    if templates:
+        reuse_open = st.toggle(
+            "Usar zonas guardadas",
+            value=False,
+            key=f"regional_saved_layouts_open_{selected_document_id}",
+        )
+        if reuse_open:
+            reuse_cols = st.columns([3, 1])
+            selected_template = reuse_cols[0].selectbox(
+                "Zonas guardadas",
                 options=[str(path) for path in templates],
                 format_func=lambda value: Path(value).name,
-                key=f"regional_template_{source_key}",
+                key=f"regional_template_{selected_document_id}",
+                label_visibility="collapsed",
             )
-            if st.button(
-                "Cargar esta plantilla",
-                key=f"regional_load_template_{source_key}",
+            if reuse_cols[1].button(
+                "Cargar zonas",
+                key=f"regional_load_template_{selected_document_id}",
+                use_container_width=True,
             ):
                 template = load_region_template(selected_template)
                 st.session_state[drafts_key] = [
                     draft_from_region(region) for region in template.regions
                 ]
                 st.session_state.pop(pending_key, None)
-                request_tab(st, key="processing_tabs", label="OCR regional")
+                request_tab(st, key="processing_tabs", label=_REGIONAL_TAB_LABEL)
                 rerun_view(st)
 
     pending_box = st.session_state.get(pending_key)
     visible_drafts = [item for item in drafts if int(item.get("page", page)) == page]
+    st.markdown("**2. Marcar una zona en la imagen**")
     drawn = regional_region_canvas(
         image_path,
         visible_drafts,
         page=page,
         pending_box=pending_box,
-        key=f"regional_canvas_{source_key}_{page}_{len(visible_drafts)}",
+        key=f"regional_canvas_{selected_document_id}_{page}_{len(visible_drafts)}",
     )
     if drawn is not None and drawn != pending_box:
         st.session_state[pending_key] = drawn
         pending_box = drawn
 
-    st.subheader("4. Describir la zona recién dibujada")
-    if pending_box is None:
-        st.info(
-            "Para agregar una zona nueva, pulsá Dibujar una zona sobre la imagen y "
-            "arrastrá un rectángulo."
-        )
-    else:
+    if pending_box is not None:
+        st.markdown("**3. Describir la zona marcada**")
         roles = list(REGION_ROLE_LABELS)
-        role = st.selectbox(
-            "Qué contiene esta zona",
+        decision_cols = st.columns(2)
+        role = decision_cols[0].selectbox(
+            "Qué contiene",
             options=roles,
             format_func=region_role_label,
-            key=f"regional_role_{source_key}_{page}",
+            key=f"regional_role_{selected_document_id}_{page}",
         )
         default_mode = REGION_ROLE_DEFAULT_MODE[role]
-        mode = st.selectbox(
-            "Cómo tratarla",
+        mode = decision_cols[1].selectbox(
+            "Qué hacer",
             options=["ocr", "manual"],
             index=0 if default_mode == "ocr" else 1,
             format_func=lambda value: (
-                "Intentar OCR" if value == "ocr" else "Conservar para transcripción manual"
+                "Reconocer texto" if value == "ocr" else "Reservar para transcripción manual"
             ),
-            key=f"regional_mode_{source_key}_{page}_{role}",
+            key=f"regional_mode_{selected_document_id}_{page}_{role}",
         )
-        label = st.text_input(
-            "Nombre visible de la zona",
+        text_cols = st.columns(2)
+        label = text_cols[0].text_input(
+            "Nombre de la zona",
             value=region_role_label(role),
-            key=f"regional_label_{source_key}_{page}_{role}",
+            key=f"regional_label_{selected_document_id}_{page}_{role}",
         )
-        note = st.text_input(
+        note = text_cols[1].text_input(
             "Nota opcional",
-            key=f"regional_note_{source_key}_{page}_{role}",
+            key=f"regional_note_{selected_document_id}_{page}_{role}",
         )
+
         ocr_payload = None
         if mode == "ocr":
-            with st.expander("Opciones avanzadas de OCR para esta zona", expanded=False):
-                variant = st.selectbox(
+            variant = "original"
+            psm = 6
+            granularity = "paragraph"
+            languages_text = "spa"
+            ocr_options_open = st.toggle(
+                "Opciones del reconocimiento",
+                value=False,
+                key=f"regional_ocr_options_open_{selected_document_id}_{page}_{role}",
+            )
+            if ocr_options_open:
+                ocr_cols = st.columns(2)
+                variant = ocr_cols[0].selectbox(
                     "Tratamiento de imagen",
                     options=["original", "grayscale_autocontrast", "otsu"],
-                    key=f"regional_variant_{source_key}_{page}_{role}",
+                    key=f"regional_variant_{selected_document_id}_{page}_{role}",
                 )
-                psm = st.selectbox(
-                    "Modo Tesseract (PSM)",
+                psm = ocr_cols[1].selectbox(
+                    "Modo de lectura (PSM)",
                     options=[3, 4, 6, 7, 11, 13],
                     index=2,
-                    key=f"regional_psm_{source_key}_{page}_{role}",
+                    key=f"regional_psm_{selected_document_id}_{page}_{role}",
+                    help="Parámetro técnico de Tesseract.",
                 )
-                granularity = st.selectbox(
-                    "Unidad de salida",
+                granularity = ocr_cols[0].selectbox(
+                    "Dividir el texto en",
                     options=["paragraph", "line"],
-                    format_func=lambda value: "Párrafo" if value == "paragraph" else "Línea",
-                    key=f"regional_granularity_{source_key}_{page}_{role}",
+                    format_func=lambda value: "Párrafos" if value == "paragraph" else "Líneas",
+                    key=f"regional_granularity_{selected_document_id}_{page}_{role}",
                 )
-                languages_text = st.text_input(
-                    "Idiomas Tesseract",
+                languages_text = ocr_cols[1].text_input(
+                    "Idiomas",
                     value="spa",
-                    key=f"regional_languages_{source_key}_{page}_{role}",
+                    key=f"regional_languages_{selected_document_id}_{page}_{role}",
                 )
             ocr_payload = RegionOcrOptions(
                 image_variant=variant,
@@ -859,11 +938,13 @@ def _render_regional_extraction_builder(
                 object_granularity=granularity,
                 minimum_characters_warning=1,
             ).model_dump(mode="json")
+
+        st.markdown("**4. Agregar la zona a la lista**")
         if st.button(
-            "Agregar esta zona",
+            "Agregar esta zona a la lista",
             type="primary",
             disabled=not label.strip(),
-            key=f"regional_add_zone_{source_key}_{page}",
+            key=f"regional_add_zone_{selected_document_id}_{page}",
         ):
             index = len(drafts) + 1
             used_orders = {
@@ -890,56 +971,69 @@ def _render_regional_extraction_builder(
             )
             st.session_state[drafts_key] = drafts
             st.session_state.pop(pending_key, None)
-            request_tab(st, key="processing_tabs", label="OCR regional")
+            request_tab(st, key="processing_tabs", label=_REGIONAL_TAB_LABEL)
             rerun_view(st)
 
     drafts = list(st.session_state.get(drafts_key, drafts))
-    st.subheader("5. Zonas que formarán la candidata")
-    if not drafts:
-        st.caption("Todavía no hay zonas agregadas.")
-    else:
+    if drafts:
+        st.markdown("**5. Revisar las zonas marcadas**")
+        st.caption(f"Zonas marcadas: {len(drafts)}")
         st.dataframe(
             [
                 {
-                    "Orden": item.get("reading_order"),
                     "Página": item.get("page"),
                     "Zona": item.get("label"),
                     "Contenido": region_role_label(str(item.get("semantic_role") or "")),
-                    "Tratamiento": "OCR" if item.get("mode") == "ocr" else "Manual",
+                    "Acción": "Reconocer texto" if item.get("mode") == "ocr" else "Transcribir manualmente",
                 }
-                for item in sorted(drafts, key=lambda row: (row.get("page", 0), row.get("reading_order", 0)))
+                for item in sorted(
+                    drafts,
+                    key=lambda row: (row.get("page", 0), row.get("reading_order", 0)),
+                )
             ],
             hide_index=True,
             use_container_width=True,
         )
+        remove_cols = st.columns([3, 1])
         remove_options = list(range(len(drafts)))
-        remove_index = st.selectbox(
-            "Zona a quitar",
+        remove_index = remove_cols[0].selectbox(
+            "Zona que querés quitar",
             options=remove_options,
             format_func=lambda index: str(drafts[index].get("label") or f"Zona {index + 1}"),
-            key=f"regional_remove_select_{source_key}",
+            key=f"regional_remove_select_{selected_document_id}",
+            label_visibility="collapsed",
         )
-        if st.button("Quitar la zona seleccionada", key=f"regional_remove_{source_key}"):
+        if remove_cols[1].button(
+            "Quitar zona",
+            key=f"regional_remove_{selected_document_id}",
+            use_container_width=True,
+        ):
             drafts.pop(remove_index)
             st.session_state[drafts_key] = drafts
-            request_tab(st, key="processing_tabs", label="OCR regional")
+            request_tab(st, key="processing_tabs", label=_REGIONAL_TAB_LABEL)
             rerun_view(st)
 
-    st.subheader("6. Crear la extracción candidata")
-    template_key = st.text_input(
-        "Identificador de la candidata",
-        value=f"regional_{source_key}",
-        key=f"regional_template_key_{source_key}",
+    template_key = f"regional_{source_key}"
+    technical_open = st.toggle(
+        "Cambiar el identificador de esta lectura",
+        value=False,
+        key=f"regional_technical_open_{selected_document_id}",
     )
-    st.caption(
-        "La corrida se registra como candidata. No se seleccionará ninguna página "
-        "ni se inicializará la capa editable."
-    )
+    if technical_open:
+        template_key = st.text_input(
+            "Identificador de este procesamiento",
+            value=template_key,
+            key=f"regional_template_key_{selected_document_id}",
+            help="Se usa para distinguir esta lectura en el historial.",
+        )
+
+    st.markdown("**6. Procesar las zonas marcadas**")
     if st.button(
-        "Crear extracción candidata",
+        "Procesar las zonas marcadas",
         type="primary",
         disabled=not drafts or not template_key.strip(),
-        key=f"regional_execute_{source_key}",
+        key=f"regional_execute_{selected_document_id}",
+        help="Guarda esta lectura parcial para decidir después si corrige o agrega texto en la página.",
     ):
         try:
             template = template_from_drafts(
@@ -964,14 +1058,647 @@ def _render_regional_extraction_builder(
             st.error(str(exc))
         else:
             st.success(
-                "Candidata creada: "
-                f"{summary.runs_created} corrida nueva, "
-                f"{summary.pages_processed} página(s), "
-                f"{summary.objects_created} objeto(s). "
-                "La selección canónica no cambió."
+                f"Zonas procesadas: {summary.pages_processed} página(s), "
+                f"{summary.objects_created} texto(s) reconocido(s) o reservado(s)."
             )
             for warning in summary.warnings:
                 st.warning(warning)
+
+
+def _processing_row_identity(row) -> str:
+    """Identidad estable del documento para controles de Procesar documentos."""
+
+    return str(row.digital_object_id)
+
+
+def _unique_processing_rows(rows):
+    """Procesamiento opera por objeto digital aunque existan varios registros de origen."""
+    chosen = {}
+    for row in rows:
+        current = chosen.get(row.digital_object_id)
+        if current is None or (current.source_type != "catalog" and row.source_type == "catalog"):
+            chosen[row.digital_object_id] = row
+    return list(chosen.values())
+
+
+def _processing_row_label(row) -> str:
+    filename = row.original_filename or "sin nombre de archivo"
+    if filename.casefold() == (row.title or "").casefold():
+        return row.title
+    return f"{row.title} · {filename}"
+
+
+def _processing_document_labels(rows, *, include_status: bool = False) -> dict[str, str]:
+    """Crea rótulos únicos y legibles sin usar el nombre visible como identidad.
+
+    Los nombres de documento y de archivo pueden repetirse legítimamente. Sólo se
+    agrega contexto adicional cuando hace falta distinguir dos opciones visibles.
+    """
+
+    unique_rows = _unique_processing_rows(rows)
+    labels = {
+        _processing_row_identity(row): _processing_row_label(row)
+        for row in unique_rows
+    }
+
+    def duplicate_ids(current: dict[str, str]) -> set[str]:
+        grouped: dict[str, list[str]] = {}
+        for row_id, label in current.items():
+            grouped.setdefault(label.casefold(), []).append(row_id)
+        return {row_id for ids in grouped.values() if len(ids) > 1 for row_id in ids}
+
+    duplicated = duplicate_ids(labels)
+    if duplicated:
+        by_id = {_processing_row_identity(row): row for row in unique_rows}
+        for row_id in duplicated:
+            row = by_id[row_id]
+            path = (row.archival_path or "").strip()
+            if path:
+                labels[row_id] = f"{labels[row_id]} · {path}"
+
+    duplicated = duplicate_ids(labels)
+    if duplicated:
+        grouped: dict[str, list[str]] = {}
+        for row_id in duplicated:
+            grouped.setdefault(labels[row_id].casefold(), []).append(row_id)
+        for row_ids in grouped.values():
+            ordered_ids = sorted(row_ids)
+            for position, row_id in enumerate(ordered_ids, start=1):
+                labels[row_id] = f"{labels[row_id]} · documento {position}"
+
+    if include_status:
+        by_id = {_processing_row_identity(row): row for row in unique_rows}
+        labels = {
+            row_id: f"{label} · {_STATUS_LABELS[by_id[row_id].status]}"
+            for row_id, label in labels.items()
+        }
+    return labels
+
+
+def _bbox_geometry(*, page: int, box: dict[str, float]) -> list[dict]:
+    x0, y0, x1, y1 = (float(box[name]) for name in ("x0", "y0", "x1", "y1"))
+    return [
+        {
+            "page": page,
+            "coordinate_space": "normalized",
+            "polygon": [[x0, y0], [x1, y0], [x1, y1], [x0, y1]],
+        }
+    ]
+
+
+def _editable_rows_for_page(session, *, editable_page_id: str):
+    return session.scalars(
+        select(EditableObject)
+        .where(
+            EditableObject.editable_page_id == editable_page_id,
+            EditableObject.lifecycle_status == "active",
+        )
+        .order_by(EditableObject.current_order_index, EditableObject.id)
+    ).all()
+
+
+def _review_canvas_rows(editable_rows):
+    return [
+        ReviewObjectRow(
+            object_id=item.id,
+            page=item.page_number,
+            order_index=item.current_order_index,
+            object_type=item.current_object_type,
+            lifecycle_status=item.lifecycle_status,
+            revision_number=item.revision_number,
+            text=item.current_text,
+            original_text=None,
+            geometry=list(item.current_geometry_json or []),
+            attributes=dict(item.current_attributes_json or {}),
+            updated_by=item.updated_by or "",
+            updated_at=item.updated_at,
+            manually_added=item.source_extracted_object_id is None,
+            review_status=item.review_status,
+            document_part_id=item.document_part_id,
+        )
+        for item in editable_rows
+    ]
+
+
+def _render_bulk_review_sender(
+    st,
+    *,
+    db_path: Path,
+    decisions,
+    inventory,
+    actor: str,
+) -> None:
+    candidates = _unique_processing_rows(
+        [row for row in inventory if row.extracted_pages or row.extraction_status]
+    )
+    if not candidates:
+        st.info("No hay documentos con extracciones completas disponibles.")
+        return
+
+    by_id = {_processing_row_identity(row): row for row in candidates}
+    document_labels = _processing_document_labels(candidates)
+    mode = st.radio(
+        "Enviar",
+        options=["single", "multiple"],
+        format_func=lambda value: "Un documento" if value == "single" else "Varios documentos",
+        horizontal=True,
+        key="processing_bulk_mode",
+    )
+
+    if mode == "single":
+        control_cols = st.columns([2, 1.5])
+        selected_id = control_cols[0].selectbox(
+            "Documento",
+            options=list(by_id),
+            format_func=lambda value: document_labels[value],
+            key="processing_bulk_single_document",
+        )
+        current_row = by_id[selected_id]
+        engine = create_sqlite_engine(db_path)
+        try:
+            with session_scope(engine) as session:
+                runs = extraction_candidate_runs(
+                    session,
+                    source_key=current_row.source_key,
+                    digital_object_id=current_row.digital_object_id,
+                )
+                initialized_pages = set(
+                    session.scalars(
+                        select(EditablePage.page_number).where(
+                            EditablePage.digital_object_id == current_row.digital_object_id
+                        )
+                    ).all()
+                )
+        finally:
+            engine.dispose()
+        general_runs = [row for row in runs if row.pages and row.engine != "tesseract_regions"]
+        if not general_runs:
+            control_cols[1].selectbox(
+                "Extracción",
+                options=["No disponible"],
+                disabled=True,
+                key=f"processing_bulk_single_unavailable_{current_row.digital_object_id}",
+            )
+            st.info("Este documento todavía no tiene una extracción completa disponible.")
+            return
+
+        run_id = control_cols[1].selectbox(
+            "Extracción",
+            options=[row.run_id for row in general_runs],
+            format_func=lambda value: next(
+                f"{len(row.pages)} pág. · {row.created_at:%Y-%m-%d %H:%M}"
+                for row in general_runs if row.run_id == value
+            ),
+            key=f"processing_bulk_single_run_{current_row.digital_object_id}",
+        )
+        run = next(row for row in general_runs if row.run_id == run_id)
+        pending_pages = sorted(set(run.pages) - initialized_pages)
+        existing_pages = len(set(run.pages) & initialized_pages)
+        st.caption(
+            f"{len(pending_pages)} página(s) nuevas · {existing_pages} ya están en Revisar documentos"
+        )
+        if st.button(
+            "Enviar páginas pendientes",
+            type="primary",
+            disabled=not pending_pages,
+            key=f"processing_bulk_single_apply_{current_row.digital_object_id}_{run_id}",
+        ):
+            engine = create_sqlite_engine(db_path)
+            try:
+                with session_scope(engine) as session:
+                    result = prepare_candidate_run_for_review(
+                        session,
+                        decisions=decisions,
+                        source_key=current_row.source_key,
+                        digital_object_id=current_row.digital_object_id,
+                        run_id=run_id,
+                        created_by=actor or "local_user",
+                    )
+            except (ValueError, RuntimeError, OSError) as exc:
+                st.error(str(exc))
+            else:
+                st.session_state["processing_flash"] = (
+                    f"{result.pages_initialized} página(s) de {current_row.title} fueron enviadas a Revisar documentos; "
+                    f"{result.pages_already_initialized} ya estaban allí."
+                )
+                request_tab(st, key="processing_tabs", label=_BULK_REVIEW_TAB_LABEL)
+                rerun_view(st)
+            finally:
+                engine.dispose()
+        return
+
+    multi_ids = st.multiselect(
+        "Documentos",
+        options=list(by_id),
+        format_func=lambda value: document_labels[value],
+        key="processing_bulk_multi_documents",
+        placeholder="Elegir documentos",
+    )
+    multi_plan: list[tuple[object, str]] = []
+    multi_rows: list[dict] = []
+    engine = create_sqlite_engine(db_path)
+    try:
+        with session_scope(engine) as session:
+            for row_id in multi_ids:
+                row = by_id[row_id]
+                runs = extraction_candidate_runs(
+                    session,
+                    source_key=row.source_key,
+                    digital_object_id=row.digital_object_id,
+                )
+                general = [item for item in runs if item.pages and item.engine != "tesseract_regions"]
+                initialized = set(
+                    session.scalars(
+                        select(EditablePage.page_number).where(
+                            EditablePage.digital_object_id == row.digital_object_id
+                        )
+                    ).all()
+                )
+                if not general:
+                    multi_rows.append(
+                        {
+                            "Documento": document_labels[_processing_row_identity(row)],
+                            "Extracción": "No disponible",
+                            "Nuevas": 0,
+                            "Ya en revisión": len(initialized),
+                        }
+                    )
+                    continue
+                chosen = st.selectbox(
+                    f"Extracción para {row.title}",
+                    options=[item.run_id for item in general],
+                    format_func=lambda value, choices=general: next(
+                        f"{len(item.pages)} pág. · {item.created_at:%Y-%m-%d %H:%M}"
+                        for item in choices if item.run_id == value
+                    ),
+                    key=f"processing_bulk_multi_run_{row.digital_object_id}",
+                )
+                chosen_row = next(item for item in general if item.run_id == chosen)
+                pending = len(set(chosen_row.pages) - initialized)
+                multi_plan.append((row, chosen))
+                multi_rows.append(
+                    {
+                        "Documento": document_labels[_processing_row_identity(row)],
+                        "Extracción": f"{len(chosen_row.pages)} pág.",
+                        "Nuevas": pending,
+                        "Ya en revisión": len(set(chosen_row.pages) & initialized),
+                    }
+                )
+    finally:
+        engine.dispose()
+
+    if multi_rows:
+        st.dataframe(multi_rows, hide_index=True, use_container_width=True)
+    if st.button(
+        "Enviar páginas pendientes",
+        type="primary",
+        disabled=not multi_plan,
+        key="processing_bulk_multi_apply",
+    ):
+        totals = {"pages": 0, "existing": 0}
+        engine = create_sqlite_engine(db_path)
+        try:
+            with session_scope(engine) as session:
+                for row, planned_run in multi_plan:
+                    result = prepare_candidate_run_for_review(
+                        session,
+                        decisions=decisions,
+                        source_key=row.source_key,
+                        digital_object_id=row.digital_object_id,
+                        run_id=planned_run,
+                        created_by=actor or "local_user",
+                    )
+                    totals["pages"] += result.pages_initialized
+                    totals["existing"] += result.pages_already_initialized
+        except (ValueError, RuntimeError, OSError) as exc:
+            st.error(str(exc))
+        else:
+            st.session_state["processing_flash"] = (
+                f"Envío completado: {totals['pages']} página(s) nuevas en Revisar documentos; "
+                f"{totals['existing']} ya estaban allí."
+            )
+            request_tab(st, key="processing_tabs", label=_BULK_REVIEW_TAB_LABEL)
+            rerun_view(st)
+        finally:
+            engine.dispose()
+
+
+def _render_regional_review_integration(
+    st,
+    *,
+    project_root: Path,
+    db_path: Path,
+    decisions,
+    inventory,
+    actor: str,
+) -> None:
+    candidates = _unique_processing_rows(
+        [row for row in inventory if row.extraction_status or row.extracted_pages]
+    )
+    if not candidates:
+        st.info("No hay documentos con texto extraído.")
+        return
+
+    available: dict[str, tuple[object, list]] = {}
+    engine = create_sqlite_engine(db_path)
+    try:
+        with session_scope(engine) as session:
+            for row in candidates:
+                runs = extraction_candidate_runs(
+                    session,
+                    source_key=row.source_key,
+                    digital_object_id=row.digital_object_id,
+                )
+                regional = [item for item in runs if item.pages and item.engine == "tesseract_regions"]
+                if regional:
+                    available[_processing_row_identity(row)] = (row, regional)
+    finally:
+        engine.dispose()
+    if not available:
+        st.info("No hay lecturas de zonas disponibles para incorporar.")
+        return
+
+    available_labels = _processing_document_labels([item[0] for item in available.values()])
+    context_cols = st.columns([2.2, 0.7, 1.4])
+    selected_id = context_cols[0].selectbox(
+        "Documento",
+        options=list(available),
+        format_func=lambda value: available_labels[value],
+        key="processing_regional_integrate_document",
+        help="Documento cuya página ya está disponible en Revisar documentos y tiene al menos una lectura de zona guardada.",
+    )
+    row, regional_runs = available[selected_id]
+    pages = sorted({page for run in regional_runs for page in run.pages})
+    page = context_cols[1].selectbox(
+        "Página",
+        options=pages,
+        key=f"processing_regional_integrate_page_{row.digital_object_id}",
+        help="Página en la que querés corregir o agregar texto.",
+    )
+    page_runs = [run for run in regional_runs if page in run.pages]
+    run_id = context_cols[2].selectbox(
+        "Lectura de zona",
+        options=[run.run_id for run in page_runs],
+        format_func=lambda value: next(
+            f"{run.created_at:%Y-%m-%d %H:%M}"
+            for run in page_runs if run.run_id == value
+        ),
+        key=f"processing_regional_integrate_run_{row.digital_object_id}_{page}",
+        help="Lectura parcial guardada para esa página. Elegí la que contiene el texto que querés incorporar.",
+    )
+
+    engine = create_sqlite_engine(db_path)
+    try:
+        with session_scope(engine) as session:
+            comparison = compare_candidate_page(
+                session,
+                project_root=project_root,
+                source_key=row.source_key,
+                digital_object_id=row.digital_object_id,
+                page=page,
+                candidate_run_id=run_id,
+            )
+            assessment = assess_candidate_adoption(
+                session,
+                source_key=row.source_key,
+                digital_object_id=row.digital_object_id,
+                page=page,
+                candidate_run_id=run_id,
+            )
+            editable_rows = (
+                _editable_rows_for_page(session, editable_page_id=assessment.editable_page_id)
+                if assessment.editable_page_id is not None else []
+            )
+    except (ValueError, RuntimeError, OSError) as exc:
+        st.error(str(exc))
+        return
+    finally:
+        engine.dispose()
+
+    if assessment.editable_page_id is None:
+        st.warning(
+            f"La página {page} todavía no está en Revisar documentos. Elegí primero una extracción completa en «{_SELECTION_TAB_LABEL}»."
+        )
+        return
+    partial_texts = [item for item in comparison.candidate.objects if item.text.strip()]
+    if not partial_texts:
+        st.warning("La lectura elegida no recuperó texto para incorporar.")
+        return
+
+    text_cols = st.columns([1.1, 1.4])
+    partial_id = text_cols[0].selectbox(
+        "Texto recuperado",
+        options=[item.object_id for item in partial_texts],
+        format_func=lambda value: next(
+            _compact_text(item.text) for item in partial_texts if item.object_id == value
+        ),
+        key=f"processing_regional_integrate_text_{row.digital_object_id}_{page}_{run_id}",
+        help="Fragmento de texto recuperado dentro de la lectura de zona elegida.",
+    )
+    partial = next(item for item in partial_texts if item.object_id == partial_id)
+    text_cols[1].text_area(
+        "Texto de la zona",
+        value=partial.text,
+        height=100,
+        disabled=True,
+        key=f"processing_regional_integrate_preview_{row.digital_object_id}_{page}_{run_id}_{partial_id}",
+        help="Vista completa del fragmento recuperado antes de decidir si corrige un texto existente o agrega texto faltante.",
+    )
+    action = st.radio(
+        "Acción",
+        options=["replace", "add"],
+        format_func=lambda value: (
+            "Corregir texto existente" if value == "replace" else "Agregar texto faltante"
+        ),
+        horizontal=True,
+        key=f"processing_regional_integrate_action_{row.digital_object_id}_{page}_{run_id}",
+    )
+
+    active_ids = [item.id for item in editable_rows]
+    target_key = f"processing_regional_integrate_target_{row.digital_object_id}_{page}"
+    selected_target = st.session_state.get(target_key)
+    if selected_target not in active_ids:
+        selected_target = active_ids[0] if active_ids else None
+        if selected_target is not None:
+            st.session_state[target_key] = selected_target
+    canvas_rows = _review_canvas_rows(editable_rows)
+    preview_path = (
+        comparison.current.preview_path
+        if comparison.current is not None and comparison.current.preview_path is not None
+        else comparison.candidate.preview_path
+    )
+    drawn_key = f"processing_regional_new_text_bbox_{row.digital_object_id}_{page}_{run_id}"
+    drawn_box = st.session_state.get(drawn_key)
+
+    if action == "replace":
+        if not editable_rows:
+            st.warning("Esta página no tiene texto existente que pueda corregirse.")
+            return
+        if preview_path is not None:
+            clicked = clickable_review_canvas(
+                preview_path,
+                canvas_rows,
+                page=page,
+                selected_object_id=selected_target,
+                show_deleted=False,
+                key=f"processing_regional_replace_canvas_{row.digital_object_id}_{page}_{run_id}",
+            )
+            if clicked in active_ids:
+                selected_target = clicked
+                st.session_state[target_key] = clicked
+        selected_target = st.selectbox(
+            "Texto que querés corregir",
+            options=active_ids,
+            format_func=lambda value: next(
+                f"{item.current_order_index + 1}. {_compact_text(item.current_text)}"
+                for item in editable_rows if item.id == value
+            ),
+            key=target_key,
+        )
+        insertion_mode = "end"
+        object_type = None
+    else:
+        if preview_path is not None:
+            clicked, newly_drawn = review_canvas_with_drawing(
+                preview_path,
+                canvas_rows,
+                page=page,
+                selected_object_id=selected_target,
+                show_deleted=False,
+                key=f"processing_regional_add_canvas_{row.digital_object_id}_{page}_{run_id}",
+                confirmed_box=drawn_box,
+            )
+            if clicked in active_ids:
+                selected_target = clicked
+                st.session_state[target_key] = clicked
+            if newly_drawn is not None:
+                drawn_box = newly_drawn
+                st.session_state[drawn_key] = newly_drawn
+        if drawn_box is None:
+            st.info("Dibujá en la página dónde irá el texto nuevo.")
+        else:
+            st.success("Ubicación marcada.")
+        object_type_options = [item.key for item in decisions.object_types if item.editable]
+        default_type = partial.object_type if partial.object_type in object_type_options else (
+            "paragraph" if "paragraph" in object_type_options else object_type_options[0]
+        )
+        add_cols = st.columns(2)
+        object_type = add_cols[0].selectbox(
+            "Tipo de texto",
+            options=object_type_options,
+            index=object_type_options.index(default_type),
+            format_func=lambda value: next(item.label for item in decisions.object_types if item.key == value),
+            key=f"processing_regional_add_type_{row.digital_object_id}_{page}_{run_id}",
+        )
+        position_options = ["end"] + (["after", "before"] if editable_rows else [])
+        insertion_mode = add_cols[1].selectbox(
+            "Orden de lectura",
+            options=position_options,
+            format_func=lambda value: {
+                "end": "Al final",
+                "after": "Después de un texto existente",
+                "before": "Antes de un texto existente",
+            }[value],
+            key=f"processing_regional_add_position_{row.digital_object_id}_{page}_{run_id}",
+        )
+        if insertion_mode in {"after", "before"} and editable_rows:
+            selected_target = st.selectbox(
+                "Texto de referencia",
+                options=active_ids,
+                format_func=lambda value: next(
+                    f"{item.current_order_index + 1}. {_compact_text(item.current_text)}"
+                    for item in editable_rows if item.id == value
+                ),
+                key=target_key,
+            )
+
+    note = st.text_input(
+        "Nota opcional",
+        key=f"processing_regional_integrate_note_{row.digital_object_id}_{page}_{run_id}_{action}",
+    )
+    if action == "replace":
+        confirm_label = "Confirmo el reemplazo del texto seleccionado"
+        button_label = "Corregir texto"
+        disabled = selected_target is None
+    else:
+        confirm_label = "Confirmo la incorporación en la ubicación marcada"
+        button_label = "Agregar texto"
+        disabled = drawn_box is None
+    confirmed = st.checkbox(
+        confirm_label,
+        key=f"processing_regional_integrate_confirm_{row.digital_object_id}_{page}_{run_id}_{action}",
+    )
+    if st.button(
+        button_label,
+        type="primary",
+        disabled=disabled or not confirmed,
+        key=f"processing_regional_integrate_apply_{row.digital_object_id}_{page}_{run_id}_{action}",
+    ):
+        engine = create_sqlite_engine(db_path)
+        try:
+            with session_scope(engine) as session:
+                editable_page = session.get(EditablePage, assessment.editable_page_id)
+                if editable_page is None:
+                    raise ValueError("La página dejó de estar disponible en Revisar documentos.")
+                if action == "replace":
+                    if selected_target is None:
+                        raise ValueError("Elegí el texto que querés corregir.")
+                    execute_page_action(
+                        session,
+                        editable_page_id=editable_page.id,
+                        action_type="regional_ocr_replace",
+                        changed_by=actor or "local_user",
+                        selected_object_id=selected_target,
+                        note=note or None,
+                        action=lambda: replace_editable_object_text_from_regional_candidate(
+                            session,
+                            source_key=row.source_key,
+                            digital_object_id=row.digital_object_id,
+                            page=page,
+                            candidate_run_id=run_id,
+                            editable_object_id=selected_target,
+                            regional_object_id=partial_id,
+                            changed_by=actor or "local_user",
+                            note=note or None,
+                        ),
+                    )
+                    flash = f"Página {page}: se corrigió el texto seleccionado."
+                else:
+                    after_id = selected_target if insertion_mode == "after" else None
+                    before_id = selected_target if insertion_mode == "before" else None
+                    execute_page_action(
+                        session,
+                        editable_page_id=editable_page.id,
+                        action_type="regional_ocr_add",
+                        changed_by=actor or "local_user",
+                        selected_object_id=selected_target,
+                        note=note or None,
+                        action=lambda: add_editable_object_from_regional_candidate(
+                            session,
+                            decisions=decisions,
+                            source_key=row.source_key,
+                            digital_object_id=row.digital_object_id,
+                            page=page,
+                            candidate_run_id=run_id,
+                            regional_object_id=partial_id,
+                            object_type=object_type,
+                            changed_by=actor or "local_user",
+                            after_object_id=after_id,
+                            before_object_id=before_id,
+                            geometry=_bbox_geometry(page=page, box=drawn_box),
+                            note=note or None,
+                        ),
+                    )
+                    st.session_state.pop(drawn_key, None)
+                    flash = f"Página {page}: se agregó el texto en la ubicación dibujada."
+        except (ValueError, RuntimeError, OSError) as exc:
+            st.error(str(exc))
+        else:
+            st.session_state["processing_flash"] = flash
+            request_tab(st, key="processing_tabs", label=_REGIONAL_INTEGRATION_TAB_LABEL)
+            rerun_view(st)
+        finally:
+            engine.dispose()
 
 
 def render_processing_view(
@@ -983,11 +1710,7 @@ def render_processing_view(
     project_id: str,
     actor: str,
 ) -> None:
-    st.header("Procesar documentos")
-    st.caption(
-        "Prepará los archivos, generá versiones de texto y elegí manualmente cuál usar en "
-        "cada página. Ninguna extracción reemplaza por sí sola una decisión humana."
-    )
+    section_heading(st, "Procesar documentos")
     flash = st.session_state.pop("processing_flash", None)
     if flash:
         st.success(flash)
@@ -996,38 +1719,47 @@ def render_processing_view(
         db_path=db_path, project_root=project_root, project_id=project_id
     )
     counts = {key: sum(row.status == key for row in inventory) for key in _STATUS_LABELS}
-    with st.expander("Resumen de avance", expanded=False):
-        metrics = st.columns(6)
-        metrics[0].metric("Documentos", len(inventory))
-        metrics[1].metric("Sin archivo", counts["missing_local_file"])
-        metrics[2].metric("Por preparar", counts["pending_preparation"] + counts["file_available"])
-        metrics[3].metric(
-            "Por seleccionar",
-            counts["pending_selection"] + counts["incomplete_extraction"],
-        )
-        metrics[4].metric("En revisión", counts["ready_for_review"] + counts["in_review"])
-        metrics[5].metric("Completados", counts["completed"])
 
-    processing_tabs = ["Inventario", "Ejecutar", "OCR regional", "Selección canónica", "Historial"]
-    inventory_tab, execute_tab, regional_tab, selection_tab, history_tab = tracked_tabs(
+    processing_tabs = [
+        "Estado",
+        "Preparar / extraer",
+        _REGIONAL_TAB_LABEL,
+        _SELECTION_TAB_LABEL,
+        _REGIONAL_INTEGRATION_TAB_LABEL,
+        _BULK_REVIEW_TAB_LABEL,
+        "Historial",
+    ]
+    (
+        inventory_tab,
+        execute_tab,
+        regional_tab,
+        selection_tab,
+        regional_integration_tab,
+        bulk_review_tab,
+        history_tab,
+    ) = tracked_tabs(
         st,
         processing_tabs,
         key="processing_tabs",
+        help_by_label=TAB_HELP["processing_tabs"],
+        rerun_on_change=False,
     )
 
     with inventory_tab:
-        st.caption("Consultá qué necesita cada documento antes de ejecutar una tarea.")
         filter_cols = st.columns([2, 1.2])
         query = filter_cols[0].text_input(
             "Buscar documento",
-            placeholder="Título, source_key, ruta archivística o archivo",
+            placeholder="Buscar por título, ruta archivística o archivo",
             key="processing_inventory_query",
+            label_visibility="collapsed",
         )
         status_filter = filter_cols[1].multiselect(
-            "Estado",
+            "Estado del procesamiento del documento",
             options=list(_STATUS_LABELS),
             format_func=lambda value: _STATUS_LABELS[value],
             key="processing_inventory_status",
+            placeholder="Todos los estados",
+            label_visibility="collapsed",
         )
         needle = query.strip().casefold()
         visible = [
@@ -1047,46 +1779,45 @@ def render_processing_view(
                 ).casefold()
             )
         ]
+        if query.strip() or status_filter:
+            st.caption(f"{len(visible)} documento(s) encontrados")
+
+        detailed_inventory = st.toggle(
+            "Ver más datos",
+            value=False,
+            key="processing_inventory_details",
+        )
+        table_rows = []
+        for row in visible:
+            item = {
+                "Estado": _STATUS_LABELS[row.status],
+                "Documento": row.title,
+                "Ruta archivística": row.archival_path,
+                "Páginas": row.page_count,
+                "Texto elegido": row.selected_pages,
+                "En Revisar documentos": row.editable_pages,
+            }
+            if detailed_inventory:
+                item.update(
+                    {
+                        "Archivo": row.original_filename,
+                        "Texto extraído": row.extracted_pages,
+                        "Páginas aprobadas": row.approved_pages,
+                        "Último problema": row.last_error,
+                    }
+                )
+            table_rows.append(item)
         st.dataframe(
-            [
-                {
-                    "Estado": _STATUS_LABELS[row.status],
-                    "Documento": row.title,
-                    "Clave": row.source_key,
-                    "Ruta archivística": row.archival_path,
-                    "Archivo": row.original_filename,
-                    "Páginas": row.page_count,
-                    "Extraídas": row.extracted_pages,
-                    "Seleccionadas": row.selected_pages,
-                    "Editables": row.editable_pages,
-                    "Aprobadas": row.approved_pages,
-                    "Preparación OCR": OCR_TREATMENT_LABELS.get(
-                        row.preprocessing_ocr_treatment or "",
-                        row.preprocessing_ocr_treatment or "—",
-                    ),
-                    "Perfil OCR": row.extraction_profile,
-                    "Error": row.last_error,
-                }
-                for row in visible
-            ],
+            table_rows,
             use_container_width=True,
             hide_index=True,
         )
-        st.caption(
-            "‘Archivo disponible’ indica que existe una copia local todavía no verificada por "
-            "el preprocesamiento. ‘Completado’ exige que todas las páginas conocidas "
-            "estén aprobadas."
-        )
 
     with execute_tab:
-        st.caption(
-            "Elegí qué hacer y sobre qué documentos. Las opciones técnicas aparecen "
-            "solamente cuando corresponden."
-        )
         if not inventory:
-            st.info("No hay fuentes procesables registradas en el catálogo.")
+            st.info("No hay documentos procesables registrados en el catálogo.")
         else:
-            operation_options = ["prepare", "extract", "retry_failed", "bootstrap"]
+            operation_options = ["prepare", "extract"]
             _restore_single_widget_state(
                 st,
                 key="processing_operation",
@@ -1094,33 +1825,59 @@ def render_processing_view(
                 default="prepare",
             )
             operation = st.radio(
-                "Qué querés hacer",
+                "Paso",
                 options=operation_options,
                 format_func=lambda value: _OPERATION_LABELS[value],
                 horizontal=True,
                 key="processing_operation",
+                help=(
+                    "Primero se preparan las imágenes de página. Después se extrae el texto de esas imágenes."
+                ),
             )
             _remember_single_widget_state(
                 st, key="processing_operation", value=operation
             )
 
-            source_options = [row.source_key for row in inventory]
+            if operation == "prepare":
+                eligible_rows = _unique_processing_rows([
+                    row for row in inventory
+                    if row.file_presence not in {"missing", "modified"}
+                ])
+            else:
+                eligible_rows = _unique_processing_rows(
+                    [row for row in inventory if row.preprocessing_ready]
+                )
+
+            eligible_by_id = {_processing_row_identity(row): row for row in eligible_rows}
+            document_options = list(eligible_by_id)
+            document_labels = _processing_document_labels(eligible_rows, include_status=True)
             _restore_multi_widget_state(
-                st, key="processing_source_keys", options=source_options
+                st, key="processing_document_ids", options=document_options
             )
-            source_keys = st.multiselect(
+            selected_document_ids = st.multiselect(
                 "Documentos",
-                options=source_options,
-                format_func=lambda value: next(
-                    f"{row.title} · {_STATUS_LABELS[row.status]} · {value}"
-                    for row in inventory
-                    if row.source_key == value
-                ),
-                key="processing_source_keys",
+                options=document_options,
+                format_func=lambda value: document_labels[value],
+                key="processing_document_ids",
+                placeholder="Elegir documentos",
             )
             _remember_multi_widget_state(
-                st, key="processing_source_keys", values=source_keys
+                st, key="processing_document_ids", values=selected_document_ids
             )
+            selected_rows = [eligible_by_id[row_id] for row_id in selected_document_ids]
+            source_keys = [row.source_key for row in selected_rows]
+            source_labels = {
+                row.source_key: document_labels[_processing_row_identity(row)]
+                for row in selected_rows
+            }
+            if not document_options:
+                if operation == "extract":
+                    st.warning(
+                        "Todavía no hay documentos con imágenes preparadas. Elegí el paso 1 y prepará al menos un documento antes de extraer texto."
+                    )
+                else:
+                    st.warning("No hay documentos con una copia local utilizable para preparar imágenes.")
+
             profile_rows = _profiles(project_root)
             profile_path = None
             selected_extraction_profile = None
@@ -1134,15 +1891,13 @@ def render_processing_view(
                     options=treatment_options,
                     default="original",
                 )
-                ocr_treatment = st.selectbox(
-                    "Tratamiento del derivado para OCR",
+                prepare_cols = st.columns(2)
+                ocr_treatment = prepare_cols[0].selectbox(
+                    "Tratamiento de imagen",
                     options=treatment_options,
                     format_func=lambda value: OCR_TREATMENT_LABELS[value],
                     key="processing_ocr_treatment",
-                    help=(
-                        "Solo modifica una copia derivada para OCR. El original y la "
-                        "previsualización permanecen intactos."
-                    ),
+                    help="Se aplica a la imagen de trabajo, no al archivo original.",
                 )
                 _remember_single_widget_state(
                     st, key="processing_ocr_treatment", value=ocr_treatment
@@ -1155,24 +1910,15 @@ def render_processing_view(
                     options=geometry_options,
                     default="none",
                 )
-                geometry_mode = st.selectbox(
-                    "Corrección geométrica",
+                geometry_mode = prepare_cols[1].selectbox(
+                    "Orientación y geometría",
                     options=geometry_options,
                     format_func=lambda value: GEOMETRY_MODE_LABELS[value],
                     key="processing_geometry_mode",
-                    help=(
-                        "Analiza orientación, inclinación, curvatura vertical y líneas "
-                        "largas sobre el derivado OCR. El modo con dewarp solo remapea "
-                        "una curva suave cuando la confianza supera los umbrales "
-                        "conservadores."
-                    ),
+                    help="Corrige orientación, inclinación, curvatura o líneas largas antes de extraer texto.",
                 )
                 _remember_single_widget_state(
                     st, key="processing_geometry_mode", value=geometry_mode
-                )
-                st.caption(
-                    "La preparación crea una versión reproducible. El original, la "
-                    "previsualización y las selecciones canónicas permanecen intactos."
                 )
                 _render_geometry_diagnostics(
                     st,
@@ -1180,16 +1926,15 @@ def render_processing_view(
                     db_path=db_path,
                     source_keys=source_keys,
                 )
-            if operation in {"extract", "retry_failed"}:
+            else:
                 if not profile_rows:
-                    st.error("No se encontraron perfiles extraction*.yaml válidos en config/.")
+                    st.error("No se encontraron métodos de extracción de texto configurados para este proyecto.")
                 else:
                     selected_profile = st.selectbox(
-                        "Perfil OCR/extracción",
+                        "Método de extracción",
                         options=[str(path) for path, _profile in profile_rows],
                         format_func=lambda value: next(
-                            f"{path.name} · {profile.profile_key} · {profile.backend} · "
-                            f"{profile.device}"
+                            _profile_ui_label(path, profile)
                             for path, profile in profile_rows
                             if str(path) == value
                         ),
@@ -1201,116 +1946,66 @@ def render_processing_view(
                         for path, profile in profile_rows
                         if str(path) == selected_profile
                     )
-                    if selected_extraction_profile.backend == "surya_cli":
-                        backend_label = {
-                            "auto": "automático (vLLM con NVIDIA o llama.cpp en CPU)",
-                            "cuda": "vLLM con NVIDIA/Docker",
-                            "cpu": "llama.cpp en CPU",
-                        }[selected_extraction_profile.device]
-                        st.caption(
-                            "Surya realizará OCR, clasificación de bloques y orden de lectura. "
-                            f"Backend solicitado: {backend_label}. La corrida seguirá siendo una "
-                            "candidata y no reemplazará la selección canónica."
-                        )
+                    selected_inventory = list(selected_rows)
+                    with st.expander("Detalles técnicos", expanded=False):
+                        st.write(f"**Configuración:** `{selected_extraction_profile.profile_key}`")
+                        st.write(f"**Motor:** `{selected_extraction_profile.backend}`")
+                        st.write(f"**Equipo solicitado:** `{selected_extraction_profile.device}`")
                         if selected_extraction_profile.surya_torch_device == "cpu":
-                            st.caption(
-                                "Configuración híbrida: el VLM usa vLLM/NVIDIA y los modelos "
-                                "auxiliares de Surya usan CPU."
-                            )
-                        if selected_extraction_profile.surya_keep_server:
-                            st.info(
-                                "El servidor vLLM quedará activo para reutilizarse en las próximas "
-                                "corridas. Libere la VRAM al terminar con "
-                                "`archive-workbench surya-server-stop`."
-                            )
+                            st.caption("Los modelos auxiliares de Surya se ejecutan en CPU.")
                         if selected_extraction_profile.fallback_profile:
                             st.caption(
-                                "Fallback automático si Surya no está disponible o falla: "
+                                "Método alternativo configurado: "
                                 f"`{selected_extraction_profile.fallback_profile}`."
                             )
-                    selected_inventory = [
-                        row for row in inventory if row.source_key in source_keys
-                    ]
-                    if selected_inventory:
-                        st.write("**Imagen que recibirá el OCR**")
-                        image_rows = []
-                        for row in selected_inventory:
-                            treatment = row.preprocessing_ocr_treatment or "original"
-                            treatment_label = OCR_TREATMENT_LABELS.get(treatment, treatment)
-                            geometry = row.preprocessing_geometry_mode or "none"
-                            geometry_label = GEOMETRY_MODE_LABELS.get(geometry, geometry)
-                            profile_variant = selected_extraction_profile.image_variant
-                            image_rows.append(
-                                {
-                                    "Documento": row.title,
-                                    "Tratamiento del derivado vigente": treatment_label,
-                                    "Corrección geométrica vigente": geometry_label,
-                                    "Transformación adicional del perfil": (
-                                        "Ninguna (`original`)"
-                                        if profile_variant == "original"
-                                        else profile_variant
-                                    ),
-                                }
-                            )
-                        st.dataframe(image_rows, hide_index=True, use_container_width=True)
-                        if selected_extraction_profile.image_variant == "original":
-                            st.caption(
-                                "`original` no significa que se use el archivo original sin "
-                                "preparación. Significa que el perfil no agrega otra transformación: "
-                                "el OCR recibe el derivado vigente tal como fue preparado."
-                            )
-                    else:
-                        st.caption(
-                            "Elegí uno o más documentos para ver el tratamiento del derivado "
-                            "vigente que recibirá el OCR."
-                        )
+                        if selected_inventory:
+                            image_rows = []
+                            for row in selected_inventory:
+                                treatment = row.preprocessing_ocr_treatment or "original"
+                                geometry = row.preprocessing_geometry_mode or "none"
+                                profile_variant = selected_extraction_profile.image_variant
+                                image_rows.append(
+                                    {
+                                        "Documento": row.title,
+                                        "Tratamiento": OCR_TREATMENT_LABELS.get(treatment, treatment),
+                                        "Geometría": GEOMETRY_MODE_LABELS.get(geometry, geometry),
+                                        "Transformación del método": (
+                                            "Ninguna" if profile_variant == "original" else profile_variant
+                                        ),
+                                    }
+                                )
+                            st.dataframe(image_rows, hide_index=True, use_container_width=True)
                     combined = [
-                        row.source_key
-                        for row in inventory
-                        if row.source_key in source_keys
-                        and row.preprocessing_ocr_treatment not in {None, "original"}
+                        document_labels[_processing_row_identity(row)]
+                        for row in selected_rows
+                        if row.preprocessing_ocr_treatment not in {None, "original"}
                     ]
                     if combined and selected_extraction_profile.image_variant != "original":
                         st.warning(
-                            "Los documentos seleccionados ya tienen un tratamiento en su "
-                            "derivado OCR y el perfil aplicará otro durante la extracción: "
+                            "Estos documentos ya recibieron un tratamiento al preparar sus imágenes y el método elegido aplicará otra transformación durante la extracción: "
                             + ", ".join(combined)
-                            + ". Revise que esa combinación sea intencional."
+                            + ". Verificá que esa combinación sea intencional."
                         )
-                st.info(
-                    "La corrida producirá candidatos. Después deberá elegir manualmente "
-                    "las páginas en la pestaña Selección canónica."
-                )
-            force = False
-            with st.expander("Opciones avanzadas", expanded=False):
-                force = st.checkbox(
-                    "Crear una nueva versión aunque exista una equivalente",
-                    value=False,
-                    key="processing_force",
-                    disabled=operation in {"retry_failed", "bootstrap"},
-                )
-                st.caption(
-                    "Usá esta opción solamente cuando necesites repetir deliberadamente una "
-                    "preparación o extracción ya registrada."
-                )
-            if operation == "retry_failed" and source_keys:
-                engine = create_sqlite_engine(db_path)
-                try:
-                    with session_scope(engine) as session:
-                        retry_map = {
-                            key: failed_extraction_pages(session, source_key=key)
-                            for key in source_keys
-                        }
-                finally:
-                    engine.dispose()
-                for key, pages in retry_map.items():
-                    page_label = ", ".join(map(str, pages)) if pages else "sin páginas fallidas"
-                    st.write(f"`{key}`: {page_label}")
+
+            force = st.toggle(
+                "Crear una nueva versión aunque ya exista una equivalente",
+                value=False,
+                key="processing_force",
+                help=(
+                    "Usalo sólo cuando necesites conservar otra corrida con la misma configuración "
+                    "en lugar de reutilizar una extracción equivalente ya existente."
+                ),
+            )
+
+            action_label = (
+                "Preparar las imágenes de los documentos seleccionados"
+                if operation == "prepare"
+                else "Extraer texto de los documentos seleccionados"
+            )
             if st.button(
-                "Ejecutar tarea",
+                action_label,
                 type="primary",
-                disabled=not source_keys
-                or (operation in {"extract", "retry_failed"} and profile_path is None),
+                disabled=not source_keys or (operation == "extract" and profile_path is None),
             ):
                 _execute_batch(
                     st,
@@ -1321,11 +2016,56 @@ def render_processing_view(
                     actor=actor,
                     operation=operation,
                     source_keys=source_keys,
+                    source_labels=source_labels,
                     profile_path=profile_path,
                     ocr_treatment=ocr_treatment,
                     geometry_mode=geometry_mode,
                     force=force,
                 )
+
+            if operation == "extract" and source_keys:
+                engine = create_sqlite_engine(db_path)
+                try:
+                    with session_scope(engine) as session:
+                        retry_map = {
+                            key: failed_extraction_pages(session, source_key=key)
+                            for key in source_keys
+                        }
+                finally:
+                    engine.dispose()
+                retry_sources = [key for key, pages in retry_map.items() if pages]
+                if retry_sources:
+                    retry_open = st.toggle(
+                        "Reintentar páginas con error",
+                        value=False,
+                        key="processing_retry_failed_open",
+                    )
+                    if retry_open:
+                        for key in retry_sources:
+                            st.caption(
+                                f"{source_labels.get(key, 'Documento seleccionado')}: páginas "
+                                + ", ".join(map(str, retry_map[key]))
+                            )
+                        if st.button(
+                            "Reintentar páginas con error",
+                            disabled=profile_path is None,
+                            key="processing_retry_failed_pages",
+                        ):
+                            _execute_batch(
+                                st,
+                                project_root=project_root,
+                                db_path=db_path,
+                                decisions=decisions,
+                                project_id=project_id,
+                                actor=actor,
+                                operation="retry_failed",
+                                source_keys=retry_sources,
+                                source_labels=source_labels,
+                                profile_path=profile_path,
+                                ocr_treatment=ocr_treatment,
+                                geometry_mode=geometry_mode,
+                                force=False,
+                            )
 
     with regional_tab:
         _render_regional_extraction_builder(
@@ -1338,33 +2078,35 @@ def render_processing_view(
         )
 
     with selection_tab:
-        st.caption(
-            "Compará versiones por página y elegí cuál debe quedar como referencia de trabajo."
+        candidates = _unique_processing_rows(
+            [row for row in inventory if row.extracted_pages or row.extraction_status]
         )
-        candidates = [row for row in inventory if row.extracted_pages or row.extraction_status]
         if not candidates:
-            st.info("Todavía no hay corridas de extracción para comparar.")
+            st.info("Todavía no hay extracciones completas para comparar.")
         else:
-            source_key = st.selectbox(
+            by_id = {_processing_row_identity(row): row for row in candidates}
+            document_labels = _processing_document_labels(candidates)
+            selected_document_id = st.selectbox(
                 "Documento",
-                options=[row.source_key for row in candidates],
-                format_func=lambda value: next(
-                    f"{row.title} · {value}" for row in candidates if row.source_key == value
-                ),
+                options=list(by_id),
+                format_func=lambda value: document_labels[value],
                 key="processing_selection_source",
             )
-            current_row = next(row for row in candidates if row.source_key == source_key)
+            current_row = by_id[selected_document_id]
+            source_key = current_row.source_key
             engine = create_sqlite_engine(db_path)
             try:
                 with session_scope(engine) as session:
-                    runs = extraction_candidate_runs(session, source_key=source_key)
+                    runs = extraction_candidate_runs(session, source_key=source_key, digital_object_id=current_row.digital_object_id)
             finally:
                 engine.dispose()
-            selectable_runs = [row for row in runs if row.pages]
+            general_runs = [row for row in runs if row.pages and row.engine != "tesseract_regions"]
+            selectable_runs = general_runs
+
             available_pages = sorted({page for row in selectable_runs for page in row.pages})
             if not available_pages:
                 st.warning(
-                    "Las corridas registradas no contienen páginas completadas para comparar."
+                    "Las extracciones registradas no contienen páginas completadas para comparar."
                 )
             else:
                 control_cols = st.columns([1, 2])
@@ -1375,17 +2117,17 @@ def render_processing_view(
                 )
                 page_runs = [row for row in selectable_runs if page in row.pages]
                 run_id = control_cols[1].selectbox(
-                    "Versión candidata",
+                    "Extracción",
                     options=[row.run_id for row in page_runs],
                     format_func=lambda value: next(
                         (
-                            f"{row.profile_key or '-'} · {row.status} · "
-                            f"calidad {row.quality_status} · {row.created_at:%Y-%m-%d %H:%M}"
+                            f"{row.created_at:%Y-%m-%d %H:%M} · "
+                            f"{len(row.pages)} pág. · {_extraction_run_ui_label(row)}"
                         )
                         for row in page_runs
                         if row.run_id == value
                     ),
-                    key=f"processing_candidate_run_{source_key}_{page}",
+                    key=f"processing_candidate_run_{current_row.digital_object_id}_{page}",
                 )
                 engine = create_sqlite_engine(db_path)
                 try:
@@ -1394,12 +2136,14 @@ def render_processing_view(
                             session,
                             project_root=project_root,
                             source_key=source_key,
+                                    digital_object_id=current_row.digital_object_id,
                             page=page,
                             candidate_run_id=run_id,
                         )
                         assessment = assess_candidate_adoption(
                             session,
                             source_key=source_key,
+                                    digital_object_id=current_row.digital_object_id,
                             page=page,
                             candidate_run_id=run_id,
                         )
@@ -1414,13 +2158,14 @@ def render_processing_view(
                     quality_targets = [comparison.candidate.page_id]
                     if comparison.current is not None:
                         quality_targets.append(comparison.current.page_id)
-                    if st.button(
-                        "Evaluar calidad de las versiones visibles",
-                        key=f"processing_quality_{source_key}_{page}_{run_id}",
-                        help=(
-                            "Calcula indicadores de imagen, fragmentación y solapamiento. "
-                            "No selecciona, adopta ni aprueba ninguna versión."
-                        ),
+                    quality_open = st.toggle(
+                        "Actualizar control automático",
+                        value=False,
+                        key=f"processing_quality_open_{current_row.digital_object_id}_{page}_{run_id}",
+                    )
+                    if quality_open and st.button(
+                        "Calcular indicadores",
+                        key=f"processing_quality_{current_row.digital_object_id}_{page}_{run_id}",
                     ):
                         engine = create_sqlite_engine(db_path)
                         try:
@@ -1435,66 +2180,35 @@ def render_processing_view(
                         except (ValueError, OSError) as exc:
                             st.error(str(exc))
                         else:
-                            request_tab(st, key="processing_tabs", label="Selección canónica")
-                            st.session_state["processing_flash"] = (
-                                f"Página {page}: control automático actualizado. "
-                                "La selección y la edición no cambiaron."
-                            )
+                            request_tab(st, key="processing_tabs", label=_SELECTION_TAB_LABEL)
+                            st.session_state["processing_flash"] = f"Página {page}: control automático actualizado."
                             rerun_view(st)
                         finally:
                             engine.dispose()
 
-                    st.caption(
-                        "Primero compare la página. Cambiar la selección no borra correcciones; "
-                        "actualizar la base editable solo se habilita cuando es seguro."
-                    )
                     current = comparison.current
                     candidate = comparison.candidate
-                    metric_cols = st.columns(4)
-                    metric_cols[0].metric(
-                        "Objetos",
-                        candidate.object_count,
-                        comparison.object_delta if comparison.object_delta is not None else None,
-                    )
-                    metric_cols[1].metric(
-                        "Caracteres",
-                        candidate.character_count,
-                        comparison.character_delta
-                        if comparison.character_delta is not None
-                        else None,
-                    )
-                    metric_cols[2].metric(
-                        "Similitud textual",
-                        (
-                            f"{comparison.text_similarity * 100:.1f}%"
-                            if comparison.text_similarity is not None
-                            else "Sin selección previa"
-                        ),
-                    )
-                    metric_cols[3].metric(
-                        "Estado de la corrida",
-                        _RUN_QUALITY_LABELS.get(
-                            candidate.quality_status, candidate.quality_status
-                        ),
+                    similarity = (
+                        f"{comparison.text_similarity * 100:.1f}% parecido"
+                        if comparison.text_similarity is not None
+                        else "sin selección previa"
                     )
                     st.caption(
-                        "El estado de la corrida lo asigna el equipo. El control automático "
-                        "es independiente: señala riesgos, pero no aprueba ni mide la exactitud "
-                        "del OCR."
+                        f"{candidate.object_count} fragmentos · {candidate.character_count} caracteres · "
+                        f"{similarity} · {_RUN_QUALITY_LABELS.get(candidate.quality_status, candidate.quality_status)}"
                     )
 
                     left, right = st.columns(2)
                     with left:
-                        st.subheader("Selección vigente")
+                        st.write("**Elegida actualmente**")
                         if current is None:
-                            st.info("Esta página todavía no tiene una extracción seleccionada.")
+                            st.info("Esta página todavía no tiene una extracción elegida para Revisar documentos.")
                         else:
-                            badges = []
-                            if current.is_editable_source:
-                                badges.append("base de edición")
-                            badges.append(current.profile_key or current.engine)
-                            st.caption(" · ".join(badges))
+                            st.caption(_extraction_run_ui_label(current))
                             _render_automatic_quality(st, current.automatic_quality)
+                            with st.expander("Detalles técnicos de esta extracción", expanded=False):
+                                st.write(f"Motor: {_extraction_run_ui_label(current)}")
+                                st.write(f"Perfil: `{current.profile_key or current.engine}`")
                             if current.preview_path is not None:
                                 st.image(
                                     render_candidate_overlay(
@@ -1503,21 +2217,19 @@ def render_processing_view(
                                     use_container_width=True,
                                 )
                             st.text_area(
-                                "Texto vigente",
+                                "Texto de la extracción elegida",
                                 value=current.text,
-                                height=260,
+                                height=180,
                                 disabled=True,
-                                key=f"processing_current_text_{source_key}_{page}_{current.run_id}",
+                                key=f"processing_current_text_{current_row.digital_object_id}_{page}_{current.run_id}",
                             )
                     with right:
-                        st.subheader("Candidata")
-                        candidate_badges = [candidate.profile_key or candidate.engine]
-                        if candidate.is_selected:
-                            candidate_badges.append("ya seleccionada")
-                        if candidate.is_editable_source:
-                            candidate_badges.append("base de edición")
-                        st.caption(" · ".join(candidate_badges))
+                        st.write("**Comparada**")
+                        st.caption(_extraction_run_ui_label(candidate))
                         _render_automatic_quality(st, candidate.automatic_quality)
+                        with st.expander("Detalles técnicos de esta extracción", expanded=False):
+                            st.write(f"Motor: {_extraction_run_ui_label(candidate)}")
+                            st.write(f"Perfil: `{candidate.profile_key or candidate.engine}`")
                         if candidate.preview_path is not None:
                             st.image(
                                 render_candidate_overlay(
@@ -1526,11 +2238,11 @@ def render_processing_view(
                                 use_container_width=True,
                             )
                         st.text_area(
-                            "Texto candidato",
+                            "Texto de la extracción comparada",
                             value=candidate.text,
-                            height=260,
+                            height=180,
                             disabled=True,
-                            key=f"processing_candidate_text_{source_key}_{page}_{candidate.run_id}",
+                            key=f"processing_candidate_text_{current_row.digital_object_id}_{page}_{candidate.run_id}",
                         )
 
                     if comparison.unified_text_diff:
@@ -1538,26 +2250,26 @@ def render_processing_view(
                             st.code(comparison.unified_text_diff, language="diff")
 
                     if assessment.code == ADOPTION_MANUAL:
-                        st.warning(f"**{assessment.title}.** {assessment.explanation}")
-                        st.write("Se detectó: " + "; ".join(assessment.blocking_reasons) + ".")
+                        st.warning(assessment.title)
+                        st.caption(" · ".join(assessment.blocking_reasons))
                     elif assessment.code == ADOPTION_ALREADY:
-                        st.success(f"**{assessment.title}.** {assessment.explanation}")
+                        st.success(assessment.title)
                     else:
-                        st.info(f"**{assessment.title}.** {assessment.explanation}")
+                        st.info(assessment.title)
 
                     note = st.text_input(
-                        "Nota",
-                        placeholder="Motivo de la elección (opcional)",
-                        key=f"processing_candidate_note_{source_key}_{page}_{run_id}",
+                        "Nota opcional",
+                        placeholder="Motivo de la decisión",
+                        key=f"processing_candidate_note_{current_row.digital_object_id}_{page}_{run_id}",
                     )
                     action_cols = st.columns(2)
                     select_disabled = candidate.is_selected
                     if action_cols[0].button(
-                        "Cambiar solo la selección",
+                        "Elegir esta extracción",
                         disabled=select_disabled,
                         use_container_width=True,
                         help=(
-                            "La edición existente se conserva. Si proviene de otra extracción, "
+                            "La edición existente se conserva. Si fue creada desde otra extracción, "
                             "quedará señalada como desactualizada."
                         ),
                     ):
@@ -1567,6 +2279,7 @@ def render_processing_view(
                                 _run, changed = select_extraction_pages(
                                     session,
                                     source_key=source_key,
+                                    digital_object_id=current_row.digital_object_id,
                                     selected_by=actor or "local_user",
                                     run_id=run_id,
                                     pages={page},
@@ -1576,18 +2289,20 @@ def render_processing_view(
                             st.error(str(exc))
                         else:
                             st.session_state["processing_flash"] = (
-                                f"Página {page}: selección actualizada ({changed} cambio). "
+                                f"Página {page}: extracción elegida actualizada ({changed} cambio). "
                                 "La edición existente se conservó."
                             )
-                            request_tab(st, key="processing_tabs", label="Selección canónica")
+                            request_tab(
+                                st, key="processing_tabs", label=_SELECTION_TAB_LABEL
+                            )
                             rerun_view(st)
                         finally:
                             engine.dispose()
 
                     if assessment.code == ADOPTION_NOT_INITIALIZED:
-                        adopt_label = "Seleccionar e inicializar esta página"
+                        adopt_label = "Enviar a Revisar documentos"
                     else:
-                        adopt_label = "Cambiar selección y base editable"
+                        adopt_label = "Actualizar en Revisar documentos"
                     if action_cols[1].button(
                         adopt_label,
                         type="primary",
@@ -1596,7 +2311,7 @@ def render_processing_view(
                         help=(
                             assessment.explanation
                             if assessment.can_adopt
-                            else "La aplicación no reemplazará automáticamente trabajo humano."
+                            else "La aplicación no reemplazará automáticamente trabajo revisado."
                         ),
                     ):
                         engine = create_sqlite_engine(db_path)
@@ -1606,6 +2321,7 @@ def render_processing_view(
                                     session,
                                     decisions=decisions,
                                     source_key=source_key,
+                                    digital_object_id=current_row.digital_object_id,
                                     page=page,
                                     candidate_run_id=run_id,
                                     adopted_by=actor or "local_user",
@@ -1615,54 +2331,65 @@ def render_processing_view(
                             st.error(str(exc))
                         else:
                             st.session_state["processing_flash"] = (
-                                f"Página {page}: candidata adoptada. "
-                                f"Objetos activos: {result.objects_activated}; "
-                                f"anteriores conservados: {result.objects_retired}."
+                                f"Página {page}: extracción aplicada. "
+                                f"Textos activos: {result.objects_activated}; "
+                                f"textos anteriores conservados en el historial: {result.objects_retired}."
                             )
-                            request_tab(st, key="processing_tabs", label="Selección canónica")
+                            request_tab(
+                                st, key="processing_tabs", label=_SELECTION_TAB_LABEL
+                            )
                             rerun_view(st)
                         finally:
                             engine.dispose()
 
                     if assessment.code == ADOPTION_MANUAL:
-                        with st.expander("Resolver conservando la edición actual"):
-                            st.write(
-                                "Esta opción no importa ni mezcla los bloques de la candidata. "
-                                "Mantiene exactamente los textos, el orden, las anotaciones y "
-                                "los estados actuales; solo registra que esa edición continuará "
-                                "sobre la candidata elegida."
-                            )
+                        manual_path = st.radio(
+                            "Edición existente",
+                            options=["none", "keep", "rebase"],
+                            format_func=lambda value: {
+                                "none": "Elegir cómo continuar",
+                                "keep": "Mantener la edición actual",
+                                "rebase": "Trasladar la edición a la extracción comparada",
+                            }[value],
+                            horizontal=True,
+                            key=f"processing_manual_path_{current_row.digital_object_id}_{page}_{run_id}",
+                        )
+                        if manual_path == "keep":
                             st.text_area(
                                 "Edición que se conservará",
                                 value=comparison.editable_text or "",
                                 height=220,
                                 disabled=True,
                                 key=(
-                                    f"processing_editable_text_{source_key}_{page}_"
+                                    f"processing_editable_text_{current_row.digital_object_id}_{page}_"
                                     f"{comparison.editable_status}"
                                 ),
                             )
                             with st.form(
-                                f"processing_keep_edits_commit_{source_key}_{page}_{run_id}",
+                                f"processing_keep_edits_commit_{current_row.digital_object_id}_{page}_{run_id}",
                                 enter_to_submit=False,
                             ):
                                 keep_confirmed = st.checkbox(
                                     "Confirmo que deseo conservar íntegramente la edición actual",
-                                    key=f"processing_keep_edits_confirm_{source_key}_{page}_{run_id}",
+                                    key=f"processing_keep_edits_confirm_{current_row.digital_object_id}_{page}_{run_id}",
                                 )
                                 keep_submitted = st.form_submit_button(
-                                    "Conservar edición y vincular esta candidata",
+                                    "Conservar la edición y vincularla con esta extracción",
                                     type="primary",
-                                    disabled=not keep_confirmed,
                                     use_container_width=True,
                                 )
-                            if keep_submitted:
+                            if keep_submitted and not keep_confirmed:
+                                st.error(
+                                    "Marcá la confirmación dentro del formulario antes de conservar la edición."
+                                )
+                            elif keep_submitted:
                                 engine = create_sqlite_engine(db_path)
                                 try:
                                     with session_scope(engine) as session:
                                         result = resolve_candidate_keep_edits(
                                             session,
                                             source_key=source_key,
+                                            digital_object_id=current_row.digital_object_id,
                                             page=page,
                                             candidate_run_id=run_id,
                                             resolved_by=actor or "local_user",
@@ -1673,27 +2400,22 @@ def render_processing_view(
                                 else:
                                     st.session_state["processing_flash"] = (
                                         f"Página {page}: se conservaron "
-                                        f"{result.retained_objects} objetos editables. "
+                                        f"{result.retained_objects} fragmentos de texto editables. "
                                         "La decisión quedó registrada en el historial."
                                     )
-                                    request_tab(st, key="processing_tabs", label="Selección canónica")
+                                    request_tab(st, key="processing_tabs", label=_SELECTION_TAB_LABEL)
                                     rerun_view(st)
                                 finally:
                                     engine.dispose()
 
-                        with st.expander("Rebasar la edición sobre esta candidata", expanded=True):
-                            st.write(
-                                "Compara la extracción anterior, la edición humana y la candidata. "
-                                "Solo habilita la aplicación cuando puede trasladar texto, menciones, "
-                                "comentarios, etiquetas, partes documentales y atributos especializados "
-                                "sin ambigüedad."
-                            )
+                        if manual_path == "rebase":
                             engine = create_sqlite_engine(db_path)
                             try:
                                 with session_scope(engine) as session:
                                     rebase_preview = preview_editable_rebase(
                                         session,
                                         source_key=source_key,
+                                        digital_object_id=current_row.digital_object_id,
                                         page=page,
                                         candidate_run_id=run_id,
                                     )
@@ -1707,13 +2429,13 @@ def render_processing_view(
                                 text_resolutions: dict[str, dict] = {}
                                 if rebase_preview.text_conflicts:
                                     st.warning(
-                                        "Hay correcciones humanas que se superponen con cambios "
-                                        "distintos de la candidata. Cada tramo debe resolverse "
-                                        "explícitamente antes de aplicar el rebase."
+                                        "Hay correcciones revisadas que se superponen con cambios "
+                                        "distintos de la extracción nueva. Cada tramo debe resolverse "
+                                        "explícitamente antes de trasladar la edición."
                                     )
                                     for conflict in rebase_preview.text_conflicts:
                                         key_base = (
-                                            f"processing_rebase_text_{source_key}_{page}_"
+                                            f"processing_rebase_text_{current_row.digital_object_id}_{page}_"
                                             f"{run_id}_{conflict.conflict_id}"
                                         )
                                         with st.container(border=True):
@@ -1722,9 +2444,9 @@ def render_processing_view(
                                             columns = st.columns(3)
                                             columns[0].write("**Base anterior**")
                                             columns[0].code(conflict.base_text or "[vacío]")
-                                            columns[1].write("**Corrección humana**")
+                                            columns[1].write("**Corrección revisada**")
                                             columns[1].code(conflict.human_text or "[vacío]")
-                                            columns[2].write("**Nueva candidata**")
+                                            columns[2].write("**Extracción nueva**")
                                             columns[2].code(conflict.candidate_text or "[vacío]")
                                             st.caption(f"Contexto: {conflict.context}")
                                             choice = st.radio(
@@ -1737,9 +2459,9 @@ def render_processing_view(
                                                 ],
                                                 format_func=lambda value: {
                                                     "pending": "Pendiente de resolución",
-                                                    "candidate": "Conservar la lectura de la candidata",
-                                                    "human": "Reaplicar la corrección humana",
-                                                    "manual": "Escribir manualmente el resultado",
+                                                    "candidate": "Conservar la lectura de la extracción nueva",
+                                                    "human": "Reaplicar la corrección revisada",
+                                                    "manual": "Escribir manualmente el texto",
                                                 }[value],
                                                 key=f"{key_base}_choice",
                                             )
@@ -1765,7 +2487,7 @@ def render_processing_view(
                                             elif choice == "manual":
                                                 st.caption(
                                                     "El texto manual reemplaza solamente el tramo "
-                                                    "mostrado en la columna Nueva candidata."
+                                                    "mostrado en la columna Extracción nueva."
                                                 )
                                                 with st.form(
                                                     f"{key_base}_manual_form",
@@ -1822,6 +2544,7 @@ def render_processing_view(
                                                 rebase_preview = preview_editable_rebase(
                                                     session,
                                                     source_key=source_key,
+                                                digital_object_id=current_row.digital_object_id,
                                                     page=page,
                                                     candidate_run_id=run_id,
                                                     text_resolutions=text_resolutions,
@@ -1839,31 +2562,29 @@ def render_processing_view(
                                     and rebase_preview.projection_conflicts
                                 ):
                                     st.warning(
-                                        "Hay objetos con anotaciones o metadatos cuya correspondencia "
-                                        "con los bloques candidatos no es suficientemente segura. "
-                                        "Elegí explícitamente el bloque de destino."
+                                        "Hay fragmentos de texto con anotaciones o datos adicionales cuya correspondencia con el texto de la extracción nueva no es suficientemente segura. Elegí explícitamente qué fragmento nuevo debe recibir esa información."
                                     )
                                     for conflict in rebase_preview.projection_conflicts:
                                         key_base = (
-                                            f"processing_rebase_projection_{source_key}_{page}_"
+                                            f"processing_rebase_projection_{current_row.digital_object_id}_{page}_"
                                             f"{run_id}_{conflict.conflict_id}"
                                         )
                                         with st.container(border=True):
                                             st.write(
-                                                f"**Proyección del objeto editable "
+                                                f"**Destino para las anotaciones del fragmento de texto "
                                                 f"{conflict.source_order_index + 1}**"
                                             )
                                             st.caption(conflict.reason)
-                                            st.code(conflict.source_text[:700] or "[objeto vacío]")
+                                            st.code(conflict.source_text[:700] or "[fragmento de texto vacío]")
                                             options = ["pending", *range(len(conflict.candidates))]
                                             selected_projection = st.selectbox(
-                                                "Bloque candidato que recibirá sus anotaciones y metadatos",
+                                                "Fragmento del texto nuevo que recibirá sus anotaciones y datos adicionales",
                                                 options=options,
                                                 format_func=lambda value, candidates=conflict.candidates: (
                                                     "Pendiente de resolución"
                                                     if value == "pending"
                                                     else (
-                                                        f"Bloque {candidates[value].order_index + 1} · "
+                                                        f"Fragmento {candidates[value].order_index + 1} · "
                                                         f"similitud textual "
                                                         f"{candidates[value].text_score:.0%} · "
                                                         f"solapamiento posicional "
@@ -1899,6 +2620,7 @@ def render_processing_view(
                                                 rebase_preview = preview_editable_rebase(
                                                     session,
                                                     source_key=source_key,
+                                                digital_object_id=current_row.digital_object_id,
                                                     page=page,
                                                     candidate_run_id=run_id,
                                                     text_resolutions=text_resolutions,
@@ -1920,20 +2642,18 @@ def render_processing_view(
                                     and rebase_preview.mention_conflicts
                                 ):
                                     st.warning(
-                                        "Hay conflictos de menciones que pueden resolverse aquí. "
-                                        "La autoridad canónica y sus relaciones no se modifican: "
-                                        "solo se decide el nuevo anclaje textual o el rechazo de un duplicado."
+                                        "Algunas menciones de entidades no pueden trasladarse automáticamente al texto nuevo. Acá decidís a qué fragmento deben quedar vinculadas o si una mención duplicada debe rechazarse. La ficha de la entidad y sus relaciones no cambian."
                                     )
                                     for conflict in rebase_preview.mention_conflicts:
                                         key_base = (
-                                            f"processing_rebase_mention_{source_key}_{page}_"
+                                            f"processing_rebase_mention_{current_row.digital_object_id}_{page}_"
                                             f"{run_id}_{conflict.mention_id}"
                                         )
                                         with st.container(border=True):
                                             authority_label = (
                                                 conflict.authority_name
                                                 or conflict.authority_id
-                                                or "sin autoridad canónica"
+                                                or "sin entidad vinculada"
                                             )
                                             st.write(
                                                 f"**{conflict.mention_text}** · {authority_label} · "
@@ -1959,14 +2679,14 @@ def render_processing_view(
                                                     candidate_option.target_index
                                                 ].order_index + 1
                                                 option_labels[option] = (
-                                                    f"Bloque {block_order} · "
+                                                    f"Fragmento {block_order} · "
                                                     f"{candidate_option.method} · "
                                                     f"«{candidate_option.matched_text}» · "
                                                     f"{candidate_option.context}"
                                                 )
                                             option_values.extend(["manual", "reject"])
                                             choice = st.selectbox(
-                                                "Resolución",
+                                                "Cómo trasladar este dato al texto nuevo",
                                                 options=option_values,
                                                 format_func=lambda value, labels=option_labels: labels[
                                                     value
@@ -2009,34 +2729,34 @@ def render_processing_view(
                                                     enter_to_submit=False,
                                                 ):
                                                     target_index = st.selectbox(
-                                                        "Bloque candidato",
+                                                        "Fragmento del texto nuevo",
                                                         options=block_options,
                                                         index=block_options.index(default_block),
                                                         format_func=lambda value: (
-                                                            f"Bloque "
+                                                            f"Fragmento "
                                                             f"{rebase_preview.candidate_objects[value].order_index + 1} · "
                                                             f"{rebase_preview.candidate_objects[value].rebased_text[:120]}"
                                                         ),
                                                         key=f"{key_base}_manual_block",
                                                     )
                                                     manual_text = st.text_input(
-                                                        "Fragmento exacto dentro del bloque",
+                                                        "Fragmento exacto dentro del texto",
                                                         value=conflict.mention_text,
                                                         key=f"{key_base}_manual_text",
                                                     )
                                                     manual_occurrence = st.number_input(
-                                                        "Aparición",
+                                                        "Qué aparición del fragmento querés usar",
                                                         min_value=1,
                                                         value=1,
                                                         step=1,
                                                         help=(
                                                             "Usá 2, 3, etc. cuando el mismo fragmento "
-                                                            "aparece varias veces en el bloque."
+                                                            "aparece varias veces en ese texto."
                                                         ),
                                                         key=f"{key_base}_manual_occurrence",
                                                     )
                                                     manual_submitted = st.form_submit_button(
-                                                        "Confirmar fragmento manual"
+                                                        "Confirmar este fragmento como nueva ubicación"
                                                     )
                                                 if manual_submitted:
                                                     st.session_state.pop(manual_state_key, None)
@@ -2049,7 +2769,7 @@ def render_processing_view(
                                                     occurrence_index = int(manual_occurrence) - 1
                                                     if not occurrences:
                                                         st.error(
-                                                            "Ese fragmento no aparece en el bloque elegido. "
+                                                            "Ese fragmento no aparece en el texto elegido. "
                                                             "Copialo exactamente desde el texto resultante."
                                                         )
                                                     elif occurrence_index >= len(occurrences):
@@ -2091,8 +2811,8 @@ def render_processing_view(
                                                     f"{key_base}_manual_resolution", None
                                                 )
                                                 reject_confirmed = st.checkbox(
-                                                    "Confirmo que esta mención debe quedar rechazada; "
-                                                    "la autoridad canónica y sus relaciones se conservarán",
+                                                    "Confirmo que esta mención duplicada debe quedar rechazada; "
+                                                    "la ficha de la entidad y sus relaciones se conservarán",
                                                     key=f"{key_base}_reject_confirm",
                                                 )
                                                 if reject_confirmed:
@@ -2116,6 +2836,7 @@ def render_processing_view(
                                                 rebase_preview = preview_editable_rebase(
                                                     session,
                                                     source_key=source_key,
+                                                digital_object_id=current_row.digital_object_id,
                                                     page=page,
                                                     candidate_run_id=run_id,
                                                     mention_resolutions=mention_resolutions,
@@ -2137,12 +2858,11 @@ def render_processing_view(
                                     and rebase_preview.metadata_conflicts
                                 ):
                                     st.warning(
-                                        "Hay metadatos incompatibles entre objetos que convergen en "
-                                        "un mismo bloque candidato. Elegí explícitamente el valor resultante."
+                                        "Hay datos adicionales incompatibles porque varios fragmentos anteriores convergen en un mismo fragmento del texto nuevo. Elegí explícitamente qué valor debe conservarse."
                                     )
                                     for conflict in rebase_preview.metadata_conflicts:
                                         key_base = (
-                                            f"processing_rebase_metadata_{source_key}_{page}_"
+                                            f"processing_rebase_metadata_{current_row.digital_object_id}_{page}_"
                                             f"{run_id}_{conflict.conflict_id}"
                                         )
                                         block = rebase_preview.candidate_objects[conflict.target_index]
@@ -2150,13 +2870,13 @@ def render_processing_view(
                                             kind_label = {
                                                 "document_part": "Parte documental",
                                                 "review_status": "Estado de revisión",
-                                                "object_type": "Tipo de bloque",
+                                                "object_type": "Tipo de fragmento de texto",
                                             }.get(conflict.kind, conflict.kind)
                                             st.write(
-                                                f"**{kind_label}** · bloque {block.order_index + 1}"
+                                                f"**{kind_label}** · fragmento {block.order_index + 1}"
                                             )
                                             st.caption(conflict.reason)
-                                            st.code(block.rebased_text[:600] or "[bloque vacío]")
+                                            st.code(block.rebased_text[:600] or "[fragmento vacío]")
                                             option_values = ["pending", *range(len(conflict.options))]
                                             selected = st.selectbox(
                                                 "Valor que debe quedar",
@@ -2189,6 +2909,7 @@ def render_processing_view(
                                                 rebase_preview = preview_editable_rebase(
                                                     session,
                                                     source_key=source_key,
+                                                digital_object_id=current_row.digital_object_id,
                                                     page=page,
                                                     candidate_run_id=run_id,
                                                     mention_resolutions=mention_resolutions,
@@ -2217,7 +2938,7 @@ def render_processing_view(
                                     )
                                     for conflict in rebase_preview.attribute_conflicts:
                                         key_base = (
-                                            f"processing_rebase_attribute_{source_key}_{page}_"
+                                            f"processing_rebase_attribute_{current_row.digital_object_id}_{page}_"
                                             f"{run_id}_{conflict.conflict_id}"
                                         )
                                         block = rebase_preview.candidate_objects[
@@ -2226,10 +2947,10 @@ def render_processing_view(
                                         with st.container(border=True):
                                             st.write(
                                                 f"**Atributo `{conflict.attribute_key}`** · "
-                                                f"bloque {block.order_index + 1}"
+                                                f"fragmento {block.order_index + 1}"
                                             )
                                             st.caption(conflict.reason)
-                                            st.code(block.rebased_text[:600] or "[bloque vacío]")
+                                            st.code(block.rebased_text[:600] or "[fragmento vacío]")
                                             option_values = [
                                                 "pending",
                                                 *range(len(conflict.options)),
@@ -2277,7 +2998,7 @@ def render_processing_view(
                                                     enter_to_submit=False,
                                                 ):
                                                     manual_json = st.text_area(
-                                                        "Valor JSON exacto",
+                                                        "Valor técnico exacto que querés conservar (JSON)",
                                                         value=json.dumps(
                                                             default_value,
                                                             ensure_ascii=False,
@@ -2290,7 +3011,7 @@ def render_processing_view(
                                                         key=f"{key_base}_manual_confirm",
                                                     )
                                                     manual_submitted = st.form_submit_button(
-                                                        "Confirmar valor JSON"
+                                                        "Confirmar este valor técnico"
                                                     )
                                                 if manual_submitted:
                                                     st.session_state.pop(manual_state_key, None)
@@ -2342,6 +3063,7 @@ def render_processing_view(
                                                 rebase_preview = preview_editable_rebase(
                                                     session,
                                                     source_key=source_key,
+                                                digital_object_id=current_row.digital_object_id,
                                                     page=page,
                                                     candidate_run_id=run_id,
                                                     mention_resolutions=mention_resolutions,
@@ -2359,16 +3081,16 @@ def render_processing_view(
                             if rebase_preview is not None:
                                 rebase_metrics = st.columns(4)
                                 rebase_metrics[0].metric(
-                                    "Bloques editables", rebase_preview.old_object_count
+                                    "Fragmentos de texto editables", rebase_preview.old_object_count
                                 )
                                 rebase_metrics[1].metric(
-                                    "Bloques candidatos", rebase_preview.new_object_count
+                                    "Fragmentos del texto nuevo", rebase_preview.new_object_count
                                 )
                                 rebase_metrics[2].metric(
-                                    "Cambios humanos", rebase_preview.human_change_count
+                                    "Cambios manuales", rebase_preview.human_change_count
                                 )
                                 rebase_metrics[3].metric(
-                                    "Menciones", rebase_preview.mention_count
+                                    "Menciones de entidades", rebase_preview.mention_count
                                 )
                                 st.caption(
                                     f"También se trasladarán {rebase_preview.comment_count} comentarios, "
@@ -2378,12 +3100,12 @@ def render_processing_view(
                                 if rebase_preview.structural_action_count:
                                     st.info(
                                         f"La página tiene {rebase_preview.structural_action_count} acciones "
-                                        "estructurales históricas. El rebase usa el estado activo actual como "
+                                        "estructurales históricas. El traslado usa el estado activo actual como "
                                         "fuente de verdad; el historial se conserva y ya no bloquea por sí solo."
                                     )
                                 if rebase_preview.conflicts:
                                     st.error(
-                                        "El rebase continúa bloqueado por incompatibilidades estructurales reales:"
+                                        "El traslado de la edición sigue bloqueado por incompatibilidades estructurales:"
                                     )
                                     for conflict in rebase_preview.conflicts:
                                         st.write(f"• {conflict}")
@@ -2395,11 +3117,11 @@ def render_processing_view(
                                         st.write(f"• {conflict.reason}")
                                 if rebase_preview.projection_conflicts:
                                     st.error(
-                                        "Todavía quedan objetos anotados sin una proyección estructural confirmada:"
+                                        "Todavía quedan fragmentos de texto con anotaciones cuyo destino en el texto nuevo no fue confirmado:"
                                     )
                                     for conflict in rebase_preview.projection_conflicts:
                                         st.write(
-                                            f"• Objeto {conflict.source_order_index + 1}: "
+                                            f"• Fragmento de texto {conflict.source_order_index + 1}: "
                                             f"{conflict.reason}"
                                         )
                                 if rebase_preview.mention_conflicts:
@@ -2416,7 +3138,7 @@ def render_processing_view(
                                     )
                                     for conflict in rebase_preview.metadata_conflicts:
                                         st.write(
-                                            f"• Bloque {rebase_preview.candidate_objects[conflict.target_index].order_index + 1}: "
+                                            f"• Fragmento {rebase_preview.candidate_objects[conflict.target_index].order_index + 1}: "
                                             f"{conflict.reason}"
                                         )
                                 if rebase_preview.attribute_conflicts:
@@ -2425,7 +3147,7 @@ def render_processing_view(
                                     )
                                     for conflict in rebase_preview.attribute_conflicts:
                                         st.write(
-                                            f"• Bloque {rebase_preview.candidate_objects[conflict.target_index].order_index + 1}, "
+                                            f"• Fragmento {rebase_preview.candidate_objects[conflict.target_index].order_index + 1}, "
                                             f"`{conflict.attribute_key}`: {conflict.reason}"
                                         )
                                 if rebase_preview.can_apply:
@@ -2434,7 +3156,7 @@ def render_processing_view(
                                         "La operación será transaccional y conservará el historial anterior."
                                     )
                                 if rebase_preview.unified_text_diff:
-                                    with st.expander("Ver correcciones humanas trasladadas"):
+                                    with st.expander("Ver correcciones revisadas trasladadas"):
                                         st.code(
                                             rebase_preview.unified_text_diff, language="diff"
                                         )
@@ -2452,23 +3174,23 @@ def render_processing_view(
                                     use_container_width=True,
                                 )
                                 with st.form(
-                                    f"processing_rebase_commit_{source_key}_{page}_{run_id}",
+                                    f"processing_rebase_commit_{current_row.digital_object_id}_{page}_{run_id}",
                                     enter_to_submit=False,
                                 ):
                                     rebase_confirmed = st.checkbox(
-                                        "Confirmo que revisé la vista previa y deseo aplicar el rebase",
+                                        "Confirmo que revisé la vista previa y deseo trasladar la edición a la extracción nueva",
                                         disabled=not rebase_preview.can_apply,
-                                        key=f"processing_rebase_confirm_{source_key}_{page}_{run_id}",
+                                        key=f"processing_rebase_confirm_{current_row.digital_object_id}_{page}_{run_id}",
                                     )
                                     rebase_submitted = st.form_submit_button(
-                                        "Aplicar rebase y adoptar la candidata",
+                                        "Aplicar el traslado y usar la extracción nueva",
                                         type="primary",
                                         disabled=not rebase_preview.can_apply,
                                         use_container_width=True,
                                     )
                                 if rebase_submitted and not rebase_confirmed:
                                     st.error(
-                                        "Marcá la confirmación dentro del formulario antes de aplicar el rebase."
+                                        "Marcá la confirmación dentro del formulario antes de trasladar la edición."
                                     )
                                 elif rebase_submitted:
                                     engine = create_sqlite_engine(db_path)
@@ -2478,6 +3200,7 @@ def render_processing_view(
                                                 session,
                                                 decisions=decisions,
                                                 source_key=source_key,
+                                                digital_object_id=current_row.digital_object_id,
                                                 page=page,
                                                 candidate_run_id=run_id,
                                                 expected_page_revision=(
@@ -2500,8 +3223,8 @@ def render_processing_view(
                                             else ""
                                         )
                                         st.session_state["processing_flash"] = (
-                                            f"Página {page}: rebase aplicado. "
-                                            f"Se crearon {result.new_objects_created} bloques, "
+                                            f"Página {page}: edición trasladada a la extracción nueva. "
+                                            f"Se crearon {result.new_objects_created} fragmentos de texto, "
                                             f"se retiraron {result.old_objects_retired} anteriores, "
                                             f"se relocalizaron {result.mentions_relocated} menciones"
                                             f"{rejected_suffix}; se absorbieron "
@@ -2512,7 +3235,7 @@ def render_processing_view(
                                         request_tab(
                                             st,
                                             key="processing_tabs",
-                                            label="Selección canónica",
+                                            label=_SELECTION_TAB_LABEL,
                                         )
                                         rerun_view(st)
                                     finally:
@@ -2525,14 +3248,30 @@ def render_processing_view(
                         ):
                             _open_review(st, source_key=source_key, page=page)
 
-            st.caption(
-                f"Documento: {current_row.selected_pages}/{current_row.page_count or '?'} "
-                f"páginas seleccionadas · {current_row.editable_pages} editables · "
-                f"estado {_STATUS_LABELS[current_row.status]}."
-            )
+
+    with regional_integration_tab:
+        _render_regional_review_integration(
+            st,
+            project_root=project_root,
+            db_path=db_path,
+            decisions=decisions,
+            inventory=inventory,
+            actor=actor,
+        )
+
+    with bulk_review_tab:
+        _render_bulk_review_sender(
+            st,
+            db_path=db_path,
+            decisions=decisions,
+            inventory=inventory,
+            actor=actor,
+        )
 
     with history_tab:
-        st.caption("Consultá las tareas ejecutadas, su estado y los errores registrados.")
+        history_document_labels = {}
+        for row in inventory:
+            history_document_labels.setdefault(row.source_key, row.title)
         engine = create_sqlite_engine(db_path)
         try:
             with session_scope(engine) as session:
@@ -2548,13 +3287,10 @@ def render_processing_view(
                 f"{job.created_at:%Y-%m-%d %H:%M} · {job.created_by}"
             )
             with st.expander(label):
-                cols = st.columns(4)
-                cols[0].metric("Documentos", job.total_items)
-                cols[1].metric("Completados", job.completed_items)
-                cols[2].metric("Advertencias", job.warning_items)
-                cols[3].metric("Fallidos", job.failed_items)
-                if job.parameters:
-                    st.json(job.parameters)
+                st.caption(
+                    f"{job.total_items} documento(s) · {job.completed_items} completados · "
+                    f"{job.warning_items} con advertencias · {job.failed_items} fallidos"
+                )
                 engine = create_sqlite_engine(db_path)
                 try:
                     with session_scope(engine) as session:
@@ -2564,17 +3300,29 @@ def render_processing_view(
                 st.dataframe(
                     [
                         {
-                            "Documento": item.source_key,
+                            "Documento": history_document_labels.get(item.source_key, item.source_key),
                             "Estado": _JOB_STATUS_LABELS.get(item.status, item.status),
                             "Páginas": ", ".join(map(str, item.pages)),
-                            "Mensaje": item.message,
+                            "Mensaje": (
+                                "No se pudo extraer texto porque el documento todavía no tenía imágenes preparadas."
+                                if item.status == "failed"
+                                and any(
+                                    "no tiene una corrida de preprocesamiento vigente" in str(warning)
+                                    for warning in (item.detail.get("warnings") or [])
+                                )
+                                else item.message
+                            ),
                         }
                         for item in items
                     ],
                     use_container_width=True,
                     hide_index=True,
                 )
-                for item in items:
-                    if item.detail:
-                        with st.expander(f"Detalle · {item.source_key}"):
-                            st.json(item.detail)
+                technical = {
+                    "parametros": job.parameters or {},
+                    "detalles_por_documento": {
+                        item.source_key: item.detail for item in items if item.detail
+                    },
+                }
+                if technical["parametros"] or technical["detalles_por_documento"]:
+                    st.json(technical, expanded=False)

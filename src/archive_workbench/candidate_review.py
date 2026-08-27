@@ -38,6 +38,7 @@ from archive_workbench.editing import (
     _allowed_object_type,
     _append_page_revision,
     _append_revision,
+    add_editable_object,
     bootstrap_editable_layer,
 )
 from archive_workbench.extraction import select_extraction_pages
@@ -129,6 +130,36 @@ class ManualCandidateResolutionResult:
 
 
 @dataclass(slots=True)
+class RegionalTextReplacementResult:
+    editable_page_id: str
+    editable_object_id: str
+    regional_object_id: str
+    regional_run_id: str
+    previous_text: str
+    replacement_text: str
+
+
+@dataclass(slots=True)
+class RegionalObjectAdditionResult:
+    editable_page_id: str
+    editable_object_id: str
+    regional_object_id: str
+    regional_run_id: str
+    added_text: str
+
+
+@dataclass(slots=True)
+class BulkReviewPreparationResult:
+    source_key: str
+    run_id: str
+    pages_available: int
+    pages_already_initialized: int
+    pages_initialized: int
+    selections_changed: int
+    objects_created: int
+
+
+@dataclass(slots=True)
 class PageHistoryRow:
     occurred_at: datetime
     category: str
@@ -141,9 +172,9 @@ class PageHistoryRow:
 
 
 def _registration(
-    session: Session, source_key: str
+    session: Session, source_key: str, *, digital_object_id: str | None = None
 ) -> tuple[SourceRegistration, DigitalObject, ArchivalUnit]:
-    row = session.execute(
+    statement = (
         select(SourceRegistration, DigitalObject, ArchivalUnit)
         .join(DigitalObject, SourceRegistration.digital_object_id == DigitalObject.id)
         .join(ArchivalUnit, SourceRegistration.archival_unit_id == ArchivalUnit.id)
@@ -151,9 +182,18 @@ def _registration(
             SourceRegistration.source_type.in_(PROCESSABLE_SOURCE_TYPES),
             SourceRegistration.source_key == source_key,
         )
-    ).one_or_none()
-    if row is None:
+    )
+    if digital_object_id is not None:
+        statement = statement.where(DigitalObject.id == digital_object_id)
+    rows = session.execute(statement).all()
+    if not rows:
         raise ValueError(f"source_key no registrado: {source_key}")
+    if len(rows) > 1 and digital_object_id is None:
+        raise ValueError(
+            "Ese identificador de origen corresponde a más de un documento. "
+            "La operación necesita la identidad concreta del documento."
+        )
+    row = rows[0]
     return row[0], row[1], row[2]
 
 
@@ -166,9 +206,9 @@ def _candidate_page(
 ) -> tuple[ExtractionRun, ExtractionPage]:
     run = session.get(ExtractionRun, run_id)
     if run is None or run.digital_object_id != digital_object_id:
-        raise ValueError("La corrida candidata no pertenece al documento seleccionado")
+        raise ValueError("La extracción elegida no pertenece al documento seleccionado")
     if run.status not in {"completed", "completed_with_warnings"}:
-        raise ValueError("La corrida candidata no está completada")
+        raise ValueError("La extracción elegida todavía no está completada")
     extraction_page = session.scalar(
         select(ExtractionPage).where(
             ExtractionPage.extraction_run_id == run.id,
@@ -176,7 +216,7 @@ def _candidate_page(
         )
     )
     if extraction_page is None:
-        raise ValueError(f"La corrida candidata no contiene la página {page}")
+        raise ValueError(f"La extracción elegida no contiene la página {page}")
     if extraction_page.status not in {"completed", "completed_with_warnings"}:
         raise ValueError(f"La página {page} no terminó correctamente en esa corrida")
     return run, extraction_page
@@ -281,8 +321,11 @@ def compare_candidate_page(
     source_key: str,
     page: int,
     candidate_run_id: str,
+    digital_object_id: str | None = None,
 ) -> CandidatePageComparison:
-    _source, digital, unit = _registration(session, source_key)
+    _source, digital, unit = _registration(
+        session, source_key, digital_object_id=digital_object_id
+    )
     candidate_run, candidate_page = _candidate_page(
         session,
         digital_object_id=digital.id,
@@ -387,8 +430,11 @@ def assess_candidate_adoption(
     source_key: str,
     page: int,
     candidate_run_id: str,
+    digital_object_id: str | None = None,
 ) -> AdoptionAssessment:
-    _source, digital, _unit = _registration(session, source_key)
+    _source, digital, _unit = _registration(
+        session, source_key, digital_object_id=digital_object_id
+    )
     _run, candidate_page = _candidate_page(
         session,
         digital_object_id=digital.id,
@@ -406,8 +452,7 @@ def assess_candidate_adoption(
             code=ADOPTION_NOT_INITIALIZED,
             title="La página todavía no fue editada",
             explanation=(
-                "Puede seleccionarse esta candidata e inicializar la página sin reemplazar "
-                "trabajo previo."
+                "Podés elegir esta extracción y enviar la página a Revisar documentos sin reemplazar trabajo previo."
             ),
             can_adopt=True,
             editable_page_id=None,
@@ -415,8 +460,8 @@ def assess_candidate_adoption(
     if editable_page.source_extraction_page_id == candidate_page.id:
         return AdoptionAssessment(
             code=ADOPTION_ALREADY,
-            title="Esta candidata ya es la base de edición",
-            explanation="No hace falta volver a adoptarla.",
+            title="Esta extracción ya es la que usa Revisar documentos",
+            explanation="No hace falta volver a aplicarla.",
             can_adopt=False,
             editable_page_id=editable_page.id,
         )
@@ -474,8 +519,7 @@ def assess_candidate_adoption(
             code=ADOPTION_MANUAL,
             title="La edición existente debe conservarse",
             explanation=(
-                "La candidata puede pasar a ser la selección canónica, pero no reemplazará "
-                "automáticamente la edición. La resolución deberá hacerse comparando ambos estados."
+                "Podés elegir otra extracción para la página, pero Archive Workbench no reemplazará automáticamente el texto que ya fue revisado. Compará ambas versiones y decidí cómo conservar los cambios."
             ),
             can_adopt=False,
             editable_page_id=editable_page.id,
@@ -483,10 +527,9 @@ def assess_candidate_adoption(
         )
     return AdoptionAssessment(
         code=ADOPTION_SAFE,
-        title="La base editable puede actualizarse de forma segura",
+        title="La página puede actualizarse con esta extracción",
         explanation=(
-            "No se detectó trabajo humano. La versión anterior quedará en el historial y "
-            "esta candidata pasará a ser la base activa."
+            "No se detectó trabajo revisado. La extracción anterior quedará en el historial y esta pasará a ser la usada en Revisar documentos."
         ),
         can_adopt=True,
         editable_page_id=editable_page.id,
@@ -511,16 +554,20 @@ def adopt_candidate_page(
     candidate_run_id: str,
     adopted_by: str,
     note: str | None = None,
+    digital_object_id: str | None = None,
 ) -> CandidateAdoptionResult:
     assessment = assess_candidate_adoption(
         session,
         source_key=source_key,
         page=page,
         candidate_run_id=candidate_run_id,
+        digital_object_id=digital_object_id,
     )
     if not assessment.can_adopt:
         raise ValueError(assessment.explanation)
-    _source, digital, _unit = _registration(session, source_key)
+    _source, digital, _unit = _registration(
+        session, source_key, digital_object_id=digital_object_id
+    )
     run, candidate_page = _candidate_page(
         session,
         digital_object_id=digital.id,
@@ -533,7 +580,8 @@ def adopt_candidate_page(
         selected_by=adopted_by,
         run_id=run.id,
         pages={page},
-        note=note or "Candidata adoptada desde la comparación por página",
+        note=note or "Extracción aplicada desde la comparación por página",
+        digital_object_id=digital.id,
     )
     selection = session.scalar(
         select(ExtractionPageSelection).where(
@@ -542,7 +590,7 @@ def adopt_candidate_page(
         )
     )
     if selection is None:
-        raise RuntimeError("No pudo materializarse la selección canónica")
+        raise RuntimeError("No pudo guardarse la extracción elegida para la página")
 
     if assessment.code == ADOPTION_NOT_INITIALIZED:
         summary = bootstrap_editable_layer(
@@ -550,6 +598,7 @@ def adopt_candidate_page(
             decisions=decisions,
             created_by=adopted_by,
             source_keys={source_key},
+            digital_object_ids={digital.id},
             pages={page},
         )
         editable_page = session.scalar(
@@ -599,7 +648,7 @@ def adopt_candidate_page(
                 obj,
                 operation="source_replaced",
                 created_by=adopted_by,
-                note="Retirado al adoptar otra candidata OCR.",
+                note="Retirado al aplicar otra extracción de texto.",
                 base_revision_number=base,
             )
             retired += 1
@@ -638,7 +687,7 @@ def adopt_candidate_page(
                 existing,
                 operation="import",
                 created_by=adopted_by,
-                note="Importado al adoptar una candidata OCR.",
+                note="Importado al aplicar otra extracción de texto.",
                 base_revision_number=None,
             )
         else:
@@ -659,7 +708,7 @@ def adopt_candidate_page(
                 existing,
                 operation="candidate_adopted",
                 created_by=adopted_by,
-                note="Reactivado desde una candidata OCR previamente conservada.",
+                note="Reactivado desde una extracción de texto previamente conservada.",
                 base_revision_number=base,
             )
         activated += 1
@@ -682,7 +731,7 @@ def adopt_candidate_page(
         editable_page,
         operation="candidate_adopted",
         created_by=adopted_by,
-        note=note or "Candidata OCR adoptada como nueva base editable.",
+        note=note or "Extracción de texto aplicada a la página editable.",
         details={
             "previous_extraction_run_id": previous_run_id,
             "previous_extraction_page_id": previous_page_id,
@@ -709,6 +758,7 @@ def resolve_candidate_keep_edits(
     candidate_run_id: str,
     resolved_by: str,
     note: str | None = None,
+    digital_object_id: str | None = None,
 ) -> ManualCandidateResolutionResult:
     """Vincula una candidata nueva sin alterar ningún objeto editable existente."""
     assessment = assess_candidate_adoption(
@@ -716,12 +766,15 @@ def resolve_candidate_keep_edits(
         source_key=source_key,
         page=page,
         candidate_run_id=candidate_run_id,
+        digital_object_id=digital_object_id,
     )
     if assessment.code != ADOPTION_MANUAL or assessment.editable_page_id is None:
         raise ValueError(
-            "Esta resolución solo corresponde cuando existe trabajo humano que debe conservarse."
+            "Esta resolución solo corresponde cuando existe trabajo revisado que debe conservarse."
         )
-    _source, digital, _unit = _registration(session, source_key)
+    _source, digital, _unit = _registration(
+        session, source_key, digital_object_id=digital_object_id
+    )
     run, candidate_page = _candidate_page(
         session,
         digital_object_id=digital.id,
@@ -752,7 +805,7 @@ def resolve_candidate_keep_edits(
         selected_by=resolved_by,
         run_id=run.id,
         pages={page},
-        note=note or "Candidata vinculada conservando la edición humana existente.",
+        note=note or "Extracción vinculada conservando la edición revisada existente.",
     )
     selection = session.scalar(
         select(ExtractionPageSelection).where(
@@ -761,7 +814,7 @@ def resolve_candidate_keep_edits(
         )
     )
     if selection is None:
-        raise RuntimeError("No pudo materializarse la selección canónica")
+        raise RuntimeError("No pudo guardarse la extracción elegida para la página")
 
     base_page_revision = editable_page.revision_number
     editable_page.source_extraction_run_id = run.id
@@ -775,7 +828,7 @@ def resolve_candidate_keep_edits(
         editable_page,
         operation="manual_keep_edits",
         created_by=resolved_by,
-        note=note or "Se conservó íntegramente la edición humana sobre la nueva candidata.",
+        note=note or "Se conservó íntegramente la edición revisada al vincular la nueva extracción.",
         details={
             "strategy": "keep_existing_editable_objects",
             "previous_extraction_run_id": previous_run_id,
@@ -792,6 +845,297 @@ def resolve_candidate_keep_edits(
         editable_page_id=editable_page.id,
         retained_objects=len(retained_ids),
         candidate_objects_not_imported=len(candidate_ids),
+    )
+
+
+def prepare_candidate_run_for_review(
+    session: Session,
+    *,
+    decisions: ProjectDecisions,
+    source_key: str,
+    run_id: str,
+    created_by: str,
+    digital_object_id: str | None = None,
+    note: str | None = None,
+) -> BulkReviewPreparationResult:
+    """Usa un resultado general como texto inicial en páginas aún no enviadas a revisión.
+
+    Las páginas que ya tienen una capa editable se omiten.
+    """
+    _source, digital, _unit = _registration(
+        session, source_key, digital_object_id=digital_object_id
+    )
+    run = session.get(ExtractionRun, run_id)
+    if run is None or run.digital_object_id != digital.id:
+        raise ValueError("El resultado de extracción no pertenece al documento elegido.")
+    if run.status not in {"completed", "completed_with_warnings"}:
+        raise ValueError("El resultado de extracción todavía no está completado.")
+    if run.engine == "tesseract_regions":
+        raise ValueError(
+            "Una lectura parcial de la página no puede usarse para enviar la página completa a Revisar documentos."
+        )
+
+    run_pages = set(
+        session.scalars(
+            select(ExtractionPage.page_number).where(
+                ExtractionPage.extraction_run_id == run.id,
+                ExtractionPage.status.in_(["completed", "completed_with_warnings"]),
+            )
+        ).all()
+    )
+    if not run_pages:
+        raise ValueError("El resultado elegido no contiene páginas completadas.")
+    initialized_pages = set(
+        session.scalars(
+            select(EditablePage.page_number).where(
+                EditablePage.digital_object_id == digital.id
+            )
+        ).all()
+    )
+    target_pages = run_pages - initialized_pages
+    if not target_pages:
+        return BulkReviewPreparationResult(
+            source_key=source_key,
+            run_id=run.id,
+            pages_available=len(run_pages),
+            pages_already_initialized=len(run_pages & initialized_pages),
+            pages_initialized=0,
+            selections_changed=0,
+            objects_created=0,
+        )
+
+    _selected_run, changed = select_extraction_pages(
+        session,
+        source_key=source_key,
+        selected_by=created_by,
+        run_id=run.id,
+        pages=target_pages,
+        note=note
+        or "Extracción elegida explícitamente para enviar páginas pendientes a Revisar documentos.",
+        digital_object_id=digital.id,
+    )
+    summary = bootstrap_editable_layer(
+        session,
+        decisions=decisions,
+        created_by=created_by,
+        source_keys={source_key},
+        digital_object_ids={digital.id},
+        pages=target_pages,
+    )
+    return BulkReviewPreparationResult(
+        source_key=source_key,
+        run_id=run.id,
+        pages_available=len(run_pages),
+        pages_already_initialized=len(run_pages & initialized_pages),
+        pages_initialized=summary.pages_created,
+        selections_changed=int(changed),
+        objects_created=summary.objects_created,
+    )
+
+
+def replace_editable_object_text_from_regional_candidate(
+    session: Session,
+    *,
+    source_key: str,
+    page: int,
+    candidate_run_id: str,
+    editable_object_id: str,
+    regional_object_id: str,
+    changed_by: str,
+    digital_object_id: str | None = None,
+    note: str | None = None,
+) -> RegionalTextReplacementResult:
+    """Reemplaza sólo el texto de un objeto editable usando un resultado OCR regional.
+
+    La selección de extracción de la página y el origen de su capa editable no cambian.
+    La procedencia regional se conserva dentro de los atributos versionados del objeto.
+    """
+    _source, digital, _unit = _registration(
+        session, source_key, digital_object_id=digital_object_id
+    )
+    run, _candidate_page_row = _candidate_page(
+        session,
+        digital_object_id=digital.id,
+        page=page,
+        run_id=candidate_run_id,
+    )
+    if run.engine != "tesseract_regions":
+        raise ValueError(
+            "Esta acción sólo puede usar texto recuperado al volver a leer una parte concreta de la página."
+        )
+
+    editable_page = session.scalar(
+        select(EditablePage).where(
+            EditablePage.digital_object_id == digital.id,
+            EditablePage.page_number == page,
+        )
+    )
+    if editable_page is None:
+        raise ValueError(
+            "La página todavía no está en Revisar documentos. Elegí primero una extracción completa para esa página."
+        )
+
+    editable = session.get(EditableObject, editable_object_id)
+    if (
+        editable is None
+        or editable.editable_page_id != editable_page.id
+        or editable.lifecycle_status != "active"
+    ):
+        raise ValueError("El fragmento de texto elegido ya no está activo en esta página.")
+
+    regional = session.get(ExtractedObject, regional_object_id)
+    if (
+        regional is None
+        or regional.extraction_run_id != run.id
+        or regional.page_number != page
+    ):
+        raise ValueError("El texto recuperado que elegiste no pertenece a esta página.")
+    replacement = regional.original_text
+    if not replacement.strip():
+        raise ValueError("La lectura parcial elegida no recuperó texto para hacer la corrección.")
+
+    previous_text = editable.current_text
+    base = editable.revision_number
+    attributes = dict(editable.current_attributes_json or {})
+    history = list(attributes.get("regional_ocr_text_replacements") or [])
+    regional_attributes = dict(regional.attributes_json or {})
+    history.append(
+        {
+            "regional_run_id": run.id,
+            "regional_object_id": regional.id,
+            "regional_profile_key": run.profile_key,
+            "region_key": regional_attributes.get("region_key"),
+            "region_label": regional_attributes.get("region_label"),
+            "previous_text": previous_text,
+        }
+    )
+    attributes["regional_ocr_text_replacements"] = history
+    editable.current_text = replacement
+    editable.current_attributes_json = attributes
+    editable.revision_number += 1
+    editable.updated_by = changed_by
+    editable.updated_at = utc_now()
+    _append_revision(
+        session,
+        editable,
+        operation="regional_ocr_replace",
+        created_by=changed_by,
+        note=note
+        or (
+            "Texto corregido con una lectura parcial de la página; "
+            f"origen regional {run.id}."
+        ),
+        base_revision_number=base,
+    )
+    session.flush()
+    return RegionalTextReplacementResult(
+        editable_page_id=editable_page.id,
+        editable_object_id=editable.id,
+        regional_object_id=regional.id,
+        regional_run_id=run.id,
+        previous_text=previous_text,
+        replacement_text=replacement,
+    )
+
+
+def add_editable_object_from_regional_candidate(
+    session: Session,
+    *,
+    decisions: ProjectDecisions,
+    source_key: str,
+    page: int,
+    candidate_run_id: str,
+    regional_object_id: str,
+    object_type: str,
+    changed_by: str,
+    after_object_id: str | None = None,
+    before_object_id: str | None = None,
+    geometry: list[dict[str, Any]] | None = None,
+    digital_object_id: str | None = None,
+    note: str | None = None,
+) -> RegionalObjectAdditionResult:
+    """Agrega texto recuperado de una parte de la página como objeto editable.
+
+    La procedencia del reconocimiento parcial se conserva aunque la persona dibuje
+    explícitamente otra caja para ubicar el nuevo objeto en la página.
+    """
+    _source, digital, _unit = _registration(
+        session, source_key, digital_object_id=digital_object_id
+    )
+    run, _candidate_page_row = _candidate_page(
+        session,
+        digital_object_id=digital.id,
+        page=page,
+        run_id=candidate_run_id,
+    )
+    if run.engine != "tesseract_regions":
+        raise ValueError(
+            "Esta acción sólo puede usar texto recuperado al volver a leer una parte concreta de la página."
+        )
+
+    editable_page = session.scalar(
+        select(EditablePage).where(
+            EditablePage.digital_object_id == digital.id,
+            EditablePage.page_number == page,
+        )
+    )
+    if editable_page is None:
+        raise ValueError(
+            "La página todavía no está en Revisar documentos. Elegí primero una extracción completa para esa página."
+        )
+
+    regional = session.get(ExtractedObject, regional_object_id)
+    if (
+        regional is None
+        or regional.extraction_run_id != run.id
+        or regional.page_number != page
+    ):
+        raise ValueError("El texto recuperado que elegiste no pertenece a esta página.")
+    added_text = regional.original_text
+    if not added_text.strip():
+        raise ValueError("La lectura parcial elegida no recuperó texto para agregar.")
+
+    regional_attributes = dict(regional.attributes_json or {})
+    source_geometry = list(regional.geometry_json or [])
+    target_geometry = list(geometry) if geometry is not None else source_geometry
+    provenance = {
+        "regional_run_id": run.id,
+        "regional_object_id": regional.id,
+        "regional_profile_key": run.profile_key,
+        "region_key": regional_attributes.get("region_key"),
+        "region_label": regional_attributes.get("region_label"),
+        "source_geometry": source_geometry,
+        "placement_geometry_defined_by_user": geometry is not None,
+    }
+    editable = add_editable_object(
+        session,
+        decisions=decisions,
+        source_key=source_key,
+        page=page,
+        object_type=object_type,
+        text=added_text,
+        created_by=changed_by,
+        after_object_id=after_object_id,
+        before_object_id=before_object_id,
+        note=note
+        or (
+            "Texto agregado a partir de una lectura parcial de la página; "
+            f"origen regional {run.id}."
+        ),
+        geometry=target_geometry,
+        attributes={
+            "regional_ocr_added": True,
+            "regional_ocr_source": provenance,
+        },
+        revision_operation="regional_ocr_add",
+    )
+    session.flush()
+    return RegionalObjectAdditionResult(
+        editable_page_id=editable_page.id,
+        editable_object_id=editable.id,
+        regional_object_id=regional.id,
+        regional_run_id=run.id,
+        added_text=added_text,
     )
 
 
@@ -859,9 +1203,9 @@ def page_history_rows(
         "import": "Se incorporó el estado editable existente",
         "mark_stale": "La edición quedó desactualizada",
         "reactivate": "La edición volvió a coincidir con la selección",
-        "candidate_adopted": "Se adoptó otra candidata como base editable",
-        "manual_keep_edits": "Se vinculó otra candidata conservando la edición existente",
-        "rebase": "Se rebasó la edición humana sobre otra candidata",
+        "candidate_adopted": "Se aplicó otra extracción al texto de revisión",
+        "manual_keep_edits": "Se vinculó otra extracción conservando la edición existente",
+        "rebase": "Se trasladó la edición revisada a otra extracción",
         "review_status": "Cambió el estado de revisión de la página",
     }
     for item in page_revisions:
@@ -904,9 +1248,11 @@ def page_history_rows(
             "restore": "Se restauró un objeto",
             "revert": "Se restauró una revisión anterior",
             "source_replaced": "El objeto quedó en una base OCR anterior",
-            "candidate_adopted": "El objeto volvió a activarse desde otra candidata",
-            "rebase_import": "Se creó un objeto desde el resultado del rebase",
-            "rebase_retired": "El objeto anterior quedó retirado por el rebase",
+            "candidate_adopted": "El fragmento de texto volvió a activarse desde otra extracción",
+            "regional_ocr_replace": "Se corrigió el fragmento con una lectura parcial de la página",
+            "regional_ocr_add": "Se agregó texto recuperado de una parte de la página",
+            "rebase_import": "Se creó un fragmento de texto al trasladar la edición",
+            "rebase_retired": "El fragmento anterior quedó retirado al trasladar la edición",
             "undo": "Se deshizo un cambio del objeto",
             "redo": "Se rehízo un cambio del objeto",
         }

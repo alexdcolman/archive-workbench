@@ -10,7 +10,7 @@ _COMPONENT_HTML = """
 <div class="aw-sync-review">
   <div class="aw-sync-head">
     <div>
-      <strong>Revisión sincronizada</strong>
+      <strong>Revisar la transcripción mientras se reproduce</strong>
       <div class="aw-sync-time">00:00.000</div>
     </div>
     <div class="aw-sync-state">Buscando reproductor…</div>
@@ -18,20 +18,28 @@ _COMPONENT_HTML = """
 
   <div class="aw-sync-controls">
     <label>
-      <span>Hablante actual</span>
+      <span>Hablante para este fragmento</span>
       <select class="aw-speaker-select"></select>
     </label>
     <label>
-      <span>Otro nombre</span>
+      <span>Escribir otro nombre de hablante</span>
       <input class="aw-speaker-input" type="text" placeholder="Ej.: Hablante 1" />
     </label>
-    <button type="button" class="aw-speaker-button">Asignar hablante desde aquí</button>
+    <label class="aw-speaker-scope-label">
+      <span>Fragmentos a los que se aplicará este hablante</span>
+      <select class="aw-speaker-scope">
+        <option value="segment">Sólo este fragmento</option>
+        <option value="forward">Desde aquí hasta el próximo cambio</option>
+      </select>
+    </label>
+    <button type="button" class="aw-speaker-button">Asignar hablante</button>
+    <div class="aw-speaker-help">«Desde aquí hasta el próximo cambio» asigna el mismo hablante a este fragmento y a los siguientes, hasta encontrar otra marca de hablante.</div>
 
     <label class="aw-note-label">
-      <span>Anotación</span>
+      <span>Anotación sobre lo que ocurre en este momento</span>
       <input class="aw-note-input" type="text" placeholder="Ej.: sonríe" />
     </label>
-    <button type="button" class="aw-note-button">Agregar anotación aquí</button>
+    <button type="button" class="aw-note-button">Agregar esta anotación en el momento actual</button>
     <div class="aw-local-message" role="status"></div>
   </div>
 
@@ -86,6 +94,7 @@ _COMPONENT_CSS = """
   align-self: end;
 }
 .aw-sync-controls button:hover { border-color: var(--st-primary-color); }
+.aw-speaker-help { grid-column: 1 / -1; margin-top: -.2rem; font-size: .78rem; opacity: .76; }
 .aw-note-label { grid-column: 1 / 2; }
 .aw-local-message { grid-column: 1 / -1; min-height: 1.1rem; font-size: .82rem; }
 .aw-transcript {
@@ -126,6 +135,7 @@ export default function(component) {
   const speakerSelect = parentElement.querySelector('.aw-speaker-select');
   const speakerInput = parentElement.querySelector('.aw-speaker-input');
   const speakerButton = parentElement.querySelector('.aw-speaker-button');
+  const speakerScope = parentElement.querySelector('.aw-speaker-scope');
   const noteInput = parentElement.querySelector('.aw-note-input');
   const noteButton = parentElement.querySelector('.aw-note-button');
   const message = parentElement.querySelector('.aw-local-message');
@@ -133,6 +143,19 @@ export default function(component) {
   const segments = Array.isArray(data.segments) ? data.segments : [];
   const annotations = Array.isArray(data.annotations) ? data.annotations : [];
   const speakerOptions = Array.isArray(data.speaker_options) ? data.speaker_options : [];
+  const persistenceToken = String(data.persistence_key || 'default');
+  const storageKey = `archive-workbench-av-review:${persistenceToken}`;
+  const readStoredState = () => {
+    try {
+      const raw = window.sessionStorage.getItem(storageKey);
+      if (!raw) return {};
+      const parsed = JSON.parse(raw);
+      return parsed && typeof parsed === 'object' ? parsed : {};
+    } catch (error) {
+      return {};
+    }
+  };
+  const storedState = readStoredState();
 
   const formatTime = (seconds) => {
     const value = Math.max(0, Number(seconds || 0));
@@ -208,7 +231,13 @@ export default function(component) {
     speakerSelect.appendChild(element);
   });
 
-  const componentState = parentElement.__awbSyncState || {activeId: null};
+  const storedTimeValue = Number(storedState.time);
+  const componentState = parentElement.__awbSyncState || {
+    activeId: storedState.active_id || null,
+    lastKnownTime: Number.isFinite(storedTimeValue) ? Math.max(0, storedTimeValue) : 0,
+    restoring: Number.isFinite(storedTimeValue) && storedTimeValue > 0,
+  };
+  if (!Number.isFinite(Number(componentState.lastKnownTime))) componentState.lastKnownTime = 0;
   parentElement.__awbSyncState = componentState;
 
   const findMedia = () => {
@@ -218,6 +247,26 @@ export default function(component) {
 
   let media = findMedia();
   let retryTimer = null;
+
+  const saveReviewState = () => {
+    try {
+      const time = Number(componentState.lastKnownTime || 0);
+      window.sessionStorage.setItem(storageKey, JSON.stringify({
+        time: Number.isFinite(time) ? Math.max(0, time) : 0,
+        active_id: componentState.activeId || null,
+      }));
+    } catch (error) {}
+  };
+
+  const rememberCurrentPosition = () => {
+    if (componentState.restoring) return;
+    const candidate = media ? Number(media.currentTime) : NaN;
+    if (!Number.isFinite(candidate) || candidate < 0) return;
+    componentState.lastKnownTime = candidate;
+    const active = activeSegmentAt(candidate);
+    if (active) componentState.activeId = active.segment_id;
+    saveReviewState();
+  };
 
   const activeSegmentAt = (time) => {
     if (!segments.length) return null;
@@ -247,15 +296,17 @@ export default function(component) {
     if (!matching) speakerInput.value = mark.label || '';
   };
 
-  const updateActive = () => {
+  const updateActive = ({persist = true} = {}) => {
     if (!media) return;
-    const time = Number(media.currentTime || 0);
+    const rawTime = Number(media.currentTime);
+    const time = Number.isFinite(rawTime) ? Math.max(0, rawTime) : Number(componentState.lastKnownTime || 0);
     timeLabel.textContent = formatTime(time);
     stateLabel.textContent = media.paused ? 'Pausado' : 'Reproduciendo';
     const active = activeSegmentAt(time);
     if (!active) return;
     const changed = componentState.activeId !== active.segment_id;
     componentState.activeId = active.segment_id;
+    if (!componentState.restoring) componentState.lastKnownTime = time;
     rows.forEach(({element, segment}) => {
       element.classList.toggle('active', segment.segment_id === active.segment_id);
     });
@@ -264,6 +315,51 @@ export default function(component) {
       if (row) row.scrollIntoView({block: 'nearest', behavior: 'smooth'});
     }
     syncSpeakerChoice(time);
+    if (persist && !componentState.restoring) saveReviewState();
+  };
+
+  const finishRestore = () => {
+    componentState.restoring = false;
+    const rawTime = media ? Number(media.currentTime) : NaN;
+    if (Number.isFinite(rawTime) && rawTime >= 0) componentState.lastKnownTime = rawTime;
+    updateActive({persist: true});
+  };
+
+  const restoreMediaPosition = () => {
+    if (!media) return;
+    const target = Math.max(0, Number(componentState.lastKnownTime || 0));
+    if (target <= 0) {
+      componentState.restoring = false;
+      updateActive({persist: true});
+      return;
+    }
+    componentState.restoring = true;
+    const seek = () => {
+      try {
+        media.currentTime = target;
+      } catch (error) {
+        componentState.restoring = false;
+        return;
+      }
+      window.setTimeout(() => {
+        if (componentState.restoring && Math.abs(Number(media.currentTime || 0) - target) < 0.2) {
+          finishRestore();
+        }
+      }, 80);
+    };
+    if (media.readyState >= 1) seek();
+    else media.addEventListener('loadedmetadata', seek, {once: true});
+  };
+
+  const onSeeked = () => {
+    if (componentState.restoring) finishRestore();
+    else updateActive({persist: true});
+  };
+  const onTimeUpdate = () => updateActive({persist: true});
+  const onPlay = () => updateActive({persist: true});
+  const onPause = () => {
+    updateActive({persist: true});
+    rememberCurrentPosition();
   };
 
   const bindMedia = () => {
@@ -273,11 +369,11 @@ export default function(component) {
       return false;
     }
     stateLabel.textContent = media.paused ? 'Pausado' : 'Reproduciendo';
-    media.addEventListener('timeupdate', updateActive);
-    media.addEventListener('seeked', updateActive);
-    media.addEventListener('play', updateActive);
-    media.addEventListener('pause', updateActive);
-    updateActive();
+    media.addEventListener('timeupdate', onTimeUpdate);
+    media.addEventListener('seeked', onSeeked);
+    media.addEventListener('play', onPlay);
+    media.addEventListener('pause', onPause);
+    restoreMediaPosition();
     return true;
   };
 
@@ -294,11 +390,19 @@ export default function(component) {
     element.onclick = () => {
       media = findMedia();
       if (!media) return;
+      componentState.activeId = segment.segment_id;
+      componentState.lastKnownTime = Number(segment.start_time);
+      componentState.restoring = false;
+      saveReviewState();
       media.currentTime = Number(segment.start_time);
       media.pause();
-      updateActive();
+      updateActive({persist: true});
     };
   });
+
+  const snapshotBeforeExternalInteraction = () => rememberCurrentPosition();
+  document.addEventListener('pointerdown', snapshotBeforeExternalInteraction, true);
+  document.addEventListener('submit', snapshotBeforeExternalInteraction, true);
 
   const selectedSpeaker = () => speakerOptions.find(
     (option) => String(option.value) === String(speakerSelect.value)
@@ -319,7 +423,7 @@ export default function(component) {
     const selected = selectedSpeaker();
     const label = typed || (selected ? String(selected.label) : '');
     if (!label) {
-      message.textContent = 'Elegí o escribí quién está hablando.';
+      message.textContent = 'Elegí una persona o escribí el nombre con el que querés identificar a quien habla.';
       return;
     }
     pauseForMark();
@@ -329,9 +433,13 @@ export default function(component) {
       return;
     }
     message.textContent = '';
+    const active = activeSegmentAt(time);
+    saveReviewState();
     setTriggerValue('action', {
       kind: 'speaker',
       time,
+      segment_id: active ? active.segment_id : null,
+      scope: speakerScope ? String(speakerScope.value || 'segment') : 'segment',
       label,
       authority_id: typed ? null : (selected?.authority_id || null),
     });
@@ -350,23 +458,24 @@ export default function(component) {
       return;
     }
     message.textContent = '';
+    saveReviewState();
     setTriggerValue('action', {kind: 'annotation', time, label});
   };
   noteButton.onclick = addNote;
-  noteInput.onkeydown = (event) => {
-    if (event.key === 'Enter') {
-      event.preventDefault();
-      addNote();
-    }
-  };
 
   return () => {
+    // No volver a leer currentTime durante el desmontaje: Streamlit puede haber
+    // reemplazado ya el reproductor y devolver 0. Se persiste el último valor
+    // observado antes de la reconstrucción.
+    saveReviewState();
+    document.removeEventListener('pointerdown', snapshotBeforeExternalInteraction, true);
+    document.removeEventListener('submit', snapshotBeforeExternalInteraction, true);
     if (retryTimer) window.clearInterval(retryTimer);
     if (media) {
-      media.removeEventListener('timeupdate', updateActive);
-      media.removeEventListener('seeked', updateActive);
-      media.removeEventListener('play', updateActive);
-      media.removeEventListener('pause', updateActive);
+      media.removeEventListener('timeupdate', onTimeUpdate);
+      media.removeEventListener('seeked', onSeeked);
+      media.removeEventListener('play', onPlay);
+      media.removeEventListener('pause', onPause);
     }
   };
 }
@@ -377,6 +486,8 @@ def build_synchronized_review_payload(
     segments: Iterable[TranscriptSegmentRow],
     annotations: Iterable[TimelineAnnotationRow],
     authorities: Iterable[Any],
+    *,
+    persistence_key: str | None = None,
 ) -> dict[str, Any]:
     segment_rows = [
         {
@@ -435,6 +546,7 @@ def build_synchronized_review_payload(
         "segments": segment_rows,
         "annotations": annotation_rows,
         "speaker_options": speaker_options,
+        "persistence_key": persistence_key or "default",
     }
 
 
@@ -463,7 +575,9 @@ def synchronized_media_review(
     if renderer is None:
         return None
     result = renderer(
-        data=build_synchronized_review_payload(segments, annotations, authorities),
+        data=build_synchronized_review_payload(
+            segments, annotations, authorities, persistence_key=key
+        ),
         key=key,
         height=690,
         width="stretch",

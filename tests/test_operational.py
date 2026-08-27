@@ -78,7 +78,7 @@ def test_backup_order_and_readiness_use_manifest_creation_time(
             report = operational_readiness(session, project_root=root)
             recovery = next(item for item in report.items if item.key == "recovery")
             assert recovery.status == "attention"
-            assert recovery.summary == "El backup más reciente todavía no fue probado."
+            assert recovery.summary == "La copia de seguridad más reciente todavía no fue probada mediante una recuperación temporal."
 
         with session_scope(engine) as session:
             result = run_project_backup_recovery_test(
@@ -121,7 +121,7 @@ def test_readiness_marks_recovery_until_latest_backup_is_tested(tmp_path: Path) 
                 tested_by="tests",
             )
             assert result.status == "completed"
-            assert result.upgraded_database_revision == "0046_audiovisual_timeline_annotations"
+            assert result.upgraded_database_revision == "0047_authority_relation_profiles"
 
         with session_scope(engine) as session:
             report = operational_readiness(session, project_root=root)

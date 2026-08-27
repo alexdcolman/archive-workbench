@@ -1,4 +1,4 @@
-# Una entrada por PDF, TIFF o imagen seleccionada para el corpus de prueba.
+# Una entrada por PDF, TIFF, PNG, JPEG o WebP seleccionada para el corpus de prueba.
 # No hace falta completar todo al principio: los campos "unknown" pueden quedar en true.
 corpus_name: "Corpus de prueba inicial"
 created_by: "Alex Colman"

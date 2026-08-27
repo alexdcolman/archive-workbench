@@ -10,12 +10,14 @@ import urllib.error
 import urllib.parse
 import urllib.request
 import webbrowser
+import zipfile
 from dataclasses import dataclass
 from http.server import BaseHTTPRequestHandler, HTTPServer
 from pathlib import Path
 from typing import Any, Callable
 
 from archive_workbench.exchange import inspect_change_bundle, sha256_file
+from archive_workbench.team_copy import inspect_team_copy_package
 
 DRIVE_FILE_SCOPE = "https://www.googleapis.com/auth/drive.file"
 GOOGLE_AUTH_URL = "https://accounts.google.com/o/oauth2/v2/auth"
@@ -59,11 +61,22 @@ class DriveFileMetadata:
 
 
 @dataclass(frozen=True, slots=True)
+class DriveArtifactInspection:
+    kind: str
+    artifact_id: str
+    project_id: str
+    label: str
+
+
+@dataclass(frozen=True, slots=True)
 class DriveUploadSummary:
     metadata: DriveFileMetadata
     local_sha256: str
-    bundle_id: str
+    artifact_kind: str
+    artifact_id: str
     project_id: str
+    bundle_id: str | None = None
+    team_copy_id: str | None = None
 
 
 @dataclass(frozen=True, slots=True)
@@ -71,8 +84,11 @@ class DriveDownloadSummary:
     metadata: DriveFileMetadata
     destination: Path
     local_sha256: str
-    bundle_id: str
+    artifact_kind: str
+    artifact_id: str
     project_id: str
+    bundle_id: str | None = None
+    team_copy_id: str | None = None
 
 
 @dataclass(frozen=True, slots=True)
@@ -419,24 +435,210 @@ def get_drive_file_metadata(
     return _metadata_from_payload(_json_request(request))
 
 
-def _multipart_related(metadata: dict[str, Any], payload: bytes, mime_type: str) -> tuple[str, bytes]:
-    boundary = "awb_" + secrets.token_hex(20)
-    json_part = json.dumps(metadata, ensure_ascii=False, separators=(",", ":")).encode("utf-8")
-    body = b"\r\n".join(
-        [
-            f"--{boundary}".encode("ascii"),
-            b"Content-Type: application/json; charset=UTF-8",
-            b"",
-            json_part,
-            f"--{boundary}".encode("ascii"),
-            f"Content-Type: {mime_type}".encode("ascii"),
-            b"",
-            payload,
-            f"--{boundary}--".encode("ascii"),
-            b"",
-        ]
+def inspect_drive_artifact(path: Path) -> DriveArtifactInspection:
+    source = path.expanduser().resolve()
+    if not source.is_file():
+        raise ValueError(f"No existe el archivo ZIP: {source}")
+    try:
+        bundle = inspect_change_bundle(source)
+    except (ValueError, zipfile.BadZipFile) as bundle_exc:
+        try:
+            team_copy = inspect_team_copy_package(source)
+        except ValueError as team_exc:
+            message = str(bundle_exc)
+            if "ZIP válido" in message or "File is not a zip file" in message:
+                raise ValueError("El archivo elegido no es un ZIP válido") from bundle_exc
+            raise ValueError(
+                "El ZIP elegido no es un paquete de cambios ni una copia para trabajar en equipo compatible con Archive Workbench."
+            ) from team_exc
+        return DriveArtifactInspection(
+            kind="team_copy",
+            artifact_id=team_copy.package_id,
+            project_id=team_copy.project_id,
+            label="Copia para trabajar en equipo",
+        )
+    return DriveArtifactInspection(
+        kind="exchange_bundle",
+        artifact_id=bundle.manifest.bundle_id,
+        project_id=bundle.manifest.project_id,
+        label="Paquete de cambios",
     )
-    return f"multipart/related; boundary={boundary}", body
+
+
+def _resumable_session_url(
+    *,
+    metadata: dict[str, Any],
+    source: Path,
+    token: GoogleDriveToken,
+) -> str:
+    fields = "id,name,mimeType,size,webViewLink,modifiedTime,md5Checksum,appProperties"
+    url = f"{DRIVE_UPLOAD_URL}?" + urllib.parse.urlencode(
+        {"uploadType": "resumable", "fields": fields, "supportsAllDrives": "true"}
+    )
+    body = json.dumps(metadata, ensure_ascii=False, separators=(",", ":")).encode("utf-8")
+    headers = _auth_headers(token)
+    headers.update(
+        {
+            "Content-Type": "application/json; charset=UTF-8",
+            "Content-Length": str(len(body)),
+            "X-Upload-Content-Type": "application/zip",
+            "X-Upload-Content-Length": str(source.stat().st_size),
+        }
+    )
+    request = urllib.request.Request(url, data=body, headers=headers, method="POST")
+    try:
+        with urllib.request.urlopen(request, timeout=120) as response:
+            session_url = response.headers.get("Location")
+    except urllib.error.HTTPError as exc:
+        detail = exc.read().decode("utf-8", errors="replace")
+        raise RuntimeError(f"Google devolvió HTTP {exc.code}: {detail[:600]}") from exc
+    except urllib.error.URLError as exc:
+        raise RuntimeError(f"No pude iniciar la subida a Google Drive: {exc.reason}") from exc
+    if not session_url:
+        raise RuntimeError("Google Drive no devolvió la sesión necesaria para una subida reanudable.")
+    return session_url
+
+
+def _range_next_offset(range_header: str | None) -> int:
+    if not range_header:
+        return 0
+    text = range_header.strip()
+    if not text.startswith("bytes=0-"):
+        return 0
+    try:
+        return int(text.split("-", 1)[1]) + 1
+    except ValueError:
+        return 0
+
+
+def _query_resumable_upload(
+    session_url: str,
+    *,
+    total_size: int,
+    token: GoogleDriveToken,
+) -> tuple[int, dict[str, Any] | None]:
+    headers = _auth_headers(token)
+    headers.update({"Content-Length": "0", "Content-Range": f"bytes */{total_size}"})
+    request = urllib.request.Request(session_url, data=b"", headers=headers, method="PUT")
+    try:
+        with urllib.request.urlopen(request, timeout=120) as response:
+            payload = response.read()
+            decoded = json.loads(payload.decode("utf-8")) if payload else {}
+            return total_size, decoded if isinstance(decoded, dict) else {}
+    except urllib.error.HTTPError as exc:
+        if exc.code == 308:
+            return _range_next_offset(exc.headers.get("Range")), None
+        detail = exc.read().decode("utf-8", errors="replace")
+        raise RuntimeError(f"Google devolvió HTTP {exc.code}: {detail[:600]}") from exc
+    except urllib.error.URLError as exc:
+        raise RuntimeError(f"No pude consultar el estado de la subida: {exc.reason}") from exc
+
+
+def _upload_resumable_file(
+    *,
+    source: Path,
+    session_url: str,
+    token: GoogleDriveToken,
+    chunk_size: int = 8 * 1024 * 1024,
+    max_retries: int = 3,
+) -> dict[str, Any]:
+    unit = 256 * 1024
+    if chunk_size < unit or chunk_size % unit:
+        raise ValueError("El tamaño de bloque de Google Drive debe ser múltiplo de 256 KiB")
+    total_size = source.stat().st_size
+    if total_size == 0:
+        headers = _auth_headers(token)
+        headers.update({"Content-Length": "0", "Content-Range": "bytes */0"})
+        request = urllib.request.Request(session_url, data=b"", headers=headers, method="PUT")
+        return _json_request(request, timeout=180)
+
+    offset = 0
+    with source.open("rb") as handle:
+        while offset < total_size:
+            handle.seek(offset)
+            payload = handle.read(min(chunk_size, total_size - offset))
+            end = offset + len(payload) - 1
+            retries = 0
+            while True:
+                headers = _auth_headers(token)
+                headers.update(
+                    {
+                        "Content-Type": "application/zip",
+                        "Content-Length": str(len(payload)),
+                        "Content-Range": f"bytes {offset}-{end}/{total_size}",
+                    }
+                )
+                request = urllib.request.Request(
+                    session_url, data=payload, headers=headers, method="PUT"
+                )
+                try:
+                    with urllib.request.urlopen(request, timeout=300) as response:
+                        body = response.read()
+                        decoded = json.loads(body.decode("utf-8")) if body else {}
+                        if not isinstance(decoded, dict):
+                            raise RuntimeError("Google devolvió una respuesta inesperada al completar la subida.")
+                        return decoded
+                except urllib.error.HTTPError as exc:
+                    if exc.code == 308:
+                        next_offset = _range_next_offset(exc.headers.get("Range"))
+                        offset = next_offset if next_offset > offset else end + 1
+                        break
+                    if exc.code < 500 or retries >= max_retries:
+                        detail = exc.read().decode("utf-8", errors="replace")
+                        raise RuntimeError(f"Google devolvió HTTP {exc.code}: {detail[:600]}") from exc
+                except urllib.error.URLError as exc:
+                    if retries >= max_retries:
+                        raise RuntimeError(f"La subida a Google Drive se interrumpió: {exc.reason}") from exc
+                retries += 1
+                time.sleep(min(2**retries, 8))
+                known_offset, completed = _query_resumable_upload(
+                    session_url, total_size=total_size, token=token
+                )
+                if completed is not None:
+                    return completed
+                if known_offset != offset:
+                    offset = known_offset
+                    break
+    raise RuntimeError("La subida a Google Drive terminó sin una confirmación final.")
+
+
+def upload_archive_workbench_zip_to_drive(
+    archive_path: Path,
+    *,
+    client_secret_path: Path,
+    token_path: Path | None = None,
+) -> DriveUploadSummary:
+    source = archive_path.expanduser().resolve()
+    inspection = inspect_drive_artifact(source)
+    local_sha = sha256_file(source)
+    token = refresh_google_drive_token(client_secret_path, token_path=token_path)
+    metadata = {
+        "name": source.name,
+        "mimeType": "application/zip",
+        "appProperties": {
+            "archive_workbench_kind": inspection.kind,
+            "archive_workbench_sha256": local_sha,
+            "archive_workbench_artifact_id": inspection.artifact_id,
+            "archive_workbench_project_id": inspection.project_id,
+        },
+    }
+    if inspection.kind == "exchange_bundle":
+        metadata["appProperties"]["archive_workbench_bundle_id"] = inspection.artifact_id
+    else:
+        metadata["appProperties"]["archive_workbench_team_copy_id"] = inspection.artifact_id
+    session_url = _resumable_session_url(metadata=metadata, source=source, token=token)
+    uploaded = _metadata_from_payload(
+        _upload_resumable_file(source=source, session_url=session_url, token=token)
+    )
+    return DriveUploadSummary(
+        metadata=uploaded,
+        local_sha256=local_sha,
+        artifact_kind=inspection.kind,
+        artifact_id=inspection.artifact_id,
+        project_id=inspection.project_id,
+        bundle_id=inspection.artifact_id if inspection.kind == "exchange_bundle" else None,
+        team_copy_id=inspection.artifact_id if inspection.kind == "team_copy" else None,
+    )
 
 
 def upload_exchange_bundle_to_drive(
@@ -445,37 +647,14 @@ def upload_exchange_bundle_to_drive(
     client_secret_path: Path,
     token_path: Path | None = None,
 ) -> DriveUploadSummary:
+    """Compatibilidad: sube un paquete incremental y rechaza otros ZIP."""
     source = bundle_path.expanduser().resolve()
-    inspection = inspect_change_bundle(source)
-    local_sha = sha256_file(source)
-    token = refresh_google_drive_token(client_secret_path, token_path=token_path)
-    metadata = {
-        "name": source.name,
-        "mimeType": "application/zip",
-        "appProperties": {
-            "archive_workbench_kind": "exchange_bundle",
-            "archive_workbench_sha256": local_sha,
-            "archive_workbench_bundle_id": inspection.manifest.bundle_id,
-            "archive_workbench_project_id": inspection.manifest.project_id,
-        },
-    }
-    content_type, body = _multipart_related(metadata, source.read_bytes(), "application/zip")
-    fields = "id,name,mimeType,size,webViewLink,modifiedTime,md5Checksum,appProperties"
-    url = f"{DRIVE_UPLOAD_URL}?" + urllib.parse.urlencode(
-        {"uploadType": "multipart", "fields": fields, "supportsAllDrives": "true"}
+    inspection = inspect_drive_artifact(source)
+    if inspection.kind != "exchange_bundle":
+        raise ValueError("El archivo elegido es una copia para trabajar en equipo, no un paquete de cambios.")
+    return upload_archive_workbench_zip_to_drive(
+        source, client_secret_path=client_secret_path, token_path=token_path
     )
-    headers = _auth_headers(token)
-    headers["Content-Type"] = content_type
-    headers["Content-Length"] = str(len(body))
-    request = urllib.request.Request(url, data=body, headers=headers, method="POST")
-    uploaded = _metadata_from_payload(_json_request(request, timeout=180))
-    return DriveUploadSummary(
-        metadata=uploaded,
-        local_sha256=local_sha,
-        bundle_id=inspection.manifest.bundle_id,
-        project_id=inspection.manifest.project_id,
-    )
-
 
 def _safe_download_name(name: str, file_id: str) -> str:
     base = Path(name).name.strip() or "paquete.zip"
@@ -486,7 +665,7 @@ def _safe_download_name(name: str, file_id: str) -> str:
     return f"{file_id[:12]}_{stem}"
 
 
-def download_exchange_bundle_from_drive(
+def download_archive_workbench_zip_from_drive(
     file_id: str,
     *,
     project_root: Path,
@@ -505,35 +684,75 @@ def download_exchange_bundle_from_drive(
         {"alt": "media", "supportsAllDrives": "true"}
     )
     request = urllib.request.Request(url, headers=_auth_headers(token), method="GET")
-    try:
-        with urllib.request.urlopen(request, timeout=180) as response:
-            data = response.read()
-    except urllib.error.HTTPError as exc:
-        detail = exc.read().decode("utf-8", errors="replace")
-        raise RuntimeError(f"Google devolvió HTTP {exc.code}: {detail[:600]}") from exc
-    except urllib.error.URLError as exc:
-        raise RuntimeError(f"No pude descargar desde Google Drive: {exc.reason}") from exc
 
     destination_dir = project_root.expanduser().resolve() / "exchange" / "drive_downloads"
     destination_dir.mkdir(parents=True, exist_ok=True)
     destination = destination_dir / _safe_download_name(metadata.name, file_id.strip())
     temp = destination.with_suffix(destination.suffix + ".tmp")
-    temp.write_bytes(data)
-    temp.replace(destination)
-    inspection = inspect_change_bundle(destination)
+    temp.unlink(missing_ok=True)
+    try:
+        with urllib.request.urlopen(request, timeout=300) as response, temp.open("wb") as target:
+            while True:
+                chunk = response.read(1024 * 1024)
+                if not chunk:
+                    break
+                target.write(chunk)
+        temp.replace(destination)
+    except urllib.error.HTTPError as exc:
+        temp.unlink(missing_ok=True)
+        detail = exc.read().decode("utf-8", errors="replace")
+        raise RuntimeError(f"Google devolvió HTTP {exc.code}: {detail[:600]}") from exc
+    except urllib.error.URLError as exc:
+        temp.unlink(missing_ok=True)
+        raise RuntimeError(f"No pude descargar desde Google Drive: {exc.reason}") from exc
+    except Exception:
+        temp.unlink(missing_ok=True)
+        raise
+
+    try:
+        inspection = inspect_drive_artifact(destination)
+    except ValueError:
+        destination.unlink(missing_ok=True)
+        raise
     local_sha = sha256_file(destination)
     declared_sha = metadata.app_properties.get("archive_workbench_sha256")
     if declared_sha and declared_sha != local_sha:
         destination.unlink(missing_ok=True)
         raise ValueError("El SHA-256 descargado no coincide con el registrado por Archive Workbench en Drive.")
+    declared_kind = metadata.app_properties.get("archive_workbench_kind")
+    if declared_kind and declared_kind != inspection.kind:
+        destination.unlink(missing_ok=True)
+        raise ValueError("El tipo de archivo descargado no coincide con el registrado por Archive Workbench en Drive.")
     return DriveDownloadSummary(
         metadata=metadata,
         destination=destination,
         local_sha256=local_sha,
-        bundle_id=inspection.manifest.bundle_id,
-        project_id=inspection.manifest.project_id,
+        artifact_kind=inspection.kind,
+        artifact_id=inspection.artifact_id,
+        project_id=inspection.project_id,
+        bundle_id=inspection.artifact_id if inspection.kind == "exchange_bundle" else None,
+        team_copy_id=inspection.artifact_id if inspection.kind == "team_copy" else None,
     )
 
+
+def download_exchange_bundle_from_drive(
+    file_id: str,
+    *,
+    project_root: Path,
+    client_secret_path: Path,
+    token_path: Path | None = None,
+) -> DriveDownloadSummary:
+    """Compatibilidad: descarga y exige un paquete incremental."""
+    result = download_archive_workbench_zip_from_drive(
+        file_id,
+        project_root=project_root,
+        client_secret_path=client_secret_path,
+        token_path=token_path,
+    )
+    if result.artifact_kind != "exchange_bundle":
+        result.destination.unlink(missing_ok=True)
+        raise ValueError("El archivo elegido es una copia para trabajar en equipo, no un paquete de cambios.")
+    return result
 
 def pick_drive_exchange_bundle(
     client_secret_path: Path,

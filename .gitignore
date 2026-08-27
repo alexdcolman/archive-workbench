@@ -76,3 +76,6 @@ Thumbs.db
 
 # Corpus documental local del piloto
 /corpus/
+
+# Datos persistentes de la distribución con contenedor
+/ArchiveWorkbenchData/

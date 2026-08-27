@@ -90,7 +90,7 @@ def create_validation_project(source: Path, destination: Path) -> dict[str, obje
             f"El destino ya existe y no se reemplazó: {destination}. Elegí otra ruta o conservá la base existente."
         )
     revision = current_revision(source)
-    if revision not in {"0045_audiovisual_transcription", "0046_audiovisual_timeline_annotations"}:
+    if revision not in {"0045_audiovisual_transcription", "0046_audiovisual_timeline_annotations", "0047_authority_relation_profiles"}:
         raise RuntimeError(f"La base fuente está en una revisión inesperada: {revision}")
     snapshot = _source_snapshot(source)
     if snapshot["quick_check"] != "ok" or snapshot["foreign_key_violations"] != 0:

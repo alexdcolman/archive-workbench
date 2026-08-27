@@ -2,8 +2,8 @@ cff-version: 1.2.0
 message: "Si utiliza o modifica este software, cite Archive Workbench y a sus autores mediante estos metadatos."
 title: "Archive Workbench"
 type: software
-version: "0.88.2"
-date-released: "2026-08-08"
+version: "0.89.0"
+date-released: "2026-08-09"
 authors:
   - family-names: "Colman"
     given-names: "Alex"

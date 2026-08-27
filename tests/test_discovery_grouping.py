@@ -323,12 +323,12 @@ def test_grouping_ui_uses_persistent_secondary_navigation() -> None:
     ).read_text(encoding="utf-8")
     assert 'key="open_discovery_grouping_tasks"' in source
     assert 'key="open_discovery_manual_group_panel"' in source
-    assert '"Revisar grupos"' in source
-    assert '"Continuidad textual"' in source
-    assert '"Actualizar grupos propuestos"' in source
-    assert '"Crear grupo manual"' in source
-    assert '"Separar candidato"' in source
-    assert '"Crear continuidad"' in source
+    assert '"Revisar posibles referencias repetidas"' in source
+    assert '"Actualizar referencias después de corregir el texto"' in source
+    assert '"Buscar referencias que podrían corresponder al mismo referente"' in source
+    assert '"Crear un grupo de referencias de forma manual"' in source
+    assert '"Quitar esta referencia del grupo"' in source
+    assert '"Buscar esta referencia en el texto corregido"' in source
     assert 'with st.expander("Agrupar candidatos' not in source
     assert 'with st.expander("Continuidad' not in source
 
@@ -539,3 +539,54 @@ def test_disc01c_preparation_and_validation_script_preserve_disc01b_state(
     assert result["manual_groups"] == 1
     assert result["continuities"] == 1
     assert result["canonical_counts"]["discovery_decisions"] == 9
+
+
+def test_local_redetection_uses_original_local_rule_version(tmp_path: Path) -> None:
+    root = tmp_path / "continuity_versioned_local_rules"
+    object_id = _seed_discovery_project(root)
+    engine = create_sqlite_engine(database_path(root))
+    try:
+        with session_scope(engine) as session:
+            editable = session.get(EditableObject, object_id)
+            assert editable is not None
+            editable.current_text = 'El testigo dijo: “No vi nada esa noche”.'
+            editable.revision_number += 1
+            session.flush()
+            profile = save_discovery_profile(
+                session,
+                project_id="search_project",
+                values=DiscoveryProfileValues(
+                    name="Histórico v1",
+                    families=("work",),
+                    provider_key="local_deterministic",
+                    provider_version="local_rules_v1",
+                ),
+                changed_by="tests",
+            )
+            run_open_discovery(
+                session,
+                project_id="search_project",
+                profile=profile,
+                created_by="tests",
+            )
+            source = _candidate(session, "No vi nada esa noche")
+            assert source.provider_version == "local_rules_v1"
+            editable.current_text = "Prefacio agregado. " + editable.current_text
+            editable.revision_number += 1
+            session.flush()
+            summary = project_discovery_candidate(
+                session,
+                project_id="search_project",
+                candidate_id=source.id,
+                method="local_redetection",
+                created_by="tests",
+            )
+            target = session.get(DiscoveryCandidate, summary.target_candidate_id)
+            assert target is not None
+            assert target.exact_text == "No vi nada esa noche"
+            run = session.get(DiscoveryRun, target.run_id)
+            assert run is not None
+            assert run.parameters_sha256
+            assert run.profile_snapshot_json["provider_version"] == "local_rules_v1"
+    finally:
+        engine.dispose()

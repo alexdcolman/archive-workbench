@@ -59,9 +59,19 @@ def test_export_template_contains_required_sheets_and_configurable_structure(tmp
     assert workbook["LISTAS"].sheet_state == "hidden"
     instructions_text = " ".join(
         str(workbook["INSTRUCCIONES"].cell(row=row, column=2).value or "")
-        for row in range(1, 30)
+        for row in range(1, workbook["INSTRUCCIONES"].max_row + 1)
     )
-    assert "LISTAS es auxiliar y permanece oculta" in instructions_text
+    assert "LISTAS es una hoja técnica oculta" in instructions_text
+    assert "Archive Workbench revisa toda la plantilla" in instructions_text
+    assert any(
+        workbook["INSTRUCCIONES"].cell(row=row, column=5).value == "Ejemplo"
+        for row in range(1, workbook["INSTRUCCIONES"].max_row + 1)
+    )
+    assert any(
+        str(workbook["INSTRUCCIONES"].cell(row=row, column=5).value or "").strip()
+        for row in range(1, workbook["INSTRUCCIONES"].max_row + 1)
+        if workbook["INSTRUCCIONES"].cell(row=row, column=3).value == "title"
+    )
     metadata = {
         workbook["INSTRUCCIONES"].cell(row=row, column=1).value:
         workbook["INSTRUCCIONES"].cell(row=row, column=2).value

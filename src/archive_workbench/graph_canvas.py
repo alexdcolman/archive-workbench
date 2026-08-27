@@ -7,12 +7,30 @@ from typing import Any
 from archive_workbench.graph import GraphView, graph_layout, graph_payload
 
 _COMPONENT_HTML = """
+<div class="awg-root">
 <div class="awg-toolbar" aria-label="Controles del grafo">
   <button type="button" data-action="zoom-out" title="Alejar">−</button>
   <button type="button" data-action="fit" title="Ajustar">Ajustar</button>
   <button type="button" data-action="zoom-in" title="Acercar">+</button>
   <span class="awg-zoom">100%</span>
+  <button type="button" data-action="fullscreen" aria-label="Abrir el grafo en pantalla completa" title="Abrir el grafo en pantalla completa">Pantalla completa</button>
+  <button type="button" data-action="legend" aria-expanded="false" aria-controls="awg-legend">Leyenda</button>
   <span class="awg-help">Arrastrá nodos para reubicarlos. Las flechas indican el sentido del vínculo; las entidades compartidas son simétricas. Pasá el puntero para ver la procedencia.</span>
+</div>
+<div class="awg-legend" id="awg-legend" hidden>
+  <div class="awg-legend-group" aria-label="Tipos de elemento">
+    <span><i class="awg-legend-node entity"></i>Entidad</span>
+    <span><i class="awg-legend-node archival_unit"></i>Unidad del catálogo</span>
+    <span><i class="awg-legend-node digital_object"></i>Documento</span>
+    <span><i class="awg-legend-node document_part"></i>Parte del documento</span>
+  </div>
+  <div class="awg-legend-group" aria-label="Tipos de vínculo">
+    <span><i class="awg-legend-edge structural"></i>Estructura archivística</span>
+    <span><i class="awg-legend-edge analytical"></i>Relación analítica</span>
+    <span><i class="awg-legend-edge role"></i>Producción o gestión</span>
+    <span><i class="awg-legend-edge mention"></i>Mención</span>
+  </div>
+  <span class="awg-legend-note">Los vínculos estructurales repetitivos, como «contiene» o «es parte de», muestran su rótulo al pasar el puntero, seleccionar el vínculo o ampliar el mapa.</span>
 </div>
 <div class="awg-viewport">
   <svg class="awg-svg" viewBox="0 0 1000 720" role="img" aria-label="Grafo documental">
@@ -25,9 +43,11 @@ _COMPONENT_HTML = """
     <g class="awg-world"></g>
   </svg>
 </div>
+</div>
 """
 
 _COMPONENT_CSS = """
+.awg-root { min-width: 0; }
 .awg-toolbar {
   display: flex; align-items: center; gap: .45rem; margin-bottom: .45rem;
   font-family: var(--st-font, sans-serif);
@@ -38,8 +58,32 @@ _COMPONENT_CSS = """
   color: var(--st-text-color); padding: .28rem .62rem; cursor: pointer;
 }
 .awg-toolbar button:hover { border-color: var(--st-primary-color); }
+.awg-toolbar [data-action="fullscreen"] { margin-left: .15rem; }
 .awg-help { opacity: .72; font-size: .82rem; margin-left: .25rem; }
 .awg-zoom { min-width: 3.4rem; text-align: center; font-variant-numeric: tabular-nums; }
+.awg-legend {
+  display: flex; flex-wrap: wrap; align-items: center; gap: .55rem 1.1rem;
+  margin: 0 0 .5rem 0; padding: .45rem .6rem;
+  border: 1px solid color-mix(in srgb, var(--st-text-color) 16%, transparent);
+  border-radius: .4rem; background: color-mix(in srgb, var(--st-secondary-background-color) 66%, transparent);
+  font: 12px var(--st-font, sans-serif); color: var(--st-text-color);
+}
+.awg-legend[hidden] { display: none; }
+.awg-legend-group { display: flex; flex-wrap: wrap; align-items: center; gap: .45rem .8rem; }
+.awg-legend-group span { display: inline-flex; align-items: center; gap: .32rem; white-space: nowrap; }
+.awg-legend-node {
+  display: inline-block; width: .72rem; height: .72rem; border-radius: 50%;
+  border: 2px solid color-mix(in srgb, var(--st-text-color) 55%, transparent);
+}
+.awg-legend-node.entity { background: color-mix(in srgb, var(--st-primary-color) 46%, var(--st-background-color)); }
+.awg-legend-node.archival_unit { background: color-mix(in srgb, #d99728 46%, var(--st-background-color)); }
+.awg-legend-node.digital_object { background: color-mix(in srgb, #6f73d2 46%, var(--st-background-color)); }
+.awg-legend-node.document_part { background: color-mix(in srgb, #3d9b74 46%, var(--st-background-color)); }
+.awg-legend-edge { display: inline-block; width: 1.55rem; height: 0; border-top: 2px solid color-mix(in srgb, var(--st-text-color) 48%, transparent); }
+.awg-legend-edge.analytical { border-top-width: 3px; }
+.awg-legend-edge.role { border-top-width: 3px; border-top-style: dashed; }
+.awg-legend-edge.mention { border-top-style: dashed; opacity: .8; }
+.awg-legend-note { opacity: .72; }
 .awg-viewport {
   height: 72vh; min-height: 560px; overflow: hidden;
   border: 1px solid color-mix(in srgb, var(--st-text-color) 18%, transparent);
@@ -60,8 +104,19 @@ _COMPONENT_CSS = """
 .awg-edge-label {
   font: 12px var(--st-font, sans-serif); fill: var(--st-text-color); opacity: .78;
   paint-order: stroke; stroke: var(--st-background-color); stroke-width: 4px; stroke-linejoin: round;
-  pointer-events: none; text-anchor: middle;
+  pointer-events: none; text-anchor: middle; transition: opacity .12s ease;
 }
+.awg-edge-label.repetitive { opacity: 0; }
+.awg-edge-group:hover .awg-edge-label.repetitive,
+.awg-edge:focus + .awg-edge-label.repetitive,
+.awg-edge.selected + .awg-edge-label.repetitive,
+.awg-detail-labels .awg-edge-label.repetitive { opacity: .78; }
+.awg-fullscreen {
+  box-sizing: border-box; width: 100%; height: 100%; padding: .7rem;
+  background: var(--st-background-color); overflow: hidden;
+}
+.awg-fullscreen .awg-viewport { height: calc(100vh - 4.9rem); min-height: 0; }
+.awg-fullscreen.awg-legend-open .awg-viewport { height: calc(100vh - 8.2rem); }
 .awg-node { cursor: pointer; }
 .awg-node circle { stroke-width: 2.5; stroke: color-mix(in srgb, var(--st-text-color) 55%, transparent); }
 .awg-node.entity circle { fill: color-mix(in srgb, var(--st-primary-color) 46%, var(--st-background-color)); }
@@ -81,11 +136,16 @@ _COMPONENT_CSS = """
 _COMPONENT_JS = r"""
 export default function(component) {
   const { parentElement, data, setTriggerValue } = component;
-  const viewport = parentElement.querySelector('.awg-viewport');
-  const svg = parentElement.querySelector('.awg-svg');
-  const world = parentElement.querySelector('.awg-world');
-  const zoomLabel = parentElement.querySelector('.awg-zoom');
-  const state = parentElement.__awgState || {scale: 1, tx: 0, ty: 0, positions: {}};
+  const root = parentElement.querySelector('.awg-root');
+  if (!root) return;
+  const viewport = root.querySelector('.awg-viewport');
+  const svg = root.querySelector('.awg-svg');
+  const world = root.querySelector('.awg-world');
+  const zoomLabel = root.querySelector('.awg-zoom');
+  const fullscreenButton = root.querySelector('[data-action="fullscreen"]');
+  const legendButton = root.querySelector('[data-action="legend"]');
+  const legend = root.querySelector('.awg-legend');
+  const state = parentElement.__awgState || {scale: 1, tx: 0, ty: 0, positions: {}, legendOpen: false};
   parentElement.__awgState = state;
 
   const signature = (data.nodes || []).map((node) => node.id).sort().join('|') + '::' +
@@ -103,6 +163,7 @@ export default function(component) {
   const applyTransform = () => {
     world.setAttribute('transform', `translate(${state.tx} ${state.ty}) scale(${state.scale})`);
     zoomLabel.textContent = `${Math.round(state.scale * 100)}%`;
+    root.classList.toggle('awg-detail-labels', state.scale >= 1.45);
   };
   applyTransform();
 
@@ -199,7 +260,7 @@ export default function(component) {
   };
 
   for (const edge of data.edges || []) {
-    const group = makeSvg('g');
+    const group = makeSvg('g', {class: 'awg-edge-group'});
     const path = makeSvg('path', {
       class: `awg-edge ${edge.edge_type}${edge.selected ? ' selected' : ''}`,
       'stroke-width': Math.min(6, 1.2 + Math.log1p(Number(edge.weight || 1))),
@@ -216,7 +277,16 @@ export default function(component) {
       }
     };
     group.appendChild(path);
-    const label = makeSvg('text', {class: 'awg-edge-label'});
+    const normalizedEdgeLabel = String(edge.label || '').trim().toLocaleLowerCase('es');
+    const repetitiveStructuralLabels = new Set([
+      'contiene',
+      'contiene parte',
+      'es parte de',
+      'parte de',
+      'forma parte de',
+    ]);
+    const repetitiveLabel = ['hierarchy', 'document', 'part'].includes(edge.edge_type) && repetitiveStructuralLabels.has(normalizedEdgeLabel);
+    const label = makeSvg('text', {class: `awg-edge-label${repetitiveLabel ? ' repetitive' : ''}`});
     label.textContent = truncate(edge.label, 40);
     group.appendChild(label);
     world.appendChild(group);
@@ -386,9 +456,47 @@ export default function(component) {
     const next = Math.max(.35, Math.min(3.5, state.scale + (event.deltaY < 0 ? .12 : -.12)));
     state.scale = next; applyTransform();
   };
-  parentElement.querySelector('[data-action="zoom-in"]').onclick = () => { state.scale = Math.min(3.5, state.scale + .2); applyTransform(); };
-  parentElement.querySelector('[data-action="zoom-out"]').onclick = () => { state.scale = Math.max(.35, state.scale - .2); applyTransform(); };
-  parentElement.querySelector('[data-action="fit"]').onclick = () => { state.scale = 1; state.tx = 0; state.ty = 0; applyTransform(); };
+  root.querySelector('[data-action="zoom-in"]').onclick = () => { state.scale = Math.min(3.5, state.scale + .2); applyTransform(); };
+  root.querySelector('[data-action="zoom-out"]').onclick = () => { state.scale = Math.max(.35, state.scale - .2); applyTransform(); };
+  root.querySelector('[data-action="fit"]').onclick = () => { state.scale = 1; state.tx = 0; state.ty = 0; applyTransform(); };
+
+  const syncLegend = () => {
+    legend.hidden = !state.legendOpen;
+    legendButton.setAttribute('aria-expanded', state.legendOpen ? 'true' : 'false');
+    root.classList.toggle('awg-legend-open', state.legendOpen);
+  };
+  legendButton.onclick = () => { state.legendOpen = !state.legendOpen; syncLegend(); };
+  syncLegend();
+
+  const isFullscreen = () => {
+    const treeRoot = root.getRootNode ? root.getRootNode() : null;
+    return root.matches?.(':fullscreen') || treeRoot?.fullscreenElement === root || document.fullscreenElement === root;
+  };
+  const syncFullscreen = () => {
+    const active = Boolean(isFullscreen());
+    root.classList.toggle('awg-fullscreen', active);
+    fullscreenButton.textContent = active ? 'Salir de pantalla completa' : 'Pantalla completa';
+    fullscreenButton.setAttribute('aria-label', active ? 'Salir de pantalla completa' : 'Abrir el grafo en pantalla completa');
+    fullscreenButton.setAttribute('title', active ? 'Salir de pantalla completa' : 'Abrir el grafo en pantalla completa');
+  };
+  fullscreenButton.onclick = async () => {
+    try {
+      if (isFullscreen()) {
+        await document.exitFullscreen();
+      } else if (root.requestFullscreen) {
+        await root.requestFullscreen();
+      }
+    } catch (_) {
+      // El navegador puede denegar fullscreen; el grafo conserva el estado y sigue utilizable.
+    }
+    syncFullscreen();
+  };
+  if (parentElement.__awgFullscreenListener) {
+    document.removeEventListener('fullscreenchange', parentElement.__awgFullscreenListener);
+  }
+  parentElement.__awgFullscreenListener = syncFullscreen;
+  document.addEventListener('fullscreenchange', parentElement.__awgFullscreenListener);
+  syncFullscreen();
 }
 """
 
