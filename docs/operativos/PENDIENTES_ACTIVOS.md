@@ -1,6 +1,6 @@
 # Pendientes activos — Archive Workbench
 
-**Estado actualizado:** 2026-08-27 · **versión:** 0.89.0 RC79
+**Estado actualizado:** 2026-08-27 · **versión:** 0.89.0 RC80
 
 Este archivo es la única fuente de verdad para trabajo abierto. Las capacidades cerradas se registran en `IMPLEMENTACIONES_REALIZADAS.md` y no deben reabrirse sin una regresión concreta o una ampliación explícita del alcance.
 
@@ -84,13 +84,13 @@ RC75 corrige el recorrido de apertura antes de continuar con OCR: una persona no
 
 RC76 corrige la primera regresión material detectada al intentar Surya dentro de la imagen CPU. El preflight interno ahora consulta el binario indicado por `LLAMA_CPP_BINARY`, el subproceso administrado `llamacpp` conserva la ruta de bibliotecas de `/opt/llama`, **Elegir texto** identifica visiblemente el motor real de cada extracción y la pestaña activa de Procesar documentos se conserva en el navegador durante reruns semánticos sin convertir el cambio de pestaña en un trigger de Python. La extracción Surya material y el reinicio persistente siguen pendientes de validación.
 
-La validación manual de RC76 dejó verdes la continuidad de pestañas y la identificación visible del motor. La primera corrida que alcanzó realmente llama.cpp falló después de 2100 segundos: Surya 0.22.1 había iniciado correctamente el servidor, pero una salida full-page superó 8000 tokens sin terminar antes del timeout de petición. RC77 agregó guardas exclusivas del runtime administrado llama.cpp y las validaciones posteriores dejaron verdes una extracción Surya CPU y otra GPU; en GPU `llama-server` CUDA se inició dentro del contenedor y se liberó al finalizar. RC78 corrigió el falso negativo de `extraction-doctor` para el runtime GPU administrado. La validación audiovisual posterior ejecutó `faster-whisper 1.2.1` con `large-v3`, CUDA `float16`, VAD y `beam_size=5` sobre `RememorArte Horacio BAU`: completó 64 segmentos y persistió como corrida terminada. RC79 corrige la métrica de VRAM de esa ruta, que quedaba nula en Docker por comparar el PID interno del contenedor con el PID del anfitrión informado por NVIDIA. **OPS-01 sigue abierto por persistencia/actualización, publicación y las pruebas multiplataforma restantes.**
+La validación manual de RC76 dejó verdes la continuidad de pestañas y la identificación visible del motor. La primera corrida que alcanzó realmente llama.cpp falló después de 2100 segundos: Surya 0.22.1 había iniciado correctamente el servidor, pero una salida full-page superó 8000 tokens sin terminar antes del timeout de petición. RC77 agregó guardas exclusivas del runtime administrado llama.cpp y las validaciones posteriores dejaron verdes una extracción Surya CPU y otra GPU; en GPU `llama-server` CUDA se inició dentro del contenedor y se liberó al finalizar. RC78 corrigió el falso negativo de `extraction-doctor` para el runtime GPU administrado. La validación audiovisual posterior ejecutó `faster-whisper 1.2.1` con `large-v3`, CUDA `float16`, VAD y `beam_size=5` sobre `RememorArte Horacio BAU`: completó 64 segmentos y persistió como corrida terminada. RC79 corrigió la métrica de VRAM de esa ruta; las validaciones posteriores dejaron verdes también la persistencia entre reinicios y entre RC77/RC79. El primer workflow de publicación real dejó verde la imagen GPU RC79 pero falló en el job CPU `linux/arm64`: el runtime principal resolvió PyTorch con dependencias NVIDIA y `pip check` rechazó `nvidia-cusparselt-cu13 0.8.1` en AArch64. RC80 fuerza PyTorch CPU también en el entorno principal de la imagen CPU antes de instalar los extras. **OPS-01 sigue abierto por republicación CPU/GPU RC80 y las pruebas Windows/macOS restantes.**
 
 Los servicios de sincronización en nube se mantienen como transporte, no como ubicación de una SQLite viva. La guía de inicio indica descargar o copiar primero un proyecto completo a una carpeta local antes de abrirlo. No se presenta Google Drive, OneDrive, Dropbox o iCloud como almacenamiento de trabajo simultáneo.
 
 Las validaciones materiales Linux ya cubren inicio CPU/GPU, apertura de proyecto local, Surya CPU/GPU y transcripción audiovisual CUDA. Las dos imágenes quedan implementadas en código y configuración, pero **OPS-01 todavía no está cerrado**. Antes de cerrar esta parte deben completarse:
 
-- construcción real y publicación de las imágenes CPU y NVIDIA GPU en GitHub Container Registry;
+- completar la publicación RC80 en GitHub Container Registry: el primer job GPU RC79 quedó verde y el job CPU RC79 falló sólo en `linux/arm64`;
 - primer inicio desde una máquina Windows con Docker Desktop usando CPU;
 - primer inicio desde Windows + WSL2 + NVIDIA usando GPU;
 - primer inicio desde una máquina macOS con Docker Desktop usando CPU;

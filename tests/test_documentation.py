@@ -565,7 +565,7 @@ def test_automatic_analysis_quality_decision_is_preserved_and_auditable() -> Non
     assert "st.form" in text
 
 
-def test_current_update_guide_describes_0890_rc79_gpu_runtime_metrics() -> None:
+def test_current_update_guide_describes_0890_rc80_cpu_multiarch_fix() -> None:
     text = (OPERATIVE / "ACTUALIZACION_ACTUAL.md").read_text(encoding="utf-8")
     pending = (OPERATIVE / "PENDIENTES_ACTIVOS.md").read_text(encoding="utf-8")
     implemented = (OPERATIVE / "IMPLEMENTACIONES_REALIZADAS.md").read_text(encoding="utf-8")
@@ -574,23 +574,27 @@ def test_current_update_guide_describes_0890_rc79_gpu_runtime_metrics() -> None:
     architecture = (REFERENCE / "ARQUITECTURA_Y_MODELO_ACTUAL.md").read_text(encoding="utf-8")
     historical_rc76 = HISTORICAL_UPDATES / "ACTUALIZACION_Y_PRUEBA_0.89.0_RC76.md"
 
-    assert "Archive Workbench 0.89.0 RC79" in text
-    assert "0.89.0-rc79-cpu" in text
-    assert "0.89.0-rc79-gpu" in text
-    assert "peak_gpu_memory_mib" in text
-    assert "nvidia-smi" in text
-    assert "llama-server" in text
+    assert "Archive Workbench 0.89.0 RC80" in text
+    assert "0.89.0-rc80-cpu" in text
+    assert "0.89.0-rc80-gpu" in text
     assert "transcripción audiovisual" in text
+    assert "nvidia-cusparselt-cu13" in text
+    assert "PyTorch CPU" in text
+    assert "linux/arm64" in text
     assert "| WEB-01 | Alta | Parcial pre-release, pausado |" in pending
     assert "| OPS-01 | Alta | Parcial, en curso |" in pending
+    assert "## RC80 - PyTorch CPU explícito en runtime principal multi-arquitectura" in implemented
     assert "## RC79 - transcripción audiovisual GPU validada y métrica VRAM en Docker" in implemented
+    assert "peak_gpu_memory_mib" in implemented
+    assert "nvidia-smi" in implemented
+    assert "llama-server" in implemented
     assert "## RC78 - diagnóstico administrado GPU y validación material Linux/NVIDIA" in implemented
     assert "## RC77 - guardas de inferencia para Surya/llama.cpp administrado" in implemented
     assert "No cambia SQLite" in text
-    assert "0.89.0 RC79" in continuity
+    assert "0.89.0 RC80" in continuity
     assert "2.5 Regla obligatoria para lectores sin conocimiento previo" in guidelines
     assert "Cada sustantivo que pueda tener más de un referente" in guidelines
-    assert "Distribución administrada y espacio de trabajo multiplataforma - RC72/RC79" in architecture
+    assert "Distribución administrada y espacio de trabajo multiplataforma - RC72/RC80" in architecture
     assert "ARCHIVE_WORKBENCH_SELECTED_PROJECT_ROOT" in architecture
     assert "0047_authority_relation_profiles" in text
     assert historical_rc76.is_file()

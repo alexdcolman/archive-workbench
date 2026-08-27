@@ -83,8 +83,14 @@ def test_cpu_container_forces_cpu_surya_runtime() -> None:
         assert extra in dockerfile
     assert "/opt/archive-workbench/.venv-surya" in dockerfile
     assert 'surya-ocr==0.22.1' in dockerfile
-    assert "https://download.pytorch.org/whl/cpu" in dockerfile
+    assert dockerfile.count("https://download.pytorch.org/whl/cpu") == 2
+    assert "main_torch=cpu" in dockerfile
     assert "torch.version.cuda is None" in dockerfile
+    main_cpu_index = dockerfile.index("https://download.pytorch.org/whl/cpu")
+    main_extras = dockerfile.index(
+        'python -m pip install ".[extraction,streamlit,semantic,tiff,discovery,audiovisual,platform]"'
+    )
+    assert main_cpu_index < main_extras
     assert "ffmpeg" in dockerfile
     assert "tesseract-ocr-spa" in dockerfile
     assert "libvips42" in dockerfile
@@ -112,8 +118,8 @@ def test_gpu_container_uses_cuda_cudnn_and_cuda_surya_runtime() -> None:
 def test_cross_platform_launchers_select_prebuilt_cpu_or_gpu_images() -> None:
     cpu_tag = (ROOT / "docker" / "image-tag.txt").read_text(encoding="utf-8").strip()
     gpu_tag = (ROOT / "docker" / "gpu-image-tag.txt").read_text(encoding="utf-8").strip()
-    assert cpu_tag == "0.89.0-rc79-cpu"
-    assert gpu_tag == "0.89.0-rc79-gpu"
+    assert cpu_tag == "0.89.0-rc80-cpu"
+    assert gpu_tag == "0.89.0-rc80-gpu"
 
     cpu_image = f"ghcr.io/alexdcolman/archive-workbench:{cpu_tag}"
     gpu_image = f"ghcr.io/alexdcolman/archive-workbench:{gpu_tag}"

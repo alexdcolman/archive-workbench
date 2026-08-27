@@ -1,3 +1,9 @@
+## RC80 - PyTorch CPU explícito en runtime principal multi-arquitectura
+
+El primer workflow real de publicación de RC79 construyó y publicó correctamente la imagen NVIDIA GPU `linux/amd64`, pero el job CPU multi-arquitectura falló en `linux/arm64`. El registro BuildKit confirma que el runtime principal descargó `torch 2.13.0` para AArch64 junto con paquetes NVIDIA y terminó con `nvidia-cusparselt-cu13 0.8.1 is not supported on this platform`. La ruta `linux/amd64` no exhibió ese fallo.
+
+RC80 instala primero `torch` y `torchvision` desde el índice oficial CPU de PyTorch dentro de `/opt/archive-workbench/.venv`, antes de resolver los extras de Archive Workbench. Así Docling, sentence-transformers y las demás dependencias que requieren Torch reutilizan la variante CPU ya instalada. El entorno aislado `/opt/archive-workbench/.venv-surya` conserva el mismo contrato CPU que ya tenía. El Dockerfile verifica además que `torch.version.cuda is None` en el runtime principal. No cambia la imagen GPU, la interfaz, SQLite ni la revisión `0047_authority_relation_profiles`.
+
 ## RC79 - transcripción audiovisual GPU validada y métrica VRAM en Docker
 
 La imagen GPU RC77 completó una transcripción real de `RememorArte Horacio BAU` con `faster-whisper 1.2.1`, `large-v3`, `device=cuda`, `float16`, VAD activado y `beam_size=5`. La corrida produjo 64 segmentos, quedó `completed` y mostró un proceso CUDA real. La primera ejecución incluyó la descarga de `Systran/faster-whisper-large-v3` al caché persistente administrado, por lo que su tiempo total incluye preparación del modelo y no se usa como benchmark puro. Al finalizar se liberó la memoria del modelo; quedó únicamente el contexto CUDA liviano del proceso Streamlit.

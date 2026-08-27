@@ -46,8 +46,13 @@ COPY src ./src
 
 RUN python3 -m venv /opt/archive-workbench/.venv \
     && python -m pip install --upgrade pip setuptools wheel \
+    && python -m pip install \
+         --index-url https://download.pytorch.org/whl/cpu \
+         "torch>=2.7.0,<3" "torchvision>=0.20.0,<1" \
     && python -m pip install ".[extraction,streamlit,semantic,tiff,discovery,audiovisual,platform]" \
-    && python -m pip check
+    && python -m pip check \
+    && python -c \
+         "import torch; assert torch.version.cuda is None; print('main_torch=cpu')"
 
 # Surya queda aislado del runtime principal. La imagen CPU instala PyTorch
 # desde el índice CPU y usa el llama-server CPU incluido en esta imagen.

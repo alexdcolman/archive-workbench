@@ -1,3 +1,11 @@
+## 0.89.0 RC80 - 2026-08-27
+
+- Corrige la publicación multi-arquitectura de la imagen CPU: el runtime principal instala PyTorch y torchvision desde el índice CPU antes de resolver Docling, búsqueda semántica y los demás extras.
+- Evita que `linux/arm64` intente instalar dependencias NVIDIA de PyTorch, incluido `nvidia-cusparselt-cu13`, que hizo fallar el primer workflow de publicación de RC79.
+- Mantiene `linux/amd64,linux/arm64` para CPU y `linux/amd64` para NVIDIA GPU; la imagen GPU no cambia funcionalmente.
+- Cambia los tags administrados a `0.89.0-rc80-cpu` y `0.89.0-rc80-gpu`.
+- Sin migración; continúa `0047_authority_relation_profiles`.
+
 ## 0.89.0 RC79 - 2026-08-27
 
 - Registra como verde la transcripción audiovisual real `large-v3` + CUDA `float16` de la distribución GPU Linux/NVIDIA.

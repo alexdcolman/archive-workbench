@@ -1,19 +1,19 @@
-# Actualización actual - Archive Workbench 0.89.0 RC79
+# Actualización actual - Archive Workbench 0.89.0 RC80
 
-## Alcance de RC79
+## Alcance de RC80
 
-RC79 continúa `OPS-01` después de la validación material de la transcripción audiovisual GPU en la imagen RC77. No cambia el backend `faster-whisper`, la segmentación ni la interfaz. Corrige la medición de VRAM máxima cuando Archive Workbench se ejecuta dentro de Docker.
+RC80 continúa `OPS-01` después del primer workflow real de publicación de RC79. El job NVIDIA GPU `linux/amd64` terminó correctamente. El job CPU multi-arquitectura falló únicamente en `linux/arm64` durante la instalación del runtime principal. El registro BuildKit muestra que PyTorch 2.13.0 para AArch64 intentó instalar dependencias NVIDIA y `pip check` rechazó `nvidia-cusparselt-cu13 0.8.1` como no compatible con esa plataforma.
 
-La corrida real `large-v3` + CUDA `float16`, VAD activado y `beam_size=5` completó el medio autorizado `RememorArte Horacio BAU` con `faster-whisper 1.2.1`, produjo 64 segmentos y persistió como `completed`. La primera ejecución dentro del espacio administrado incluyó la descarga inicial del modelo `Systran/faster-whisper-large-v3` al caché persistente de `ArchiveWorkbenchData/Settings`; por eso el tiempo total de esa primera corrida no se interpreta como benchmark puro de inferencia.
+La imagen CPU ya forzaba PyTorch CPU en el entorno aislado de Surya, pero no en el entorno principal que instala Docling, búsqueda semántica y los demás extras. RC80 instala `torch` y `torchvision` desde `https://download.pytorch.org/whl/cpu` también en ese entorno principal **antes** de resolver los extras. Las ruedas CPU oficiales existen para Python 3.12 tanto en `linux/amd64` como en `linux/arm64`; las restricciones de Docling y sentence-transformers quedan satisfechas por esa instalación y no se retira ninguna capacidad. La construcción multi-arquitectura del workflow sigue siendo `linux/amd64,linux/arm64`.
 
-El defecto observado fue sólo de instrumentación: `nvidia-smi --query-compute-apps` informa PIDs del anfitrión, mientras `os.getpid()` dentro del contenedor pertenece al espacio de nombres de PID del contenedor. El monitor anterior comparaba ambos valores y registraba `peak_gpu_memory_mib=null` aunque CTranslate2 estuviera ejecutando CUDA. RC79 mantiene la coincidencia directa de PID para instalaciones nativas y, en runtime administrado, usa como fallback el único proceso de cómputo cuyo nombre ejecutable coincide con el proceso Python actual. Si hay más de un candidato, deja la métrica sin medir antes que atribuir VRAM ajena.
+El Dockerfile agrega además una aserción de build `torch.version.cuda is None` para el entorno principal de la imagen CPU. La imagen NVIDIA GPU no cambia funcionalmente; se republica con tag RC80 para mantener una pareja coherente de artefactos.
 
-La validación material anterior de Surya CPU/GPU, el cierre automático de `llama-server` y la corrección de `extraction-doctor` de RC78 no cambian.
+La validación material de RC79 ya dejó verdes persistencia por reinicio y por actualización, Surya CPU/GPU, `faster-whisper large-v3` con CUDA y el diagnóstico GPU administrado. RC80 no modifica esos backends ni la interfaz.
 
 ## Tags de esta candidata
 
-- CPU: `ghcr.io/alexdcolman/archive-workbench:0.89.0-rc79-cpu`;
-- NVIDIA GPU: `ghcr.io/alexdcolman/archive-workbench:0.89.0-rc79-gpu`.
+- CPU: `ghcr.io/alexdcolman/archive-workbench:0.89.0-rc80-cpu`;
+- NVIDIA GPU: `ghcr.io/alexdcolman/archive-workbench:0.89.0-rc80-gpu`.
 
 ## Persistencia y base
 
@@ -23,19 +23,18 @@ No cambia SQLite ni el modelo de proyecto. Continúa `0047_authority_relation_pr
 
 ## Gate automatizado focal
 
-La suite completa corresponde exclusivamente a Alex. Para RC79 el gate se limita a la medición audiovisual modificada, distribución, documentación, empaquetado y recopilación completa sin ejecución:
+La suite completa corresponde exclusivamente a Alex. Para RC80 el gate se limita a distribución, documentación, empaquetado y recopilación completa sin ejecución:
 
 ```bash
 pytest -q \
-  tests/test_transcription_evaluation.py \
   tests/test_container_distribution.py \
   tests/test_documentation.py \
   tests/test_packaging.py \
 && pytest --collect-only -q
 ```
 
+El gate material que no puede sustituirse con pruebas unitarias es repetir el workflow `Publish Archive Workbench container images` y comprobar que ambos jobs publiquen los tags RC80.
+
 ## Validación manual específica
 
-No repetir la transcripción audiovisual completa de `RememorArte Horacio BAU`, ni las extracciones Surya CPU/GPU, ni la prueba de pestañas: esos recorridos ya quedaron materialmente verdes y RC79 no modifica sus backends. La corrección de `peak_gpu_memory_mib` puede confirmarse en una corrida GPU corta futura, incluida una prueba multiplataforma pendiente, sin volver a procesar ahora el material completo.
-
-El siguiente gate material de `OPS-01` es comprobar persistencia al detener y volver a abrir la distribución y luego continuar con los hosts Windows/macOS previstos. También siguen pendientes la publicación real de imágenes y las comprobaciones limpias de las carpetas de importación/creación administrada.
+No repetir OCR Surya, transcripción audiovisual, persistencia por reinicio ni persistencia por actualización en Linux: esos recorridos ya quedaron materialmente verdes y RC80 no modifica sus runtimes de ejecución. Después de que el workflow publique ambas imágenes RC80, comprobar una descarga limpia de los dos tags y continuar con las pruebas Windows/macOS pendientes de `OPS-01`.

@@ -1,7 +1,7 @@
 # Hoja de ruta pre-release y líneas paralelas — Archive Workbench
 
 **Estado preparado:** 2026-08-27
-**Versión de referencia:** 0.89.0 RC79
+**Versión de referencia:** 0.89.0 RC80
 
 Esta hoja ordena el trabajo restante hasta v1.0. El detalle y el estado de cada bloque se mantienen en [`PENDIENTES_ACTIVOS.md`](PENDIENTES_ACTIVOS.md). Las líneas paralelas no bloquean la publicación inicial salvo decisión explícita posterior.
 
@@ -9,7 +9,7 @@ Esta hoja ordena el trabajo restante hasta v1.0. El detalle y el estado de cada 
 
 `OCR-01` quedó implementado, validado y cerrado en 0.83.0. `AV-01` quedó implementado, validado y cerrado en 0.84.0. `AV-02` quedó implementado, validado y cerrado en 0.85.0. `AV-03` quedó implementado, validado y cerrado en 0.86.0. `INT-01` quedó implementado, validado y cerrado en 0.87.0. `EXP-01` quedó implementado, validado y cerrado en 0.88.0.
 
-1. Completar y validar `OPS-01`: publicar las imágenes CPU y NVIDIA GPU de RC79 y comprobar el inicio por doble clic en los sistemas compatibles.
+1. Completar y validar `OPS-01`: republicar las imágenes CPU y NVIDIA GPU de RC80 después de la corrección ARM64 y comprobar el inicio por doble clic en los sistemas compatibles.
 2. Retomar `WEB-01` sólo después de estabilizar la instalación pública y reescribir sitio/README bajo la regla de lectores sin conocimiento previo. La publicación final seguirá usando GitHub Pages.
 3. Ejecutar `QA-01` junto con `OPS-02`.
 4. Cerrar `OPS-03`, congelar contratos públicos y preparar la candidata a v1.0.

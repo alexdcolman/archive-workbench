@@ -1,4 +1,4 @@
-ARCHIVE WORKBENCH 0.89.0 RC79 - PRIMER INICIO
+ARCHIVE WORKBENCH 0.89.0 RC80 - PRIMER INICIO
 
 Archive Workbench se ejecuta dentro de una imagen preparada de Docker. No instala Python ni las dependencias del programa en tu sistema.
 
