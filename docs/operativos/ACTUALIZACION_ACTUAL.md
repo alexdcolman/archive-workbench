@@ -10,6 +10,22 @@ El Dockerfile agrega además una aserción de build `torch.version.cuda is None`
 
 La validación material de RC79 ya dejó verdes persistencia por reinicio y por actualización, Surya CPU/GPU, `faster-whisper large-v3` con CUDA y el diagnóstico GPU administrado. RC80 no modifica esos backends ni la interfaz.
 
+## Publicación material RC80
+
+El workflow `Publish Archive Workbench container images` de RC80 terminó correctamente en GitHub Actions. El job CPU publicó un índice OCI con `linux/amd64` y `linux/arm64`; el job NVIDIA GPU publicó `linux/amd64`.
+
+Después de cerrar sesión en GHCR, ambos tags se descargaron correctamente sin autenticación. Queda por tanto validado que las imágenes son accesibles públicamente y que una persona usuaria no necesita cuenta de GitHub ni `docker login` para obtenerlas.
+
+## Hallazgo durante la validación Windows
+
+La primera prueba material en Windows detectó un defecto de presentación en el selector que pregunta si se desea abrir un proyecto existente o abrir el inicio general: las tildes y otros caracteres no ASCII se muestran incorrectamente.
+
+El diálogo proviene de `docker/select-project-windows.ps1`. El script contiene texto en español con caracteres no ASCII y se distribuye como UTF-8 sin BOM. Windows PowerShell 5.1 puede interpretar un script UTF-8 sin BOM mediante la página de códigos ANSI heredada, por lo que cadenas como `Podés`, `Sí` o `Elegí` pueden aparecer con mojibake aunque la computadora esté correctamente configurada.
+
+Este comportamiento se considera un defecto de portabilidad del paquete, no un problema específico de la computadora usada para la prueba. La corrección debe conservar el texto actual y asegurar una codificación inequívoca para Windows PowerShell, preferentemente UTF-8 con BOM para ese script. La candidata que incorpore el fix debe agregar un gate focal que compruebe la codificación del archivo y debe volver a validar materialmente el diálogo en Windows antes de cerrar `OPS-01`.
+
+La validación funcional de Windows continúa con RC80 para detectar otros problemas independientes. No se modifica el launcher durante esta pasada para no cambiar la candidata bajo prueba.
+
 ## Tags de esta candidata
 
 - CPU: `ghcr.io/alexdcolman/archive-workbench:0.89.0-rc80-cpu`;
@@ -19,7 +35,7 @@ La validación material de RC79 ya dejó verdes persistencia por reinicio y por 
 
 No cambia SQLite ni el modelo de proyecto. Continúa `0047_authority_relation_profiles` y no hay migración. **No ejecutar `db-upgrade`.**
 
-`WEB-01` permanece parcial y queda pausado hasta terminar la distribución multiplataforma; RC79 no modifica el sitio público. No se incorporan capturas hasta realizar esa reescritura para lectores sin conocimiento previo.
+`WEB-01` permanece parcial y queda pausado hasta terminar la distribución multiplataforma; RC80 no modifica el sitio público. No se incorporan capturas hasta realizar esa reescritura para lectores sin conocimiento previo.
 
 ## Gate automatizado focal
 
@@ -37,4 +53,4 @@ El gate material que no puede sustituirse con pruebas unitarias es repetir el wo
 
 ## Validación manual específica
 
-No repetir OCR Surya, transcripción audiovisual, persistencia por reinicio ni persistencia por actualización en Linux: esos recorridos ya quedaron materialmente verdes y RC80 no modifica sus runtimes de ejecución. Después de que el workflow publique ambas imágenes RC80, comprobar una descarga limpia de los dos tags y continuar con las pruebas Windows/macOS pendientes de `OPS-01`.
+No repetir OCR Surya, transcripción audiovisual, persistencia por reinicio ni persistencia por actualización en Linux: esos recorridos ya quedaron materialmente verdes y RC80 no modifica sus runtimes de ejecución. La publicación multi-arquitectura y la descarga pública de ambos tags RC80 ya quedaron verdes. Continúan las pruebas Windows/macOS pendientes de `OPS-01`, y la corrección de codificación del selector de Windows debe validarse en una candidata posterior antes de cerrar ese bloque.
