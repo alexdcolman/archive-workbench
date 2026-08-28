@@ -16,7 +16,11 @@ El workflow `Publish Archive Workbench container images` de RC80 terminó correc
 
 Después de cerrar sesión en GHCR, ambos tags se descargaron correctamente sin autenticación. Queda por tanto validado que las imágenes son accesibles públicamente y que una persona usuaria no necesita cuenta de GitHub ni `docker login` para obtenerlas.
 
-## Hallazgo durante la validación Windows
+La primera prueba material en Windows confirmó además que el tag CPU puede descargarse públicamente desde Docker Desktop. La descarga terminó con el digest esperado de RC80. Por lo tanto, el bloqueo actual de Windows ya no está en publicación ni acceso a GHCR, sino en experiencia de inicio e interacción.
+
+## Hallazgos durante la validación Windows
+
+### Codificación del selector de proyecto
 
 La primera prueba material en Windows detectó un defecto de presentación en el selector que pregunta si se desea abrir un proyecto existente o abrir el inicio general: las tildes y otros caracteres no ASCII se muestran incorrectamente.
 
@@ -24,7 +28,58 @@ El diálogo proviene de `docker/select-project-windows.ps1`. El script contiene 
 
 Este comportamiento se considera un defecto de portabilidad del paquete, no un problema específico de la computadora usada para la prueba. La corrección debe conservar el texto actual y asegurar una codificación inequívoca para Windows PowerShell, preferentemente UTF-8 con BOM para ese script. La candidata que incorpore el fix debe agregar un gate focal que compruebe la codificación del archivo y debe volver a validar materialmente el diálogo en Windows antes de cerrar `OPS-01`.
 
-La validación funcional de Windows continúa con RC80 para detectar otros problemas independientes. No se modifica el launcher durante esta pasada para no cambiar la candidata bajo prueba.
+### Puerto 8501 ocupado
+
+El primer intento de iniciar la imagen CPU encontró `127.0.0.1:8501` ocupado por otro contenedor Docker (`emoparse-workshop-dashboard-1`). Docker devolvió correctamente el conflicto de bind, pero el launcher expuso el error técnico crudo y terminó con `No se pudo iniciar Archive Workbench`.
+
+Que otra aplicación ocupe el puerto no es un defecto de Archive Workbench, pero el recorrido público sí debe manejarlo. Una candidata posterior debe detectar el conflicto antes de `docker compose up` y explicar en lenguaje claro qué ocurre. La solución no debe detener ni eliminar automáticamente contenedores o procesos ajenos. Debe indicar qué aplicación ocupa el puerto y ofrecer una salida segura, o permitir usar otro puerto local cuando corresponda.
+
+### Falso negativo del chequeo de inicio
+
+Después de liberar el puerto, Docker Compose creó la red y arrancó el contenedor CPU correctamente. Los logs del contenedor confirmaron Uvicorn y Streamlit escuchando en `0.0.0.0:8501`, con URL local `http://localhost:8501`. Sin embargo, el launcher agotó su comprobación y volvió a informar `No se pudo iniciar Archive Workbench`.
+
+La comprobación posterior desde Windows devolvió HTTP 200 tanto para `http://127.0.0.1:8501/` como para `http://127.0.0.1:8501/_stcore/health`, cuyo contenido fue `ok`; abrir `http://localhost:8501` manualmente también mostró la aplicación. Queda confirmado que RC80 puede producir un falso negativo del launcher aunque el contenedor y Streamlit estén efectivamente sanos.
+
+La candidata posterior debe hacer robusto el chequeo de readiness, distinguir `contenedor iniciado pero todavía no listo` de `contenedor fallido` y no declarar fracaso si la aplicación responde. La causa exacta del falso negativo debe diagnosticarse antes de fijar la implementación.
+
+### Google Drive y credenciales OAuth
+
+La prueba Windows mostró que el flujo actual de Google Drive busca por defecto `google_drive_client_secret.json` dentro de la configuración del usuario Linux del contenedor (`/home/ubuntu/.config/archive-workbench/`). Ese recorrido es aceptable para desarrollo, pero no para una distribución pública o para integrantes de un equipo sin configuración técnica.
+
+La siguiente candidata debe eliminar la necesidad de repartir y copiar manualmente un JSON de credenciales OAuth. Archive Workbench ya utiliza `drive.file` y PKCE; el diseño público debe conservar ese alcance restringido, identificar a Archive Workbench mediante un cliente OAuth de aplicación de escritorio y permitir que cada persona conecte su propia cuenta desde la interfaz. Los tokens de cada persona deben permanecer locales y persistentes, preferentemente bajo `ArchiveWorkbenchData/Settings`, y nunca compartirse entre integrantes.
+
+No se debe ampliar silenciosamente el scope de Google Drive. `drive.file` continúa siendo el contrato deseado para evitar acceso general a los archivos de la cuenta.
+
+### Rendimiento de interfaz en Windows
+
+La prueba material detectó latencias incompatibles con una experiencia pública aceptable incluso en proyectos pequeños. Los ejemplos observados incluyen:
+
+- aproximadamente 5 a 10 segundos para abrir `Opciones avanzadas para crear otra transcripción` en Audio y video;
+- aproximadamente 10 a 15 segundos al cambiar entre algunas pestañas de `Organizar trabajo`;
+- aproximadamente 2 a 4 segundos al cambiar entre pestañas de `Procesar documentos`;
+- otras secciones y pestañas pueden responder con menor demora, por lo que no se considera demostrado que Docker Desktop o WSL2 sean por sí solos la causa principal.
+
+El control de opciones avanzadas de transcripción está implementado como `st.toggle`, por lo que provoca un rerun completo de la vista para una acción que conceptualmente sólo muestra u oculta opciones. Las pestañas de `Organizar trabajo` y `Procesar documentos`, en cambio, usan `tracked_tabs` en modo pasivo y no deberían provocar rerun global por navegación. Esto obliga a investigar también el costo de renderizado del frontend, el hecho de que `st.tabs` construye el contenido de todas las pestañas y las capas propias de ayuda y persistencia visual que observan mutaciones del DOM.
+
+La implementación actual de navegación instala `MutationObserver` para ayuda contextual y conservación de pestañas sobre `document.body`. En vistas densas, una hipótesis prioritaria es que esos observadores y la reanotación del DOM amplifiquen el costo de cambios visuales. Esta hipótesis debe medirse antes de modificar el comportamiento.
+
+La corrección no puede consistir en reintroducir reruns globales indiscriminados al cambiar de pestaña. Debe respetar el invariante Streamlit del proyecto: las interacciones pasivas no deben reconstruir innecesariamente la vista ni perder estado del navegador.
+
+La latencia observada se considera un bloqueante de usabilidad para cerrar `OPS-01`. Se pausa la validación exhaustiva de Windows con RC80 antes de probar GPU o proyectos grandes. La próxima candidata debe medir y corregir este bloque antes de continuar la matriz Windows.
+
+## Próxima candidata
+
+RC81 debe concentrar los hallazgos de distribución Windows sin reabrir los runtimes Linux ya validados:
+
+- codificación correcta de `select-project-windows.ps1`;
+- detección y mensaje seguro para puerto local ocupado;
+- chequeo de readiness que no produzca falsos negativos;
+- OAuth de Google Drive sin archivo JSON manual por instalación y con persistencia adecuada de tokens;
+- eliminación de reruns innecesarios en controles puramente visuales;
+- perfilado y reducción del lag de pestañas y vistas densas en Windows;
+- conservación estricta del invariante Streamlit y de la persistencia de estado del navegador.
+
+Antes de implementar RC81 deben releerse `.assistant/00_CHECKLIST_CAMBIOS.md`, la política de interacción Streamlit y las reglas de pruebas. No debe presentarse ningún cambio de código como válido sin esa verificación.
 
 ## Tags de esta candidata
 
@@ -49,8 +104,10 @@ pytest -q \
 && pytest --collect-only -q
 ```
 
-El gate material que no puede sustituirse con pruebas unitarias es repetir el workflow `Publish Archive Workbench container images` y comprobar que ambos jobs publiquen los tags RC80.
+El gate material de publicación de RC80 ya quedó verde. Los nuevos hallazgos Windows requieren una candidata posterior y validación material específica; no justifican repetir OCR Surya, transcripción audiovisual ni los gates Linux ya cerrados.
 
 ## Validación manual específica
 
-No repetir OCR Surya, transcripción audiovisual, persistencia por reinicio ni persistencia por actualización en Linux: esos recorridos ya quedaron materialmente verdes y RC80 no modifica sus runtimes de ejecución. La publicación multi-arquitectura y la descarga pública de ambos tags RC80 ya quedaron verdes. Continúan las pruebas Windows/macOS pendientes de `OPS-01`, y la corrección de codificación del selector de Windows debe validarse en una candidata posterior antes de cerrar ese bloque.
+No repetir OCR Surya, transcripción audiovisual, persistencia por reinicio ni persistencia por actualización en Linux: esos recorridos ya quedaron materialmente verdes y RC80 no modifica sus runtimes de ejecución. La publicación multi-arquitectura y la descarga pública de ambos tags RC80 ya quedaron verdes.
+
+La validación Windows de RC80 queda cerrada como **distribución funcional pero experiencia todavía no aceptable**. No continuar con GPU Windows ni con proyectos grandes hasta corregir el bloque de inicio, OAuth y rendimiento en RC81. Después de validar RC81 en Windows se retomará la matriz pendiente de `OPS-01`, incluida macOS CPU.
