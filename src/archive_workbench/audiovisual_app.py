@@ -1256,21 +1256,56 @@ def _render_transcription_workspace(
                 st.session_state["av_flash"] = "Descripción del audio o video guardada."
                 rerun_view(st)
 
-    technical_open = st.toggle(
-        "Opciones avanzadas para crear otra transcripción",
-        value=False,
-        key=f"av_technical_open_{media_id}",
-    )
     backend_options = transcription_backend_keys()
     backend = backend_options[0] if backend_options else "faster_whisper"
-    model_name = "small"
-    device = "cpu"
-    language = "es"
-    compute_type = "int8"
-    beam_size = 5
-    vad_filter = True
-    hotwords = ""
-    if technical_open:
+
+    if latest_run is None:
+        button_type = "primary" if selected_segment is None else "secondary"
+        if st.button("Transcribir en CPU", type=button_type):
+            result = _run_db_action(
+                st,
+                db_path=db_path,
+                callback=lambda session: transcribe_audiovisual(
+                    session,
+                    project_root=project_root,
+                    media_id=media_id,
+                    request=TranscriptionRequest(
+                        backend=backend,
+                        model_name="small",
+                        device="cpu",
+                        language="es",
+                        options={
+                            "compute_type": "int8",
+                            "vad_filter": True,
+                            "beam_size": 5,
+                            "hotwords": "",
+                        },
+                    ),
+                    actor=actor,
+                ),
+            )
+            if result is not None:
+                st.session_state["av_pending_run_id"] = result.id
+                if result.status == "completed":
+                    st.session_state["av_flash"] = "Transcripción completada y segmentada."
+                else:
+                    st.session_state["av_flash"] = (
+                        "La nueva versión de la transcripción quedó registrada con un error; revisá el diagnóstico técnico."
+                    )
+                rerun_view(st)
+
+    with st.popover(
+        "Opciones avanzadas para crear otra transcripción",
+        use_container_width=True,
+        on_change="ignore",
+    ):
+        model_name = "small"
+        device = "cpu"
+        language = "es"
+        compute_type = "int8"
+        beam_size = 5
+        vad_filter = True
+        hotwords = ""
         st.caption(
             "Estas opciones sólo son necesarias si querés generar otra versión de la transcripción con un modelo o una configuración diferente. "
             "La transcripción y las marcas de revisión quedan vinculadas al audio o video incorporado al proyecto."
@@ -1378,15 +1413,8 @@ def _render_transcription_workspace(
         st.caption(
             "La configuración usada para crear cada versión de la transcripción queda registrada para poder comparar después sus resultados sobre el mismo audio."
         )
-
-    show_default_transcription = latest_run is None and not technical_open
-    show_advanced_transcription = technical_open
-    if show_default_transcription or show_advanced_transcription:
-        button_label = "Transcribir en CPU" if show_default_transcription else "Iniciar nueva transcripción"
         button_type = "primary" if selected_segment is None else "secondary"
-        if st.button(button_label, type=button_type):
-            effective_device = device if technical_open else "cpu"
-            effective_compute = compute_type if technical_open else "int8"
+        if st.button("Iniciar nueva transcripción", type=button_type):
             result = _run_db_action(
                 st,
                 db_path=db_path,
@@ -1397,10 +1425,10 @@ def _render_transcription_workspace(
                     request=TranscriptionRequest(
                         backend=backend,
                         model_name=model_name,
-                        device=effective_device,
+                        device=device,
                         language=(language.strip() or None),
                         options={
-                            "compute_type": effective_compute,
+                            "compute_type": compute_type,
                             "vad_filter": bool(vad_filter),
                             "beam_size": int(beam_size),
                             "hotwords": hotwords.strip(),

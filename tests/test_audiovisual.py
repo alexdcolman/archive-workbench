@@ -359,6 +359,9 @@ def test_audiovisual_ui_separates_incorporation_from_transcription_and_keeps_sec
     ):
         assert literal in audiovisual_ui
 
+    assert 'with st.popover(\n        "Opciones avanzadas para crear otra transcripción"' in audiovisual_ui
+    assert 'on_change="ignore"' in audiovisual_ui
+    assert 'technical_open = st.toggle(' not in audiovisual_ui
     assert 'av_platform_import_open' not in audiovisual_ui
     assert 'Incorporalo primero en Catálogo documental como archivo local' not in audiovisual_ui
     assert 'with st.expander("Descartar esta versión de la transcripción"' not in audiovisual_ui

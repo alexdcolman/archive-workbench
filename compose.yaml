@@ -7,6 +7,7 @@ x-managed-environment: &managed-environment
   ARCHIVE_WORKBENCH_AUDIOVISUAL_IMPORT_ROOT: /workspace/Imports/AudioVideo
   ARCHIVE_WORKBENCH_PREFERENCES_PATH: /workspace/Settings/preferences.json
   ARCHIVE_WORKBENCH_SETTINGS_ROOT: /workspace/Settings
+  ARCHIVE_WORKBENCH_PUBLIC_URL: "http://127.0.0.1:${AW_HOST_PORT:-8501}"
   ARCHIVE_WORKBENCH_SELECTED_PROJECT_ROOT: "${AW_SELECTED_PROJECT_CONTAINER:-}"
   HF_HOME: /workspace/Settings/huggingface
   TORCH_HOME: /workspace/Settings/torch
@@ -19,7 +20,7 @@ x-app-common: &app-common
   init: true
   user: "${AW_UID:-1000}:${AW_GID:-1000}"
   ports:
-    - "127.0.0.1:8501:8501"
+    - "127.0.0.1:${AW_HOST_PORT:-8501}:8501"
   volumes:
     - type: bind
       source: ./ArchiveWorkbenchData
@@ -33,7 +34,7 @@ x-app-common: &app-common
 services:
   app-cpu:
     <<: *app-common
-    image: ${ARCHIVE_WORKBENCH_CPU_IMAGE:-ghcr.io/alexdcolman/archive-workbench:0.89.0-rc80-cpu}
+    image: ${ARCHIVE_WORKBENCH_CPU_IMAGE:-ghcr.io/alexdcolman/archive-workbench:0.89.0-rc81-cpu}
     build:
       context: .
       dockerfile: Dockerfile
@@ -45,7 +46,7 @@ services:
 
   app-gpu:
     <<: *app-common
-    image: ${ARCHIVE_WORKBENCH_GPU_IMAGE:-ghcr.io/alexdcolman/archive-workbench:0.89.0-rc80-gpu}
+    image: ${ARCHIVE_WORKBENCH_GPU_IMAGE:-ghcr.io/alexdcolman/archive-workbench:0.89.0-rc81-gpu}
     build:
       context: .
       dockerfile: Dockerfile.gpu

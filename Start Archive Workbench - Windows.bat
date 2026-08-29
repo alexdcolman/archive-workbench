@@ -7,7 +7,7 @@ set "AW_PROFILE=cpu"
 if defined ARCHIVE_WORKBENCH_CPU_IMAGE (
   set "AW_IMAGE=%ARCHIVE_WORKBENCH_CPU_IMAGE%"
 ) else (
-  set "AW_IMAGE=ghcr.io/alexdcolman/archive-workbench:0.89.0-rc80-cpu"
+  set "AW_IMAGE=ghcr.io/alexdcolman/archive-workbench:0.89.0-rc81-cpu"
 )
 set "ARCHIVE_WORKBENCH_CPU_IMAGE=%AW_IMAGE%"
 
@@ -60,6 +60,13 @@ if not exist "ArchiveWorkbenchData\Settings" mkdir "ArchiveWorkbenchData\Setting
 
 docker compose --profile cpu --profile gpu down >nul 2>&1
 
+set "AW_PORT_FILE=%TEMP%\archive_workbench_port_%RANDOM%_%RANDOM%.txt"
+powershell -NoProfile -ExecutionPolicy Bypass -File "%~dp0docker\windows-runtime.ps1" -Action SelectPort -PortFile "%AW_PORT_FILE%"
+if errorlevel 1 goto :port_failed
+set /p "AW_HOST_PORT="<"%AW_PORT_FILE%"
+del /q "%AW_PORT_FILE%" >nul 2>&1
+if not defined AW_HOST_PORT goto :port_failed
+
 docker image inspect "%AW_IMAGE%" >nul 2>&1
 if not errorlevel 1 goto :image_ready
 
@@ -75,9 +82,9 @@ echo Iniciando Archive Workbench...
 docker compose --profile %AW_PROFILE% up -d --no-build %AW_SERVICE%
 if errorlevel 1 goto :failed
 
-powershell -NoProfile -ExecutionPolicy Bypass -Command "$u='http://localhost:8501/_stcore/health'; for($i=0;$i -lt 90;$i++){try{Invoke-WebRequest -UseBasicParsing -TimeoutSec 2 $u | Out-Null; exit 0}catch{Start-Sleep -Seconds 2}}; exit 1" >nul 2>&1
+powershell -NoProfile -ExecutionPolicy Bypass -File "%~dp0docker\windows-runtime.ps1" -Action WaitReady -Port %AW_HOST_PORT% -Service %AW_SERVICE%
 if errorlevel 1 goto :failed
-start "" "http://localhost:8501"
+start "" "http://127.0.0.1:%AW_HOST_PORT%"
 
 echo.
 echo Archive Workbench esta abierto en el navegador con la imagen CPU.

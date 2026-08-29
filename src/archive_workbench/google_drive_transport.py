@@ -18,6 +18,7 @@ from typing import Any, Callable
 
 from archive_workbench.exchange import inspect_change_bundle, sha256_file
 from archive_workbench.team_copy import inspect_team_copy_package
+from archive_workbench.runtime_environment import managed_workspace
 
 DRIVE_FILE_SCOPE = "https://www.googleapis.com/auth/drive.file"
 GOOGLE_AUTH_URL = "https://accounts.google.com/o/oauth2/v2/auth"
@@ -25,6 +26,10 @@ GOOGLE_TOKEN_URL = "https://oauth2.googleapis.com/token"
 DRIVE_FILES_URL = "https://www.googleapis.com/drive/v3/files"
 DRIVE_UPLOAD_URL = "https://www.googleapis.com/upload/drive/v3/files"
 DRIVE_ZIP_MIME_TYPES = ("application/zip", "application/x-zip-compressed")
+GOOGLE_OAUTH_CLIENT_ID_ENV = "ARCHIVE_WORKBENCH_GOOGLE_OAUTH_CLIENT_ID"
+GOOGLE_OAUTH_CLIENT_SECRET_ENV = "ARCHIVE_WORKBENCH_GOOGLE_OAUTH_CLIENT_SECRET"
+GOOGLE_OAUTH_PUBLIC_URL_ENV = "ARCHIVE_WORKBENCH_PUBLIC_URL"
+OAUTH_PENDING_MAX_AGE_SECONDS = 10 * 60
 
 
 @dataclass(frozen=True, slots=True)
@@ -97,14 +102,34 @@ class OAuthResult:
     picked_file_ids: tuple[str, ...] = ()
 
 
-def default_client_secret_path() -> Path:
+def _local_config_root() -> Path:
     config_root = Path(os.environ.get("XDG_CONFIG_HOME", Path.home() / ".config"))
-    return config_root / "archive-workbench" / "google_drive_client_secret.json"
+    return config_root / "archive-workbench"
+
+
+def default_client_secret_path() -> Path:
+    return _local_config_root() / "google_drive_client_secret.json"
 
 
 def default_token_path() -> Path:
-    config_root = Path(os.environ.get("XDG_CONFIG_HOME", Path.home() / ".config"))
-    return config_root / "archive-workbench" / "google_drive_token.json"
+    workspace = managed_workspace()
+    if workspace is not None:
+        return workspace.settings / "google_drive_token.json"
+    return _local_config_root() / "google_drive_token.json"
+
+
+def default_oauth_pending_path() -> Path:
+    workspace = managed_workspace()
+    if workspace is not None:
+        return workspace.settings / "google_drive_oauth_pending.json"
+    return _local_config_root() / "google_drive_oauth_pending.json"
+
+
+def default_picker_result_path() -> Path:
+    workspace = managed_workspace()
+    if workspace is not None:
+        return workspace.settings / "google_drive_picker_result.json"
+    return _local_config_root() / "google_drive_picker_result.json"
 
 
 def load_oauth_client(path: Path) -> GoogleOAuthClient:
@@ -131,6 +156,28 @@ def load_oauth_client(path: Path) -> GoogleOAuthClient:
         client_secret=client_secret,
         auth_uri=auth_uri,
         token_uri=token_uri,
+    )
+
+
+def configured_oauth_client(client_secret_path: Path | None = None) -> GoogleOAuthClient:
+    """Resuelve el cliente OAuth sin exigir un JSON por integrante del equipo."""
+
+    if client_secret_path is not None:
+        return load_oauth_client(client_secret_path)
+    client_id = str(os.environ.get(GOOGLE_OAUTH_CLIENT_ID_ENV, "")).strip()
+    if client_id:
+        client_secret = str(os.environ.get(GOOGLE_OAUTH_CLIENT_SECRET_ENV, "")).strip() or None
+        return GoogleOAuthClient(
+            client_id=client_id,
+            client_secret=client_secret,
+            auth_uri=GOOGLE_AUTH_URL,
+            token_uri=GOOGLE_TOKEN_URL,
+        )
+    fallback = default_client_secret_path()
+    if fallback.is_file():
+        return load_oauth_client(fallback)
+    raise ValueError(
+        "Esta compilación de Archive Workbench no tiene configurado el cliente OAuth de Google Drive."
     )
 
 
@@ -179,11 +226,160 @@ def load_token(path: Path | None = None) -> GoogleDriveToken | None:
         return None
 
 
+def _pkce_challenge(verifier: str) -> str:
+    digest = hashlib.sha256(verifier.encode("ascii")).digest()
+    return base64.urlsafe_b64encode(digest).decode("ascii").rstrip("=")
+
+
 def _pkce_pair() -> tuple[str, str]:
     verifier = secrets.token_urlsafe(64)[:96]
-    digest = hashlib.sha256(verifier.encode("ascii")).digest()
-    challenge = base64.urlsafe_b64encode(digest).decode("ascii").rstrip("=")
-    return verifier, challenge
+    return verifier, _pkce_challenge(verifier)
+
+
+def _write_private_json(path: Path, payload: dict[str, Any]) -> Path:
+    destination = path.expanduser().resolve()
+    destination.parent.mkdir(parents=True, exist_ok=True)
+    temp = destination.with_suffix(destination.suffix + ".tmp")
+    temp.write_text(json.dumps(payload, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
+    os.chmod(temp, 0o600)
+    temp.replace(destination)
+    os.chmod(destination, 0o600)
+    return destination
+
+
+def _read_json_object(path: Path) -> dict[str, Any] | None:
+    source = path.expanduser().resolve()
+    if not source.is_file():
+        return None
+    try:
+        payload = json.loads(source.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError):
+        return None
+    return payload if isinstance(payload, dict) else None
+
+
+def public_oauth_redirect_uri() -> str:
+    value = str(os.environ.get(GOOGLE_OAUTH_PUBLIC_URL_ENV, "")).strip().rstrip("/")
+    if not value:
+        raise ValueError(
+            "La distribución administrada no informó la URL local necesaria para volver desde Google Drive."
+        )
+    parsed = urllib.parse.urlparse(value)
+    if parsed.scheme not in {"http", "https"} or not parsed.netloc:
+        raise ValueError("La URL local configurada para Google Drive no es válida.")
+    return value
+
+
+def prepare_google_drive_authorization(
+    client_secret_path: Path | None = None,
+    *,
+    picker: bool = False,
+    pending_path: Path | None = None,
+    redirect_uri: str | None = None,
+) -> str:
+    """Prepara OAuth/PKCE para abrir Google en el navegador del equipo anfitrión."""
+
+    client = configured_oauth_client(client_secret_path)
+    redirect = (redirect_uri or public_oauth_redirect_uri()).rstrip("/")
+    destination = pending_path or default_oauth_pending_path()
+    existing = _read_json_object(destination)
+    now = time.time()
+    verifier = ""
+    state_value = ""
+    if existing:
+        created_at = float(existing.get("created_at") or 0)
+        if (
+            now - created_at < OAUTH_PENDING_MAX_AGE_SECONDS
+            and bool(existing.get("picker")) is picker
+            and str(existing.get("redirect_uri") or "") == redirect
+            and str(existing.get("client_id") or "") == client.client_id
+        ):
+            verifier = str(existing.get("code_verifier") or "")
+            state_value = str(existing.get("state") or "")
+    if not verifier or not state_value:
+        state_value = secrets.token_urlsafe(24)
+        verifier, _ = _pkce_pair()
+        _write_private_json(
+            destination,
+            {
+                "state": state_value,
+                "code_verifier": verifier,
+                "redirect_uri": redirect,
+                "client_id": client.client_id,
+                "picker": bool(picker),
+                "created_at": now,
+            },
+        )
+    return build_authorization_url(
+        client,
+        redirect_uri=redirect,
+        state=state_value,
+        code_challenge=_pkce_challenge(verifier),
+        picker=picker,
+    )
+
+
+def complete_google_drive_authorization(
+    *,
+    code: str,
+    state: str,
+    picked_file_ids: str = "",
+    client_secret_path: Path | None = None,
+    token_path: Path | None = None,
+    pending_path: Path | None = None,
+    picker_result_path: Path | None = None,
+) -> OAuthResult:
+    pending = _read_json_object(pending_path or default_oauth_pending_path())
+    if not pending:
+        raise RuntimeError("No encontré una autorización de Google Drive pendiente en esta instalación.")
+    if time.time() - float(pending.get("created_at") or 0) >= OAUTH_PENDING_MAX_AGE_SECONDS:
+        raise RuntimeError("La autorización de Google Drive venció. Iniciá la conexión nuevamente.")
+    if not state or state != str(pending.get("state") or ""):
+        raise RuntimeError("La respuesta OAuth de Google no coincide con la solicitud iniciada.")
+    clean_code = code.strip()
+    if not clean_code:
+        raise RuntimeError("Google no devolvió el código de autorización.")
+    verifier = str(pending.get("code_verifier") or "")
+    redirect_uri = str(pending.get("redirect_uri") or "")
+    if not verifier or not redirect_uri:
+        raise RuntimeError("La autorización pendiente de Google Drive está incompleta.")
+
+    client = configured_oauth_client(client_secret_path)
+    if client.client_id != str(pending.get("client_id") or ""):
+        raise RuntimeError("El cliente OAuth cambió desde que se inició la autorización.")
+    token_request = {
+        "client_id": client.client_id,
+        "code": clean_code,
+        "code_verifier": verifier,
+        "grant_type": "authorization_code",
+        "redirect_uri": redirect_uri,
+    }
+    if client.client_secret:
+        token_request["client_secret"] = client.client_secret
+    previous = load_token(token_path)
+    token = _token_from_response(_post_form(client.token_uri, token_request), previous=previous)
+    save_token(token, token_path)
+    picked = tuple(item.strip() for item in picked_file_ids.split(",") if item.strip())
+    if bool(pending.get("picker")):
+        if not picked:
+            raise RuntimeError("Google Picker no devolvió ningún archivo seleccionado.")
+        _write_private_json(
+            picker_result_path or default_picker_result_path(),
+            {"file_ids": list(picked), "created_at": time.time()},
+        )
+    return OAuthResult(token=token, picked_file_ids=picked)
+
+
+def load_picker_result(path: Path | None = None, *, max_age_seconds: float = 3600) -> tuple[str, ...]:
+    payload = _read_json_object(path or default_picker_result_path())
+    if not payload:
+        return ()
+    if time.time() - float(payload.get("created_at") or 0) > max_age_seconds:
+        return ()
+    raw = payload.get("file_ids")
+    if not isinstance(raw, list):
+        return ()
+    return tuple(str(item).strip() for item in raw if str(item).strip())
 
 
 def build_authorization_url(
@@ -301,14 +497,14 @@ def _token_from_response(
 
 
 def authorize_google_drive(
-    client_secret_path: Path,
+    client_secret_path: Path | None = None,
     *,
     picker: bool = False,
     token_path: Path | None = None,
     open_browser: Callable[[str], bool] | None = None,
     timeout_seconds: float = 300,
 ) -> OAuthResult:
-    client = load_oauth_client(client_secret_path)
+    client = configured_oauth_client(client_secret_path)
     state_value = secrets.token_urlsafe(24)
     verifier, challenge = _pkce_pair()
     callback_state = _CallbackState()
@@ -376,11 +572,11 @@ def authorize_google_drive(
 
 
 def refresh_google_drive_token(
-    client_secret_path: Path,
+    client_secret_path: Path | None = None,
     *,
     token_path: Path | None = None,
 ) -> GoogleDriveToken:
-    client = load_oauth_client(client_secret_path)
+    client = configured_oauth_client(client_secret_path)
     current = load_token(token_path)
     if current is None:
         raise RuntimeError("Google Drive todavía no está conectado.")
@@ -420,7 +616,7 @@ def _metadata_from_payload(payload: dict[str, Any]) -> DriveFileMetadata:
 def get_drive_file_metadata(
     file_id: str,
     *,
-    client_secret_path: Path,
+    client_secret_path: Path | None = None,
     token_path: Path | None = None,
 ) -> DriveFileMetadata:
     clean_id = file_id.strip()
@@ -605,7 +801,7 @@ def _upload_resumable_file(
 def upload_archive_workbench_zip_to_drive(
     archive_path: Path,
     *,
-    client_secret_path: Path,
+    client_secret_path: Path | None = None,
     token_path: Path | None = None,
 ) -> DriveUploadSummary:
     source = archive_path.expanduser().resolve()
@@ -644,7 +840,7 @@ def upload_archive_workbench_zip_to_drive(
 def upload_exchange_bundle_to_drive(
     bundle_path: Path,
     *,
-    client_secret_path: Path,
+    client_secret_path: Path | None = None,
     token_path: Path | None = None,
 ) -> DriveUploadSummary:
     """Compatibilidad: sube un paquete incremental y rechaza otros ZIP."""
@@ -669,7 +865,7 @@ def download_archive_workbench_zip_from_drive(
     file_id: str,
     *,
     project_root: Path,
-    client_secret_path: Path,
+    client_secret_path: Path | None = None,
     token_path: Path | None = None,
 ) -> DriveDownloadSummary:
     metadata = get_drive_file_metadata(
@@ -739,7 +935,7 @@ def download_exchange_bundle_from_drive(
     file_id: str,
     *,
     project_root: Path,
-    client_secret_path: Path,
+    client_secret_path: Path | None = None,
     token_path: Path | None = None,
 ) -> DriveDownloadSummary:
     """Compatibilidad: descarga y exige un paquete incremental."""
@@ -755,7 +951,7 @@ def download_exchange_bundle_from_drive(
     return result
 
 def pick_drive_exchange_bundle(
-    client_secret_path: Path,
+    client_secret_path: Path | None = None,
     *,
     token_path: Path | None = None,
     open_browser: Callable[[str], bool] | None = None,

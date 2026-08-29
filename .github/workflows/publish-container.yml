@@ -43,6 +43,8 @@ jobs:
           platforms: linux/amd64,linux/arm64
           push: true
           tags: ghcr.io/${{ github.repository }}:${{ steps.cpu-version.outputs.tag }}
+          build-args: |
+            ARCHIVE_WORKBENCH_GOOGLE_OAUTH_CLIENT_ID=${{ vars.ARCHIVE_WORKBENCH_GOOGLE_OAUTH_CLIENT_ID }}
           cache-from: type=gha,scope=archive-workbench-cpu
           cache-to: type=gha,mode=max,scope=archive-workbench-cpu
 
@@ -76,5 +78,7 @@ jobs:
           platforms: linux/amd64
           push: true
           tags: ghcr.io/${{ github.repository }}:${{ steps.gpu-version.outputs.tag }}
+          build-args: |
+            ARCHIVE_WORKBENCH_GOOGLE_OAUTH_CLIENT_ID=${{ vars.ARCHIVE_WORKBENCH_GOOGLE_OAUTH_CLIENT_ID }}
           cache-from: type=gha,scope=archive-workbench-gpu
           cache-to: type=gha,mode=max,scope=archive-workbench-gpu

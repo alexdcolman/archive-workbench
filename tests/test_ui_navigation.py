@@ -144,6 +144,9 @@ def test_passive_tracked_tabs_keep_visual_state_in_browser_without_python_trigge
     assert "tab.click()" in keeper
     assert "setStateValue" not in keeper
     assert "setTriggerValue" not in keeper
+    assert "observer.observe(doc.body" not in keeper
+    assert "doc.querySelectorAll('[class]')" not in keeper
+    assert "querySelector('[role=\"tablist\"]')" in keeper
 
 
 def test_context_help_uses_discoverable_info_icons_without_question_badges() -> None:
@@ -166,6 +169,10 @@ def test_context_help_uses_discoverable_info_icons_without_question_badges() -> 
     assert "pointerFocusIsRecent" in source
     assert "matches(':focus-visible')" in source
     assert "event.key === 'Escape'" in source
+    context = source[source.index("def _context_help_renderer"):source.index("def request_tab")]
+    assert "observer.observe(doc.body" not in context
+    assert "doc.querySelectorAll('[class]')" not in context
+    assert "doc.getElementsByClassName(className)" in context
 
 
 def test_tracked_tabs_can_switch_without_forcing_rerun() -> None:

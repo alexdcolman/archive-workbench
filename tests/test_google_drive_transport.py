@@ -21,16 +21,23 @@ from archive_workbench.exchange import compare_change_bundle_manifest, ensure_ex
 from archive_workbench.decisions import load_decisions
 from archive_workbench.google_drive_transport import (
     DRIVE_FILE_SCOPE,
+    GOOGLE_OAUTH_CLIENT_ID_ENV,
+    GOOGLE_OAUTH_PUBLIC_URL_ENV,
     GoogleDriveToken,
     GoogleOAuthClient,
     _safe_download_name,
     _upload_resumable_file,
     build_authorization_url,
+    complete_google_drive_authorization,
+    configured_oauth_client,
     connection_status,
+    default_token_path,
     download_archive_workbench_zip_from_drive,
     download_exchange_bundle_from_drive,
     load_oauth_client,
+    load_picker_result,
     load_token,
+    prepare_google_drive_authorization,
     save_token,
     upload_archive_workbench_zip_to_drive,
     upload_exchange_bundle_to_drive,
@@ -129,6 +136,73 @@ def test_load_desktop_oauth_client_and_token_permissions(tmp_path: Path):
     assert load_token(token_path) is not None
     assert oct(os.stat(token_path).st_mode & 0o777) == "0o600"
     assert connection_status(token_path) == "connected"
+
+
+def test_managed_oauth_uses_embedded_client_and_persists_token_in_settings(
+    tmp_path: Path, monkeypatch
+):
+    workspace = tmp_path / "ArchiveWorkbenchData"
+    settings = workspace / "Settings"
+    monkeypatch.setenv("ARCHIVE_WORKBENCH_WORKSPACE_ROOT", str(workspace))
+    monkeypatch.setenv("ARCHIVE_WORKBENCH_SETTINGS_ROOT", str(settings))
+    monkeypatch.setenv(GOOGLE_OAUTH_CLIENT_ID_ENV, "managed-client.apps.googleusercontent.com")
+    monkeypatch.setenv(GOOGLE_OAUTH_PUBLIC_URL_ENV, "http://127.0.0.1:8507")
+
+    client = configured_oauth_client()
+    assert client.client_id == "managed-client.apps.googleusercontent.com"
+    assert client.client_secret is None
+    assert default_token_path() == settings / "google_drive_token.json"
+
+    authorization_url = prepare_google_drive_authorization(picker=True)
+    params = urllib.parse.parse_qs(urllib.parse.urlparse(authorization_url).query)
+    assert params["scope"] == [DRIVE_FILE_SCOPE]
+    assert params["redirect_uri"] == ["http://127.0.0.1:8507"]
+    assert params["trigger_onepick"] == ["true"]
+    assert params["code_challenge_method"] == ["S256"]
+
+    requests = []
+
+    def fake_post_form(url, data, *, timeout=60):
+        requests.append((url, data, timeout))
+        return {
+            "access_token": "managed-access",
+            "refresh_token": "managed-refresh",
+            "expires_in": 3600,
+            "scope": DRIVE_FILE_SCOPE,
+        }
+
+    monkeypatch.setattr("archive_workbench.google_drive_transport._post_form", fake_post_form)
+    result = complete_google_drive_authorization(
+        code="authorization-code",
+        state=params["state"][0],
+        picked_file_ids="drive-file-1",
+    )
+
+    assert result.picked_file_ids == ("drive-file-1",)
+    assert load_token(default_token_path()) is not None
+    assert load_picker_result() == ("drive-file-1",)
+    assert requests[0][1]["code_verifier"]
+    assert requests[0][1]["redirect_uri"] == "http://127.0.0.1:8507"
+    assert "client_secret" not in requests[0][1]
+
+
+def test_managed_google_drive_ui_uses_host_browser_callback_without_per_user_json():
+    source = (Path(__file__).parents[1] / "src" / "archive_workbench" / "review_app.py").read_text(
+        encoding="utf-8"
+    )
+    managed_start = source.index("if workspace is not None:", source.index("def _render_google_drive_connection"))
+    native_start = source.index("panel_key =", managed_start)
+    managed_branch = source[managed_start:native_start]
+
+    assert "prepare_google_drive_authorization()" in managed_branch
+    assert 'st.link_button(' in managed_branch
+    assert "ArchiveWorkbenchData/Settings" in managed_branch
+    assert "client_secret_path" not in managed_branch
+    assert "google_drive_client_secret.json" not in managed_branch
+    assert "_handle_google_drive_oauth_callback(st)" in source
+    assert source.index("_handle_google_drive_oauth_callback(st)", source.index("def main()")) < source.index(
+        "_render_global_input_policy(st)", source.index("def main()")
+    )
 
 
 def test_picker_authorization_url_uses_only_drive_file_scope():

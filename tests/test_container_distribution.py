@@ -21,7 +21,7 @@ def test_container_variants_keep_user_data_outside_images() -> None:
     assert set(services) == {"app-cpu", "app-gpu"}
     for service_name in ("app-cpu", "app-gpu"):
         service = services[service_name]
-        assert service["ports"] == ["127.0.0.1:8501:8501"]
+        assert service["ports"] == ["127.0.0.1:${AW_HOST_PORT:-8501}:8501"]
         volumes = service["volumes"]
         assert {
             "type": "bind",
@@ -118,8 +118,8 @@ def test_gpu_container_uses_cuda_cudnn_and_cuda_surya_runtime() -> None:
 def test_cross_platform_launchers_select_prebuilt_cpu_or_gpu_images() -> None:
     cpu_tag = (ROOT / "docker" / "image-tag.txt").read_text(encoding="utf-8").strip()
     gpu_tag = (ROOT / "docker" / "gpu-image-tag.txt").read_text(encoding="utf-8").strip()
-    assert cpu_tag == "0.89.0-rc80-cpu"
-    assert gpu_tag == "0.89.0-rc80-gpu"
+    assert cpu_tag == "0.89.0-rc81-cpu"
+    assert gpu_tag == "0.89.0-rc81-gpu"
 
     cpu_image = f"ghcr.io/alexdcolman/archive-workbench:{cpu_tag}"
     gpu_image = f"ghcr.io/alexdcolman/archive-workbench:{gpu_tag}"
@@ -141,7 +141,12 @@ def test_cross_platform_launchers_select_prebuilt_cpu_or_gpu_images() -> None:
         assert "app-cpu" in source
         assert "AW_SELECTED_PROJECT" in source
         assert "docker compose build" not in source
-        assert "http://localhost:8501" in source
+        if launcher.suffix.casefold() == ".bat":
+            assert "http://127.0.0.1:%AW_HOST_PORT%" in source
+            assert "windows-runtime.ps1" in source
+            assert "http://localhost:8501" not in source
+        else:
+            assert "http://localhost:8501" in source
 
     gpu_launchers = (
         ROOT / "Start Archive Workbench - GPU - Windows.bat",
@@ -159,6 +164,10 @@ def test_cross_platform_launchers_select_prebuilt_cpu_or_gpu_images() -> None:
         assert "AW_SELECTED_PROJECT" in source
         assert "docker image inspect" in source
         assert "docker compose build" not in source
+        if launcher.suffix.casefold() == ".bat":
+            assert "http://127.0.0.1:%AW_HOST_PORT%" in source
+            assert "windows-runtime.ps1" in source
+            assert "http://localhost:8501" not in source
 
     first_start = (ROOT / "FIRST_START.txt").read_text(encoding="utf-8")
     assert "Windows" in first_start
@@ -212,6 +221,7 @@ def test_container_publish_workflow_targets_cpu_and_gpu_images() -> None:
     assert "file: ./Dockerfile.gpu" in workflow_text
     assert "scope=archive-workbench-cpu" in workflow_text
     assert "scope=archive-workbench-gpu" in workflow_text
+    assert "ARCHIVE_WORKBENCH_GOOGLE_OAUTH_CLIENT_ID=${{ vars.ARCHIVE_WORKBENCH_GOOGLE_OAUTH_CLIENT_ID }}" in workflow_text
 
 
 def test_container_distribution_files_are_present() -> None:
@@ -233,12 +243,46 @@ def test_container_distribution_files_are_present() -> None:
         "docker/select-project-linux.sh",
         "docker/select-project-macos.sh",
         "docker/select-project-windows.ps1",
+        "docker/windows-runtime.ps1",
         "docker/image-tag.txt",
         "docker/gpu-image-tag.txt",
         ".github/workflows/publish-container.yml",
     )
     for relative in required:
         assert (ROOT / relative).is_file(), relative
+
+
+def test_windows_powershell_sources_with_non_ascii_are_utf8_bom() -> None:
+    for relative in (
+        "docker/select-project-windows.ps1",
+        "docker/windows-runtime.ps1",
+    ):
+        payload = (ROOT / relative).read_bytes()
+        assert payload.startswith(b"\xef\xbb\xbf"), relative
+        payload.decode("utf-8-sig")
+
+
+def test_windows_launcher_uses_safe_port_selection_and_ipv4_readiness() -> None:
+    helper = (ROOT / "docker" / "windows-runtime.ps1").read_text(encoding="utf-8-sig")
+    compose = (ROOT / "compose.yaml").read_text(encoding="utf-8")
+    cpu = (ROOT / "Start Archive Workbench - Windows.bat").read_text(encoding="utf-8")
+    gpu = (ROOT / "Start Archive Workbench - GPU - Windows.bat").read_text(encoding="utf-8")
+
+    assert '127.0.0.1:${AW_HOST_PORT:-8501}:8501' in compose
+    assert 'ARCHIVE_WORKBENCH_PUBLIC_URL: "http://127.0.0.1:${AW_HOST_PORT:-8501}"' in compose
+    assert "Test-LoopbackPortAvailable" in helper
+    assert "Archive Workbench no va a detener ni modificar ese proceso." in helper
+    assert "8502..8510" in helper
+    assert 'http://127.0.0.1:$Port/_stcore/health' in helper
+    assert '([string]$response.Content).Trim() -eq "ok"' in helper
+    assert "http://localhost:8501" not in helper
+    for source in (cpu, gpu):
+        assert "-Action SelectPort" in source
+        assert "-Action WaitReady" in source
+        assert "AW_HOST_PORT" in source
+        assert "http://127.0.0.1:%AW_HOST_PORT%" in source
+        assert "docker kill" not in source
+        assert "docker stop" not in source
 
 
 def test_host_project_picker_mounts_only_the_selected_project() -> None:

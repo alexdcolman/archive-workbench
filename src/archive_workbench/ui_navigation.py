@@ -259,29 +259,37 @@ def _context_help_renderer():
             icon.setAttribute('aria-describedby', description.id);
           };
 
-          const annotate = () => {
+          const scopedTargets = new Map();
+          const headingTargets = [];
+          for (const target of targets) {
+            const kind = String(target?.kind || '');
+            const scopeKey = String(target?.scope_key || '');
+            if (kind === 'heading') {
+              headingTargets.push(target);
+            } else if (scopeKey) {
+              if (!scopedTargets.has(scopeKey)) scopedTargets.set(scopeKey, []);
+              scopedTargets.get(scopeKey).push(target);
+            }
+          }
+
+          const annotateHeadings = () => {
+            if (!headingTargets.length) return;
+            for (const element of doc.querySelectorAll('h1, h2, h3, h4')) {
+              const elementLabel = cleanLabel(element);
+              for (const target of headingTargets) {
+                if (elementLabel === normalize(target?.label)) applyHeadingHelp(element, target);
+              }
+            }
+          };
+
+          const annotateScope = (scope, scopeTargets) => {
+            if (!scope) return;
             if (activeAnchor && (!activeAnchor.isConnected || !visible(activeAnchor))) hideTooltip();
-            for (const target of targets) {
+            for (const target of scopeTargets) {
               const kind = String(target?.kind || '');
               const label = normalize(target?.label);
               const help = String(target?.help || '');
               if (!label || !help) continue;
-
-              if (kind === 'heading') {
-                for (const element of doc.querySelectorAll('h1, h2, h3, h4')) {
-                  if (cleanLabel(element) === label) applyHeadingHelp(element, target);
-                }
-                continue;
-              }
-
-              const scopeKey = String(target?.scope_key || '');
-              if (!scopeKey) continue;
-              const className = `st-key-${scopeKey}`;
-              const scope = Array.from(doc.querySelectorAll('[class]')).find((element) =>
-                Array.from(element.classList || []).includes(className)
-              );
-              if (!scope) continue;
-
               if (kind === 'tab') {
                 for (const element of scope.querySelectorAll('[role="tab"]')) {
                   if (cleanLabel(element) === label) applyTabHelp(element, target);
@@ -292,12 +300,36 @@ def _context_help_renderer():
             }
           };
 
-          annotate();
-          win.requestAnimationFrame(annotate);
-          const observer = new MutationObserver(annotate);
-          observer.observe(doc.body, {childList: true, subtree: true, characterData: true});
+          const observers = [];
+          const attachScope = (scopeKey, scopeTargets) => {
+            const className = `st-key-${scopeKey}`;
+            const scope = doc.getElementsByClassName(className)[0] || null;
+            if (!scope) return false;
+            annotateScope(scope, scopeTargets);
+            const watchesTabs = scopeTargets.some((target) => String(target?.kind || '') === 'tab');
+            const observedRoot = watchesTabs
+              ? (scope.querySelector('[role="tablist"]') || scope)
+              : scope;
+            const observer = new MutationObserver(() => annotateScope(scope, scopeTargets));
+            observer.observe(observedRoot, {childList: true, subtree: true});
+            observers.push(observer);
+            return true;
+          };
+
+          annotateHeadings();
+          win.requestAnimationFrame(annotateHeadings);
+          for (const [scopeKey, scopeTargets] of scopedTargets.entries()) {
+            if (attachScope(scopeKey, scopeTargets)) continue;
+            let attempts = 0;
+            const retry = () => {
+              attempts += 1;
+              if (attachScope(scopeKey, scopeTargets) || attempts >= 8) return;
+              win.requestAnimationFrame(retry);
+            };
+            win.requestAnimationFrame(retry);
+          }
           return () => {
-            observer.disconnect();
+            observers.forEach((observer) => observer.disconnect());
             hideTooltip();
           };
         }
@@ -406,9 +438,7 @@ def _tab_state_keeper_renderer():
             return normalize(clone.textContent);
           };
           const className = `st-key-${scopeKey}`;
-          const findScope = () => Array.from(doc.querySelectorAll('[class]')).find((element) =>
-            Array.from(element.classList || []).includes(className)
-          );
+          const findScope = () => doc.getElementsByClassName(className)[0] || null;
 
           const bound = new Map();
           const remember = (tab) => {
@@ -417,37 +447,52 @@ def _tab_state_keeper_renderer():
           };
           const bind = (tab) => {
             if (bound.has(tab)) return;
-            const handler = () => win.requestAnimationFrame(() => remember(tab));
+            const handler = () => remember(tab);
             tab.addEventListener('click', handler, true);
             bound.set(tab, handler);
           };
 
           let forced = false;
-          const restore = () => {
-            const scope = findScope();
-            if (!scope) return;
+          let observer = null;
+          const restore = (scope) => {
+            if (!scope) return false;
             const tabs = Array.from(scope.querySelectorAll('[role="tab"]'));
-            if (!tabs.length) return;
+            if (!tabs.length) return false;
             tabs.forEach(bind);
 
             const stored = win.sessionStorage.getItem(storageKey);
             const target = (!forced && forcePreferred && labels.has(preferred))
               ? preferred
               : (labels.has(stored) ? stored : preferred);
-            if (!labels.has(target)) return;
+            if (!labels.has(target)) return true;
             const tab = tabs.find((candidate) => cleanLabel(candidate) === target);
-            if (!tab) return;
+            if (!tab) return true;
             if (tab.getAttribute('aria-selected') !== 'true') tab.click();
             win.sessionStorage.setItem(storageKey, target);
             if (forcePreferred) forced = true;
+            return true;
           };
 
-          restore();
-          win.requestAnimationFrame(restore);
-          const observer = new MutationObserver(restore);
-          observer.observe(doc.body, {childList: true, subtree: true, attributes: true});
+          const attach = () => {
+            const scope = findScope();
+            if (!scope || !restore(scope)) return false;
+            const tablist = scope.querySelector('[role="tablist"]') || scope;
+            observer = new MutationObserver(() => restore(scope));
+            observer.observe(tablist, {childList: true, subtree: true});
+            return true;
+          };
+
+          if (!attach()) {
+            let attempts = 0;
+            const retry = () => {
+              attempts += 1;
+              if (attach() || attempts >= 8) return;
+              win.requestAnimationFrame(retry);
+            };
+            win.requestAnimationFrame(retry);
+          }
           return () => {
-            observer.disconnect();
+            if (observer) observer.disconnect();
             for (const [tab, handler] of bound.entries()) {
               try { tab.removeEventListener('click', handler, true); } catch (error) {}
             }

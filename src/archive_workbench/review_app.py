@@ -179,12 +179,16 @@ from archive_workbench.team_copy import (
 )
 from archive_workbench.google_drive_transport import (
     authorize_google_drive,
+    complete_google_drive_authorization,
     connection_status as google_drive_connection_status,
     default_client_secret_path as google_drive_default_client_secret_path,
     default_token_path as google_drive_default_token_path,
     download_archive_workbench_zip_from_drive,
+    get_drive_file_metadata,
     inspect_drive_artifact,
+    load_picker_result as google_drive_load_picker_result,
     pick_drive_exchange_bundle,
+    prepare_google_drive_authorization,
     upload_archive_workbench_zip_to_drive,
 )
 
@@ -2908,18 +2912,89 @@ def _save_uploaded_zip(project_root: Path, uploaded, *, namespace: str) -> Path:
     return destination
 
 
+def _google_drive_query_param(st, name: str) -> str:
+    value = st.query_params.get(name)
+    if isinstance(value, list):
+        value = value[0] if value else ""
+    return str(value or "").strip()
+
+
+def _handle_google_drive_oauth_callback(st) -> None:
+    flash = st.session_state.pop("google_drive_oauth_flash", None)
+    if flash:
+        st.success(str(flash))
+
+    error = _google_drive_query_param(st, "error")
+    code = _google_drive_query_param(st, "code")
+    state = _google_drive_query_param(st, "state")
+    picked_file_ids = _google_drive_query_param(st, "picked_file_ids")
+    if not error and not code and not state:
+        return
+
+    if error:
+        st.query_params.clear()
+        st.error(f"Google Drive no fue autorizado: {error}")
+        return
+    if not code or not state:
+        st.query_params.clear()
+        st.error("La respuesta de Google Drive está incompleta. Iniciá la conexión nuevamente.")
+        return
+
+    try:
+        result = complete_google_drive_authorization(
+            code=code,
+            state=state,
+            picked_file_ids=picked_file_ids,
+            token_path=google_drive_default_token_path(),
+        )
+    except (ValueError, RuntimeError, OSError) as exc:
+        st.query_params.clear()
+        st.error(str(exc))
+        return
+
+    if result.picked_file_ids:
+        message = (
+            "El ZIP quedó autorizado en Google Drive. Podés volver a la pestaña donde lo elegiste "
+            "y usar esa selección."
+        )
+    else:
+        message = "Google Drive quedó conectado en esta computadora."
+    st.session_state["google_drive_oauth_flash"] = message
+    st.query_params.clear()
+    st.success(message)
+
+
 def _render_google_drive_connection(
     st,
     *,
     key_prefix: str,
-) -> tuple[Path, Path] | None:
-    """Devuelve las rutas de Drive cuando hay conexión o muestra el alta a demanda."""
+) -> tuple[Path | None, Path] | None:
+    """Devuelve el cliente/token disponible o muestra el alta OAuth correspondiente."""
 
     token_path = google_drive_default_token_path()
     client_path = google_drive_default_client_secret_path()
     status = google_drive_connection_status(token_path)
+    workspace = managed_workspace()
     if status in {"connected", "expired"}:
-        return client_path, token_path
+        return (None if workspace is not None else client_path), token_path
+
+    if workspace is not None:
+        try:
+            authorization_url = prepare_google_drive_authorization()
+        except (ValueError, RuntimeError, OSError) as exc:
+            st.warning(str(exc))
+            return None
+        st.link_button(
+            "Conectar Google Drive",
+            authorization_url,
+            type="primary",
+            use_container_width=True,
+        )
+        st.caption(
+            "Se abrirá Google en una pestaña del navegador. Cada integrante autoriza su propia cuenta; "
+            "el token queda guardado sólo en ArchiveWorkbenchData/Settings de esta computadora."
+        )
+        return None
 
     panel_key = f"{key_prefix}_connect_open"
     if not st.session_state.get(panel_key, False):
@@ -2934,8 +3009,8 @@ def _render_google_drive_connection(
         value=str(client_path),
         key=f"{key_prefix}_client_secret_path",
         help=(
-            "Elegí el JSON del cliente OAuth de escritorio descargado desde Google Cloud. "
-            "Archive Workbench solicita únicamente el permiso drive.file."
+            "En una instalación nativa de desarrollo podés indicar el JSON de un cliente OAuth "
+            "de escritorio. La distribución administrada no requiere este archivo por persona."
         ),
     )
     client_path = Path(client_path_text).expanduser()
@@ -3019,7 +3094,39 @@ def _render_google_drive_receive(
         return
     client_path, token_path = connection
 
-    if st.button("Elegir ZIP en Google Drive", key="exchange_drive_pick_button"):
+    if managed_workspace() is not None:
+        try:
+            picker_url = prepare_google_drive_authorization(picker=True)
+        except (ValueError, RuntimeError, OSError) as exc:
+            st.error(str(exc))
+            picker_url = None
+        if picker_url:
+            st.link_button(
+                "Elegir ZIP en Google Drive",
+                picker_url,
+                use_container_width=True,
+            )
+            st.caption(
+                "Después de elegir el ZIP en Google, volvé a esta pestaña y confirmá la selección."
+            )
+            if st.button("Usar el ZIP elegido", key="exchange_drive_pick_result_button"):
+                picked = google_drive_load_picker_result()
+                if not picked:
+                    st.warning("Todavía no hay una selección reciente de Google Drive para usar.")
+                else:
+                    try:
+                        file_id = picked[0]
+                        metadata = get_drive_file_metadata(
+                            file_id,
+                            client_secret_path=client_path,
+                            token_path=token_path,
+                        )
+                    except (ValueError, RuntimeError, OSError) as exc:
+                        st.error(str(exc))
+                    else:
+                        st.session_state["exchange_drive_selected_file"] = (file_id, metadata)
+                        st.session_state.pop("exchange_drive_downloaded_artifact", None)
+    elif st.button("Elegir ZIP en Google Drive", key="exchange_drive_pick_button"):
         try:
             with st.spinner("Elegí el archivo en la pestaña de Google Drive…"):
                 file_id, metadata = pick_drive_exchange_bundle(
@@ -4874,6 +4981,7 @@ def main() -> None:
     import streamlit as st
 
     st.set_page_config(page_title="Archive Workbench", layout="wide")
+    _handle_google_drive_oauth_callback(st)
     _render_global_input_policy(st)
     project_root = _project_root_from_argv()
     if project_root is None:
