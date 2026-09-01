@@ -929,23 +929,30 @@ def _render_transcription_workspace(
     seek_to = st.session_state.pop("av_pending_seek_seconds", None)
     sync_action = None
     if playback_path is None:
-        st.warning(
-            "Este formato está registrado, pero necesita una copia técnica para reproducción en el navegador."
-        )
-        if st.button("Preparar copia para reproducción", type="primary"):
-            result = _run_db_action(
-                st,
-                db_path=db_path,
-                callback=lambda session: ensure_playback_asset(
-                    session,
-                    project_root=project_root,
-                    media_id=media_id,
-                    actor=actor,
-                ),
+        if media_row.local_path is None:
+            st.warning(
+                "El archivo audiovisual original no está disponible en esta copia del proyecto. "
+                "La transcripción, las anotaciones y los metadatos guardados siguen disponibles; "
+                "la reproducción y las operaciones que requieren el medio original quedan deshabilitadas."
             )
-            if result is not None:
-                st.session_state["av_flash"] = "Copia de reproducción preparada."
-                rerun_view(st)
+        else:
+            st.warning(
+                "Este formato está registrado, pero necesita una copia técnica para reproducción en el navegador."
+            )
+            if st.button("Preparar copia para reproducción", type="primary"):
+                result = _run_db_action(
+                    st,
+                    db_path=db_path,
+                    callback=lambda session: ensure_playback_asset(
+                        session,
+                        project_root=project_root,
+                        media_id=media_id,
+                        actor=actor,
+                    ),
+                )
+                if result is not None:
+                    st.session_state["av_flash"] = "Copia de reproducción preparada."
+                    rerun_view(st)
     elif selected_run is not None and selected_run["status"] == "completed" and segments:
         player_col, review_col = st.columns([1.02, 0.98], gap="large")
         with player_col:

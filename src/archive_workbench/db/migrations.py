@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from importlib.resources import as_file, files
 from pathlib import Path
+import threading
 
 from alembic import command
 from alembic.config import Config
@@ -9,6 +10,9 @@ from alembic.script import ScriptDirectory
 from sqlalchemy import inspect
 
 from archive_workbench.db.session import create_sqlite_engine, database_path, sqlite_url
+
+
+_MIGRATION_LOCK = threading.RLock()
 
 
 def _new_config(db_path: Path, migrations_path: Path) -> Config:
@@ -19,11 +23,20 @@ def _new_config(db_path: Path, migrations_path: Path) -> Config:
 
 
 def upgrade_database(project_root: str | Path, revision: str = "head") -> Path:
+    """Ejecuta Alembic de forma serial dentro del proceso actual.
+
+    Alembic mantiene proxies globales durante ``command.upgrade`` y no es seguro
+    ejecutar dos migraciones simultáneas desde sesiones/reruns de Streamlit.
+    Serializar este tramo evita bases parcialmente migradas y estados internos
+    de Alembic corruptos sin introducir migraciones implícitas adicionales.
+    """
+
     db_path = database_path(project_root)
     db_path.parent.mkdir(parents=True, exist_ok=True)
     migrations_ref = files("archive_workbench").joinpath("migrations")
-    with as_file(migrations_ref) as migrations_path:
-        command.upgrade(_new_config(db_path, migrations_path), revision)
+    with _MIGRATION_LOCK:
+        with as_file(migrations_ref) as migrations_path:
+            command.upgrade(_new_config(db_path, migrations_path), revision)
     return db_path
 
 

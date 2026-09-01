@@ -7,7 +7,7 @@ set "AW_PROFILE=cpu"
 if defined ARCHIVE_WORKBENCH_CPU_IMAGE (
   set "AW_IMAGE=%ARCHIVE_WORKBENCH_CPU_IMAGE%"
 ) else (
-  set "AW_IMAGE=ghcr.io/alexdcolman/archive-workbench:0.89.0-rc81-cpu"
+  set "AW_IMAGE=ghcr.io/alexdcolman/archive-workbench:0.89.0-rc82-cpu"
 )
 set "ARCHIVE_WORKBENCH_CPU_IMAGE=%AW_IMAGE%"
 

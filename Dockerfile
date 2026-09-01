@@ -3,6 +3,7 @@ FROM ghcr.io/ggml-org/llama.cpp:server-b10524 AS llama-server
 FROM ubuntu:24.04
 
 ARG ARCHIVE_WORKBENCH_GOOGLE_OAUTH_CLIENT_ID=""
+ARG ARCHIVE_WORKBENCH_GOOGLE_OAUTH_CLIENT_SECRET=""
 
 LABEL org.opencontainers.image.title="Archive Workbench" \
       org.opencontainers.image.description="Aplicación local para investigación archivística - CPU" \
@@ -20,7 +21,8 @@ ENV DEBIAN_FRONTEND=noninteractive \
     LLAMA_CPP_BINARY=/opt/llama/llama-server \
     SURYA_INFERENCE_BACKEND=llamacpp \
     ARCHIVE_WORKBENCH_SURYA_BACKEND=llamacpp \
-    ARCHIVE_WORKBENCH_GOOGLE_OAUTH_CLIENT_ID="${ARCHIVE_WORKBENCH_GOOGLE_OAUTH_CLIENT_ID}"
+    ARCHIVE_WORKBENCH_GOOGLE_OAUTH_CLIENT_ID="${ARCHIVE_WORKBENCH_GOOGLE_OAUTH_CLIENT_ID}" \
+    ARCHIVE_WORKBENCH_GOOGLE_OAUTH_CLIENT_SECRET="${ARCHIVE_WORKBENCH_GOOGLE_OAUTH_CLIENT_SECRET}"
 
 RUN apt-get update && apt-get install -y --no-install-recommends \
       ca-certificates \

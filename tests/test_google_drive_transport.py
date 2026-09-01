@@ -146,11 +146,12 @@ def test_managed_oauth_uses_embedded_client_and_persists_token_in_settings(
     monkeypatch.setenv("ARCHIVE_WORKBENCH_WORKSPACE_ROOT", str(workspace))
     monkeypatch.setenv("ARCHIVE_WORKBENCH_SETTINGS_ROOT", str(settings))
     monkeypatch.setenv(GOOGLE_OAUTH_CLIENT_ID_ENV, "managed-client.apps.googleusercontent.com")
+    monkeypatch.setenv("ARCHIVE_WORKBENCH_GOOGLE_OAUTH_CLIENT_SECRET", "managed-secret")
     monkeypatch.setenv(GOOGLE_OAUTH_PUBLIC_URL_ENV, "http://127.0.0.1:8507")
 
     client = configured_oauth_client()
     assert client.client_id == "managed-client.apps.googleusercontent.com"
-    assert client.client_secret is None
+    assert client.client_secret == "managed-secret"
     assert default_token_path() == settings / "google_drive_token.json"
 
     authorization_url = prepare_google_drive_authorization(picker=True)
@@ -183,7 +184,7 @@ def test_managed_oauth_uses_embedded_client_and_persists_token_in_settings(
     assert load_picker_result() == ("drive-file-1",)
     assert requests[0][1]["code_verifier"]
     assert requests[0][1]["redirect_uri"] == "http://127.0.0.1:8507"
-    assert "client_secret" not in requests[0][1]
+    assert requests[0][1]["client_secret"] == "managed-secret"
 
 
 def test_managed_google_drive_ui_uses_host_browser_callback_without_per_user_json():

@@ -8,7 +8,15 @@ import yaml
 
 from archive_workbench.contracts.decisions import ProjectDecisions
 
-from archive_workbench.db import current_revision, database_path, upgrade_database
+from archive_workbench.db import (
+    create_sqlite_engine,
+    current_revision,
+    database_path,
+    session_scope,
+    upgrade_database,
+)
+from archive_workbench.catalog import ensure_project
+from archive_workbench.decisions import load_decisions
 from archive_workbench.identity import slugify
 from archive_workbench.project_init import initialize_project
 
@@ -51,6 +59,13 @@ def create_ready_project(destination: Path, *, project_name: str, project_id: st
         project_id=project_id,
     )
     upgrade_database(root)
+    decisions = load_decisions(root / "config" / "decisions.yaml")
+    engine = create_sqlite_engine(database_path(root))
+    try:
+        with session_scope(engine) as session:
+            ensure_project(session, decisions)
+    finally:
+        engine.dispose()
     return root
 
 

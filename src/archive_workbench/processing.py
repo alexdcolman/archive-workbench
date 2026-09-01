@@ -280,6 +280,8 @@ def failed_extraction_pages(session: Session, *, source_key: str) -> list[int]:
 def processing_inventory_rows(
     session: Session, *, project_root: str | Path, project_id: str
 ) -> list[ProcessingInventoryRow]:
+    """Construye el inventario con consultas acotadas al proyecto, sin N+1 por documento."""
+
     root = Path(project_root).resolve()
     paths = _archival_paths(session, project_id)
     registrations = session.execute(
@@ -293,62 +295,116 @@ def processing_inventory_rows(
         )
         .order_by(ArchivalUnit.title, SourceRegistration.source_key)
     ).all()
+    if not registrations:
+        return []
+
+    digital_ids = [digital.id for _registration, digital, _unit in registrations]
+    source_keys = [registration.source_key for registration, _digital, _unit in registrations]
+
+    files_by_digital: dict[str, list[FileInstance]] = {value: [] for value in digital_ids}
+    for row in session.scalars(
+        select(FileInstance).where(FileInstance.digital_object_id.in_(digital_ids))
+    ).all():
+        files_by_digital.setdefault(row.digital_object_id, []).append(row)
+
+    preprocessing_by_digital: dict[str, list[PreprocessingRun]] = {value: [] for value in digital_ids}
+    for row in session.scalars(
+        select(PreprocessingRun)
+        .where(PreprocessingRun.digital_object_id.in_(digital_ids))
+        .order_by(PreprocessingRun.digital_object_id, PreprocessingRun.created_at.desc())
+    ).all():
+        preprocessing_by_digital.setdefault(row.digital_object_id, []).append(row)
+
+    extraction_by_digital: dict[str, list[ExtractionRun]] = {value: [] for value in digital_ids}
+    all_extraction_runs = session.scalars(
+        select(ExtractionRun)
+        .where(ExtractionRun.digital_object_id.in_(digital_ids))
+        .order_by(ExtractionRun.digital_object_id, ExtractionRun.created_at.desc())
+    ).all()
+    for row in all_extraction_runs:
+        extraction_by_digital.setdefault(row.digital_object_id, []).append(row)
+
+    extraction_pages_by_run: dict[str, list[ExtractionPage]] = {}
+    run_ids = [row.id for row in all_extraction_runs]
+    if run_ids:
+        for row in session.scalars(
+            select(ExtractionPage).where(ExtractionPage.extraction_run_id.in_(run_ids))
+        ).all():
+            extraction_pages_by_run.setdefault(row.extraction_run_id, []).append(row)
+
+    selections_by_digital: dict[str, set[int]] = {value: set() for value in digital_ids}
+    for digital_id, page_number in session.execute(
+        select(ExtractionPageSelection.digital_object_id, ExtractionPageSelection.page_number)
+        .where(ExtractionPageSelection.digital_object_id.in_(digital_ids))
+    ).all():
+        selections_by_digital.setdefault(digital_id, set()).add(page_number)
+
+    editable_by_digital: dict[str, list[EditablePage]] = {value: [] for value in digital_ids}
+    for row in session.scalars(
+        select(EditablePage).where(EditablePage.digital_object_id.in_(digital_ids))
+    ).all():
+        editable_by_digital.setdefault(row.digital_object_id, []).append(row)
+
+    active_operations: dict[str, str] = {}
+    active_rows = session.execute(
+        select(ProcessingJobItem.source_key, ProcessingJob.operation, ProcessingJob.created_at)
+        .join(ProcessingJob, ProcessingJobItem.processing_job_id == ProcessingJob.id)
+        .where(
+            ProcessingJobItem.source_key.in_(source_keys),
+            ProcessingJob.status.in_(("queued", "running")),
+            ProcessingJobItem.status.in_(("queued", "running")),
+        )
+        .order_by(ProcessingJob.created_at.desc())
+    ).all()
+    for source_key, operation, _created_at in active_rows:
+        active_operations.setdefault(source_key, operation)
+
+    def latest_run(rows):
+        current = [row for row in rows if bool(row.is_current)]
+        return current[0] if current else (rows[0] if rows else None)
+
     output: list[ProcessingInventoryRow] = []
     for registration, digital, unit in registrations:
-        file_rows = session.scalars(
-            select(FileInstance).where(FileInstance.digital_object_id == digital.id)
-        ).all()
         file_presence, local_path = _local_file_state(
-            project_root=root, digital=digital, files=file_rows
+            project_root=root, digital=digital, files=files_by_digital.get(digital.id, [])
         )
-        preprocessing = _latest_run(
-            session, PreprocessingRun, digital_object_id=digital.id
+        preprocessing_rows = preprocessing_by_digital.get(digital.id, [])
+        preprocessing = latest_run(preprocessing_rows)
+        preprocessing_ready = any(
+            bool(row.is_current) and row.status in _SUCCESS_RUN_STATUSES
+            for row in preprocessing_rows
         )
-        preprocessing_ready = session.scalar(
-            select(PreprocessingRun.id)
-            .where(
-                PreprocessingRun.digital_object_id == digital.id,
-                PreprocessingRun.is_current.is_(True),
-                PreprocessingRun.status.in_(_SUCCESS_RUN_STATUSES),
-            )
-            .limit(1)
-        ) is not None
-        extraction = _latest_run(session, ExtractionRun, digital_object_id=digital.id)
-        successful_runs = session.scalars(
-            select(ExtractionRun.id).where(
-                ExtractionRun.digital_object_id == digital.id,
-                ExtractionRun.status.in_(_SUCCESS_RUN_STATUSES),
-            )
-        ).all()
-        extracted_pages: set[int] = set()
-        if successful_runs:
-            extracted_pages = set(
-                session.scalars(
-                    select(ExtractionPage.page_number).where(
-                        ExtractionPage.extraction_run_id.in_(successful_runs),
-                        ExtractionPage.status.in_(_SUCCESS_PAGE_STATUSES),
-                    )
-                ).all()
-            )
-        selected_page_numbers = set(
-            session.scalars(
-                select(ExtractionPageSelection.page_number).where(
-                    ExtractionPageSelection.digital_object_id == digital.id
-                )
-            ).all()
-        )
-        editable = session.scalars(
-            select(EditablePage).where(EditablePage.digital_object_id == digital.id)
-        ).all()
+
+        extraction_rows = extraction_by_digital.get(digital.id, [])
+        extraction = latest_run(extraction_rows)
+        successful_run_ids = {
+            row.id for row in extraction_rows if row.status in _SUCCESS_RUN_STATUSES
+        }
+        extracted_pages = {
+            page.page_number
+            for run_id in successful_run_ids
+            for page in extraction_pages_by_run.get(run_id, [])
+            if page.status in _SUCCESS_PAGE_STATUSES
+        }
+        selected_page_numbers = selections_by_digital.get(digital.id, set())
+        editable = editable_by_digital.get(digital.id, [])
         editable_active = [item for item in editable if item.status in {"active", "stale"}]
         reviewed = [item for item in editable_active if item.review_status in _REVIEWED_STATUSES]
         approved = [item for item in editable_active if item.review_status == "approved"]
+
         failed_pages: set[int] = set()
         if extraction is not None:
-            failed_pages = _run_failed_pages(
-                session, extraction, page_count=digital.page_count
-            )
-        active_operation = _active_processing_operation(session, registration.source_key)
+            page_rows = extraction_pages_by_run.get(extraction.id, [])
+            completed = {
+                item.page_number for item in page_rows if item.status in _SUCCESS_PAGE_STATUSES
+            }
+            failed_pages = {
+                item.page_number for item in page_rows if item.status not in _SUCCESS_PAGE_STATUSES
+            }
+            if extraction.status == "failed":
+                failed_pages |= _requested_pages(extraction, digital.page_count) - completed
+
+        active_operation = active_operations.get(registration.source_key)
         expected = set(range(1, (digital.page_count or 0) + 1))
         last_error: str | None = None
 

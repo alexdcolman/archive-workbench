@@ -118,8 +118,8 @@ def test_gpu_container_uses_cuda_cudnn_and_cuda_surya_runtime() -> None:
 def test_cross_platform_launchers_select_prebuilt_cpu_or_gpu_images() -> None:
     cpu_tag = (ROOT / "docker" / "image-tag.txt").read_text(encoding="utf-8").strip()
     gpu_tag = (ROOT / "docker" / "gpu-image-tag.txt").read_text(encoding="utf-8").strip()
-    assert cpu_tag == "0.89.0-rc81-cpu"
-    assert gpu_tag == "0.89.0-rc81-gpu"
+    assert cpu_tag == "0.89.0-rc82-cpu"
+    assert gpu_tag == "0.89.0-rc82-gpu"
 
     cpu_image = f"ghcr.io/alexdcolman/archive-workbench:{cpu_tag}"
     gpu_image = f"ghcr.io/alexdcolman/archive-workbench:{gpu_tag}"
@@ -222,6 +222,13 @@ def test_container_publish_workflow_targets_cpu_and_gpu_images() -> None:
     assert "scope=archive-workbench-cpu" in workflow_text
     assert "scope=archive-workbench-gpu" in workflow_text
     assert "ARCHIVE_WORKBENCH_GOOGLE_OAUTH_CLIENT_ID=${{ vars.ARCHIVE_WORKBENCH_GOOGLE_OAUTH_CLIENT_ID }}" in workflow_text
+    assert "ARCHIVE_WORKBENCH_GOOGLE_OAUTH_CLIENT_SECRET=${{ secrets.ARCHIVE_WORKBENCH_GOOGLE_OAUTH_CLIENT_SECRET }}" in workflow_text
+    for dockerfile in (
+        (ROOT / "Dockerfile").read_text(encoding="utf-8"),
+        (ROOT / "Dockerfile.gpu").read_text(encoding="utf-8"),
+    ):
+        assert 'ARG ARCHIVE_WORKBENCH_GOOGLE_OAUTH_CLIENT_SECRET=""' in dockerfile
+        assert 'ARCHIVE_WORKBENCH_GOOGLE_OAUTH_CLIENT_SECRET="${ARCHIVE_WORKBENCH_GOOGLE_OAUTH_CLIENT_SECRET}"' in dockerfile
 
 
 def test_container_distribution_files_are_present() -> None:

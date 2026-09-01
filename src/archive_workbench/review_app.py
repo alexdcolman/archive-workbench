@@ -5000,6 +5000,17 @@ def main() -> None:
         )
         st.stop()
 
+    try:
+        require_current_database(project_root)
+    except DatabaseRevisionError as exc:
+        st.error(
+            "La base local de este proyecto no quedó preparada para esta versión de Archive Workbench. "
+            "No se abrirán las secciones para evitar trabajar sobre un estado incompleto."
+        )
+        with st.expander("Ver detalle técnico"):
+            st.code(str(exc))
+        st.stop()
+
     decisions = load_decisions(decisions_path)
     preferences = load_user_preferences()
     try:
@@ -5032,16 +5043,28 @@ def main() -> None:
     type_definitions = [item for item in decisions.object_types if item.editable]
     type_keys = [item.key for item in type_definitions]
     type_labels = {item.key: item.label for item in type_definitions}
-    engine = create_sqlite_engine(db_path)
-    try:
-        with session_scope(engine) as session:
-            documents = review_document_rows(session)
-    finally:
-        engine.dispose()
 
-    document_map = {item.source_key: item for item in documents}
+    documents = []
+    document_map: dict[str, object] = {}
+    documents_loaded = False
+
+    def load_review_documents() -> None:
+        nonlocal documents, document_map, documents_loaded
+        if documents_loaded:
+            return
+        engine = create_sqlite_engine(db_path)
+        try:
+            with session_scope(engine) as session:
+                documents = review_document_rows(session)
+        finally:
+            engine.dispose()
+        document_map = {item.source_key: item for item in documents}
+        documents_loaded = True
+
     _apply_pending_app_mode(st)
-    _apply_pending_navigation(st, document_map)
+    if isinstance(st.session_state.get("review_pending_navigation"), dict):
+        load_review_documents()
+        _apply_pending_navigation(st, document_map)
     with st.sidebar:
         st.title("Archive Workbench")
         reviewer, active_palette = _render_preferences(
@@ -5067,6 +5090,10 @@ def main() -> None:
             )
             with st.popover("Guía de esta sección", use_container_width=True):
                 _render_section_guidance(st, app_mode)
+
+    if app_mode in {"review", "search"}:
+        load_review_documents()
+
     def render_active_view() -> None:
         if app_mode == "home":
             render_home_view(

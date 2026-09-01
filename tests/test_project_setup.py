@@ -2,7 +2,11 @@ from __future__ import annotations
 
 from pathlib import Path
 
+from sqlalchemy import select
+
 from archive_workbench.decisions import load_decisions
+from archive_workbench.db import create_sqlite_engine, database_path, session_scope
+from archive_workbench.db.models import Project
 from archive_workbench.project_setup import (
     add_standard_collection_level,
     create_ready_project,
@@ -33,6 +37,15 @@ def test_create_ready_project_builds_config_and_current_database(tmp_path: Path)
     assert (root / "config" / "extraction.yaml").is_file()
     assert (root / "data" / "archive_workbench.sqlite3").is_file()
     assert project_is_ready(root)
+    engine = create_sqlite_engine(database_path(root))
+    try:
+        with session_scope(engine) as session:
+            project = session.scalar(select(Project))
+            assert project is not None
+            assert project.id == "corpus_piloto"
+            assert project.name == "Corpus piloto"
+    finally:
+        engine.dispose()
 
 
 def test_update_archival_parent_keys_preserves_identity_and_changes_only_rules(tmp_path: Path) -> None:

@@ -2692,3 +2692,15 @@ def test_managed_distribution_uses_host_visible_workspace_instead_of_native_pick
 
     assert "if managed_workspace() is None:" in graph_source
     assert "workspace_display_path(target)" in graph_source
+
+
+def test_review_app_loads_review_documents_only_for_views_that_need_them() -> None:
+    source = (Path(__file__).parents[1] / "src" / "archive_workbench" / "review_app.py").read_text(
+        encoding="utf-8"
+    )
+    main_source = source[source.index("def main() -> None:") :]
+    assert "def load_review_documents() -> None:" in main_source
+    assert 'if app_mode in {"review", "search"}:' in main_source
+    assert 'if isinstance(st.session_state.get("review_pending_navigation"), dict):' in main_source
+    prefix = main_source[: main_source.index("def load_review_documents() -> None:")]
+    assert "review_document_rows(session)" not in prefix

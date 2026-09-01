@@ -931,12 +931,16 @@ def resolve_playback_path(
     digital = session.get(DigitalObject, media.digital_object_id)
     if digital is None:
         raise ValueError("El original audiovisual no existe")
-    source = _local_path(session, root, digital.id)
-    extension = source.suffix.lower()
-    if digital.media_type == MediaType.AUDIO.value and extension in _BROWSER_AUDIO_EXTENSIONS:
-        return source
-    if digital.media_type == MediaType.VIDEO.value and extension in _BROWSER_VIDEO_EXTENSIONS:
-        return source
+    try:
+        source = _local_path(session, root, digital.id)
+    except FileNotFoundError:
+        source = None
+    if source is not None:
+        extension = source.suffix.lower()
+        if digital.media_type == MediaType.AUDIO.value and extension in _BROWSER_AUDIO_EXTENSIONS:
+            return source
+        if digital.media_type == MediaType.VIDEO.value and extension in _BROWSER_VIDEO_EXTENSIONS:
+            return source
     asset = session.scalar(
         select(AudiovisualDerivativeAsset)
         .where(

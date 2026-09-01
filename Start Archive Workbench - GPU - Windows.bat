@@ -7,7 +7,7 @@ set "AW_PROFILE=gpu"
 if defined ARCHIVE_WORKBENCH_GPU_IMAGE (
   set "AW_IMAGE=%ARCHIVE_WORKBENCH_GPU_IMAGE%"
 ) else (
-  set "AW_IMAGE=ghcr.io/alexdcolman/archive-workbench:0.89.0-rc81-gpu"
+  set "AW_IMAGE=ghcr.io/alexdcolman/archive-workbench:0.89.0-rc82-gpu"
 )
 set "ARCHIVE_WORKBENCH_GPU_IMAGE=%AW_IMAGE%"
 

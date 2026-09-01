@@ -19,6 +19,7 @@ from archive_workbench.audiovisual import (
     run_audiovisual_export,
     register_transcription_backend,
     restore_transcription_run,
+    resolve_playback_path,
     search_transcript_segments,
     transcript_segment_rows,
     transcribe_audiovisual,
@@ -122,6 +123,35 @@ def test_media_detection_supports_audio_and_video_extensions(tmp_path: Path) -> 
     inspection = inspect_input(audio)
     assert inspection.media_type == MediaType.AUDIO
     assert inspection.page_count is None
+
+
+
+
+def test_audiovisual_workspace_tolerates_missing_original_file(tmp_path: Path) -> None:
+    root, decisions, engine, result, audio = _project(tmp_path)
+    try:
+        audio.unlink()
+        with session_scope(engine) as session:
+            media = session.scalar(
+                select(AudiovisualMedia).where(
+                    AudiovisualMedia.digital_object_id == result.digital_object_id
+                )
+            )
+            assert media is not None
+            rows = audiovisual_media_rows(
+                session, project_root=root, project_id=decisions.project_id
+            )
+            assert rows[0].local_path is None
+            assert resolve_playback_path(
+                session, project_root=root, media_id=media.id
+            ) is None
+        source = (Path(__file__).parents[1] / "src" / "archive_workbench" / "audiovisual_app.py").read_text(
+            encoding="utf-8"
+        )
+        assert "El archivo audiovisual original no está disponible en esta copia del proyecto" in source
+        assert "la reproducción y las operaciones que requieren el medio original quedan deshabilitadas" in source
+    finally:
+        engine.dispose()
 
 
 def test_audiovisual_migration_adds_temporal_tables(tmp_path: Path) -> None:

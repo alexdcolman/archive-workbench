@@ -2,7 +2,7 @@
 set -u
 SCRIPT_DIR=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)
 cd "$SCRIPT_DIR"
-IMAGE="${ARCHIVE_WORKBENCH_GPU_IMAGE:-ghcr.io/alexdcolman/archive-workbench:0.89.0-rc81-gpu}"
+IMAGE="${ARCHIVE_WORKBENCH_GPU_IMAGE:-ghcr.io/alexdcolman/archive-workbench:0.89.0-rc82-gpu}"
 export ARCHIVE_WORKBENCH_GPU_IMAGE="$IMAGE"
 
 if ! command -v docker >/dev/null 2>&1; then

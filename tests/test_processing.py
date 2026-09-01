@@ -228,6 +228,68 @@ def test_processing_inventory_follows_manual_canonical_flow(tmp_path: Path) -> N
         engine.dispose()
 
 
+
+
+def test_processing_inventory_query_count_is_bounded_for_many_documents(tmp_path: Path) -> None:
+    from sqlalchemy import event
+
+    root = tmp_path / "project"
+    decisions = load_decisions(Path(__file__).parents[1] / "config/decisions.yaml")
+    upgrade_database(root)
+    engine = create_sqlite_engine(database_path(root))
+    try:
+        with session_scope(engine) as session:
+            from archive_workbench.catalog import ensure_project
+            from archive_workbench.catalog_management import create_archival_unit, register_local_file
+
+            ensure_project(session, decisions)
+            root_level = next(
+                level
+                for level in sorted(decisions.archival_levels, key=lambda item: item.display_order)
+                if level.enabled and not level.parent_keys
+            )
+            unit = create_archival_unit(
+                session,
+                decisions=decisions,
+                project_id=decisions.project_id,
+                parent_id=None,
+                level_key=root_level.key,
+                title="Inventario",
+                created_by="tests",
+            )
+            for index in range(12):
+                path = root / "corpus" / f"doc_{index:02d}.pdf"
+                _write_pdf(path)
+                register_local_file(
+                    session,
+                    project_root=root,
+                    project_id=decisions.project_id,
+                    archival_unit_id=unit.id,
+                    relative_path=path.relative_to(root).as_posix(),
+                    registered_by="tests",
+                )
+
+        statements = 0
+
+        def count_statement(*_args, **_kwargs):
+            nonlocal statements
+            statements += 1
+
+        event.listen(engine, "before_cursor_execute", count_statement)
+        try:
+            with session_scope(engine) as session:
+                rows = processing_inventory_rows(
+                    session, project_root=root, project_id=decisions.project_id
+                )
+        finally:
+            event.remove(engine, "before_cursor_execute", count_statement)
+
+        assert len(rows) == 12
+        assert statements <= 12
+    finally:
+        engine.dispose()
+
+
 def test_failed_page_retry_uses_missing_pages_from_latest_failed_run(tmp_path: Path) -> None:
     root = tmp_path / "project"
     _write_pdf(root / "corpus/doc.pdf", pages=2)

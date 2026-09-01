@@ -1831,3 +1831,37 @@ def test_authority_relation_profile_migration_adds_nullable_json_columns(tmp_pat
     assert authority_columns["profile_json"]["nullable"] is True
     assert "profile_json" in relation_columns
     assert relation_columns["profile_json"]["nullable"] is True
+
+
+def test_upgrade_database_serializes_concurrent_alembic_calls(tmp_path: Path, monkeypatch) -> None:
+    import threading
+    import time
+
+    from archive_workbench.db import migrations as migration_module
+
+    active = 0
+    peak = 0
+    guard = threading.Lock()
+
+    def fake_upgrade(_config, _revision):
+        nonlocal active, peak
+        with guard:
+            active += 1
+            peak = max(peak, active)
+        time.sleep(0.05)
+        with guard:
+            active -= 1
+
+    monkeypatch.setattr(migration_module.command, "upgrade", fake_upgrade)
+    roots = [tmp_path / "one", tmp_path / "two"]
+    threads = [
+        threading.Thread(target=migration_module.upgrade_database, args=(root,))
+        for root in roots
+    ]
+    for thread in threads:
+        thread.start()
+    for thread in threads:
+        thread.join(timeout=2)
+        assert not thread.is_alive()
+
+    assert peak == 1
