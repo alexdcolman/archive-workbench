@@ -447,13 +447,19 @@ def _tab_state_keeper_renderer():
           };
           const bind = (tab) => {
             if (bound.has(tab)) return;
-            const handler = () => remember(tab);
-            tab.addEventListener('click', handler, true);
-            bound.set(tab, handler);
+            const pointerHandler = () => remember(tab);
+            const keyboardHandler = (event) => {
+              if (event.key === 'Enter' || event.key === ' ') remember(tab);
+            };
+            // Recordar antes de que el tab nativo procese el gesto evita que una
+            // restauración visual compita con el primer clic. No se cancela ni se
+            // sustituye el comportamiento nativo del tab.
+            tab.addEventListener('pointerdown', pointerHandler, true);
+            tab.addEventListener('keydown', keyboardHandler, true);
+            bound.set(tab, {pointerHandler, keyboardHandler});
           };
 
           let forced = false;
-          let observer = null;
           const restore = (scope) => {
             if (!scope) return false;
             const tabs = Array.from(scope.querySelectorAll('[role="tab"]'));
@@ -475,11 +481,7 @@ def _tab_state_keeper_renderer():
 
           const attach = () => {
             const scope = findScope();
-            if (!scope || !restore(scope)) return false;
-            const tablist = scope.querySelector('[role="tablist"]') || scope;
-            observer = new MutationObserver(() => restore(scope));
-            observer.observe(tablist, {childList: true, subtree: true});
-            return true;
+            return Boolean(scope && restore(scope));
           };
 
           if (!attach()) {
@@ -492,9 +494,9 @@ def _tab_state_keeper_renderer():
             win.requestAnimationFrame(retry);
           }
           return () => {
-            if (observer) observer.disconnect();
-            for (const [tab, handler] of bound.entries()) {
-              try { tab.removeEventListener('click', handler, true); } catch (error) {}
+            for (const [tab, handlers] of bound.entries()) {
+              try { tab.removeEventListener('pointerdown', handlers.pointerHandler, true); } catch (error) {}
+              try { tab.removeEventListener('keydown', handlers.keyboardHandler, true); } catch (error) {}
             }
           };
         }

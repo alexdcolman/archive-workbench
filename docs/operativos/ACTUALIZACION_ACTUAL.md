@@ -1,78 +1,67 @@
-# Actualización actual - Archive Workbench 0.89.0 RC82
+# Actualización actual - Archive Workbench 0.89.0 RC83
 
 ## Estado de partida
 
-RC81 fue publicada correctamente como imagen CPU multi-arquitectura `linux/amd64` + `linux/arm64` e imagen NVIDIA GPU `linux/amd64`. El workflow de publicación terminó en verde para ambos jobs. RC81 ya había corregido el selector Windows a UTF-8 con BOM y alineado puerto/readiness sobre `127.0.0.1`; RC82 conserva esos cierres. Las validaciones Linux ya cerradas incluyen Surya CPU/GPU y transcripción audiovisual CUDA; RC82 no reabre esos runtimes. La validación Windows CPU confirmó que la reducción de observers globales eliminó prácticamente el lag al cambiar de pestaña, pero con un proyecto real de 138 documentos todavía se observan aproximadamente 2-3 segundos al cambiar de sección y alrededor de 7 segundos al entrar en `Organizar trabajo` y `Procesar documentos`.
+RC82 quedó publicada correctamente como imagen CPU multi-arquitectura `linux/amd64` + `linux/arm64` e imagen NVIDIA GPU `linux/amd64`. La validación material Windows CPU quedó verde en todos los bloques afectados por RC82: un proyecto nuevo abre directamente `Administrar y recuperar` e `Intercambiar cambios`, Google Drive completa OAuth y conserva el token local, una copia sin originales audiovisuales mantiene transcripciones y metadatos sin traceback, y el proyecto real de 138 documentos redujo la entrada a `Organizar trabajo` y `Procesar documentos` a aproximadamente un segundo; el resto de los cambios de sección resultó casi inmediato.
 
-La misma validación abrió cuatro defectos concretos: Google Drive falla en el canje OAuth con `HTTP 400` / `client secret is missing`; un proyecto creado desde el inicio general puede tener la base migrada pero no una fila `Project` hasta visitar Catálogo, lo que rompe `Administrar y recuperar` e `Intercambiar cambios`; una copia deliberadamente preparada sin originales audiovisuales puede propagar `FileNotFoundError`; y los servicios Docker iniciados con `up -d` permanecen activos después de cerrar navegador/ventana, lo que necesita una solución de ciclo de vida comprensible para personas no técnicas.
+Esa validación dejó tres cuestiones de experiencia concretas. Primero, el título de una pestaña necesita dos clics: el primer gesto sólo la focaliza y el segundo cambia realmente de pestaña. Segundo, una copia completa descargada y verificada desde Google Drive obliga a salir de la aplicación y abrir manualmente otra carpeta aunque el proyecto actual esté vacío. Tercero, cerrar el navegador no detiene el servicio Docker iniciado en modo desacoplado.
 
-## Alcance de RC82
+## Alcance de RC83
 
-RC82 corrige los tres defectos funcionales reproducidos y la causa principal de latencia en las secciones con inventario documental. El ciclo de vida amigable del contenedor queda registrado como pendiente de `OPS-01` para una decisión específica posterior. RC82 no cambia el esquema SQLite, no agrega migración y continúa `0047_authority_relation_profiles`. No ejecutar `db-upgrade` por esta candidata.
+RC83 corrige exclusivamente esos tres bloques. RC83 no cambia el esquema SQLite, no agrega migración y continúa `0047_authority_relation_profiles`. No ejecutar `db-upgrade` por esta candidata. Los arreglos funcionales y de rendimiento ya validados en RC82 no se reabren.
 
-### 1. Google Drive con cliente OAuth de escritorio completo
+### 1. Pestañas con un solo clic y sin rerun global
 
-La distribución administrada conserva `https://www.googleapis.com/auth/drive.file`, PKCE y tokens locales bajo `ArchiveWorkbenchData/Settings`. Además del `client_id`, las imágenes incorporan el `client_secret` correspondiente al cliente OAuth de escritorio mediante `ARCHIVE_WORKBENCH_GOOGLE_OAUTH_CLIENT_SECRET`. El workflow lee ese valor desde un GitHub Actions secret homónimo; no se distribuye un JSON por integrante y cada persona autoriza únicamente su propia cuenta.
+`tracked_tabs` sigue siendo navegación visual pasiva: no envía estado ni triggers a Python y conserva la selección en `sessionStorage`. RC83 elimina el observer del conservador de pestañas y registra la intención del usuario en `pointerdown` antes de que el tab nativo procese el clic. El comportamiento nativo no se cancela ni se sustituye. El teclado conserva Enter/Espacio. Así se evita que la restauración visual compita con el primer clic sin reintroducir reruns globales.
 
-Antes de publicar RC82 deben existir:
+### 2. Adoptar una copia completa dentro del proyecto vacío
 
-- variable de repositorio `ARCHIVE_WORKBENCH_GOOGLE_OAUTH_CLIENT_ID`;
-- secret de repositorio `ARCHIVE_WORKBENCH_GOOGLE_OAUTH_CLIENT_SECRET`.
+Cuando `Descargar y verificar ZIP` o el selector local reconoce una `team_copy`, la interfaz ya no termina con instrucciones de extracción manual. Si el proyecto abierto está vacío, ofrece **Usar esta copia en este proyecto**. La operación exige confirmación explícita, verifica el paquete, prepara primero una staging temporal, valida la revisión SQLite recibida, reidentifica allí la copia de equipo, crea una copia de seguridad del proyecto vacío y sólo entonces reemplaza de forma atómica configuración, base y contenido transportado. El ZIP de transporte y los backups locales del proyecto receptor se conservan. Al terminar, la misma sesión vuelve a Inicio sobre la misma carpeta mediante un rerun controlado.
 
-### 2. Creación de proyectos y Alembic sin estado parcial
+Esta operación está deliberadamente restringida a un proyecto sin unidades archivísticas, objetos digitales ni autoridades. Si el proyecto actual ya contiene trabajo, una copia completa no se mezcla automáticamente: para combinar trabajo entre copias corresponde un paquete incremental de cambios, con su comparación, conflictos y aplicación existentes.
 
-`create_ready_project()` ya no termina después de crear archivos y migrar la base: registra inmediatamente el `Project` definido por `decisions.yaml` dentro de la misma preparación. Así, `Administrar y recuperar` e `Intercambiar cambios` no dependen de que la persona visite primero Catálogo.
+### 3. Cierre explícito de la distribución administrada
 
-`upgrade_database()` serializa las ejecuciones de Alembic dentro del proceso para impedir migraciones simultáneas desde sesiones o reruns de Streamlit. El log material de RC81 mostró una migración 0037 interrumpida con `no such table: main.exchange_state_adoptions` y un segundo intento que terminó en `KeyError: 'script'`, patrón compatible con reentrada concurrente de los proxies globales de Alembic. RC82 evita esa concurrencia sin agregar migraciones implícitas.
+Cuando Archive Workbench se ejecuta dentro del workspace administrado aparece **Cerrar Archive Workbench** en la barra lateral. La acción requiere un botón explícito y termina únicamente la instancia actual. Como Streamlit es el subproceso del comando principal del contenedor y Compose no usa una política de reinicio, al finalizar ese proceso sale el contenedor propio y se liberan el puerto y los recursos. La acción no llama a Docker ni intenta detener otros contenedores o aplicaciones.
 
-Al abrir un proyecto, `main()` también verifica que la revisión SQLite sea la requerida antes de renderizar vistas. Una base incompleta se detiene con un mensaje controlado en vez de propagarse como errores posteriores de SQLAlchemy.
-
-### 3. Copias de proyecto sin originales audiovisuales
-
-Una copia de trabajo puede omitir deliberadamente archivos originales y conservar transcripciones, anotaciones y metadatos. `resolve_playback_path()` ya no trata la falta del original como una excepción fatal: usa un derivado de reproducción si existe y, si no existe, devuelve ausencia de reproducción. La interfaz explica que el original no está disponible y deshabilita las operaciones que requieren ese medio, sin impedir revisar la transcripción guardada.
-
-### 4. Rendimiento con inventarios documentales reales
-
-La validación de RC81 mostró que las pestañas ya responden prácticamente al instante. El costo restante se concentraba al entrar en secciones: `processing_inventory_rows()` hacía varias consultas por cada documento y tanto `Procesar documentos` como `Organizar trabajo` reutilizan ese inventario. Con 138 documentos esto producía un patrón N+1 de cientos de consultas.
-
-RC82 carga en bloque archivos, preparaciones, extracciones, páginas extraídas, selecciones, páginas editables y trabajos activos; el número de consultas queda acotado al proyecto y deja de crecer linealmente por documento. Además, `review_app.main()` deja de cargar `review_document_rows()` para secciones que no lo necesitan: el inventario de revisión se consulta sólo para `Revisar documentos`, `Búsqueda textual` o una navegación pendiente hacia un resultado.
-
-No se cambia el invariante Streamlit: las pestañas siguen siendo navegación visual pasiva y no se reintroducen reruns globales al cambiarlas.
+Los launchers conservan `docker compose up -d`, pero explican que el cierre de la ventana del launcher no equivale a detener el servicio y remiten al control dentro de la aplicación.
 
 ## Tags de la candidata
 
-- CPU: `ghcr.io/alexdcolman/archive-workbench:0.89.0-rc82-cpu`;
-- NVIDIA GPU: `ghcr.io/alexdcolman/archive-workbench:0.89.0-rc82-gpu`.
+- CPU: `ghcr.io/alexdcolman/archive-workbench:0.89.0-rc83-cpu`;
+- NVIDIA GPU: `ghcr.io/alexdcolman/archive-workbench:0.89.0-rc83-gpu`.
 
-Estos tags no deben publicarse hasta aplicar RC82 al repositorio, cerrar los gates locales y configurar el `client_secret` OAuth real en GitHub.
+RC83 debe publicarse sólo después de aplicar la candidata, cerrar gates locales y ejecutar la suite completa exclusivamente en el equipo de Alex por tratarse de cambios materiales de código.
 
-## Pruebas automatizadas de RC82
+## Pruebas automatizadas de RC83
 
-Los gates automatizados locales quedaron cerrados el 1 de septiembre de 2026:
+Los gates automatizados locales quedaron cerrados el 2 de septiembre de 2026:
 
-- gate focal y transversal sobre creación de proyecto y migraciones, Google Drive, Audio y video, procesamiento, navegación, distribución Docker, empaquetado y documentación: verde;
-- `pytest --collect-only -q`: 726 pruebas recopiladas sin errores;
+- compilación sintáctica de `src` y `tests`: verde;
+- gate focal y transversal sobre intercambio/copias de equipo, navegación, distribución Docker, empaquetado y documentación: verde;
+- `tests/test_ui_navigation.py` completo: verde;
+- `pytest --collect-only -q`: 731 pruebas recopiladas sin errores;
 - suite completa ejecutada exclusivamente por Alex en su equipo local: 100 % verde;
-- sólo se registraron 40 `DeprecationWarning` ya conocidas de SQLite/SQLAlchemy bajo Python 3.12: 10 en `tests/test_database.py` y 30 en `tests/test_exchange.py`.
+- sólo se registraron 40 `DeprecationWarning` ya conocidas de SQLite/SQLAlchemy bajo Python 3.12: 10 en `tests/test_database.py` y 30 en `tests/test_exchange.py`;
+- `python -m build --wheel` no pudo iniciarse en el entorno aislado del asistente porque no contiene el módulo `build`; el mismo backend construyó correctamente `archive_workbench-0.89.0-py3-none-any.whl` mediante `pip wheel --no-deps --no-build-isolation`, SHA-256 `af150d545506890e23fc326d96b3224aeec9d8ad7204405a521805771d5379a9`.
 
 La suite completa no debe repetirse por esta actualización documental ni por rutina. Sólo corresponde una nueva corrida si aparece un cambio material posterior de código.
 
 ## Validación manual inmediata
 
-Después de publicar las imágenes RC82, repetir sólo los comportamientos materialmente afectados en Windows CPU:
+Después de publicar las imágenes RC83, repetir sólo lo afectado en Windows CPU:
 
-1. crear un proyecto nuevo y abrir directamente `Administrar y recuperar` e `Intercambiar cambios`, sin visitar antes Catálogo;
-2. conectar Google Drive y comprobar autorización y persistencia del token tras reiniciar;
-3. abrir una copia de proyecto sin originales audiovisuales y confirmar que Audio y video conserva transcripción/metadatos sin traceback;
-4. con el proyecto real de 138 documentos, medir el cambio entre secciones y especialmente la entrada en `Organizar trabajo` y `Procesar documentos`;
-5. comprobar que el cambio entre pestañas continúa siendo prácticamente inmediato.
+1. comprobar que cada pestaña cambia con un solo clic y que el cambio sigue siendo prácticamente inmediato;
+2. crear un proyecto vacío, descargar y verificar una copia completa desde Google Drive y usar **Usar esta copia en este proyecto** sin salir de la aplicación ni extraer carpetas manualmente; confirmar que el contenido recibido queda disponible y que la copia tiene identidad local propia;
+3. comprobar que una copia completa se rechaza como reemplazo automático si el proyecto actual ya contiene trabajo y que la interfaz remite a paquetes de cambios para combinar trabajo;
+4. pulsar **Cerrar Archive Workbench** y comprobar desde Windows que la instancia se detiene y el puerto queda libre.
 
-No repetir Surya Linux, transcripción CUDA Linux, persistencia Linux ni las publicaciones RC80/RC81 ya cerradas salvo evidencia nueva. Windows GPU y macOS continúan después del gate Windows CPU.
+No repetir OAuth, inicialización SQLite, copia audiovisual sin originales ni la medición de 138 documentos salvo que aparezca una regresión concreta. Después de este gate, `OPS-01` continúa con Windows GPU y macOS.
 
 ## Persistencia y datos locales
 
-`ArchiveWorkbenchData/` continúa siendo el espacio persistente de la distribución administrada. `pilot_data` no se recrea ni se modifica destructivamente. `pilot_data_2` no forma parte de staging, commits ni paquetes. RC82 no cambia el esquema ni la revisión de base.
+`ArchiveWorkbenchData/` continúa siendo el espacio persistente de la distribución administrada. `pilot_data` no se recrea ni se modifica destructivamente. `pilot_data_2` no forma parte de staging, commits ni paquetes. RC83 no cambia el esquema ni la revisión de base.
 
 ## Estado de OPS-01
 
-`OPS-01` permanece **parcial, en curso**. RC81 quedó publicada y sirvió para aislar los defectos Windows descritos arriba. RC82 es la candidata activa. El cierre del ciclo de vida del contenedor para personas no técnicas permanece abierto: cerrar el navegador no detiene por sí solo un servicio iniciado con Docker Compose en modo desacoplado, y la solución final debe ser explícita, segura y no detener procesos ajenos. `WEB-01` permanece parcial y queda pausado hasta estabilizar la distribución multiplataforma. No se incorporan capturas hasta realizar esa reescritura para lectores sin conocimiento previo.
+`OPS-01` permanece **parcial, en curso**. RC82 queda publicada y materialmente verde en Windows CPU para sus bloques funcionales y de rendimiento. RC83 es la candidata activa para cerrar las tres regresiones/limitaciones de UX detectadas antes de continuar Windows GPU y macOS. `WEB-01` permanece parcial y queda pausado hasta estabilizar la distribución multiplataforma. No se incorporan capturas hasta realizar esa reescritura para lectores sin conocimiento previo.

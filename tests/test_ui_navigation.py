@@ -146,7 +146,10 @@ def test_passive_tracked_tabs_keep_visual_state_in_browser_without_python_trigge
     assert "setTriggerValue" not in keeper
     assert "observer.observe(doc.body" not in keeper
     assert "doc.querySelectorAll('[class]')" not in keeper
-    assert "querySelector('[role=\"tablist\"]')" in keeper
+    assert "MutationObserver" not in keeper
+    assert "pointerdown" in keeper
+    assert "keydown" in keeper
+    assert "event.key === 'Enter' || event.key === ' '" in keeper
 
 
 def test_context_help_uses_discoverable_info_icons_without_question_badges() -> None:
@@ -770,8 +773,41 @@ def test_receive_file_selector_distinguishes_team_copy_from_change_bundle() -> N
     assert '"Desde Google Drive"' in helper
     assert "inspect_drive_artifact(temp_path)" in helper
     assert 'inspection.kind == "team_copy"' in helper
-    assert "No se incorpora sobre el proyecto que está abierto ahora" in helper
+    assert "_render_received_team_copy_action(" in helper
+    assert "Usar esta copia en este proyecto" in source
+    assert "adopt_team_copy_into_empty_project(" in source
     assert "_simulate_exchange_bundle_path(" in helper
+
+
+def test_empty_project_can_adopt_received_team_copy_without_leaving_app() -> None:
+    source = (
+        Path(__file__).parents[1] / "src" / "archive_workbench" / "review_app.py"
+    ).read_text(encoding="utf-8")
+
+    assert "assess_team_copy_target(project_root)" in source
+    assert "Este proyecto todavía está vacío" in source
+    assert "Usar esta copia en este proyecto" in source
+    assert "Confirmo que quiero reemplazar este proyecto vacío con la copia recibida" in source
+    assert "adopt_team_copy_into_empty_project(" in source
+    assert 'st.session_state["launcher_project_root"] = str(project_root.resolve())' in source
+    assert 'st.session_state["review_app_mode"] = "home"' in source
+    assert "rerun_app(st)" in source
+    assert "Extraé este ZIP en una carpeta nueva" not in source
+
+
+def test_managed_runtime_has_explicit_shutdown_control() -> None:
+    source = (
+        Path(__file__).parents[1] / "src" / "archive_workbench" / "review_app.py"
+    ).read_text(encoding="utf-8")
+    block = source[
+        source.index("def _render_managed_shutdown") : source.index(
+            "def _render_google_drive_receive", source.index("def _render_managed_shutdown")
+        )
+    ]
+    assert "managed_workspace() is None" in block
+    assert "Cerrar y detener Archive Workbench" in block
+    assert "os._exit(0)" in block
+    assert "docker" not in block.lower() or "contenedor" in block.lower()
 
 
 def test_received_team_copy_is_reidentified_automatically_on_first_open() -> None:

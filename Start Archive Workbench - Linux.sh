@@ -2,7 +2,7 @@
 set -u
 SCRIPT_DIR=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)
 cd "$SCRIPT_DIR"
-IMAGE="${ARCHIVE_WORKBENCH_CPU_IMAGE:-ghcr.io/alexdcolman/archive-workbench:0.89.0-rc82-cpu}"
+IMAGE="${ARCHIVE_WORKBENCH_CPU_IMAGE:-ghcr.io/alexdcolman/archive-workbench:0.89.0-rc83-cpu}"
 export ARCHIVE_WORKBENCH_CPU_IMAGE="$IMAGE"
 
 if ! command -v docker >/dev/null 2>&1; then
@@ -84,3 +84,4 @@ if command -v xdg-open >/dev/null 2>&1; then
   xdg-open "http://localhost:8501" >/dev/null 2>&1 || true
 fi
 printf '%s\n' "Archive Workbench está disponible en http://localhost:8501"
+printf '%s\n' "Para detenerlo al terminar, usá Cerrar Archive Workbench dentro de la aplicación."

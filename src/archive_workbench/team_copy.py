@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import json
 import os
+import shutil
 import sqlite3
 import tempfile
 import zipfile
@@ -10,10 +11,21 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Iterable
 
-from sqlalchemy import select
+from sqlalchemy import func, select
 
-from archive_workbench.db import create_sqlite_engine, database_path, session_scope
-from archive_workbench.db.models import FileInstance, Project
+from archive_workbench.db import (
+    create_sqlite_engine,
+    database_path,
+    require_current_database,
+    session_scope,
+)
+from archive_workbench.db.models import (
+    ArchivalUnit,
+    AuthorityRecord,
+    DigitalObject,
+    FileInstance,
+    Project,
+)
 from archive_workbench.exchange import (
     create_exchange_checkpoint,
     current_editable_state_sha256,
@@ -119,6 +131,36 @@ class TeamCopyActivationSummary:
     checkpoint_label: str
     state_sha256: str
     omitted_content_groups: tuple[str, ...] = ()
+
+
+@dataclass(frozen=True, slots=True)
+class TeamCopyTargetAssessment:
+    project_id: str
+    project_name: str
+    archival_unit_count: int
+    digital_object_count: int
+    authority_count: int
+
+    @property
+    def is_empty(self) -> bool:
+        return not (
+            self.archival_unit_count
+            or self.digital_object_count
+            or self.authority_count
+        )
+
+
+@dataclass(frozen=True, slots=True)
+class TeamCopyAdoptionSummary:
+    package_id: str
+    project_id: str
+    project_name: str
+    workspace_id: str
+    workspace_name: str
+    checkpoint_label: str
+    backup_path: Path
+    backup_sha256: str
+    omitted_content_groups: tuple[str, ...]
 
 
 def _canonical_json_bytes(value: object) -> bytes:
@@ -644,4 +686,191 @@ def activate_received_team_copy(
         checkpoint_label=summary.checkpoint_label,
         state_sha256=summary.state_sha256,
         omitted_content_groups=omitted_groups,
+    )
+
+
+def assess_team_copy_target(project_root: Path) -> TeamCopyTargetAssessment:
+    """Indica si el proyecto abierto aún no contiene trabajo de dominio."""
+
+    root = project_root.expanduser().resolve()
+    require_current_database(root)
+    engine = create_sqlite_engine(database_path(root))
+    try:
+        with session_scope(engine) as session:
+            project = session.scalar(select(Project).order_by(Project.created_at))
+            if project is None:
+                raise ValueError("El proyecto actual no está registrado en SQLite")
+            archival_unit_count = int(
+                session.scalar(
+                    select(func.count(ArchivalUnit.id)).where(
+                        ArchivalUnit.project_id == project.id
+                    )
+                )
+                or 0
+            )
+            digital_object_count = int(
+                session.scalar(
+                    select(func.count(DigitalObject.id)).where(
+                        DigitalObject.project_id == project.id
+                    )
+                )
+                or 0
+            )
+            authority_count = int(
+                session.scalar(
+                    select(func.count(AuthorityRecord.id)).where(
+                        AuthorityRecord.project_id == project.id
+                    )
+                )
+                or 0
+            )
+            return TeamCopyTargetAssessment(
+                project_id=project.id,
+                project_name=project.name,
+                archival_unit_count=archival_unit_count,
+                digital_object_count=digital_object_count,
+                authority_count=authority_count,
+            )
+    finally:
+        engine.dispose()
+
+
+def _atomic_copy(source: Path, target: Path) -> None:
+    target.parent.mkdir(parents=True, exist_ok=True)
+    temporary = target.with_name(target.name + ".team_copy_tmp")
+    temporary.unlink(missing_ok=True)
+    try:
+        shutil.copy2(source, temporary)
+        os.replace(temporary, target)
+    finally:
+        temporary.unlink(missing_ok=True)
+
+
+def adopt_team_copy_into_empty_project(
+    *,
+    project_root: Path,
+    package_path: Path,
+    adopted_by: str,
+    adoption_confirmed: bool,
+) -> TeamCopyAdoptionSummary:
+    """Carga una copia completa en la carpeta actual cuando el proyecto está vacío.
+
+    La copia se valida y activa primero en una carpeta temporal. El proyecto vacío
+    se resguarda antes de sustituir configuración y SQLite. Los directorios locales
+    de backups, logs y transporte se conservan.
+    """
+
+    if not adoption_confirmed:
+        raise ValueError("Confirmá que querés usar la copia recibida en este proyecto")
+    actor = adopted_by.strip() or "local_user"
+    root = project_root.expanduser().resolve()
+    package = package_path.expanduser().resolve()
+    inspection = inspect_team_copy_package(package)
+    assessment = assess_team_copy_target(root)
+    if not assessment.is_empty:
+        raise ValueError(
+            "El proyecto actual ya contiene trabajo. Para combinar trabajo entre copias, "
+            "recibí un paquete de cambios; esta operación sólo reemplaza un proyecto vacío."
+        )
+
+    with tempfile.TemporaryDirectory(prefix="archive_workbench_team_copy_adopt_") as tmp_name:
+        staging_parent = Path(tmp_name)
+        with zipfile.ZipFile(package, "r") as archive:
+            # inspect_team_copy_package ya rechazó rutas inseguras y comprobó el ZIP.
+            archive.extractall(staging_parent)
+        staged_root = staging_parent / inspection.project_folder
+        staged_config = staged_root / "config" / "decisions.yaml"
+        staged_db = database_path(staged_root)
+        if not staged_config.is_file() or not staged_db.is_file():
+            raise ValueError(
+                "La copia recibida no contiene la configuración y la base necesarias para abrir el proyecto"
+            )
+        require_current_database(staged_root)
+        activation = activate_received_team_copy(
+            project_root=staged_root,
+            created_by=actor,
+        )
+        if activation is None:
+            raise ValueError(
+                "La copia recibida ya figura como activada y no puede usarse como copia inicial reutilizable"
+            )
+
+        from archive_workbench.project_admin import create_project_backup
+
+        backup = create_project_backup(
+            project_root=root,
+            created_by=actor,
+            note=f"Antes de cargar la copia de trabajo {inspection.package_id}",
+        )
+
+        staged_files = [path for path in staged_root.rglob("*") if path.is_file()]
+        critical_config: list[tuple[Path, Path]] = []
+        staged_database: tuple[Path, Path] | None = None
+        regular_files: list[tuple[Path, Path]] = []
+        for source in staged_files:
+            relative = source.relative_to(staged_root)
+            if relative.parts and relative.parts[0] in {"backups", "logs"}:
+                continue
+            if relative.parts and relative.parts[0] == "exchange" and relative != TEAM_COPY_MARKER:
+                continue
+            target = root / relative
+            if relative == Path("data/archive_workbench.sqlite3"):
+                staged_database = (source, target)
+            elif relative.parts and relative.parts[0] == "config":
+                critical_config.append((source, target))
+            else:
+                regular_files.append((source, target))
+        if staged_database is None:
+            raise ValueError("La copia recibida no contiene su base SQLite")
+
+        conflicting_regular = [target for _source, target in regular_files if target.exists()]
+        if conflicting_regular:
+            relative_conflicts = ", ".join(
+                str(path.relative_to(root)) for path in conflicting_regular[:3]
+            )
+            raise ValueError(
+                "El proyecto vacío contiene archivos locales que coinciden con la copia recibida "
+                f"({relative_conflicts}). No se sobrescribieron esos archivos."
+            )
+
+        created_regular: list[Path] = []
+        original_config: dict[Path, bytes | None] = {}
+        try:
+            for source, target in regular_files:
+                existed = target.exists()
+                _atomic_copy(source, target)
+                if not existed:
+                    created_regular.append(target)
+
+            for source, target in critical_config:
+                original_config[target] = target.read_bytes() if target.is_file() else None
+                _atomic_copy(source, target)
+
+            source_db, target_db = staged_database
+            for suffix in ("-wal", "-shm"):
+                companion = Path(str(target_db) + suffix)
+                companion.unlink(missing_ok=True)
+            _atomic_copy(source_db, target_db)
+        except Exception:
+            for target, original in original_config.items():
+                if original is None:
+                    target.unlink(missing_ok=True)
+                else:
+                    temporary = target.with_name(target.name + ".team_copy_rollback")
+                    temporary.write_bytes(original)
+                    os.replace(temporary, target)
+            for target in reversed(created_regular):
+                target.unlink(missing_ok=True)
+            raise
+
+    return TeamCopyAdoptionSummary(
+        package_id=inspection.package_id,
+        project_id=inspection.project_id,
+        project_name=inspection.project_name,
+        workspace_id=activation.workspace_id,
+        workspace_name=activation.workspace_name,
+        checkpoint_label=activation.checkpoint_label,
+        backup_path=backup.path,
+        backup_sha256=backup.backup_sha256,
+        omitted_content_groups=activation.omitted_content_groups,
     )

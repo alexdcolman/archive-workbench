@@ -7,7 +7,9 @@ from collections import Counter
 import hashlib
 import html
 import json
+import os
 import sys
+import zipfile
 from pathlib import Path
 
 from typing import Callable
@@ -174,6 +176,8 @@ from archive_workbench.team_copy import (
     TEAM_COPY_GROUP_LABELS,
     TEAM_COPY_PRESETS,
     activate_received_team_copy,
+    adopt_team_copy_into_empty_project,
+    assess_team_copy_target,
     create_team_copy_package,
     plan_team_copy,
 )
@@ -3079,6 +3083,99 @@ def _render_created_artifact_drive_action(st, *, archive_path: Path, key: str) -
             st.code(f"SHA-256: {result.local_sha256}", language="text")
 
 
+def _reset_after_team_copy_adoption(st, *, project_root: Path, project_name: str) -> None:
+    for state_key in list(st.session_state.keys()):
+        del st.session_state[state_key]
+    st.session_state["launcher_project_root"] = str(project_root.resolve())
+    st.session_state["review_app_mode"] = "home"
+    st.session_state["_team_copy_adoption_notice"] = (
+        f"La copia de {project_name} quedó cargada en este proyecto y ya tiene una identidad local propia."
+    )
+    rerun_app(st)
+
+
+def _render_received_team_copy_action(
+    st,
+    *,
+    project_root: Path,
+    package_path: Path,
+    reviewer: str,
+    detail_label: str,
+) -> None:
+    try:
+        assessment = assess_team_copy_target(project_root)
+    except (ValueError, RuntimeError, OSError) as exc:
+        st.error(str(exc))
+        return
+
+    st.write("**Copia para trabajar en equipo descargada y verificada.**")
+    if assessment.is_empty:
+        st.caption(
+            "Este proyecto todavía está vacío. Podés cargar la copia recibida acá mismo: "
+            "Archive Workbench resguarda primero el proyecto vacío, valida la copia completa y "
+            "continúa en esta misma carpeta sin pedir una extracción manual ni volver al inicio."
+        )
+        with st.form(
+            f"exchange_adopt_team_copy_{hashlib.sha256(str(package_path).encode('utf-8')).hexdigest()[:12]}",
+            enter_to_submit=False,
+        ):
+            confirmed = st.checkbox(
+                "Confirmo que quiero reemplazar este proyecto vacío con la copia recibida"
+            )
+            submitted = st.form_submit_button(
+                "Usar esta copia en este proyecto",
+                type="primary",
+            )
+        if submitted:
+            if not confirmed:
+                st.error("Marcá la confirmación antes de cargar la copia recibida.")
+            else:
+                try:
+                    with st.spinner("Validando y cargando la copia recibida…"):
+                        adopted = adopt_team_copy_into_empty_project(
+                            project_root=project_root,
+                            package_path=package_path,
+                            adopted_by=reviewer or "local_user",
+                            adoption_confirmed=True,
+                        )
+                except (ValueError, RuntimeError, OSError, zipfile.BadZipFile) as exc:
+                    st.error(str(exc))
+                else:
+                    _reset_after_team_copy_adoption(
+                        st,
+                        project_root=project_root,
+                        project_name=adopted.project_name,
+                    )
+    else:
+        st.warning(
+            "Este proyecto ya contiene trabajo. Una copia completa no se mezcla automáticamente "
+            "con un proyecto que ya tiene contenido. Para combinar trabajo entre copias, recibí "
+            "un paquete de cambios y revisá sus diferencias antes de incorporarlo."
+        )
+
+    with st.expander(detail_label, expanded=False):
+        st.code(str(package_path))
+
+
+def _render_managed_shutdown(st) -> None:
+    if managed_workspace() is None:
+        return
+    with st.popover("Cerrar Archive Workbench", use_container_width=True):
+        st.caption(
+            "Detiene esta instancia de Archive Workbench y libera el puerto y los recursos del "
+            "contenedor. No detiene otros contenedores ni otras aplicaciones."
+        )
+        if st.button(
+            "Cerrar y detener Archive Workbench",
+            type="primary",
+            key="managed_shutdown_button",
+        ):
+            # En la distribución administrada Streamlit es el subproceso del comando
+            # review-app. Al terminar este proceso, el launcher sale y Docker detiene
+            # únicamente el contenedor propio (restart: no).
+            os._exit(0)
+
+
 def _render_google_drive_receive(
     st,
     *,
@@ -3188,13 +3285,14 @@ def _render_google_drive_receive(
         return
 
     if result.artifact_kind == "team_copy":
-        st.write("**Copia para trabajar en equipo descargada y verificada.**")
-        st.caption(
-            "Extraé este ZIP en una carpeta nueva y abrí esa carpeta como otro proyecto. "
-            "No se incorpora sobre el proyecto que está abierto ahora."
+        _render_received_team_copy_action(
+            st,
+            project_root=project_root,
+            package_path=result.destination,
+            reviewer=reviewer,
+            detail_label="Detalles del ZIP descargado",
         )
-        with st.expander("Detalles del ZIP descargado", expanded=False):
-            st.code(str(result.destination))
+        with st.expander("Verificación del ZIP", expanded=False):
             st.code(f"SHA-256: {result.local_sha256}", language="text")
         return
 
@@ -3320,13 +3418,13 @@ def _render_receive_zip_source(
     if received_team_copy:
         received_path = Path(str(received_team_copy))
         if received_path.is_file():
-            st.write("**El ZIP recibido es una copia para trabajar en equipo.**")
-            st.caption(
-                "Extraela en una carpeta nueva y abrí esa carpeta como otro proyecto. "
-                "No se incorpora sobre el proyecto que está abierto ahora."
+            _render_received_team_copy_action(
+                st,
+                project_root=project_root,
+                package_path=received_path,
+                reviewer=reviewer,
+                detail_label="Detalles del ZIP recibido",
             )
-            with st.expander("Detalles del ZIP recibido", expanded=False):
-                st.code(str(received_path))
             return
         st.session_state.pop("exchange_received_team_copy", None)
 
@@ -5011,6 +5109,10 @@ def main() -> None:
             st.code(str(exc))
         st.stop()
 
+    adoption_notice = st.session_state.pop("_team_copy_adoption_notice", None)
+    if adoption_notice:
+        st.success(str(adoption_notice))
+
     decisions = load_decisions(decisions_path)
     preferences = load_user_preferences()
     try:
@@ -5090,6 +5192,7 @@ def main() -> None:
             )
             with st.popover("Guía de esta sección", use_container_width=True):
                 _render_section_guidance(st, app_mode)
+        _render_managed_shutdown(st)
 
     if app_mode in {"review", "search"}:
         load_review_documents()

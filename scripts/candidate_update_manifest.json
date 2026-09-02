@@ -1,6 +1,6 @@
 {
   "schema_version": 1,
-  "candidate": "0.89.0 RC82",
+  "candidate": "0.89.0 RC83",
   "relocations": [
     {
       "from": "docs/operativos/AUDITORIA_INTERFAZ_RC11_5_PASADAS.txt",

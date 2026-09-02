@@ -485,7 +485,7 @@ def test_candidate_update_reconciles_only_known_relocations(tmp_path: Path) -> N
     manifest = json.loads(
         (root / "scripts" / "candidate_update_manifest.json").read_text(encoding="utf-8")
     )
-    assert manifest["candidate"] == "0.89.0 RC82"
+    assert manifest["candidate"] == "0.89.0 RC83"
     assert len(manifest["relocations"]) == 5
 
     for item in manifest["relocations"]:

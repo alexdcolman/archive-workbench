@@ -565,7 +565,7 @@ def test_automatic_analysis_quality_decision_is_preserved_and_auditable() -> Non
     assert "st.form" in text
 
 
-def test_current_update_guide_describes_0890_rc82_windows_candidate() -> None:
+def test_current_update_guide_describes_0890_rc83_windows_candidate() -> None:
     text = (OPERATIVE / "ACTUALIZACION_ACTUAL.md").read_text(encoding="utf-8")
     pending = (OPERATIVE / "PENDIENTES_ACTIVOS.md").read_text(encoding="utf-8")
     implemented = (OPERATIVE / "IMPLEMENTACIONES_REALIZADAS.md").read_text(encoding="utf-8")
@@ -574,13 +574,9 @@ def test_current_update_guide_describes_0890_rc82_windows_candidate() -> None:
     architecture = (REFERENCE / "ARQUITECTURA_Y_MODELO_ACTUAL.md").read_text(encoding="utf-8")
     historical_rc76 = HISTORICAL_UPDATES / "ACTUALIZACION_Y_PRUEBA_0.89.0_RC76.md"
 
-    assert "Archive Workbench 0.89.0 RC82" in text
-    assert "0.89.0-rc82-cpu" in text
-    assert "0.89.0-rc82-gpu" in text
-    assert "transcripción audiovisual" in text
-    assert "127.0.0.1" in text
-    assert "ArchiveWorkbenchData/Settings" in text
-    assert "UTF-8 con BOM" in text
+    assert "Archive Workbench 0.89.0 RC83" in text
+    assert "0.89.0-rc83-cpu" in text
+    assert "0.89.0-rc83-gpu" in text
     assert "| WEB-01 | Alta | Parcial pre-release, pausado |" in pending
     assert "| OPS-01 | Alta | Parcial, en curso |" in pending
     assert "## RC80 - PyTorch CPU explícito en runtime principal multi-arquitectura" in implemented
@@ -591,12 +587,18 @@ def test_current_update_guide_describes_0890_rc82_windows_candidate() -> None:
     assert "## RC78 - diagnóstico administrado GPU y validación material Linux/NVIDIA" in implemented
     assert "## RC77 - guardas de inferencia para Surya/llama.cpp administrado" in implemented
     assert "no cambia el esquema SQLite" in text
-    assert "0.89.0 RC82" in continuity
+    assert "0.89.0 RC83" in continuity
     assert "2.5 Regla obligatoria para lectores sin conocimiento previo" in guidelines
     assert "Cada sustantivo que pueda tener más de un referente" in guidelines
-    assert "Distribución administrada y espacio de trabajo multiplataforma - RC72/RC82" in architecture
+    assert "Distribución administrada y espacio de trabajo multiplataforma - RC72/RC83" in architecture
     assert "ARCHIVE_WORKBENCH_SELECTED_PROJECT_ROOT" in architecture
     assert "0047_authority_relation_profiles" in text
+    assert "OPS-01-TABS" in pending
+    assert "OPS-01-COPY" in pending
+    assert "OPS-01-STOP" in pending
+    assert "Usar esta copia en este proyecto" in text
+    assert "un solo clic" in text
+    assert "Cerrar Archive Workbench" in text
     assert historical_rc76.is_file()
 
 

@@ -77,8 +77,11 @@ from archive_workbench.work import (
     create_work_assignment,
     update_work_assignment,
 )
+from archive_workbench.project_setup import create_ready_project
 from archive_workbench.team_copy import (
     activate_received_team_copy,
+    adopt_team_copy_into_empty_project,
+    assess_team_copy_target,
     create_team_copy_package,
     inspect_team_copy_package,
     plan_team_copy,
@@ -6049,6 +6052,105 @@ def test_team_copy_can_omit_originals_and_records_that_choice(tmp_path: Path) ->
         assert any(name.endswith("/derivatives/preview.webp") for name in names)
         assert any(name.endswith("/data/archive_workbench.sqlite3") for name in names)
         assert any(name.endswith("/config/decisions.yaml") for name in names)
+
+
+def test_team_copy_can_be_adopted_inside_an_empty_project(tmp_path: Path) -> None:
+    source_root = tmp_path / "source"
+    engine, _decisions, _object_id = _seed_project(source_root)
+    engine.dispose()
+    source_config = source_root / "config" / "decisions.yaml"
+    source_config.parent.mkdir(parents=True, exist_ok=True)
+    shutil.copy2(Path(__file__).parents[1] / "config" / "decisions.yaml", source_config)
+    summary = create_team_copy_package(
+        project_root=source_root,
+        created_by="Alex",
+        included_groups=["derivatives", "extraction", "transcripts"],
+        content_profile="review",
+    )
+
+    target_root = tmp_path / "empty_target"
+    create_ready_project(
+        target_root,
+        project_name="Proyecto receptor vacío",
+        project_id="receptor_vacio",
+    )
+    assessment = assess_team_copy_target(target_root)
+    assert assessment.is_empty
+
+    adopted = adopt_team_copy_into_empty_project(
+        project_root=target_root,
+        package_path=summary.output_path,
+        adopted_by="Persona receptora",
+        adoption_confirmed=True,
+    )
+
+    assert adopted.project_id == summary.project_id
+    assert adopted.workspace_id != summary.source_workspace_id
+    assert adopted.backup_path.is_file()
+    assert "originals" in adopted.omitted_content_groups
+    marker = json.loads((target_root / "exchange" / "team_copy.json").read_text(encoding="utf-8"))
+    assert marker["status"] == "activated"
+    target_engine = create_sqlite_engine(database_path(target_root))
+    try:
+        with session_scope(target_engine) as session:
+            assert session.scalar(select(func.count(DigitalObject.id))) == 1
+            project_id = session.execute(text("SELECT id FROM projects LIMIT 1")).scalar_one()
+            assert project_id == summary.project_id
+    finally:
+        target_engine.dispose()
+
+
+def test_team_copy_adoption_rejects_project_with_existing_work(tmp_path: Path) -> None:
+    source_root = tmp_path / "source"
+    source_engine, _decisions, _object_id = _seed_project(source_root)
+    source_engine.dispose()
+    source_config = source_root / "config" / "decisions.yaml"
+    source_config.parent.mkdir(parents=True, exist_ok=True)
+    shutil.copy2(Path(__file__).parents[1] / "config" / "decisions.yaml", source_config)
+    summary = create_team_copy_package(project_root=source_root, created_by="Alex")
+
+    target_root = tmp_path / "target_with_work"
+    target_engine, _target_decisions, _target_object_id = _seed_project(target_root)
+    target_engine.dispose()
+    assert not assess_team_copy_target(target_root).is_empty
+
+    with pytest.raises(ValueError, match="ya contiene trabajo"):
+        adopt_team_copy_into_empty_project(
+            project_root=target_root,
+            package_path=summary.output_path,
+            adopted_by="Persona receptora",
+            adoption_confirmed=True,
+        )
+
+
+def test_team_copy_adoption_does_not_overwrite_unrelated_local_file(tmp_path: Path) -> None:
+    source_root = tmp_path / "source"
+    source_engine, _decisions, _object_id = _seed_project(source_root)
+    source_engine.dispose()
+    source_config = source_root / "config" / "decisions.yaml"
+    source_config.parent.mkdir(parents=True, exist_ok=True)
+    shutil.copy2(Path(__file__).parents[1] / "config" / "decisions.yaml", source_config)
+    summary = create_team_copy_package(project_root=source_root, created_by="Alex")
+
+    target_root = tmp_path / "empty_target_with_local_marker"
+    create_ready_project(
+        target_root,
+        project_name="Proyecto receptor vacío",
+        project_id="receptor_vacio_local",
+    )
+    marker = target_root / "exchange" / "team_copy.json"
+    marker.parent.mkdir(parents=True, exist_ok=True)
+    marker.write_text("contenido local", encoding="utf-8")
+
+    with pytest.raises(ValueError, match="No se sobrescribieron"):
+        adopt_team_copy_into_empty_project(
+            project_root=target_root,
+            package_path=summary.output_path,
+            adopted_by="Persona receptora",
+            adoption_confirmed=True,
+        )
+
+    assert marker.read_text(encoding="utf-8") == "contenido local"
 
 
 def test_team_copy_package_can_seed_multiple_independent_copies(tmp_path: Path) -> None:
