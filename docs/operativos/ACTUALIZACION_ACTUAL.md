@@ -14,6 +14,12 @@ RC83 corrige exclusivamente esos tres bloques. RC83 no cambia el esquema SQLite,
 
 `tracked_tabs` sigue siendo navegación visual pasiva: no envía estado ni triggers a Python y conserva la selección en `sessionStorage`. RC83 elimina el observer del conservador de pestañas y registra la intención del usuario en `pointerdown` antes de que el tab nativo procese el clic. El comportamiento nativo no se cancela ni se sustituye. El teclado conserva Enter/Espacio. Así se evita que la restauración visual compita con el primer clic sin reintroducir reruns globales.
 
+### Estrategia Streamlit consolidada
+
+RC83 conserva el invariante validado durante el piloto: las interacciones puramente visuales permanecen en el navegador; las acciones semánticas comunican sólo la identidad o decisión necesaria; los reruns se acotan al alcance real de la acción; y el camino común de `main()` evita cargar datos de secciones inactivas. La secuencia RC76-RC83 dejó además dos reglas de rendimiento explícitas: no usar observers globales del DOM y no aceptar patrones N+1 o inventarios completos en el camino caliente de cada rerun.
+
+La fuente canónica es `docs/referencia/ARQUITECTURA_Y_MODELO_ACTUAL.md#streamlit-interaction-invariant`. `.assistant/08_ESTRATEGIAS_STREAMLIT.md` conserva el procedimiento operativo, antipatrones y checklist de diagnóstico para futuras conversaciones sin duplicar la arquitectura.
+
 ### 2. Adoptar una copia completa dentro del proyecto vacío
 
 Cuando `Descargar y verificar ZIP` o el selector local reconoce una `team_copy`, la interfaz ya no termina con instrucciones de extracción manual. Si el proyecto abierto está vacío, ofrece **Usar esta copia en este proyecto**. La operación exige confirmación explícita, verifica el paquete, prepara primero una staging temporal, valida la revisión SQLite recibida, reidentifica allí la copia de equipo, crea una copia de seguridad del proyecto vacío y sólo entonces reemplaza de forma atómica configuración, base y contenido transportado. El ZIP de transporte y los backups locales del proyecto receptor se conservan. Al terminar, la misma sesión vuelve a Inicio sobre la misma carpeta mediante un rerun controlado.

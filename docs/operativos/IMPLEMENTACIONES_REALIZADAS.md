@@ -1,3 +1,17 @@
+## RC82 - cierre Windows CPU y rendimiento Streamlit sobre proyecto real
+
+La validación material de RC82 en Windows CPU cerró los defectos funcionales abiertos por RC81: un proyecto nuevo pudo entrar directamente en `Administrar y recuperar` e `Intercambiar cambios` sin errores SQLite/Alembic, Google Drive completó OAuth y conservó el token local, y una copia sin originales audiovisuales mantuvo transcripción y metadatos sin propagar `FileNotFoundError`.
+
+La misma prueba se ejecutó con un proyecto de 138 documentos extraídos y una transcripción. La optimización de RC82 eliminó trabajo común innecesario y el patrón N+1 del inventario documental: `Organizar trabajo` y `Procesar documentos` quedaron alrededor de un segundo y el resto de los cambios de sección resultó casi inmediato. Las pestañas internas siguieron siendo prácticamente instantáneas. Esto confirma que la latencia observada no era un límite inevitable de Streamlit sino, principalmente, una combinación de observers amplios, consultas repetidas y carga anticipada de datos.
+
+La estrategia canónica resultante está documentada en `docs/referencia/ARQUITECTURA_Y_MODELO_ACTUAL.md#streamlit-interaction-invariant`. La guía operativa para futuras intervenciones vive en `.assistant/08_ESTRATEGIAS_STREAMLIT.md` y no constituye una fuente paralela de arquitectura.
+
+## RC81 - observers acotados y divulgación visual pasiva
+
+RC81 mantuvo las pestañas como navegación visual local y eliminó `MutationObserver` globales sobre `document.body` que recorrían repetidamente el DOM de vistas densas. Los observers necesarios para ayuda contextual quedaron acotados al widget o `tablist` correspondiente. En Audio y video, abrir/cerrar las opciones avanzadas de una nueva transcripción dejó de usar un toggle reactivo y pasó a una divulgación pasiva, sin rerun global por el mero gesto de mostrar opciones.
+
+La validación posterior confirmó que el cambio entre pestañas quedó prácticamente inmediato. RC82 completó la mejora atacando el trabajo Python que todavía se ejecutaba al cambiar de sección.
+
 ## RC80 - PyTorch CPU explícito en runtime principal multi-arquitectura
 
 El primer workflow real de publicación de RC79 construyó y publicó correctamente la imagen NVIDIA GPU `linux/amd64`, pero el job CPU multi-arquitectura falló en `linux/arm64`. El registro BuildKit confirma que el runtime principal descargó `torch 2.13.0` para AArch64 junto con paquetes NVIDIA y terminó con `nvidia-cusparselt-cu13 0.8.1 is not supported on this platform`. La ruta `linux/amd64` no exhibió ese fallo.
