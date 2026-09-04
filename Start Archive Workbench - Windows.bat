@@ -1,4 +1,4 @@
-@echo off
+﻿@echo off
 setlocal EnableExtensions
 chcp 65001 >nul
 cd /d "%~dp0"
@@ -7,7 +7,7 @@ set "AW_PROFILE=cpu"
 if defined ARCHIVE_WORKBENCH_CPU_IMAGE (
   set "AW_IMAGE=%ARCHIVE_WORKBENCH_CPU_IMAGE%"
 ) else (
-  set "AW_IMAGE=ghcr.io/alexdcolman/archive-workbench:0.89.0-rc83-cpu"
+  set "AW_IMAGE=ghcr.io/alexdcolman/archive-workbench:0.89.0-rc84-cpu"
 )
 set "ARCHIVE_WORKBENCH_CPU_IMAGE=%AW_IMAGE%"
 

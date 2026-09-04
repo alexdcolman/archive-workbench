@@ -1,3 +1,9 @@
+## RC83 - cierre Windows CPU de interacción, copia completa y ciclo de vida
+
+La validación material Windows CPU de RC83 cerró sus cuatro objetivos. Las pestañas volvieron a cambiar con un solo clic y conservaron respuesta prácticamente inmediata; una copia completa recibida pudo adoptarse dentro de un proyecto vacío sin salir de Archive Workbench; el mismo intento quedó bloqueado de forma segura cuando el proyecto ya contenía trabajo; y **Cerrar Archive Workbench** terminó la instancia administrada propia y liberó el puerto.
+
+La recorrida no reabrió los cierres funcionales de RC82. Detectó únicamente que la pestaña auxiliar usada por OAuth/Google Picker continuaba hacia el launcher después del callback, aunque autorización y selección funcionaban correctamente. Ese hallazgo queda acotado a RC84 y no invalida los cuatro cierres de RC83.
+
 ## RC82 - cierre Windows CPU y rendimiento Streamlit sobre proyecto real
 
 La validación material de RC82 en Windows CPU cerró los defectos funcionales abiertos por RC81: un proyecto nuevo pudo entrar directamente en `Administrar y recuperar` e `Intercambiar cambios` sin errores SQLite/Alembic, Google Drive completó OAuth y conservó el token local, y una copia sin originales audiovisuales mantuvo transcripción y metadatos sin propagar `FileNotFoundError`.

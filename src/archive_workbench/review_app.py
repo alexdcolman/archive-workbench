@@ -2923,26 +2923,52 @@ def _google_drive_query_param(st, name: str) -> str:
     return str(value or "").strip()
 
 
-def _handle_google_drive_oauth_callback(st) -> None:
-    flash = st.session_state.pop("google_drive_oauth_flash", None)
-    if flash:
-        st.success(str(flash))
+def _render_google_drive_callback_terminal(st, *, message: str, is_error: bool) -> None:
+    if is_error:
+        st.error(message)
+    else:
+        st.success(message)
+    st.caption(
+        "Esta pestaña se abrió sólo para completar Google Drive. Podés cerrarla y volver a la "
+        "pestaña de Archive Workbench que ya tenías abierta."
+    )
+
+
+def _handle_google_drive_oauth_callback(st) -> bool:
+    terminal = st.session_state.get("google_drive_oauth_terminal")
+    if isinstance(terminal, dict):
+        _render_google_drive_callback_terminal(
+            st,
+            message=str(terminal.get("message") or "Google Drive terminó su operación."),
+            is_error=bool(terminal.get("is_error")),
+        )
+        return True
 
     error = _google_drive_query_param(st, "error")
     code = _google_drive_query_param(st, "code")
     state = _google_drive_query_param(st, "state")
     picked_file_ids = _google_drive_query_param(st, "picked_file_ids")
     if not error and not code and not state:
-        return
+        return False
 
     if error:
+        message = f"Google Drive no fue autorizado: {error}"
+        st.session_state["google_drive_oauth_terminal"] = {
+            "message": message,
+            "is_error": True,
+        }
         st.query_params.clear()
-        st.error(f"Google Drive no fue autorizado: {error}")
-        return
+        _render_google_drive_callback_terminal(st, message=message, is_error=True)
+        return True
     if not code or not state:
+        message = "La respuesta de Google Drive está incompleta. Iniciá la conexión nuevamente."
+        st.session_state["google_drive_oauth_terminal"] = {
+            "message": message,
+            "is_error": True,
+        }
         st.query_params.clear()
-        st.error("La respuesta de Google Drive está incompleta. Iniciá la conexión nuevamente.")
-        return
+        _render_google_drive_callback_terminal(st, message=message, is_error=True)
+        return True
 
     try:
         result = complete_google_drive_authorization(
@@ -2952,20 +2978,29 @@ def _handle_google_drive_oauth_callback(st) -> None:
             token_path=google_drive_default_token_path(),
         )
     except (ValueError, RuntimeError, OSError) as exc:
+        message = str(exc)
+        st.session_state["google_drive_oauth_terminal"] = {
+            "message": message,
+            "is_error": True,
+        }
         st.query_params.clear()
-        st.error(str(exc))
-        return
+        _render_google_drive_callback_terminal(st, message=message, is_error=True)
+        return True
 
     if result.picked_file_ids:
         message = (
-            "El ZIP quedó autorizado en Google Drive. Podés volver a la pestaña donde lo elegiste "
-            "y usar esa selección."
+            "El ZIP quedó autorizado en Google Drive. Volvé a la pestaña donde lo elegiste "
+            "y usá esa selección."
         )
     else:
         message = "Google Drive quedó conectado en esta computadora."
-    st.session_state["google_drive_oauth_flash"] = message
+    st.session_state["google_drive_oauth_terminal"] = {
+        "message": message,
+        "is_error": False,
+    }
     st.query_params.clear()
-    st.success(message)
+    _render_google_drive_callback_terminal(st, message=message, is_error=False)
+    return True
 
 
 def _render_google_drive_connection(
@@ -5079,7 +5114,8 @@ def main() -> None:
     import streamlit as st
 
     st.set_page_config(page_title="Archive Workbench", layout="wide")
-    _handle_google_drive_oauth_callback(st)
+    if _handle_google_drive_oauth_callback(st):
+        st.stop()
     _render_global_input_policy(st)
     project_root = _project_root_from_argv()
     if project_root is None:

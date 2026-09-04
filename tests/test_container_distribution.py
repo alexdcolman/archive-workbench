@@ -58,8 +58,8 @@ def test_container_variants_keep_user_data_outside_images() -> None:
     assert services["app-gpu"]["gpus"] == "all"
     assert services["app-cpu"]["profiles"] == ["cpu"]
     assert services["app-gpu"]["profiles"] == ["gpu"]
-    assert "0.89.0-rc83-cpu" in services["app-cpu"]["image"]
-    assert "0.89.0-rc83-gpu" in services["app-gpu"]["image"]
+    assert "0.89.0-rc84-cpu" in services["app-cpu"]["image"]
+    assert "0.89.0-rc84-gpu" in services["app-gpu"]["image"]
     assert "ArchiveWorkbenchData" in dockerignore
     assert "/ArchiveWorkbenchData/" in gitignore
     assert "pilot_data" in dockerignore
@@ -120,8 +120,8 @@ def test_gpu_container_uses_cuda_cudnn_and_cuda_surya_runtime() -> None:
 def test_cross_platform_launchers_select_prebuilt_cpu_or_gpu_images() -> None:
     cpu_tag = (ROOT / "docker" / "image-tag.txt").read_text(encoding="utf-8").strip()
     gpu_tag = (ROOT / "docker" / "gpu-image-tag.txt").read_text(encoding="utf-8").strip()
-    assert cpu_tag == "0.89.0-rc83-cpu"
-    assert gpu_tag == "0.89.0-rc83-gpu"
+    assert cpu_tag == "0.89.0-rc84-cpu"
+    assert gpu_tag == "0.89.0-rc84-gpu"
 
     cpu_image = f"ghcr.io/alexdcolman/archive-workbench:{cpu_tag}"
     gpu_image = f"ghcr.io/alexdcolman/archive-workbench:{gpu_tag}"

@@ -1,3 +1,19 @@
+## 0.89.0 RC84 - 2026-09-04
+
+- Convierte el retorno administrado de Google Drive en una pantalla auxiliar terminal después de OAuth o Google Picker.
+- Evita que una sesión Streamlit nueva abierta por Google continúe hacia el launcher de creación/apertura de proyectos.
+- Mantiene sin cambios permisos `drive.file`, PKCE, tokens locales, selección de ZIP, intercambio, SQLite y rendimiento.
+- Cambia los tags administrados a `0.89.0-rc84-cpu` y `0.89.0-rc84-gpu`.
+- Sin migración; continúa `0047_authority_relation_profiles`.
+
+## 0.89.0 RC83 - 2026-09-01/04
+
+- Recupera el cambio de pestaña con un solo clic sin rerun global y conserva continuidad visual en navegador.
+- Permite adoptar dentro de un proyecto vacío una copia completa recibida, con staging, validación, backup y reemplazo controlado; un proyecto con trabajo la rechaza y remite a paquetes incrementales.
+- Agrega **Cerrar Archive Workbench** para terminar sólo la instancia administrada propia.
+- La validación Windows CPU dejó verdes los tres bloques y mantuvo el rendimiento de RC82.
+- Sin migración; continúa `0047_authority_relation_profiles`.
+
 ## 0.89.0 RC80 - 2026-08-27
 
 - Corrige la publicación multi-arquitectura de la imagen CPU: el runtime principal instala PyTorch y torchvision desde el índice CPU antes de resolver Docling, búsqueda semántica y los demás extras.

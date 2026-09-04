@@ -206,6 +206,72 @@ def test_managed_google_drive_ui_uses_host_browser_callback_without_per_user_jso
     )
 
 
+def test_managed_google_drive_callback_is_terminal_before_launcher():
+    source = (Path(__file__).parents[1] / "src" / "archive_workbench" / "review_app.py").read_text(
+        encoding="utf-8"
+    )
+    handler_start = source.index("def _handle_google_drive_oauth_callback")
+    connection_start = source.index("def _render_google_drive_connection", handler_start)
+    handler = source[handler_start:connection_start]
+    main_start = source.index("def main()")
+    main_head = source[main_start : source.index("decisions_path =", main_start)]
+
+    assert 'st.session_state.get("google_drive_oauth_terminal")' in handler
+    assert 'st.session_state["google_drive_oauth_terminal"]' in handler
+    assert "_render_google_drive_callback_terminal" in handler
+    assert "return True" in handler
+    assert "if _handle_google_drive_oauth_callback(st):" in main_head
+    assert "st.stop()" in main_head
+    assert main_head.index("if _handle_google_drive_oauth_callback(st):") < main_head.index(
+        "_render_global_input_policy(st)"
+    )
+    assert main_head.index("st.stop()") < main_head.index("_render_global_input_policy(st)")
+
+
+def test_managed_google_drive_callback_persists_terminal_state_across_query_cleanup(monkeypatch):
+    from types import SimpleNamespace
+
+    from archive_workbench import review_app
+
+    class FakeStreamlit:
+        def __init__(self):
+            self.session_state = {}
+            self.query_params = {"code": "authorization-code", "state": "state"}
+            self.successes = []
+            self.errors = []
+            self.captions = []
+
+        def success(self, message):
+            self.successes.append(str(message))
+
+        def error(self, message):
+            self.errors.append(str(message))
+
+        def caption(self, message):
+            self.captions.append(str(message))
+
+    st = FakeStreamlit()
+    monkeypatch.setattr(
+        review_app,
+        "complete_google_drive_authorization",
+        lambda **_kwargs: SimpleNamespace(picked_file_ids=()),
+    )
+
+    assert review_app._handle_google_drive_oauth_callback(st) is True
+    assert st.query_params == {}
+    assert st.session_state["google_drive_oauth_terminal"]["is_error"] is False
+    assert "Google Drive quedó conectado" in st.session_state["google_drive_oauth_terminal"]["message"]
+    assert st.successes
+    assert st.captions
+
+    # Simula el rerun provocado por limpiar los query params en la misma pestaña auxiliar.
+    st.successes.clear()
+    st.captions.clear()
+    assert review_app._handle_google_drive_oauth_callback(st) is True
+    assert st.successes
+    assert st.captions
+
+
 def test_picker_authorization_url_uses_only_drive_file_scope():
     client = GoogleOAuthClient(
         client_id="client",
