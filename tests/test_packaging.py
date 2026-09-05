@@ -263,7 +263,7 @@ def test_version_docs_and_discovery_plan_are_packaged() -> None:
     assert (root / "config" / "ocr_benchmark_truth.template.yaml").is_file()
     assert (root / "scripts" / "create_ocr_truth_benchmark_validation_project.py").is_file()
     assert (root / "scripts" / "verify_ocr_truth_benchmark_validation_project.py").is_file()
-    assert (root / "docs" / "referencia" / "BENCHMARK_OCR_VERDAD_TERRENO.md").is_file()
+    assert (root / ".assistant" / "project_docs" / "referencia" / "BENCHMARK_OCR_VERDAD_TERRENO.md").is_file()
     processing_app = (root / "src" / "archive_workbench" / "processing_app.py").read_text(
         encoding="utf-8"
     )
@@ -349,10 +349,10 @@ def test_version_docs_and_discovery_plan_are_packaged() -> None:
     validator_source = validator.read_text(encoding="utf-8")
     assert "controlled_candidates" in validator_source
     assert "editable_object_id" in validator_source
-    assert (root / "docs" / "HISTORIAL_DE_CAMBIOS.md").is_file()
-    assert (root / "docs" / "operativos" / "PENDIENTES_ACTIVOS.md").is_file()
-    assert (root / "docs" / "operativos" / "ESTRATEGIA_DE_PRUEBAS.md").is_file()
-    assert (root / "docs" / "operativos" / "ACTUALIZACION_ACTUAL.md").is_file()
+    assert (root / ".assistant" / "project_docs" / "HISTORIAL_DE_CAMBIOS.md").is_file()
+    assert (root / ".assistant" / "project_docs" / "operativos" / "PENDIENTES_ACTIVOS.md").is_file()
+    assert (root / ".assistant" / "project_docs" / "operativos" / "ESTRATEGIA_DE_PRUEBAS.md").is_file()
+    assert (root / ".assistant" / "project_docs" / "operativos" / "ACTUALIZACION_ACTUAL.md").is_file()
     assert ".assistant/" in (root / ".gitignore").read_text(encoding="utf-8")
     assistant_root = root / ".assistant"
     if assistant_root.is_dir():
@@ -364,10 +364,10 @@ def test_version_docs_and_discovery_plan_are_packaged() -> None:
         assert "incluye `.assistant` completa y vigente" in security
         assert "se conserva y mantiene actualizada también en la copia local de trabajo" in security
     assert (
-        root / "docs" / "referencia" / "RECUPERACION_LINAJE_EX_01.md"
+        root / ".assistant" / "project_docs" / "historico" / "planes" / "RECUPERACION_LINAJE_EX_01.md"
     ).is_file()
     assert (
-        root / "docs" / "referencia" / "DESCUBRIMIENTO_ABIERTO_DISC_01.md"
+        root / ".assistant" / "project_docs" / "historico" / "planes" / "DESCUBRIMIENTO_ABIERTO_DISC_01.md"
     ).is_file()
     assert (
         root / "scripts" / "create_lineage_diagnostic_validation_projects.py"
@@ -485,14 +485,21 @@ def test_candidate_update_reconciles_only_known_relocations(tmp_path: Path) -> N
     manifest = json.loads(
         (root / "scripts" / "candidate_update_manifest.json").read_text(encoding="utf-8")
     )
-    assert manifest["candidate"] == "0.89.0 RC84"
-    assert len(manifest["relocations"]) == 5
-
+    assert manifest["candidate"] == "0.89.0 RC84 - reorganización documental post-validación"
+    assert len(manifest["relocations"]) > 100
     for item in manifest["relocations"]:
-        historical = root / item["to"]
-        old = target / item["from"]
-        old.parent.mkdir(parents=True, exist_ok=True)
-        shutil.copy2(historical, old)
+        assert item["from_sha256"]
+        assert item["to_sha256"]
+        assert (root / item["to"]).is_file()
+
+    # Use an unchanged historical file so source and destination bytes are identical.
+    item = next(
+        item for item in manifest["relocations"]
+        if item["from"].endswith("ACTUALIZACION_Y_PRUEBA_0.46.0.md")
+    )
+    old = target / item["from"]
+    old.parent.mkdir(parents=True, exist_ok=True)
+    shutil.copy2(root / item["to"], old)
 
     local_marker = target / "pilot_data" / "LOCAL_DO_NOT_TOUCH.txt"
     local_marker.parent.mkdir(parents=True)
@@ -513,21 +520,15 @@ def test_candidate_update_reconciles_only_known_relocations(tmp_path: Path) -> N
     )
     assert result.returncode == 0, result.stdout + result.stderr
     assert local_marker.read_text(encoding="utf-8") == "persistente"
-    for item in manifest["relocations"]:
-        assert not (target / item["from"]).exists()
-        assert (target / item["to"]).is_file()
+    assert not old.exists()
+    assert (target / item["to"]).is_file()
+    assert not (target / "docs" / "operativos").exists()
+    assert not (target / "docs" / "referencia").exists()
+    assert not (target / "docs" / "historico").exists()
+    assert (target / ".assistant" / "project_docs" / "operativos" / "PENDIENTES_ACTIVOS.md").is_file()
+    assert (target / ".assistant" / "project_docs" / "referencia" / "ARQUITECTURA_Y_MODELO_ACTUAL.md").is_file()
+    assert (target / "docs" / "desarrollo.html").is_file()
 
-    operational_files = {
-        path.name for path in (target / "docs" / "operativos").iterdir() if path.is_file()
-    }
-    assert operational_files == {
-        "PENDIENTES_ACTIVOS.md",
-        "IMPLEMENTACIONES_REALIZADAS.md",
-        "ACTUALIZACION_ACTUAL.md",
-        "ESTRATEGIA_DE_PRUEBAS.md",
-        "GUIA_PRUEBA_PILOTO.md",
-        "HOJA_DE_RUTA_PRE_RELEASE.md",
-    }
 
 
 def test_candidate_update_aborts_before_copy_if_known_old_file_was_modified(tmp_path: Path) -> None:

@@ -6,7 +6,7 @@ Los documentos y la base SQLite permanecen en la computadora del equipo. Las ext
 
 **Versión actual:** 0.89.0, en estabilización pre-release.
 
-[Documentación pública](docs/index.html) · [Tutorial](docs/tutorial.html) · [Instalación](docs/instalacion.html) · [Referencia técnica](docs/referencia.html) · [Problemas frecuentes](docs/problemas.html)
+[Documentación pública](docs/index.html) · [Tutorial](docs/tutorial.html) · [Instalación](docs/instalacion.html) · [Referencia técnica](docs/referencia.html) · [Desarrollo](docs/desarrollo.html) · [Problemas frecuentes](docs/problemas.html)
 
 ![Recorrido general de Archive Workbench, desde catálogo y procesamiento hasta revisión, análisis, exportación, intercambio y resguardo.](docs/assets/diagrams/flujo-general.svg)
 
@@ -121,20 +121,14 @@ Surya OCR se instala en un entorno separado para no modificar el runtime princip
 
 ## Límites y estado
 
-Archive Workbench se encuentra en estabilización pre-release. El circuito completo fue probado con un corpus piloto, pero la calidad de OCR depende del material y la búsqueda semántica requiere evaluación crítica sobre cada corpus. La imagen Docker y otros trabajos operativos previos a v1.0 siguen en la [hoja de ruta](docs/operativos/HOJA_DE_RUTA_PRE_RELEASE.md).
+Archive Workbench se encuentra en estabilización pre-release. El circuito completo fue probado con un corpus piloto, pero la calidad de OCR depende del material y la búsqueda semántica requiere evaluación crítica sobre cada corpus. El estado público del trabajo previo a v1.0 se resume en [Desarrollo](docs/desarrollo.html).
 
 Las funciones automáticas no reemplazan la lectura del equipo. Una similitud semántica, una extracción OCR o una referencia candidata expresa un resultado computacional que debe interpretarse con su procedencia.
 
-## Documentación para desarrollo y continuidad
+## Documentación
 
-La documentación pública comienza en [`docs/index.html`](docs/index.html). El estado interno de desarrollo se mantiene separado:
+La documentación pública comienza en [`docs/index.html`](docs/index.html). El [tutorial](docs/tutorial.html) recorre las tareas de uso, la [referencia técnica](docs/referencia.html) reúne contratos estables y [Desarrollo](docs/desarrollo.html) explica los identificadores que aparecen en el [`CHANGELOG.md`](CHANGELOG.md).
 
-- [Pendientes activos](docs/operativos/PENDIENTES_ACTIVOS.md)
-- [Implementaciones realizadas](docs/operativos/IMPLEMENTACIONES_REALIZADAS.md)
-- [Actualización actual](docs/operativos/ACTUALIZACION_ACTUAL.md)
-- [Hoja de ruta pre-release](docs/operativos/HOJA_DE_RUTA_PRE_RELEASE.md)
-- [Arquitectura y modelo actual](docs/referencia/ARQUITECTURA_Y_MODELO_ACTUAL.md)
-- [Historial de cambios y mapa documental](docs/HISTORIAL_DE_CAMBIOS.md)
 
 ## Desarrollo y pruebas
 

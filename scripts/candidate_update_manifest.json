@@ -1,31 +1,864 @@
 {
   "schema_version": 1,
-  "candidate": "0.89.0 RC84",
+  "candidate": "0.89.0 RC84 - reorganización documental post-validación",
   "relocations": [
     {
+      "from": "docs/HISTORIAL_DE_CAMBIOS.md",
+      "to": ".assistant/project_docs/HISTORIAL_DE_CAMBIOS.md",
+      "from_sha256": "bc8c734969380581a3f6a0911943f8ab79a503973c7010a9defcca6eb972804a",
+      "to_sha256": "3323ec2a7ede34afa42241421d92666546efd989120fe38db92151f712b32f62"
+    },
+    {
+      "from": "docs/historico/actualizaciones/ACTUALIZACION_Y_PRUEBA_0.46.0.md",
+      "to": ".assistant/project_docs/historico/actualizaciones/ACTUALIZACION_Y_PRUEBA_0.46.0.md",
+      "from_sha256": "adddb9a8d6acd32df5314539eb2f86a7d9accf6949f620689ce673b724933fd9",
+      "to_sha256": "adddb9a8d6acd32df5314539eb2f86a7d9accf6949f620689ce673b724933fd9"
+    },
+    {
+      "from": "docs/historico/actualizaciones/ACTUALIZACION_Y_PRUEBA_0.47.0.md",
+      "to": ".assistant/project_docs/historico/actualizaciones/ACTUALIZACION_Y_PRUEBA_0.47.0.md",
+      "from_sha256": "37474f67af618aa51ab95198abab0d4b234d990e7d182455a99780ecbf9e14f6",
+      "to_sha256": "37474f67af618aa51ab95198abab0d4b234d990e7d182455a99780ecbf9e14f6"
+    },
+    {
+      "from": "docs/historico/actualizaciones/ACTUALIZACION_Y_PRUEBA_0.48.0.md",
+      "to": ".assistant/project_docs/historico/actualizaciones/ACTUALIZACION_Y_PRUEBA_0.48.0.md",
+      "from_sha256": "4b61f499223442bdcadec066d51cd95228fde0f34abc7d556e0fb2f2f75c0555",
+      "to_sha256": "4b61f499223442bdcadec066d51cd95228fde0f34abc7d556e0fb2f2f75c0555"
+    },
+    {
+      "from": "docs/historico/actualizaciones/ACTUALIZACION_Y_PRUEBA_0.49.0.md",
+      "to": ".assistant/project_docs/historico/actualizaciones/ACTUALIZACION_Y_PRUEBA_0.49.0.md",
+      "from_sha256": "cf48c9fbc32b54e43a63c3d37981dd42304c70e77220c28255520d8f3eaad166",
+      "to_sha256": "cf48c9fbc32b54e43a63c3d37981dd42304c70e77220c28255520d8f3eaad166"
+    },
+    {
+      "from": "docs/historico/actualizaciones/ACTUALIZACION_Y_PRUEBA_0.49.1.md",
+      "to": ".assistant/project_docs/historico/actualizaciones/ACTUALIZACION_Y_PRUEBA_0.49.1.md",
+      "from_sha256": "f4b7568b77afd81e7a0ada314adb6f275a8a7908a12189c04bde232871533cce",
+      "to_sha256": "f4b7568b77afd81e7a0ada314adb6f275a8a7908a12189c04bde232871533cce"
+    },
+    {
+      "from": "docs/historico/actualizaciones/ACTUALIZACION_Y_PRUEBA_0.49.2.md",
+      "to": ".assistant/project_docs/historico/actualizaciones/ACTUALIZACION_Y_PRUEBA_0.49.2.md",
+      "from_sha256": "049b6fd9339c9d2de73526cd499252acb5f5d34332a247166958c167bf8a3273",
+      "to_sha256": "049b6fd9339c9d2de73526cd499252acb5f5d34332a247166958c167bf8a3273"
+    },
+    {
+      "from": "docs/historico/actualizaciones/ACTUALIZACION_Y_PRUEBA_0.50.0.md",
+      "to": ".assistant/project_docs/historico/actualizaciones/ACTUALIZACION_Y_PRUEBA_0.50.0.md",
+      "from_sha256": "e16230c9ef07fd44cdc1d6525c8d2a6cb945a3c052748881362123e5160a61ed",
+      "to_sha256": "e16230c9ef07fd44cdc1d6525c8d2a6cb945a3c052748881362123e5160a61ed"
+    },
+    {
+      "from": "docs/historico/actualizaciones/ACTUALIZACION_Y_PRUEBA_0.50.1.md",
+      "to": ".assistant/project_docs/historico/actualizaciones/ACTUALIZACION_Y_PRUEBA_0.50.1.md",
+      "from_sha256": "334c3385bd1cca04e57c1bd3b2140c1c7899410a2f79f3aacd09b545f2a78494",
+      "to_sha256": "334c3385bd1cca04e57c1bd3b2140c1c7899410a2f79f3aacd09b545f2a78494"
+    },
+    {
+      "from": "docs/historico/actualizaciones/ACTUALIZACION_Y_PRUEBA_0.50.2.md",
+      "to": ".assistant/project_docs/historico/actualizaciones/ACTUALIZACION_Y_PRUEBA_0.50.2.md",
+      "from_sha256": "807a7299071bfebc8b0224550a7f4d62c1c69c2ab00da607a4929d55b3994516",
+      "to_sha256": "807a7299071bfebc8b0224550a7f4d62c1c69c2ab00da607a4929d55b3994516"
+    },
+    {
+      "from": "docs/historico/actualizaciones/ACTUALIZACION_Y_PRUEBA_0.50.3.md",
+      "to": ".assistant/project_docs/historico/actualizaciones/ACTUALIZACION_Y_PRUEBA_0.50.3.md",
+      "from_sha256": "9c25985741aba2423a3fe688d495ed520add76011fa0db65081ef4280b7e3c81",
+      "to_sha256": "9c25985741aba2423a3fe688d495ed520add76011fa0db65081ef4280b7e3c81"
+    },
+    {
+      "from": "docs/historico/actualizaciones/ACTUALIZACION_Y_PRUEBA_0.51.0.md",
+      "to": ".assistant/project_docs/historico/actualizaciones/ACTUALIZACION_Y_PRUEBA_0.51.0.md",
+      "from_sha256": "5ffff1688ee67635631bd87859db54ede853ace585d27c9de7923576806e8df0",
+      "to_sha256": "5ffff1688ee67635631bd87859db54ede853ace585d27c9de7923576806e8df0"
+    },
+    {
+      "from": "docs/historico/actualizaciones/ACTUALIZACION_Y_PRUEBA_0.52.0.md",
+      "to": ".assistant/project_docs/historico/actualizaciones/ACTUALIZACION_Y_PRUEBA_0.52.0.md",
+      "from_sha256": "923367e96017f821c898eb36a860d28f706ba0cae66320655b46913eff54cb66",
+      "to_sha256": "923367e96017f821c898eb36a860d28f706ba0cae66320655b46913eff54cb66"
+    },
+    {
+      "from": "docs/historico/actualizaciones/ACTUALIZACION_Y_PRUEBA_0.53.0.md",
+      "to": ".assistant/project_docs/historico/actualizaciones/ACTUALIZACION_Y_PRUEBA_0.53.0.md",
+      "from_sha256": "5b7cc6698a8c09b12b69917030b5bd26610cac1997ec1b95a215894829e2c6cb",
+      "to_sha256": "5b7cc6698a8c09b12b69917030b5bd26610cac1997ec1b95a215894829e2c6cb"
+    },
+    {
+      "from": "docs/historico/actualizaciones/ACTUALIZACION_Y_PRUEBA_0.54.0.md",
+      "to": ".assistant/project_docs/historico/actualizaciones/ACTUALIZACION_Y_PRUEBA_0.54.0.md",
+      "from_sha256": "9cdaec9c6c241fe870a685290e6e8ac8299e3f22fe0dd439739dd3c4f819f7a9",
+      "to_sha256": "9cdaec9c6c241fe870a685290e6e8ac8299e3f22fe0dd439739dd3c4f819f7a9"
+    },
+    {
+      "from": "docs/historico/actualizaciones/ACTUALIZACION_Y_PRUEBA_0.55.0.md",
+      "to": ".assistant/project_docs/historico/actualizaciones/ACTUALIZACION_Y_PRUEBA_0.55.0.md",
+      "from_sha256": "5b2741dc49185e9593f3265303d7129cd3bf2044f2f8a90f647efb2d65ba9181",
+      "to_sha256": "5b2741dc49185e9593f3265303d7129cd3bf2044f2f8a90f647efb2d65ba9181"
+    },
+    {
+      "from": "docs/historico/actualizaciones/ACTUALIZACION_Y_PRUEBA_0.56.0.md",
+      "to": ".assistant/project_docs/historico/actualizaciones/ACTUALIZACION_Y_PRUEBA_0.56.0.md",
+      "from_sha256": "19db11d2aaead90852bfff08003d28b092b03446d93b3c2ac8354e964924cf80",
+      "to_sha256": "19db11d2aaead90852bfff08003d28b092b03446d93b3c2ac8354e964924cf80"
+    },
+    {
+      "from": "docs/historico/actualizaciones/ACTUALIZACION_Y_PRUEBA_0.57.0.md",
+      "to": ".assistant/project_docs/historico/actualizaciones/ACTUALIZACION_Y_PRUEBA_0.57.0.md",
+      "from_sha256": "1f4a505dd3afe120d1eb9de3df1ea667a337aa8e24bcb03537f8aeb41e9be56f",
+      "to_sha256": "1f4a505dd3afe120d1eb9de3df1ea667a337aa8e24bcb03537f8aeb41e9be56f"
+    },
+    {
+      "from": "docs/historico/actualizaciones/ACTUALIZACION_Y_PRUEBA_0.58.0.md",
+      "to": ".assistant/project_docs/historico/actualizaciones/ACTUALIZACION_Y_PRUEBA_0.58.0.md",
+      "from_sha256": "f0bf92d4618c8e12a703721208779afe57faf224fe7488a9933cda9f0dae2387",
+      "to_sha256": "f0bf92d4618c8e12a703721208779afe57faf224fe7488a9933cda9f0dae2387"
+    },
+    {
+      "from": "docs/historico/actualizaciones/ACTUALIZACION_Y_PRUEBA_0.59.0.md",
+      "to": ".assistant/project_docs/historico/actualizaciones/ACTUALIZACION_Y_PRUEBA_0.59.0.md",
+      "from_sha256": "d8445bae9caf615dba24a67d83f5700e56e166b234cbc5385ca5f6262509ce3d",
+      "to_sha256": "d8445bae9caf615dba24a67d83f5700e56e166b234cbc5385ca5f6262509ce3d"
+    },
+    {
+      "from": "docs/historico/actualizaciones/ACTUALIZACION_Y_PRUEBA_0.60.0.md",
+      "to": ".assistant/project_docs/historico/actualizaciones/ACTUALIZACION_Y_PRUEBA_0.60.0.md",
+      "from_sha256": "043a801ddc89000b1b5a5534656e24fca42a67b061bb733dd8f967314b577698",
+      "to_sha256": "043a801ddc89000b1b5a5534656e24fca42a67b061bb733dd8f967314b577698"
+    },
+    {
+      "from": "docs/historico/actualizaciones/ACTUALIZACION_Y_PRUEBA_0.61.0.md",
+      "to": ".assistant/project_docs/historico/actualizaciones/ACTUALIZACION_Y_PRUEBA_0.61.0.md",
+      "from_sha256": "2f429b2632d2ea6e4d7b2083e561726202ed150b77f71f58e735c791551942d5",
+      "to_sha256": "2f429b2632d2ea6e4d7b2083e561726202ed150b77f71f58e735c791551942d5"
+    },
+    {
+      "from": "docs/historico/actualizaciones/ACTUALIZACION_Y_PRUEBA_0.62.0.md",
+      "to": ".assistant/project_docs/historico/actualizaciones/ACTUALIZACION_Y_PRUEBA_0.62.0.md",
+      "from_sha256": "96518af17b7d54086f3addf0a7fdf61c52a6186c477373b54c42baca990f2ed7",
+      "to_sha256": "96518af17b7d54086f3addf0a7fdf61c52a6186c477373b54c42baca990f2ed7"
+    },
+    {
+      "from": "docs/historico/actualizaciones/ACTUALIZACION_Y_PRUEBA_0.62.1.md",
+      "to": ".assistant/project_docs/historico/actualizaciones/ACTUALIZACION_Y_PRUEBA_0.62.1.md",
+      "from_sha256": "a1e2deb0c6e94e113b7c12cb4da9c14e6716015e83e77dd753ddcfaf5b9c0b40",
+      "to_sha256": "a1e2deb0c6e94e113b7c12cb4da9c14e6716015e83e77dd753ddcfaf5b9c0b40"
+    },
+    {
+      "from": "docs/historico/actualizaciones/ACTUALIZACION_Y_PRUEBA_0.63.0.md",
+      "to": ".assistant/project_docs/historico/actualizaciones/ACTUALIZACION_Y_PRUEBA_0.63.0.md",
+      "from_sha256": "16756cfa352e8de433d8db9c29c4e77f5fe9668bc2aed269f32839cf36b7dc47",
+      "to_sha256": "16756cfa352e8de433d8db9c29c4e77f5fe9668bc2aed269f32839cf36b7dc47"
+    },
+    {
+      "from": "docs/historico/actualizaciones/ACTUALIZACION_Y_PRUEBA_0.64.0.md",
+      "to": ".assistant/project_docs/historico/actualizaciones/ACTUALIZACION_Y_PRUEBA_0.64.0.md",
+      "from_sha256": "8b9344e2780780ac32c7ab0d7aa813989b049490c9219072d8e234a36b863aa1",
+      "to_sha256": "8b9344e2780780ac32c7ab0d7aa813989b049490c9219072d8e234a36b863aa1"
+    },
+    {
+      "from": "docs/historico/actualizaciones/ACTUALIZACION_Y_PRUEBA_0.64.1.md",
+      "to": ".assistant/project_docs/historico/actualizaciones/ACTUALIZACION_Y_PRUEBA_0.64.1.md",
+      "from_sha256": "0d767003dc7c27e5eff1fa41d1e3fe1310422dc4f5a77a66ecf9203c33e40d1f",
+      "to_sha256": "0d767003dc7c27e5eff1fa41d1e3fe1310422dc4f5a77a66ecf9203c33e40d1f"
+    },
+    {
+      "from": "docs/historico/actualizaciones/ACTUALIZACION_Y_PRUEBA_0.64.2.md",
+      "to": ".assistant/project_docs/historico/actualizaciones/ACTUALIZACION_Y_PRUEBA_0.64.2.md",
+      "from_sha256": "8c752c55ac443ef9cbe2a2730d349ac31e791464673571eacc63af0ee8469658",
+      "to_sha256": "8c752c55ac443ef9cbe2a2730d349ac31e791464673571eacc63af0ee8469658"
+    },
+    {
+      "from": "docs/historico/actualizaciones/ACTUALIZACION_Y_PRUEBA_0.65.0.md",
+      "to": ".assistant/project_docs/historico/actualizaciones/ACTUALIZACION_Y_PRUEBA_0.65.0.md",
+      "from_sha256": "c2a7a4adf033bd85ccce16627d099af9c230d96b0d783c9707164525f556d8a9",
+      "to_sha256": "c2a7a4adf033bd85ccce16627d099af9c230d96b0d783c9707164525f556d8a9"
+    },
+    {
+      "from": "docs/historico/actualizaciones/ACTUALIZACION_Y_PRUEBA_0.66.0.md",
+      "to": ".assistant/project_docs/historico/actualizaciones/ACTUALIZACION_Y_PRUEBA_0.66.0.md",
+      "from_sha256": "6f8598a1bc3c8e7dfa1670caf7ac50d838e393979b2ba9021ff3c80d1c65bc26",
+      "to_sha256": "6f8598a1bc3c8e7dfa1670caf7ac50d838e393979b2ba9021ff3c80d1c65bc26"
+    },
+    {
+      "from": "docs/historico/actualizaciones/ACTUALIZACION_Y_PRUEBA_0.67.0.md",
+      "to": ".assistant/project_docs/historico/actualizaciones/ACTUALIZACION_Y_PRUEBA_0.67.0.md",
+      "from_sha256": "86e7d653c46b639f936a32adc85c75f58d05fa7b8b27f4fbf521c41959b26b04",
+      "to_sha256": "86e7d653c46b639f936a32adc85c75f58d05fa7b8b27f4fbf521c41959b26b04"
+    },
+    {
+      "from": "docs/historico/actualizaciones/ACTUALIZACION_Y_PRUEBA_0.68.0.md",
+      "to": ".assistant/project_docs/historico/actualizaciones/ACTUALIZACION_Y_PRUEBA_0.68.0.md",
+      "from_sha256": "cb3962adfa019cccdb17924889467627f49b9f19672a91bf2f18bfc5e9b7a080",
+      "to_sha256": "cb3962adfa019cccdb17924889467627f49b9f19672a91bf2f18bfc5e9b7a080"
+    },
+    {
+      "from": "docs/historico/actualizaciones/ACTUALIZACION_Y_PRUEBA_0.68.1.md",
+      "to": ".assistant/project_docs/historico/actualizaciones/ACTUALIZACION_Y_PRUEBA_0.68.1.md",
+      "from_sha256": "54775211b41253b6dbbfc2f2458bf034af23fe08d91bcd520b312e3524cc95c4",
+      "to_sha256": "54775211b41253b6dbbfc2f2458bf034af23fe08d91bcd520b312e3524cc95c4"
+    },
+    {
+      "from": "docs/historico/actualizaciones/ACTUALIZACION_Y_PRUEBA_0.69.0.md",
+      "to": ".assistant/project_docs/historico/actualizaciones/ACTUALIZACION_Y_PRUEBA_0.69.0.md",
+      "from_sha256": "97f741749fa1a51a43688531bfbc33574ef37df49dc9a96be047f54abafd9584",
+      "to_sha256": "97f741749fa1a51a43688531bfbc33574ef37df49dc9a96be047f54abafd9584"
+    },
+    {
+      "from": "docs/historico/actualizaciones/ACTUALIZACION_Y_PRUEBA_0.69.1.md",
+      "to": ".assistant/project_docs/historico/actualizaciones/ACTUALIZACION_Y_PRUEBA_0.69.1.md",
+      "from_sha256": "8d8bbd8ad5c24d0273205c2d190c63bf54852bfd2da62c1382350eeb45557c83",
+      "to_sha256": "8d8bbd8ad5c24d0273205c2d190c63bf54852bfd2da62c1382350eeb45557c83"
+    },
+    {
+      "from": "docs/historico/actualizaciones/ACTUALIZACION_Y_PRUEBA_0.69.2.md",
+      "to": ".assistant/project_docs/historico/actualizaciones/ACTUALIZACION_Y_PRUEBA_0.69.2.md",
+      "from_sha256": "3c8fd6ee70144069279877672ab1d50f2b70255cc9587f27b42ee50587f6c6a6",
+      "to_sha256": "3c8fd6ee70144069279877672ab1d50f2b70255cc9587f27b42ee50587f6c6a6"
+    },
+    {
+      "from": "docs/historico/actualizaciones/ACTUALIZACION_Y_PRUEBA_0.70.0.md",
+      "to": ".assistant/project_docs/historico/actualizaciones/ACTUALIZACION_Y_PRUEBA_0.70.0.md",
+      "from_sha256": "dd32a26fabb6f3da1dbae305502ae045a4580e3c7a2c7b0791ebf124fa261a9e",
+      "to_sha256": "dd32a26fabb6f3da1dbae305502ae045a4580e3c7a2c7b0791ebf124fa261a9e"
+    },
+    {
+      "from": "docs/historico/actualizaciones/ACTUALIZACION_Y_PRUEBA_0.70.1.md",
+      "to": ".assistant/project_docs/historico/actualizaciones/ACTUALIZACION_Y_PRUEBA_0.70.1.md",
+      "from_sha256": "7008c9b2a79bd6b775a603957152bac84176e7d6d764df860a2b19a12b38e6fc",
+      "to_sha256": "7008c9b2a79bd6b775a603957152bac84176e7d6d764df860a2b19a12b38e6fc"
+    },
+    {
+      "from": "docs/historico/actualizaciones/ACTUALIZACION_Y_PRUEBA_0.70.2.md",
+      "to": ".assistant/project_docs/historico/actualizaciones/ACTUALIZACION_Y_PRUEBA_0.70.2.md",
+      "from_sha256": "bcfeb4ab7fa23a2afa1f6e0c232f66635c4c6870fcee18b5082013af1b955c14",
+      "to_sha256": "bcfeb4ab7fa23a2afa1f6e0c232f66635c4c6870fcee18b5082013af1b955c14"
+    },
+    {
+      "from": "docs/historico/actualizaciones/ACTUALIZACION_Y_PRUEBA_0.71.0.md",
+      "to": ".assistant/project_docs/historico/actualizaciones/ACTUALIZACION_Y_PRUEBA_0.71.0.md",
+      "from_sha256": "6b0e3dde4de91f7f9ff03ad21360d0b1c7c2c371498408616500cbadb72481e6",
+      "to_sha256": "6b0e3dde4de91f7f9ff03ad21360d0b1c7c2c371498408616500cbadb72481e6"
+    },
+    {
+      "from": "docs/historico/actualizaciones/ACTUALIZACION_Y_PRUEBA_0.71.1.md",
+      "to": ".assistant/project_docs/historico/actualizaciones/ACTUALIZACION_Y_PRUEBA_0.71.1.md",
+      "from_sha256": "8a36052d10e6127b58977b318610128e76f56f298172b70158552f875a5638e0",
+      "to_sha256": "8a36052d10e6127b58977b318610128e76f56f298172b70158552f875a5638e0"
+    },
+    {
+      "from": "docs/historico/actualizaciones/ACTUALIZACION_Y_PRUEBA_0.72.0.md",
+      "to": ".assistant/project_docs/historico/actualizaciones/ACTUALIZACION_Y_PRUEBA_0.72.0.md",
+      "from_sha256": "f656d63f0066cd47b1d0c6e8e1cf7effc9982251ece0ac120842c0ac5f78fe66",
+      "to_sha256": "f656d63f0066cd47b1d0c6e8e1cf7effc9982251ece0ac120842c0ac5f78fe66"
+    },
+    {
+      "from": "docs/historico/actualizaciones/ACTUALIZACION_Y_PRUEBA_0.73.0.md",
+      "to": ".assistant/project_docs/historico/actualizaciones/ACTUALIZACION_Y_PRUEBA_0.73.0.md",
+      "from_sha256": "e5166a0f7e0a8206c2a52ad41b14f52e4c3fdb997df4ca982034dbb6676ad00f",
+      "to_sha256": "e5166a0f7e0a8206c2a52ad41b14f52e4c3fdb997df4ca982034dbb6676ad00f"
+    },
+    {
+      "from": "docs/historico/actualizaciones/ACTUALIZACION_Y_PRUEBA_0.74.0.md",
+      "to": ".assistant/project_docs/historico/actualizaciones/ACTUALIZACION_Y_PRUEBA_0.74.0.md",
+      "from_sha256": "1bbb32755a96778a6bb2a22a06f9d1d2911952f3e021e91c6fd4bd92b059dddc",
+      "to_sha256": "1bbb32755a96778a6bb2a22a06f9d1d2911952f3e021e91c6fd4bd92b059dddc"
+    },
+    {
+      "from": "docs/historico/actualizaciones/ACTUALIZACION_Y_PRUEBA_0.75.0.md",
+      "to": ".assistant/project_docs/historico/actualizaciones/ACTUALIZACION_Y_PRUEBA_0.75.0.md",
+      "from_sha256": "310857865ef6bf3e04563e4d903c18a5a1217a96042bf7ca615dfc9f49502b3d",
+      "to_sha256": "310857865ef6bf3e04563e4d903c18a5a1217a96042bf7ca615dfc9f49502b3d"
+    },
+    {
+      "from": "docs/historico/actualizaciones/ACTUALIZACION_Y_PRUEBA_0.75.1.md",
+      "to": ".assistant/project_docs/historico/actualizaciones/ACTUALIZACION_Y_PRUEBA_0.75.1.md",
+      "from_sha256": "8b7e0a0dfff5bca59b6927a48ab20091e9c288148c533647c9c0b8f65bd0b531",
+      "to_sha256": "8b7e0a0dfff5bca59b6927a48ab20091e9c288148c533647c9c0b8f65bd0b531"
+    },
+    {
+      "from": "docs/historico/actualizaciones/ACTUALIZACION_Y_PRUEBA_0.88.2.md",
+      "to": ".assistant/project_docs/historico/actualizaciones/ACTUALIZACION_Y_PRUEBA_0.88.2.md",
+      "from_sha256": "f788ab3e8b6bb67fc5bbc5bb8eb1b08232b90ba9b75a9604281551747f242bd3",
+      "to_sha256": "f788ab3e8b6bb67fc5bbc5bb8eb1b08232b90ba9b75a9604281551747f242bd3"
+    },
+    {
+      "from": "docs/historico/actualizaciones/ACTUALIZACION_Y_PRUEBA_0.89.0_RC10.md",
+      "to": ".assistant/project_docs/historico/actualizaciones/ACTUALIZACION_Y_PRUEBA_0.89.0_RC10.md",
+      "from_sha256": "6a9ca295321669c6a294f92d0e7a4a6971d3bba47a3a472b006f25b49de51187",
+      "to_sha256": "6a9ca295321669c6a294f92d0e7a4a6971d3bba47a3a472b006f25b49de51187"
+    },
+    {
+      "from": "docs/historico/actualizaciones/ACTUALIZACION_Y_PRUEBA_0.89.0_RC12.md",
+      "to": ".assistant/project_docs/historico/actualizaciones/ACTUALIZACION_Y_PRUEBA_0.89.0_RC12.md",
+      "from_sha256": "665312fac6adb0aead655def94a7c904ab73b4cde33cfae2c18f917098fbb0a3",
+      "to_sha256": "665312fac6adb0aead655def94a7c904ab73b4cde33cfae2c18f917098fbb0a3"
+    },
+    {
+      "from": "docs/historico/actualizaciones/ACTUALIZACION_Y_PRUEBA_0.89.0_RC14.md",
+      "to": ".assistant/project_docs/historico/actualizaciones/ACTUALIZACION_Y_PRUEBA_0.89.0_RC14.md",
+      "from_sha256": "0145effdda40d01094fb720279aca058259e9766b947ea209c62d131ffb79396",
+      "to_sha256": "0145effdda40d01094fb720279aca058259e9766b947ea209c62d131ffb79396"
+    },
+    {
+      "from": "docs/historico/actualizaciones/ACTUALIZACION_Y_PRUEBA_0.89.0_RC15.md",
+      "to": ".assistant/project_docs/historico/actualizaciones/ACTUALIZACION_Y_PRUEBA_0.89.0_RC15.md",
+      "from_sha256": "946b99d4c53c3ad7373e8ffe7e3945fbb7fff30c9fc1fa0b1ef3e7bf88c1edd2",
+      "to_sha256": "946b99d4c53c3ad7373e8ffe7e3945fbb7fff30c9fc1fa0b1ef3e7bf88c1edd2"
+    },
+    {
+      "from": "docs/historico/actualizaciones/ACTUALIZACION_Y_PRUEBA_0.89.0_RC20.md",
+      "to": ".assistant/project_docs/historico/actualizaciones/ACTUALIZACION_Y_PRUEBA_0.89.0_RC20.md",
+      "from_sha256": "0a6de42b2eba0b525a73912b778b1d8aab452a43985682f902c3b1a43437f5dd",
+      "to_sha256": "0a6de42b2eba0b525a73912b778b1d8aab452a43985682f902c3b1a43437f5dd"
+    },
+    {
+      "from": "docs/historico/actualizaciones/ACTUALIZACION_Y_PRUEBA_0.89.0_RC22.md",
+      "to": ".assistant/project_docs/historico/actualizaciones/ACTUALIZACION_Y_PRUEBA_0.89.0_RC22.md",
+      "from_sha256": "0145c7274bc352268c6ef04d9f8970e5813fd0b7dd17fbae926a4ee7cbd93fa8",
+      "to_sha256": "0145c7274bc352268c6ef04d9f8970e5813fd0b7dd17fbae926a4ee7cbd93fa8"
+    },
+    {
+      "from": "docs/historico/actualizaciones/ACTUALIZACION_Y_PRUEBA_0.89.0_RC23.md",
+      "to": ".assistant/project_docs/historico/actualizaciones/ACTUALIZACION_Y_PRUEBA_0.89.0_RC23.md",
+      "from_sha256": "d72085486853438583bf2e6b37ec3f26d77c726f1de473ff1b471e75eff8e611",
+      "to_sha256": "d72085486853438583bf2e6b37ec3f26d77c726f1de473ff1b471e75eff8e611"
+    },
+    {
+      "from": "docs/historico/actualizaciones/ACTUALIZACION_Y_PRUEBA_0.89.0_RC25.md",
+      "to": ".assistant/project_docs/historico/actualizaciones/ACTUALIZACION_Y_PRUEBA_0.89.0_RC25.md",
+      "from_sha256": "82fcb121cf7f0d11b8e04779a1af5a1edfccd35a6c82e45631fbcb9b330ced64",
+      "to_sha256": "82fcb121cf7f0d11b8e04779a1af5a1edfccd35a6c82e45631fbcb9b330ced64"
+    },
+    {
+      "from": "docs/historico/actualizaciones/ACTUALIZACION_Y_PRUEBA_0.89.0_RC27.md",
+      "to": ".assistant/project_docs/historico/actualizaciones/ACTUALIZACION_Y_PRUEBA_0.89.0_RC27.md",
+      "from_sha256": "33f02693c367bea947950c263afb2e4a94be56bc0a1e9d0afe7f86c2d8669019",
+      "to_sha256": "33f02693c367bea947950c263afb2e4a94be56bc0a1e9d0afe7f86c2d8669019"
+    },
+    {
+      "from": "docs/historico/actualizaciones/ACTUALIZACION_Y_PRUEBA_0.89.0_RC30.md",
+      "to": ".assistant/project_docs/historico/actualizaciones/ACTUALIZACION_Y_PRUEBA_0.89.0_RC30.md",
+      "from_sha256": "2fa690d765825cfcac09b61ae9b498af6551b71c6454f5a2e28be7fb1c0c61b5",
+      "to_sha256": "2fa690d765825cfcac09b61ae9b498af6551b71c6454f5a2e28be7fb1c0c61b5"
+    },
+    {
+      "from": "docs/historico/actualizaciones/ACTUALIZACION_Y_PRUEBA_0.89.0_RC38.md",
+      "to": ".assistant/project_docs/historico/actualizaciones/ACTUALIZACION_Y_PRUEBA_0.89.0_RC38.md",
+      "from_sha256": "b29d6614bbaf22a82a2d123987b869375436afe0fba53b69fe60a75b5e67bee6",
+      "to_sha256": "b29d6614bbaf22a82a2d123987b869375436afe0fba53b69fe60a75b5e67bee6"
+    },
+    {
+      "from": "docs/historico/actualizaciones/ACTUALIZACION_Y_PRUEBA_0.89.0_RC39.md",
+      "to": ".assistant/project_docs/historico/actualizaciones/ACTUALIZACION_Y_PRUEBA_0.89.0_RC39.md",
+      "from_sha256": "8384255123199773c80419073f1ced04ec25116cc31748b3249c1ec7af49274d",
+      "to_sha256": "8384255123199773c80419073f1ced04ec25116cc31748b3249c1ec7af49274d"
+    },
+    {
+      "from": "docs/historico/actualizaciones/ACTUALIZACION_Y_PRUEBA_0.89.0_RC40.md",
+      "to": ".assistant/project_docs/historico/actualizaciones/ACTUALIZACION_Y_PRUEBA_0.89.0_RC40.md",
+      "from_sha256": "3949f7063ee805ec486ff8c4e6f937a447a84107791e2a03f491be70687aad98",
+      "to_sha256": "3949f7063ee805ec486ff8c4e6f937a447a84107791e2a03f491be70687aad98"
+    },
+    {
+      "from": "docs/historico/actualizaciones/ACTUALIZACION_Y_PRUEBA_0.89.0_RC42.md",
+      "to": ".assistant/project_docs/historico/actualizaciones/ACTUALIZACION_Y_PRUEBA_0.89.0_RC42.md",
+      "from_sha256": "1edaa6bb18377179c07ee23cf27a326982c451b46dd706d3c5a4afde75595cf2",
+      "to_sha256": "1edaa6bb18377179c07ee23cf27a326982c451b46dd706d3c5a4afde75595cf2"
+    },
+    {
+      "from": "docs/historico/actualizaciones/ACTUALIZACION_Y_PRUEBA_0.89.0_RC43.md",
+      "to": ".assistant/project_docs/historico/actualizaciones/ACTUALIZACION_Y_PRUEBA_0.89.0_RC43.md",
+      "from_sha256": "400671510f34b2862eef455e11e535d284667818ae2b5c19a2cc866f48afd881",
+      "to_sha256": "400671510f34b2862eef455e11e535d284667818ae2b5c19a2cc866f48afd881"
+    },
+    {
+      "from": "docs/historico/actualizaciones/ACTUALIZACION_Y_PRUEBA_0.89.0_RC44.md",
+      "to": ".assistant/project_docs/historico/actualizaciones/ACTUALIZACION_Y_PRUEBA_0.89.0_RC44.md",
+      "from_sha256": "ccd7cb249eefdb624f3850891c02003371c98c0cc1b86b5148a48d37f3bd8f77",
+      "to_sha256": "ccd7cb249eefdb624f3850891c02003371c98c0cc1b86b5148a48d37f3bd8f77"
+    },
+    {
+      "from": "docs/historico/actualizaciones/ACTUALIZACION_Y_PRUEBA_0.89.0_RC45.md",
+      "to": ".assistant/project_docs/historico/actualizaciones/ACTUALIZACION_Y_PRUEBA_0.89.0_RC45.md",
+      "from_sha256": "876ab33e0c2c14b97546b1e5d59774ea606e6f6b1760ab962aed507b42880ceb",
+      "to_sha256": "876ab33e0c2c14b97546b1e5d59774ea606e6f6b1760ab962aed507b42880ceb"
+    },
+    {
+      "from": "docs/historico/actualizaciones/ACTUALIZACION_Y_PRUEBA_0.89.0_RC46.md",
+      "to": ".assistant/project_docs/historico/actualizaciones/ACTUALIZACION_Y_PRUEBA_0.89.0_RC46.md",
+      "from_sha256": "5873ee6c2111ca14407c56515b2cc7180eb2a144b58eba432cdd2ee92f4a02bd",
+      "to_sha256": "5873ee6c2111ca14407c56515b2cc7180eb2a144b58eba432cdd2ee92f4a02bd"
+    },
+    {
+      "from": "docs/historico/actualizaciones/ACTUALIZACION_Y_PRUEBA_0.89.0_RC47.md",
+      "to": ".assistant/project_docs/historico/actualizaciones/ACTUALIZACION_Y_PRUEBA_0.89.0_RC47.md",
+      "from_sha256": "2314a5be161075f18fd082430ec5bbbfff47ecaaf0f6ba16df1829c1ea16ffc7",
+      "to_sha256": "2314a5be161075f18fd082430ec5bbbfff47ecaaf0f6ba16df1829c1ea16ffc7"
+    },
+    {
+      "from": "docs/historico/actualizaciones/ACTUALIZACION_Y_PRUEBA_0.89.0_RC50.md",
+      "to": ".assistant/project_docs/historico/actualizaciones/ACTUALIZACION_Y_PRUEBA_0.89.0_RC50.md",
+      "from_sha256": "4ccb98213c4ee9fc199ece40cb131c8fcfce8698b06fac1672daa6d951e62c29",
+      "to_sha256": "4ccb98213c4ee9fc199ece40cb131c8fcfce8698b06fac1672daa6d951e62c29"
+    },
+    {
+      "from": "docs/historico/actualizaciones/ACTUALIZACION_Y_PRUEBA_0.89.0_RC53.md",
+      "to": ".assistant/project_docs/historico/actualizaciones/ACTUALIZACION_Y_PRUEBA_0.89.0_RC53.md",
+      "from_sha256": "ab7c54214cf6d842ff08404b35517edf3c79d41ba25ce07ab4ac694502e54e47",
+      "to_sha256": "ab7c54214cf6d842ff08404b35517edf3c79d41ba25ce07ab4ac694502e54e47"
+    },
+    {
+      "from": "docs/historico/actualizaciones/ACTUALIZACION_Y_PRUEBA_0.89.0_RC54.md",
+      "to": ".assistant/project_docs/historico/actualizaciones/ACTUALIZACION_Y_PRUEBA_0.89.0_RC54.md",
+      "from_sha256": "a45163917d3c18f565ca451f4f42431d3957041bcd900c1475998251b930ebb8",
+      "to_sha256": "a45163917d3c18f565ca451f4f42431d3957041bcd900c1475998251b930ebb8"
+    },
+    {
+      "from": "docs/historico/actualizaciones/ACTUALIZACION_Y_PRUEBA_0.89.0_RC55.md",
+      "to": ".assistant/project_docs/historico/actualizaciones/ACTUALIZACION_Y_PRUEBA_0.89.0_RC55.md",
+      "from_sha256": "11d8b411563a8e05a0a03e15b85cf0fa0dde6e049aca1e2ce42dde83dbeeba59",
+      "to_sha256": "11d8b411563a8e05a0a03e15b85cf0fa0dde6e049aca1e2ce42dde83dbeeba59"
+    },
+    {
+      "from": "docs/historico/actualizaciones/ACTUALIZACION_Y_PRUEBA_0.89.0_RC56.md",
+      "to": ".assistant/project_docs/historico/actualizaciones/ACTUALIZACION_Y_PRUEBA_0.89.0_RC56.md",
+      "from_sha256": "f537db5cbd6d02eea29c81fa0be9a44476348e019a3c60ed8f4b88bf9a952694",
+      "to_sha256": "f537db5cbd6d02eea29c81fa0be9a44476348e019a3c60ed8f4b88bf9a952694"
+    },
+    {
+      "from": "docs/historico/actualizaciones/ACTUALIZACION_Y_PRUEBA_0.89.0_RC57.md",
+      "to": ".assistant/project_docs/historico/actualizaciones/ACTUALIZACION_Y_PRUEBA_0.89.0_RC57.md",
+      "from_sha256": "b263e5250eaa664da99abab29c86be8f08980075ad2bfdd0ab6c30f668659508",
+      "to_sha256": "b263e5250eaa664da99abab29c86be8f08980075ad2bfdd0ab6c30f668659508"
+    },
+    {
+      "from": "docs/historico/actualizaciones/ACTUALIZACION_Y_PRUEBA_0.89.0_RC58.md",
+      "to": ".assistant/project_docs/historico/actualizaciones/ACTUALIZACION_Y_PRUEBA_0.89.0_RC58.md",
+      "from_sha256": "57ec903c7c7f054a94344831922d37008f45e5a206cef801775c16cbb356e8c5",
+      "to_sha256": "57ec903c7c7f054a94344831922d37008f45e5a206cef801775c16cbb356e8c5"
+    },
+    {
+      "from": "docs/historico/actualizaciones/ACTUALIZACION_Y_PRUEBA_0.89.0_RC59.md",
+      "to": ".assistant/project_docs/historico/actualizaciones/ACTUALIZACION_Y_PRUEBA_0.89.0_RC59.md",
+      "from_sha256": "398b4bce157c6cc2c038ec0a0a3068f17ff3f28638a9fec6bb230b164d941474",
+      "to_sha256": "398b4bce157c6cc2c038ec0a0a3068f17ff3f28638a9fec6bb230b164d941474"
+    },
+    {
+      "from": "docs/historico/actualizaciones/ACTUALIZACION_Y_PRUEBA_0.89.0_RC60.md",
+      "to": ".assistant/project_docs/historico/actualizaciones/ACTUALIZACION_Y_PRUEBA_0.89.0_RC60.md",
+      "from_sha256": "24e0c102900e49f2478f0af20de27ee2ef32e360f04e0be3a02a275911b55b98",
+      "to_sha256": "24e0c102900e49f2478f0af20de27ee2ef32e360f04e0be3a02a275911b55b98"
+    },
+    {
+      "from": "docs/historico/actualizaciones/ACTUALIZACION_Y_PRUEBA_0.89.0_RC61.md",
+      "to": ".assistant/project_docs/historico/actualizaciones/ACTUALIZACION_Y_PRUEBA_0.89.0_RC61.md",
+      "from_sha256": "6658a7a52e7708a84588d07556caf167decc7b04a11feb2102c24e3fefe181aa",
+      "to_sha256": "6658a7a52e7708a84588d07556caf167decc7b04a11feb2102c24e3fefe181aa"
+    },
+    {
+      "from": "docs/historico/actualizaciones/ACTUALIZACION_Y_PRUEBA_0.89.0_RC62.md",
+      "to": ".assistant/project_docs/historico/actualizaciones/ACTUALIZACION_Y_PRUEBA_0.89.0_RC62.md",
+      "from_sha256": "ed2d0938773e26ccf6fbfaf330d81021cf399903c495609395e810dd9252626e",
+      "to_sha256": "ed2d0938773e26ccf6fbfaf330d81021cf399903c495609395e810dd9252626e"
+    },
+    {
+      "from": "docs/historico/actualizaciones/ACTUALIZACION_Y_PRUEBA_0.89.0_RC63.md",
+      "to": ".assistant/project_docs/historico/actualizaciones/ACTUALIZACION_Y_PRUEBA_0.89.0_RC63.md",
+      "from_sha256": "98d78b4bc2a782983a586df8a55ef51ab0434b92b06d8f77186c920fd05434fd",
+      "to_sha256": "98d78b4bc2a782983a586df8a55ef51ab0434b92b06d8f77186c920fd05434fd"
+    },
+    {
+      "from": "docs/historico/actualizaciones/ACTUALIZACION_Y_PRUEBA_0.89.0_RC64.md",
+      "to": ".assistant/project_docs/historico/actualizaciones/ACTUALIZACION_Y_PRUEBA_0.89.0_RC64.md",
+      "from_sha256": "5f75afb8fc9c86c2884d4d9a47547dc81952c7682c899d60a9a246e652a4f6d1",
+      "to_sha256": "5f75afb8fc9c86c2884d4d9a47547dc81952c7682c899d60a9a246e652a4f6d1"
+    },
+    {
+      "from": "docs/historico/actualizaciones/ACTUALIZACION_Y_PRUEBA_0.89.0_RC65.md",
+      "to": ".assistant/project_docs/historico/actualizaciones/ACTUALIZACION_Y_PRUEBA_0.89.0_RC65.md",
+      "from_sha256": "782d4f695a585bc9593f10c57a6a462a1395bcce7256fdc7e4b113a42461afa5",
+      "to_sha256": "782d4f695a585bc9593f10c57a6a462a1395bcce7256fdc7e4b113a42461afa5"
+    },
+    {
+      "from": "docs/historico/actualizaciones/ACTUALIZACION_Y_PRUEBA_0.89.0_RC66.md",
+      "to": ".assistant/project_docs/historico/actualizaciones/ACTUALIZACION_Y_PRUEBA_0.89.0_RC66.md",
+      "from_sha256": "4e41110bb2bb728b22f0ea32a3ae2f9bb45633fd0e93e7d7b5b34fe40ef97c47",
+      "to_sha256": "4e41110bb2bb728b22f0ea32a3ae2f9bb45633fd0e93e7d7b5b34fe40ef97c47"
+    },
+    {
+      "from": "docs/historico/actualizaciones/ACTUALIZACION_Y_PRUEBA_0.89.0_RC67.md",
+      "to": ".assistant/project_docs/historico/actualizaciones/ACTUALIZACION_Y_PRUEBA_0.89.0_RC67.md",
+      "from_sha256": "6678c7c49ec73259d2c26107d53b9078fadfe7beb65a7eda64faf0c1b5b9aa6d",
+      "to_sha256": "6678c7c49ec73259d2c26107d53b9078fadfe7beb65a7eda64faf0c1b5b9aa6d"
+    },
+    {
+      "from": "docs/historico/actualizaciones/ACTUALIZACION_Y_PRUEBA_0.89.0_RC68.md",
+      "to": ".assistant/project_docs/historico/actualizaciones/ACTUALIZACION_Y_PRUEBA_0.89.0_RC68.md",
+      "from_sha256": "73b57ace74615d306fe65eb470cbef3cc8f39fc9c825140097b254efec2fd05e",
+      "to_sha256": "73b57ace74615d306fe65eb470cbef3cc8f39fc9c825140097b254efec2fd05e"
+    },
+    {
+      "from": "docs/historico/actualizaciones/ACTUALIZACION_Y_PRUEBA_0.89.0_RC69.md",
+      "to": ".assistant/project_docs/historico/actualizaciones/ACTUALIZACION_Y_PRUEBA_0.89.0_RC69.md",
+      "from_sha256": "c39b8c3510a8374d95cfc03c0007eb86f10a571527acab57620d4d6d6497a7a7",
+      "to_sha256": "c39b8c3510a8374d95cfc03c0007eb86f10a571527acab57620d4d6d6497a7a7"
+    },
+    {
+      "from": "docs/historico/actualizaciones/ACTUALIZACION_Y_PRUEBA_0.89.0_RC70.md",
+      "to": ".assistant/project_docs/historico/actualizaciones/ACTUALIZACION_Y_PRUEBA_0.89.0_RC70.md",
+      "from_sha256": "3d3f45ae4d5307dffb71b838add1b8b1d67c8ee4c873ac722254228ad5e056e8",
+      "to_sha256": "3d3f45ae4d5307dffb71b838add1b8b1d67c8ee4c873ac722254228ad5e056e8"
+    },
+    {
+      "from": "docs/historico/actualizaciones/ACTUALIZACION_Y_PRUEBA_0.89.0_RC71.md",
+      "to": ".assistant/project_docs/historico/actualizaciones/ACTUALIZACION_Y_PRUEBA_0.89.0_RC71.md",
+      "from_sha256": "473cd955c5e2d180a3814ff0c5896c71348dac025a50b59b0ea6e12fb3723a00",
+      "to_sha256": "473cd955c5e2d180a3814ff0c5896c71348dac025a50b59b0ea6e12fb3723a00"
+    },
+    {
+      "from": "docs/historico/actualizaciones/ACTUALIZACION_Y_PRUEBA_0.89.0_RC72.md",
+      "to": ".assistant/project_docs/historico/actualizaciones/ACTUALIZACION_Y_PRUEBA_0.89.0_RC72.md",
+      "from_sha256": "47e2b3c0b30b5d0bcbc7ed7ba28c87e6325fc7bc51224490ae5fc9d5e3a52ba4",
+      "to_sha256": "47e2b3c0b30b5d0bcbc7ed7ba28c87e6325fc7bc51224490ae5fc9d5e3a52ba4"
+    },
+    {
+      "from": "docs/historico/actualizaciones/ACTUALIZACION_Y_PRUEBA_0.89.0_RC73.md",
+      "to": ".assistant/project_docs/historico/actualizaciones/ACTUALIZACION_Y_PRUEBA_0.89.0_RC73.md",
+      "from_sha256": "f7e25aa0cf682cea45108340f441d0b7c04eb6211bc529536869a0c8c98fda28",
+      "to_sha256": "f7e25aa0cf682cea45108340f441d0b7c04eb6211bc529536869a0c8c98fda28"
+    },
+    {
+      "from": "docs/historico/actualizaciones/ACTUALIZACION_Y_PRUEBA_0.89.0_RC74.md",
+      "to": ".assistant/project_docs/historico/actualizaciones/ACTUALIZACION_Y_PRUEBA_0.89.0_RC74.md",
+      "from_sha256": "aa915b0c4aab7d93b504bb457efc9d0e33ed5d89c4b94a4a05d80a6ad5cf9c76",
+      "to_sha256": "aa915b0c4aab7d93b504bb457efc9d0e33ed5d89c4b94a4a05d80a6ad5cf9c76"
+    },
+    {
+      "from": "docs/historico/actualizaciones/ACTUALIZACION_Y_PRUEBA_0.89.0_RC75.md",
+      "to": ".assistant/project_docs/historico/actualizaciones/ACTUALIZACION_Y_PRUEBA_0.89.0_RC75.md",
+      "from_sha256": "aaab64e865b8775a27d54532e4f02f38136456f584358158a1b596abca00536c",
+      "to_sha256": "aaab64e865b8775a27d54532e4f02f38136456f584358158a1b596abca00536c"
+    },
+    {
+      "from": "docs/historico/actualizaciones/ACTUALIZACION_Y_PRUEBA_0.89.0_RC76.md",
+      "to": ".assistant/project_docs/historico/actualizaciones/ACTUALIZACION_Y_PRUEBA_0.89.0_RC76.md",
+      "from_sha256": "2c724f5154aae681ab390de29523fb8e60fddd6cefc42d6ca412692b39214828",
+      "to_sha256": "2c724f5154aae681ab390de29523fb8e60fddd6cefc42d6ca412692b39214828"
+    },
+    {
+      "from": "docs/historico/actualizaciones/AUDITORIA_EXHAUSTIVA_STREAMLIT_ARCHIVE_WORKBENCH_RC62.md",
+      "to": ".assistant/project_docs/historico/actualizaciones/AUDITORIA_EXHAUSTIVA_STREAMLIT_ARCHIVE_WORKBENCH_RC62.md",
+      "from_sha256": "acffa8dcaa3fc74a6097f8049718c783cb2e4f6c6064ae4aa0e27de047cce945",
+      "to_sha256": "acffa8dcaa3fc74a6097f8049718c783cb2e4f6c6064ae4aa0e27de047cce945"
+    },
+    {
+      "from": "docs/historico/actualizaciones/AUDITORIA_INTERFAZ_RC11_5_PASADAS.txt",
+      "to": ".assistant/project_docs/historico/actualizaciones/AUDITORIA_INTERFAZ_RC11_5_PASADAS.txt",
+      "from_sha256": "69c296aa1edbffd4447d33ba8cedc6bd63a1ec1e2917e26453c5bea024339a3e",
+      "to_sha256": "69c296aa1edbffd4447d33ba8cedc6bd63a1ec1e2917e26453c5bea024339a3e"
+    },
+    {
+      "from": "docs/historico/actualizaciones/AUDITORIA_INTERFAZ_RC12_5_PASADAS.txt",
+      "to": ".assistant/project_docs/historico/actualizaciones/AUDITORIA_INTERFAZ_RC12_5_PASADAS.txt",
+      "from_sha256": "fdb76fbb3bb348307e8dd921308f4690977828e455203dbb8cf0e9c3bb470e1a",
+      "to_sha256": "fdb76fbb3bb348307e8dd921308f4690977828e455203dbb8cf0e9c3bb470e1a"
+    },
+    {
+      "from": "docs/historico/actualizaciones/AUDITORIA_INTERFAZ_RC25_PROCESAR_DOCUMENTOS_5_PASADAS.txt",
+      "to": ".assistant/project_docs/historico/actualizaciones/AUDITORIA_INTERFAZ_RC25_PROCESAR_DOCUMENTOS_5_PASADAS.txt",
+      "from_sha256": "6595174f2e2fd68f8f5a32d72ecd687b2610efeed0b751e5430a8c4648763997",
+      "to_sha256": "6595174f2e2fd68f8f5a32d72ecd687b2610efeed0b751e5430a8c4648763997"
+    },
+    {
+      "from": "docs/historico/actualizaciones/AUDITORIA_INTERFAZ_RC26_AYUDAS_Y_REVISION_5_PASADAS.txt",
+      "to": ".assistant/project_docs/historico/actualizaciones/AUDITORIA_INTERFAZ_RC26_AYUDAS_Y_REVISION_5_PASADAS.txt",
+      "from_sha256": "f5635eeaa7dce62b0fdf8207faf475a1f8db730990d13c7059e60f42f5c26c81",
+      "to_sha256": "f5635eeaa7dce62b0fdf8207faf475a1f8db730990d13c7059e60f42f5c26c81"
+    },
+    {
+      "from": "docs/historico/actualizaciones/AUDITORIA_INTERFAZ_RC28_AYUDA_DESCUBRIBLE_5_PASADAS.txt",
+      "to": ".assistant/project_docs/historico/actualizaciones/AUDITORIA_INTERFAZ_RC28_AYUDA_DESCUBRIBLE_5_PASADAS.txt",
+      "from_sha256": "c038a9314a190cf2b6e4633090b6be799e5b309335549416339bfdf6b0b88234",
+      "to_sha256": "c038a9314a190cf2b6e4633090b6be799e5b309335549416339bfdf6b0b88234"
+    },
+    {
+      "from": "docs/historico/actualizaciones/AUDITORIA_INTERFAZ_RC60_5_PASADAS.txt",
+      "to": ".assistant/project_docs/historico/actualizaciones/AUDITORIA_INTERFAZ_RC60_5_PASADAS.txt",
+      "from_sha256": "c8a18f6a4dd1b95961a1771a06c1d006a2732f9670392d1780b2613886a546fc",
+      "to_sha256": "c8a18f6a4dd1b95961a1771a06c1d006a2732f9670392d1780b2613886a546fc"
+    },
+    {
+      "from": "docs/historico/actualizaciones/AUDITORIA_UX02_RC70_5_PASADAS.md",
+      "to": ".assistant/project_docs/historico/actualizaciones/AUDITORIA_UX02_RC70_5_PASADAS.md",
+      "from_sha256": "e1b96d3eaca5e1a14e05dbe27aa1ab57a1df20f4f11cb5a77059c6bcfc89758d",
+      "to_sha256": "e1b96d3eaca5e1a14e05dbe27aa1ab57a1df20f4f11cb5a77059c6bcfc89758d"
+    },
+    {
+      "from": "docs/historico/decisiones_tecnicas/CONTINUIDAD_INTERACCION_STREAMLIT_0.44.0.md",
+      "to": ".assistant/project_docs/historico/decisiones_tecnicas/CONTINUIDAD_INTERACCION_STREAMLIT_0.44.0.md",
+      "from_sha256": "64fa3a71352da8dfe43fb84b7a10078bd25373a2d3b57d76dfb38cc18d589b88",
+      "to_sha256": "64fa3a71352da8dfe43fb84b7a10078bd25373a2d3b57d76dfb38cc18d589b88"
+    },
+    {
+      "from": "docs/historico/decisiones_tecnicas/CONTROL_ESTRUCTURAL_OCR_0.39.0.md",
+      "to": ".assistant/project_docs/historico/decisiones_tecnicas/CONTROL_ESTRUCTURAL_OCR_0.39.0.md",
+      "from_sha256": "cc6f202c38c917c9282b545a47648c77183e0fc5c7faa5f6a7071ff785ddc5ba",
+      "to_sha256": "cc6f202c38c917c9282b545a47648c77183e0fc5c7faa5f6a7071ff785ddc5ba"
+    },
+    {
+      "from": "docs/historico/decisiones_tecnicas/EVALUACION_SURYA_OCR_0.38.0.md",
+      "to": ".assistant/project_docs/historico/decisiones_tecnicas/EVALUACION_SURYA_OCR_0.38.0.md",
+      "from_sha256": "4a0be24e30c5c4ab12dfa56db14ed8402c3b0cb25b07bda124981e913ebd61cc",
+      "to_sha256": "4a0be24e30c5c4ab12dfa56db14ed8402c3b0cb25b07bda124981e913ebd61cc"
+    },
+    {
+      "from": "docs/historico/decisiones_tecnicas/POLITICA_AUDITABLE_ANALISIS_AUTOMATICOS_0.64.0.md",
+      "to": ".assistant/project_docs/historico/decisiones_tecnicas/POLITICA_AUDITABLE_ANALISIS_AUTOMATICOS_0.64.0.md",
+      "from_sha256": "7ef000ad4a580b4a7169785946163d1b28c1367a865045fa3c36f802419c8096",
+      "to_sha256": "7ef000ad4a580b4a7169785946163d1b28c1367a865045fa3c36f802419c8096"
+    },
+    {
+      "from": "docs/historico/decisiones_tecnicas/REBASE_ATRIBUTOS_Y_PRUEBA_GUIADA_0.45.0.md",
+      "to": ".assistant/project_docs/historico/decisiones_tecnicas/REBASE_ATRIBUTOS_Y_PRUEBA_GUIADA_0.45.0.md",
+      "from_sha256": "5274c639e06e944cd96669f474fa6ee03834650c1bcff960a4166dd02a97c01b",
+      "to_sha256": "5274c639e06e944cd96669f474fa6ee03834650c1bcff960a4166dd02a97c01b"
+    },
+    {
+      "from": "docs/historico/decisiones_tecnicas/REBASE_CONFLICTOS_TEXTUALES_Y_NAVEGACION_0.42.0.md",
+      "to": ".assistant/project_docs/historico/decisiones_tecnicas/REBASE_CONFLICTOS_TEXTUALES_Y_NAVEGACION_0.42.0.md",
+      "from_sha256": "6de83d07246a8f70952ba7c56b87df35b497a38a12c0e183dad1ad8bfdd1684b",
+      "to_sha256": "6de83d07246a8f70952ba7c56b87df35b497a38a12c0e183dad1ad8bfdd1684b"
+    },
+    {
+      "from": "docs/historico/decisiones_tecnicas/REBASE_EDICION_OCR_0.40.0.md",
+      "to": ".assistant/project_docs/historico/decisiones_tecnicas/REBASE_EDICION_OCR_0.40.0.md",
+      "from_sha256": "f2050e42c212da85d45b33bcb655398ecf1a996c788e0d62a9a18ff064500abd",
+      "to_sha256": "f2050e42c212da85d45b33bcb655398ecf1a996c788e0d62a9a18ff064500abd"
+    },
+    {
+      "from": "docs/historico/decisiones_tecnicas/REBASE_ESTRUCTURA_Y_METADATOS_0.43.0.md",
+      "to": ".assistant/project_docs/historico/decisiones_tecnicas/REBASE_ESTRUCTURA_Y_METADATOS_0.43.0.md",
+      "from_sha256": "8e9ac08bd05df643eb4ed4e48197769c19311e063a6bfafddd6e0433fe95b71f",
+      "to_sha256": "8e9ac08bd05df643eb4ed4e48197769c19311e063a6bfafddd6e0433fe95b71f"
+    },
+    {
+      "from": "docs/historico/decisiones_tecnicas/RECONCILIACION_DIVERGENCIAS_MENCIONES_0.61.0.md",
+      "to": ".assistant/project_docs/historico/decisiones_tecnicas/RECONCILIACION_DIVERGENCIAS_MENCIONES_0.61.0.md",
+      "from_sha256": "8b4be281a61295d59d3f671c654f929a79a01c8c107f08c980aa4364eb08a021",
+      "to_sha256": "8b4be281a61295d59d3f671c654f929a79a01c8c107f08c980aa4364eb08a021"
+    },
+    {
+      "from": "docs/historico/decisiones_tecnicas/REPARACION_ASISTIDA_MENCIONES_0.57.0.md",
+      "to": ".assistant/project_docs/historico/decisiones_tecnicas/REPARACION_ASISTIDA_MENCIONES_0.57.0.md",
+      "from_sha256": "749bfffde857dccab1296f1364d91a128824e2c585a8a33384aa5df665c5297d",
+      "to_sha256": "749bfffde857dccab1296f1364d91a128824e2c585a8a33384aa5df665c5297d"
+    },
+    {
+      "from": "docs/historico/decisiones_tecnicas/REPARACION_CONJUNTOS_MENCIONES_0.62.0.md",
+      "to": ".assistant/project_docs/historico/decisiones_tecnicas/REPARACION_CONJUNTOS_MENCIONES_0.62.0.md",
+      "from_sha256": "771116ea06ac0b042125aa255e2299fd48476a5279aa91c192f2d1ca38d180e6",
+      "to_sha256": "771116ea06ac0b042125aa255e2299fd48476a5279aa91c192f2d1ca38d180e6"
+    },
+    {
+      "from": "docs/historico/decisiones_tecnicas/REPARACION_DUPLICADOS_MENCIONES_0.59.0.md",
+      "to": ".assistant/project_docs/historico/decisiones_tecnicas/REPARACION_DUPLICADOS_MENCIONES_0.59.0.md",
+      "from_sha256": "e602ad40f09b84dbd50ac15bd49d76bed9fa686716962eb52cc7da1c46f2943f",
+      "to_sha256": "e602ad40f09b84dbd50ac15bd49d76bed9fa686716962eb52cc7da1c46f2943f"
+    },
+    {
+      "from": "docs/historico/decisiones_tecnicas/REPARACION_ENTIDAD_FALTANTE_0.58.0.md",
+      "to": ".assistant/project_docs/historico/decisiones_tecnicas/REPARACION_ENTIDAD_FALTANTE_0.58.0.md",
+      "from_sha256": "0a798adf9c6eb456a07a2b957209b41a3a1d45af666609977c4d55b5c9df9fce",
+      "to_sha256": "0a798adf9c6eb456a07a2b957209b41a3a1d45af666609977c4d55b5c9df9fce"
+    },
+    {
+      "from": "docs/historico/decisiones_tecnicas/REPARACION_UBICACIONES_MANUALES_0.60.0.md",
+      "to": ".assistant/project_docs/historico/decisiones_tecnicas/REPARACION_UBICACIONES_MANUALES_0.60.0.md",
+      "from_sha256": "39d89c58e399d07109f31162e8b34c1d8085366ef0cf834eb2a9dc8002809fd1",
+      "to_sha256": "39d89c58e399d07109f31162e8b34c1d8085366ef0cf834eb2a9dc8002809fd1"
+    },
+    {
+      "from": "docs/historico/decisiones_tecnicas/RESOLUCION_CONFLICTOS_REBASE_0.41.0.md",
+      "to": ".assistant/project_docs/historico/decisiones_tecnicas/RESOLUCION_CONFLICTOS_REBASE_0.41.0.md",
+      "from_sha256": "33101d887580176f06ef622b3aed3386678130c0186e9c225a5e98a5c99e9a5d",
+      "to_sha256": "33101d887580176f06ef622b3aed3386678130c0186e9c225a5e98a5c99e9a5d"
+    },
+    {
+      "from": "docs/historico/diseno/DISENO_Y_PLAN_DE_IMPLEMENTACION_HASTA_0.49.2.md",
+      "to": ".assistant/project_docs/historico/diseno/DISENO_Y_PLAN_DE_IMPLEMENTACION_HASTA_0.49.2.md",
+      "from_sha256": "84153d4ee79bb4b6541cd75e069334cfa0e10c84dd2212914522787e5235cdb2",
+      "to_sha256": "84153d4ee79bb4b6541cd75e069334cfa0e10c84dd2212914522787e5235cdb2"
+    },
+    {
+      "from": "docs/historico/diseno/INVESTIGACION_UI_UX_STREAMLIT_UX04_20260820.md",
+      "to": ".assistant/project_docs/historico/diseno/INVESTIGACION_UI_UX_STREAMLIT_UX04_20260820.md",
+      "from_sha256": "339729079ee482a875d6907184af7d3d4493de8b9942bf0e7b497dc8b9b15ae3",
+      "to_sha256": "339729079ee482a875d6907184af7d3d4493de8b9942bf0e7b497dc8b9b15ae3"
+    },
+    {
+      "from": "docs/historico/prueba_piloto/GUIA_PRUEBA_PILOTO_ARCHIVE_WORKBENCH.md",
+      "to": ".assistant/project_docs/historico/prueba_piloto/GUIA_PRUEBA_PILOTO_ARCHIVE_WORKBENCH.md",
+      "from_sha256": "749f73e7807380ccdb7b631c42e4e5cc68cc3210071218147dafd31fb3bc9dae",
+      "to_sha256": "749f73e7807380ccdb7b631c42e4e5cc68cc3210071218147dafd31fb3bc9dae"
+    },
+    {
+      "from": "docs/historico/prueba_piloto/PENDIENTES_Y_MEJORAS_ARCHIVE_WORKBENCH_PILOTO_FINAL_20260727_203735.md",
+      "to": ".assistant/project_docs/historico/prueba_piloto/PENDIENTES_Y_MEJORAS_ARCHIVE_WORKBENCH_PILOTO_FINAL_20260727_203735.md",
+      "from_sha256": "0a18870e7dcdf9414c2557a06515d32cd1cc449c95176069b58279ba0ef6908e",
+      "to_sha256": "0a18870e7dcdf9414c2557a06515d32cd1cc449c95176069b58279ba0ef6908e"
+    },
+    {
+      "from": "docs/historico/prueba_piloto/PRUEBA_PILOTO_Y_CIERRE_0.33.1.md",
+      "to": ".assistant/project_docs/historico/prueba_piloto/PRUEBA_PILOTO_Y_CIERRE_0.33.1.md",
+      "from_sha256": "2fa7e0f7739a75eae6d8591b05af847f49f3d94f595500d899e100c436dd99d4",
+      "to_sha256": "2fa7e0f7739a75eae6d8591b05af847f49f3d94f595500d899e100c436dd99d4"
+    },
+    {
+      "from": "docs/historico/prueba_piloto/REGISTRO_PRUEBA_PILOTO_ARCHIVE_WORKBENCH_CIERRE_FINAL_20260727_203735.md",
+      "to": ".assistant/project_docs/historico/prueba_piloto/REGISTRO_PRUEBA_PILOTO_ARCHIVE_WORKBENCH_CIERRE_FINAL_20260727_203735.md",
+      "from_sha256": "306afd26e499ee19c7899999b43d9a0cd09f063836fa7c8b42a510ecfa80312e",
+      "to_sha256": "306afd26e499ee19c7899999b43d9a0cd09f063836fa7c8b42a510ecfa80312e"
+    },
+    {
+      "from": "docs/historico/relevos/CONTINUIDAD_ARCHIVE_WORKBENCH_0890_RC10_PILOT01_20260811.md",
+      "to": ".assistant/project_docs/historico/relevos/CONTINUIDAD_ARCHIVE_WORKBENCH_0890_RC10_PILOT01_20260811.md",
+      "from_sha256": "e70165cc940d2461a5e20ce027f93c48f763fb3b334d62f10a72ca1a2c28f199",
+      "to_sha256": "e70165cc940d2461a5e20ce027f93c48f763fb3b334d62f10a72ca1a2c28f199"
+    },
+    {
+      "from": "docs/historico/relevos/CONTINUIDAD_ARCHIVE_WORKBENCH_0890_RC11_PILOT01_20260815.md",
+      "to": ".assistant/project_docs/historico/relevos/CONTINUIDAD_ARCHIVE_WORKBENCH_0890_RC11_PILOT01_20260815.md",
+      "from_sha256": "70e347c68c4b7ae4e6d30c88f946e3ee5cd2abbd0b8696c4023e5fb6ac589736",
+      "to_sha256": "70e347c68c4b7ae4e6d30c88f946e3ee5cd2abbd0b8696c4023e5fb6ac589736"
+    },
+    {
+      "from": "docs/historico/relevos/CONTINUIDAD_ARCHIVE_WORKBENCH_0890_RC12_PILOT01_20260816.md",
+      "to": ".assistant/project_docs/historico/relevos/CONTINUIDAD_ARCHIVE_WORKBENCH_0890_RC12_PILOT01_20260816.md",
+      "from_sha256": "d4bab450a2b1548e143f03ac7372e5ee6303a8f4c4756ff890881249217e78a2",
+      "to_sha256": "d4bab450a2b1548e143f03ac7372e5ee6303a8f4c4756ff890881249217e78a2"
+    },
+    {
+      "from": "docs/historico/relevos/CONTINUIDAD_ARCHIVE_WORKBENCH_0890_RC20_PILOT01_20260820.md",
+      "to": ".assistant/project_docs/historico/relevos/CONTINUIDAD_ARCHIVE_WORKBENCH_0890_RC20_PILOT01_20260820.md",
+      "from_sha256": "05114b65e53c0a79a2c240f8317ecbc8d1a02ba15f16615773d9dbba15c706df",
+      "to_sha256": "05114b65e53c0a79a2c240f8317ecbc8d1a02ba15f16615773d9dbba15c706df"
+    },
+    {
+      "from": "docs/historico/relevos/CONTINUIDAD_ARCHIVE_WORKBENCH_0890_RC27_PILOT01_20260821.md",
+      "to": ".assistant/project_docs/historico/relevos/CONTINUIDAD_ARCHIVE_WORKBENCH_0890_RC27_PILOT01_20260821.md",
+      "from_sha256": "fbacecb6ff238b11b65fd02c966d9b6524e913ac97b3cdcc7db8ec58d0ef410d",
+      "to_sha256": "fbacecb6ff238b11b65fd02c966d9b6524e913ac97b3cdcc7db8ec58d0ef410d"
+    },
+    {
+      "from": "docs/historico/relevos/CONTINUIDAD_ARCHIVE_WORKBENCH_0890_RC64_PILOT01_20260824.md",
+      "to": ".assistant/project_docs/historico/relevos/CONTINUIDAD_ARCHIVE_WORKBENCH_0890_RC64_PILOT01_20260824.md",
+      "from_sha256": "322c97eefd6961953676cfd135c62db177afcd386f6143f0dd08decb8980c54e",
+      "to_sha256": "322c97eefd6961953676cfd135c62db177afcd386f6143f0dd08decb8980c54e"
+    },
+    {
+      "from": "docs/operativos/ACTUALIZACION_ACTUAL.md",
+      "to": ".assistant/project_docs/operativos/ACTUALIZACION_ACTUAL.md",
+      "from_sha256": "52d0486e27a2bec74b7e00758ea2ac84fe207b257246e11797f041f7d27dd834",
+      "to_sha256": "ba0f640c7160c883abd2991ded6237ae2359faca887f720c58cc19815682f768"
+    },
+    {
+      "from": "docs/operativos/ESTRATEGIA_DE_PRUEBAS.md",
+      "to": ".assistant/project_docs/operativos/ESTRATEGIA_DE_PRUEBAS.md",
+      "from_sha256": "af257c784a1ad8743f760049ddf1738b82739c953f96cf3a4813ebe37d9a3952",
+      "to_sha256": "af257c784a1ad8743f760049ddf1738b82739c953f96cf3a4813ebe37d9a3952"
+    },
+    {
+      "from": "docs/operativos/GUIA_PRUEBA_PILOTO.md",
+      "to": ".assistant/project_docs/historico/prueba_piloto/GUIA_PRUEBA_PILOTO.md",
+      "from_sha256": "91aecf5df46e5a7544e4f9530690d723c3cd1027a67cae0f84fb95347ebb1506",
+      "to_sha256": "91aecf5df46e5a7544e4f9530690d723c3cd1027a67cae0f84fb95347ebb1506"
+    },
+    {
+      "from": "docs/operativos/HOJA_DE_RUTA_PRE_RELEASE.md",
+      "to": ".assistant/project_docs/operativos/HOJA_DE_RUTA_PRE_RELEASE.md",
+      "from_sha256": "05dc4e3561d036562a9a677f0f173572f9e6c177fc4064232cd2f0fe8428c0b6",
+      "to_sha256": "ab69fdc73b0d993e32c61f7a6428b335d2ca41265b36b948b43f01093d5640f1"
+    },
+    {
+      "from": "docs/operativos/IMPLEMENTACIONES_REALIZADAS.md",
+      "to": ".assistant/project_docs/operativos/IMPLEMENTACIONES_REALIZADAS.md",
+      "from_sha256": "f502c275f3a3725ad3c15307c6e75dd0fe2a40cbaa905b02099d2661239f269d",
+      "to_sha256": "99060624eba7b0716c2e3f9913a88b204d10ff142ef6af60b267b940067e6f63"
+    },
+    {
+      "from": "docs/operativos/PENDIENTES_ACTIVOS.md",
+      "to": ".assistant/project_docs/operativos/PENDIENTES_ACTIVOS.md",
+      "from_sha256": "29d397c22105c1edf23a1024cdeeb6282ad47fc1633e71940bc9d59030ed77f1",
+      "to_sha256": "60a4c6ee3ccb10418acc48eee51d148a730c4d0333455f596a8feef6fece9ae4"
+    },
+    {
+      "from": "docs/referencia/ARQUITECTURA_Y_MODELO_ACTUAL.md",
+      "to": ".assistant/project_docs/referencia/ARQUITECTURA_Y_MODELO_ACTUAL.md",
+      "from_sha256": "41d5482a700b090e6b13d0610be82be71aa3cdcc075ca0c726d2463960064433",
+      "to_sha256": "6c7d6f66f58e2dfceb2ec4cf3323418b2e9d8a1429d6675040a9f15bb5dd4288"
+    },
+    {
+      "from": "docs/referencia/BENCHMARK_OCR_VERDAD_TERRENO.md",
+      "to": ".assistant/project_docs/referencia/BENCHMARK_OCR_VERDAD_TERRENO.md",
+      "from_sha256": "5d4f88bae37c3b8e77c1b93a223ba03ff4a092a8bd46d2d012c4eb7760e9984c",
+      "to_sha256": "5d4f88bae37c3b8e77c1b93a223ba03ff4a092a8bd46d2d012c4eb7760e9984c"
+    },
+    {
+      "from": "docs/referencia/DESCUBRIMIENTO_ABIERTO_DISC_01.md",
+      "to": ".assistant/project_docs/historico/planes/DESCUBRIMIENTO_ABIERTO_DISC_01.md",
+      "from_sha256": "592caff1c2e4bde4bfa265c9385c3c7891c9b61caf7e70a50cffc9f5f927742a",
+      "to_sha256": "592caff1c2e4bde4bfa265c9385c3c7891c9b61caf7e70a50cffc9f5f927742a"
+    },
+    {
+      "from": "docs/referencia/IMPORTACION_DICCIONARIOS_DISC_02.md",
+      "to": ".assistant/project_docs/referencia/IMPORTACION_DICCIONARIOS_DISC_02.md",
+      "from_sha256": "bbd7ca3c0bc11670d74b2988185be7a6ab99c6ca6c6242d2720cb887b8527ea4",
+      "to_sha256": "bbd7ca3c0bc11670d74b2988185be7a6ab99c6ca6c6242d2720cb887b8527ea4"
+    },
+    {
+      "from": "docs/referencia/PROYECTO_PARALELO_GIAR.md",
+      "to": ".assistant/project_docs/proyectos/PROYECTO_PARALELO_GIAR.md",
+      "from_sha256": "fefeb245d9f2880843471211f9ba83746aef74da97de4e973168635951316de7",
+      "to_sha256": "fefeb245d9f2880843471211f9ba83746aef74da97de4e973168635951316de7"
+    },
+    {
+      "from": "docs/referencia/RECUPERACION_LINAJE_EX_01.md",
+      "to": ".assistant/project_docs/historico/planes/RECUPERACION_LINAJE_EX_01.md",
+      "from_sha256": "ff42f6d869f6f4efe78ccec7598c174cc62ed589b34cdbe1813a181114591541",
+      "to_sha256": "ff42f6d869f6f4efe78ccec7598c174cc62ed589b34cdbe1813a181114591541"
+    },
+    {
       "from": "docs/operativos/AUDITORIA_INTERFAZ_RC11_5_PASADAS.txt",
-      "to": "docs/historico/actualizaciones/AUDITORIA_INTERFAZ_RC11_5_PASADAS.txt",
-      "sha256": "69c296aa1edbffd4447d33ba8cedc6bd63a1ec1e2917e26453c5bea024339a3e"
+      "to": ".assistant/project_docs/historico/actualizaciones/AUDITORIA_INTERFAZ_RC11_5_PASADAS.txt",
+      "from_sha256": "69c296aa1edbffd4447d33ba8cedc6bd63a1ec1e2917e26453c5bea024339a3e",
+      "to_sha256": "69c296aa1edbffd4447d33ba8cedc6bd63a1ec1e2917e26453c5bea024339a3e"
     },
     {
       "from": "docs/operativos/AUDITORIA_INTERFAZ_RC12_5_PASADAS.txt",
-      "to": "docs/historico/actualizaciones/AUDITORIA_INTERFAZ_RC12_5_PASADAS.txt",
-      "sha256": "fdb76fbb3bb348307e8dd921308f4690977828e455203dbb8cf0e9c3bb470e1a"
+      "to": ".assistant/project_docs/historico/actualizaciones/AUDITORIA_INTERFAZ_RC12_5_PASADAS.txt",
+      "from_sha256": "fdb76fbb3bb348307e8dd921308f4690977828e455203dbb8cf0e9c3bb470e1a",
+      "to_sha256": "fdb76fbb3bb348307e8dd921308f4690977828e455203dbb8cf0e9c3bb470e1a"
     },
     {
       "from": "CONTINUIDAD_ARCHIVE_WORKBENCH_0890_RC10_PILOT01_20260811.md",
-      "to": "docs/historico/relevos/CONTINUIDAD_ARCHIVE_WORKBENCH_0890_RC10_PILOT01_20260811.md",
-      "sha256": "e70165cc940d2461a5e20ce027f93c48f763fb3b334d62f10a72ca1a2c28f199"
+      "to": ".assistant/project_docs/historico/relevos/CONTINUIDAD_ARCHIVE_WORKBENCH_0890_RC10_PILOT01_20260811.md",
+      "from_sha256": "e70165cc940d2461a5e20ce027f93c48f763fb3b334d62f10a72ca1a2c28f199",
+      "to_sha256": "e70165cc940d2461a5e20ce027f93c48f763fb3b334d62f10a72ca1a2c28f199"
     },
     {
       "from": "CONTINUIDAD_ARCHIVE_WORKBENCH_0890_RC11_PILOT01_20260815.md",
-      "to": "docs/historico/relevos/CONTINUIDAD_ARCHIVE_WORKBENCH_0890_RC11_PILOT01_20260815.md",
-      "sha256": "70e347c68c4b7ae4e6d30c88f946e3ee5cd2abbd0b8696c4023e5fb6ac589736"
+      "to": ".assistant/project_docs/historico/relevos/CONTINUIDAD_ARCHIVE_WORKBENCH_0890_RC11_PILOT01_20260815.md",
+      "from_sha256": "70e347c68c4b7ae4e6d30c88f946e3ee5cd2abbd0b8696c4023e5fb6ac589736",
+      "to_sha256": "70e347c68c4b7ae4e6d30c88f946e3ee5cd2abbd0b8696c4023e5fb6ac589736"
     },
     {
       "from": "CONTINUIDAD_ARCHIVE_WORKBENCH_0890_RC12_PILOT01_20260816.md",
-      "to": "docs/historico/relevos/CONTINUIDAD_ARCHIVE_WORKBENCH_0890_RC12_PILOT01_20260816.md",
-      "sha256": "d4bab450a2b1548e143f03ac7372e5ee6303a8f4c4756ff890881249217e78a2"
+      "to": ".assistant/project_docs/historico/relevos/CONTINUIDAD_ARCHIVE_WORKBENCH_0890_RC12_PILOT01_20260816.md",
+      "from_sha256": "d4bab450a2b1548e143f03ac7372e5ee6303a8f4c4756ff890881249217e78a2",
+      "to_sha256": "d4bab450a2b1548e143f03ac7372e5ee6303a8f4c4756ff890881249217e78a2"
     }
   ]
 }

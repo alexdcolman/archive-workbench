@@ -3,8 +3,8 @@
 <rect class="box" x="275" y="45" width="200" height="95"/><text class="head" x="295" y="78">Procesamiento</text><text class="small" x="295" y="106">derivados + OCR</text>
 <rect class="box" x="525" y="45" width="200" height="95"/><text class="head" x="545" y="78">Revisión</text><text class="small" x="545" y="106">texto + decisiones</text>
 <rect class="box" x="775" y="45" width="200" height="95"/><text class="head" x="795" y="78">Análisis</text><text class="small" x="795" y="106">búsqueda + entidades</text>
-<rect class="box" x="1025" y="45" width="150" height="95"/><text class="head" x="1045" y="78">Exportación</text><text class="small" x="1045" y="106">CSV / JSONL / ZIP</text>
-<path class="arr" d="M225 92 H268"/><path class="arr" d="M475 92 H518"/><path class="arr" d="M725 92 H768"/><path class="arr" d="M975 92 H1018"/>
+<rect class="box" x="1000" y="45" width="175" height="95"/><text class="head" x="1020" y="78">Exportación</text><text class="small" x="1020" y="106">CSV / JSONL / ZIP</text>
+<path class="arr" d="M225 92 H268"/><path class="arr" d="M475 92 H518"/><path class="arr" d="M725 92 H768"/><path class="arr" d="M975 92 H993"/>
 <rect class="box" x="300" y="255" width="240" height="95"/><text class="head" x="320" y="288">Intercambio</text><text class="small" x="320" y="316">copias locales + paquetes</text>
 <rect class="box" x="660" y="255" width="240" height="95"/><text class="head" x="680" y="288">Resguardo</text><text class="small" x="680" y="316">integridad + backups</text>
 <path class="arr" d="M625 140 V205 H420 V248"/><path class="arr" d="M1100 140 V205 H780 V248"/>

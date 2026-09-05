@@ -46,15 +46,19 @@ def preflight_relocations(source: Path, target: Path, relocations: list[dict]) -
     for item in relocations:
         old_rel = Path(item["from"])
         new_rel = Path(item["to"])
-        expected = str(item["sha256"])
+        old_expected = str(item.get("from_sha256") or item.get("sha256") or "")
+        new_expected = str(item.get("to_sha256") or item.get("sha256") or "")
+        if not old_expected or not new_expected:
+            problems.append(f"La reubicación no declara huellas válidas: {old_rel} -> {new_rel}")
+            continue
         package_new = source / new_rel
         if not package_new.is_file():
-            problems.append(f"Falta en el paquete el destino histórico esperado: {new_rel}")
+            problems.append(f"Falta en el paquete el destino esperado: {new_rel}")
             continue
         package_hash = sha256_file(package_new)
-        if package_hash != expected:
+        if package_hash != new_expected:
             problems.append(
-                f"La copia histórica del paquete no coincide con el SHA-256 declarado: {new_rel}"
+                f"La copia nueva del paquete no coincide con el SHA-256 declarado: {new_rel}"
             )
             continue
         local_old = target / old_rel
@@ -64,12 +68,17 @@ def preflight_relocations(source: Path, target: Path, relocations: list[dict]) -
             problems.append(f"La ruta obsoleta existe pero no es un archivo: {old_rel}")
             continue
         local_hash = sha256_file(local_old)
-        if local_hash != expected:
+        if local_hash != old_expected:
             problems.append(
-                f"No se tocará {old_rel}: su contenido local difiere de la copia histórica conocida."
+                f"No se tocará {old_rel}: su contenido local difiere de la copia conocida."
             )
             continue
-        actions.append({"from": old_rel, "to": new_rel, "sha256": expected})
+        actions.append({
+            "from": old_rel,
+            "to": new_rel,
+            "from_sha256": old_expected,
+            "to_sha256": new_expected,
+        })
     if problems:
         raise RuntimeError("\n".join(problems))
     return actions
@@ -88,14 +97,37 @@ def reconcile_relocations(target: Path, actions: list[dict]) -> None:
     for item in actions:
         old_path = target / item["from"]
         new_path = target / item["to"]
-        expected = item["sha256"]
-        if not new_path.is_file() or sha256_file(new_path) != expected:
+        old_expected = item["from_sha256"]
+        new_expected = item["to_sha256"]
+        if not new_path.is_file() or sha256_file(new_path) != new_expected:
             raise RuntimeError(
                 f"No se retira {item['from']}: no se pudo verificar la copia histórica en {item['to']}."
             )
-        if old_path.is_file() and sha256_file(old_path) == expected:
+        if old_path.is_file() and sha256_file(old_path) == old_expected:
             old_path.unlink()
             print(f"Reubicación verificada: {item['from']} -> {item['to']}")
+
+
+def prune_known_empty_directories(target: Path) -> None:
+    """Retira sólo directorios obsoletos autorizados cuando ya quedaron vacíos."""
+
+    for rel in (Path("docs/historico"), Path("docs/operativos"), Path("docs/referencia")):
+        root = target / rel
+        if not root.is_dir():
+            continue
+        for directory in sorted(
+            (path for path in root.rglob("*") if path.is_dir()),
+            key=lambda path: len(path.parts),
+            reverse=True,
+        ):
+            try:
+                directory.rmdir()
+            except OSError:
+                pass
+        try:
+            root.rmdir()
+        except OSError:
+            pass
 
 
 def apply_update(source: Path, target: Path) -> None:
@@ -107,6 +139,7 @@ def apply_update(source: Path, target: Path) -> None:
     print(f"Reubicaciones conocidas a reconciliar: {len(actions)}")
     copy_candidate(source, target)
     reconcile_relocations(target, actions)
+    prune_known_empty_directories(target)
     print("Actualización aplicada. No se modificaron archivos locales ajenos al paquete ni otras rutas.")
 
 

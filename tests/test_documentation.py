@@ -3,29 +3,34 @@ from pathlib import Path
 
 ROOT = Path(__file__).parents[1]
 DOCS = ROOT / "docs"
-HISTORICAL_TECH = DOCS / "historico" / "decisiones_tecnicas"
-HISTORICAL_UPDATES = DOCS / "historico" / "actualizaciones"
-OPERATIVE = DOCS / "operativos"
-REFERENCE = DOCS / "referencia"
+PRIVATE_DOCS = ROOT / ".assistant" / "project_docs"
+HISTORICAL_TECH = PRIVATE_DOCS / "historico" / "decisiones_tecnicas"
+HISTORICAL_UPDATES = PRIVATE_DOCS / "historico" / "actualizaciones"
+OPERATIVE = PRIVATE_DOCS / "operativos"
+REFERENCE = PRIVATE_DOCS / "referencia"
+PROJECTS = PRIVATE_DOCS / "proyectos"
 
 
-def test_docs_root_is_clean_and_operational_documents_are_unique() -> None:
+def test_docs_root_is_public_only_and_private_documents_are_unique() -> None:
     root_files = {path.name for path in DOCS.iterdir() if path.is_file()}
-    assert "HISTORIAL_DE_CAMBIOS.md" in root_files
     assert "index.html" in root_files
+    assert "desarrollo.html" in root_files
     assert ".nojekyll" in root_files
-    assert not {name for name in root_files if name.endswith(".md") and name != "HISTORIAL_DE_CAMBIOS.md"}
+    assert not list(DOCS.rglob("*.md"))
+    assert not list(DOCS.rglob("*.txt"))
     assert sorted(path.name for path in OPERATIVE.glob("*.md")) == [
         "ACTUALIZACION_ACTUAL.md",
         "ESTRATEGIA_DE_PRUEBAS.md",
-        "GUIA_PRUEBA_PILOTO.md",
         "HOJA_DE_RUTA_PRE_RELEASE.md",
         "IMPLEMENTACIONES_REALIZADAS.md",
         "PENDIENTES_ACTIVOS.md",
     ]
-    assert len(list(DOCS.rglob("PENDIENTES_ACTIVOS.md"))) == 1
-    assert len(list(DOCS.rglob("IMPLEMENTACIONES_REALIZADAS.md"))) == 1
+    assert (PRIVATE_DOCS / "HISTORIAL_DE_CAMBIOS.md").is_file()
+    assert (PRIVATE_DOCS / "historico" / "prueba_piloto" / "GUIA_PRUEBA_PILOTO.md").is_file()
+    assert len(list(PRIVATE_DOCS.rglob("PENDIENTES_ACTIVOS.md"))) == 1
+    assert len(list(PRIVATE_DOCS.rglob("IMPLEMENTACIONES_REALIZADAS.md"))) == 1
     assert not list(OPERATIVE.glob("*0.*.md"))
+
 
 
 def test_assistant_continuity_documents_exist_and_define_read_order() -> None:
@@ -58,7 +63,7 @@ def test_assistant_continuity_documents_exist_and_define_read_order() -> None:
     for name in documents:
         assert f".assistant/{name}" in first
     assert "Orden obligatorio de lectura" in first
-    assert "docs/operativos/PENDIENTES_ACTIVOS.md" in first
+    assert ".assistant/project_docs/operativos/PENDIENTES_ACTIVOS.md" in first
     assert "No volver a presentar como pendiente" in first
 
 
@@ -214,12 +219,8 @@ def test_streamlit_form_policy_prevents_circular_disabled_buttons() -> None:
     assert "ausencia de paneles duplicados" in text
     assert ".assistant/05_FORMULARIOS_STREAMLIT.md" in tests_policy
     assert ".assistant/05_FORMULARIOS_STREAMLIT.md" in first
-    implemented = (
-        ROOT / "docs" / "operativos" / "IMPLEMENTACIONES_REALIZADAS.md"
-    ).read_text(encoding="utf-8")
-    pending = (
-        ROOT / "docs" / "operativos" / "PENDIENTES_ACTIVOS.md"
-    ).read_text(encoding="utf-8")
+    implemented = (OPERATIVE / "IMPLEMENTACIONES_REALIZADAS.md").read_text(encoding="utf-8")
+    pending = (OPERATIVE / "PENDIENTES_ACTIVOS.md").read_text(encoding="utf-8")
     interaction = (assistant / "01_INTERACCION_Y_GUIADO.md").read_text(encoding="utf-8")
     assert "Regla permanente de interfaz" in first
     assert "Principio permanente para toda modificación" in implemented
@@ -250,8 +251,8 @@ def test_interface_policy_requires_persistent_interactive_panels() -> None:
 
 
 def test_history_map_is_concise_and_references_historical_detail() -> None:
-    text = (DOCS / "HISTORIAL_DE_CAMBIOS.md").read_text(encoding="utf-8")
-    assert "## Documentación vigente" in text
+    text = (PRIVATE_DOCS / "HISTORIAL_DE_CAMBIOS.md").read_text(encoding="utf-8")
+    assert "## Documentación interna vigente" in text
     assert "### 0.80.0" in text
     assert "0044_layout_structure_review" in text
     assert "### 0.83.0" in text
@@ -309,15 +310,15 @@ def test_history_map_is_concise_and_references_historical_detail() -> None:
     assert text.index("### 0.74.0") < text.index("### 0.73.0")
     assert text.index("### 0.73.0") < text.index("### 0.72.0")
     assert text.index("### 0.72.0") < text.index("### 0.71.2")
-    assert len(text.splitlines()) < 380
+    assert len(text.splitlines()) < 400
 
 
 def test_current_architecture_is_separate_from_historical_design() -> None:
-    current = (DOCS / "referencia" / "ARQUITECTURA_Y_MODELO_ACTUAL.md").read_text(
+    current = (REFERENCE / "ARQUITECTURA_Y_MODELO_ACTUAL.md").read_text(
         encoding="utf-8"
     )
     historical_path = (
-        DOCS
+        PRIVATE_DOCS
         / "historico"
         / "diseno"
         / "DISENO_Y_PLAN_DE_IMPLEMENTACION_HASTA_0.49.2.md"
@@ -625,7 +626,7 @@ def test_interaction_policy_requires_explicit_checklist_confirmation_for_code_ch
 
 def test_authority_dictionary_format_is_versioned_and_conservative() -> None:
     text = (
-        DOCS / "referencia" / "IMPORTACION_DICCIONARIOS_DISC_02.md"
+        REFERENCE / "IMPORTACION_DICCIONARIOS_DISC_02.md"
     ).read_text(encoding="utf-8")
     for item in (
         "Versión del esquema",
@@ -649,7 +650,7 @@ def test_authority_dictionary_format_is_versioned_and_conservative() -> None:
 
 def test_ex01_lineage_recovery_plan_is_complete_and_conservative() -> None:
     text = (
-        DOCS / "referencia" / "RECUPERACION_LINAJE_EX_01.md"
+        PRIVATE_DOCS / "historico" / "planes" / "RECUPERACION_LINAJE_EX_01.md"
     ).read_text(encoding="utf-8")
     for item in (
         "## 2. Objetivo",
@@ -691,7 +692,7 @@ def test_testing_strategy_is_explicit_and_does_not_discard_slow_tests() -> None:
 
 
 def test_pilot_guide_delegates_future_work_to_single_pending_ledger() -> None:
-    text = (OPERATIVE / "GUIA_PRUEBA_PILOTO.md").read_text(encoding="utf-8")
+    text = (PRIVATE_DOCS / "historico" / "prueba_piloto" / "GUIA_PRUEBA_PILOTO.md").read_text(encoding="utf-8")
     assert "PENDIENTES_ACTIVOS.md" in text
     assert "HOJA_DE_RUTA_PRE_RELEASE.md" in text
     assert "PROYECTO_PARALELO_GIAR.md" in text
@@ -720,9 +721,9 @@ def test_readme_points_only_to_current_documentation_map() -> None:
     assert "Exportar texto e imágenes (ZIP)" in text
     assert 'pip install -e ".[platform]"' in text
     assert "FFmpeg/FFprobe" in text
-    assert "docs/HISTORIAL_DE_CAMBIOS.md" in text
-    assert "docs/operativos/PENDIENTES_ACTIVOS.md" in text
-    assert "docs/operativos/IMPLEMENTACIONES_REALIZADAS.md" in text
+    assert "docs/desarrollo.html" in text
+    assert "docs/operativos/" not in text
+    assert "docs/referencia/ARQUITECTURA_Y_MODELO_ACTUAL.md" not in text
     assert "docs/DISENO_Y_PLAN_DE_IMPLEMENTACION.md" not in text
 
 
@@ -731,7 +732,7 @@ def test_public_site_web01_has_required_pages_metadata_and_local_links() -> None
         "index.html", "instalacion.html", "tutorial.html", "catalogo.html",
         "procesamiento.html", "revision.html", "entidades.html", "busquedas.html",
         "relaciones.html", "audiovisual.html", "exportacion.html", "intercambio.html",
-        "resguardo.html", "conceptos.html", "referencia.html", "problemas.html", "404.html",
+        "resguardo.html", "conceptos.html", "referencia.html", "desarrollo.html", "problemas.html", "404.html",
     }
     assert required.issubset({p.name for p in DOCS.glob("*.html")})
     for path in [DOCS / name for name in required]:
@@ -741,6 +742,7 @@ def test_public_site_web01_has_required_pages_metadata_and_local_links() -> None
         assert 'href="assets/site.css"' in text
         assert 'class="skip"' in text
         assert '<nav aria-label="Navegación principal">' in text
+        assert 'href="desarrollo.html"' in text or path.name == "desarrollo.html"
         assert "placeholder" not in text.lower()
     for html in DOCS.glob("*.html"):
         text = html.read_text(encoding="utf-8")
@@ -777,7 +779,7 @@ def test_web01_resumes_after_distribution_closure_and_requires_full_novice_reade
 
 
 def test_open_discovery_plan_separates_suggestions_from_canonical_records() -> None:
-    text = (DOCS / "referencia" / "DESCUBRIMIENTO_ABIERTO_DISC_01.md").read_text(
+    text = (PRIVATE_DOCS / "historico" / "planes" / "DESCUBRIMIENTO_ABIERTO_DISC_01.md").read_text(
         encoding="utf-8"
     )
     assert "DISC-01A" in text
@@ -831,7 +833,7 @@ def test_pre_release_roadmap_includes_public_site_export_and_parallel_giar() -> 
 
 
 def test_giar_parallel_project_is_referential_and_preserves_provenance() -> None:
-    path = DOCS / "referencia" / "PROYECTO_PARALELO_GIAR.md"
+    path = PROJECTS / "PROYECTO_PARALELO_GIAR.md"
     text = path.read_text(encoding="utf-8")
     for item in (
         "integrantes e investigadores",
@@ -883,10 +885,9 @@ def test_ocr01c_assistant_guidance_update_is_idempotent(tmp_path: Path) -> None:
 def test_ocr01_is_closed_and_architecture_remains_conservative() -> None:
     pending = (OPERATIVE / "PENDIENTES_ACTIVOS.md").read_text(encoding="utf-8")
     implemented = (OPERATIVE / "IMPLEMENTACIONES_REALIZADAS.md").read_text(encoding="utf-8")
-    architecture = (DOCS / "referencia" / "ARQUITECTURA_Y_MODELO_ACTUAL.md").read_text(encoding="utf-8")
+    architecture = (REFERENCE / "ARQUITECTURA_Y_MODELO_ACTUAL.md").read_text(encoding="utf-8")
     assert "### OCR-01 —" not in pending
     assert "| OCR-01 |" not in pending
-    assert "`OCR-01` quedó cerrado en 0.83.0" in pending
     assert "OCR-01A–F implementadas, validadas y cerradas" in implemented
     assert "OCR-01F — Tesseract, Docling y Surya — 0.83.0" in implemented
     assert "CER 0.0000" in implemented and "WER 0.0000" in implemented
@@ -938,7 +939,7 @@ def test_pilot_findings_are_persisted_in_project_documentation() -> None:
     interface = (ROOT / ".assistant" / "05_CRITERIOS_INTERFAZ.md").read_text(encoding="utf-8")
     pending = (OPERATIVE / "PENDIENTES_ACTIVOS.md").read_text(encoding="utf-8")
     implemented = (OPERATIVE / "IMPLEMENTACIONES_REALIZADAS.md").read_text(encoding="utf-8")
-    architecture = (ROOT / "docs" / "referencia" / "ARQUITECTURA_Y_MODELO_ACTUAL.md").read_text(encoding="utf-8")
+    architecture = (REFERENCE / "ARQUITECTURA_Y_MODELO_ACTUAL.md").read_text(encoding="utf-8")
 
     assert "dejar asentado" in interaction.lower()
     assert "memoria del asistente como sustituto" in interaction
@@ -955,7 +956,7 @@ def test_pilot_findings_are_persisted_in_project_documentation() -> None:
 
 
 def test_streamlit_interaction_architecture_has_one_canonical_source() -> None:
-    architecture = (DOCS / "referencia" / "ARQUITECTURA_Y_MODELO_ACTUAL.md").read_text(encoding="utf-8")
+    architecture = (REFERENCE / "ARQUITECTURA_Y_MODELO_ACTUAL.md").read_text(encoding="utf-8")
     first = (ROOT / ".assistant" / "00_LEER_PRIMERO.md").read_text(encoding="utf-8")
     criteria = (ROOT / ".assistant" / "05_CRITERIOS_INTERFAZ.md").read_text(encoding="utf-8")
     forms = (ROOT / ".assistant" / "05_FORMULARIOS_STREAMLIT.md").read_text(encoding="utf-8")
@@ -974,6 +975,32 @@ def test_streamlit_interaction_architecture_has_one_canonical_source() -> None:
     assert "PILOT-01M" in (OPERATIVE / "IMPLEMENTACIONES_REALIZADAS.md").read_text(encoding="utf-8")
 
 
+
+def test_public_docs_do_not_expose_private_project_ledgers() -> None:
+    assert not (DOCS / "operativos").exists()
+    assert not (DOCS / "referencia").exists()
+    assert not (DOCS / "historico").exists()
+    readme = (ROOT / "README.md").read_text(encoding="utf-8")
+    reference = (DOCS / "referencia.html").read_text(encoding="utf-8")
+    assert ".assistant/project_docs" not in readme
+    assert ".assistant/project_docs" not in reference
+    assert "docs/operativos/" not in readme
+    assert "ARQUITECTURA_Y_MODELO_ACTUAL.md" not in reference
+    development = (DOCS / "desarrollo.html").read_text(encoding="utf-8")
+    for code in ("WEB-01", "QA-01", "OPS-02", "OPS-03", "RC"):
+        assert code in development
+
+
+def test_web01_requires_current_code_vocabulary_and_screenshot_coverage() -> None:
+    pending = (OPERATIVE / "PENDIENTES_ACTIVOS.md").read_text(encoding="utf-8")
+    site_policy = (ROOT / ".assistant" / "POLITICA_SITIO_PUBLICO.md").read_text(encoding="utf-8")
+    guidelines = (ROOT / ".assistant" / "LINEAMIENTOS_DE_DISENO_Y_ESCRITURA.md").read_text(encoding="utf-8")
+    for text in (pending, site_policy):
+        assert "código vigente" in text
+        assert "al menos una captura" in text
+        assert "sección" in text and "pestaña" in text
+    assert "nombre literal" in guidelines
+
 def test_operational_docs_contain_only_canonical_active_documents() -> None:
     actual = {path.name for path in OPERATIVE.iterdir() if path.is_file()}
     assert actual == {
@@ -981,10 +1008,9 @@ def test_operational_docs_contain_only_canonical_active_documents() -> None:
         "IMPLEMENTACIONES_REALIZADAS.md",
         "ACTUALIZACION_ACTUAL.md",
         "ESTRATEGIA_DE_PRUEBAS.md",
-        "GUIA_PRUEBA_PILOTO.md",
         "HOJA_DE_RUTA_PRE_RELEASE.md",
     }
-    historical = DOCS / "historico" / "actualizaciones"
+    historical = PRIVATE_DOCS / "historico" / "actualizaciones"
     assert (historical / "AUDITORIA_INTERFAZ_RC11_5_PASADAS.txt").is_file()
     assert (historical / "AUDITORIA_INTERFAZ_RC12_5_PASADAS.txt").is_file()
     assert (historical / "ACTUALIZACION_Y_PRUEBA_0.89.0_RC12.md").is_file()

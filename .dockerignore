@@ -21,5 +21,4 @@ ArchiveWorkbenchData
 *.log
 *.pyc
 *.pyo
-docs/historico
 tests

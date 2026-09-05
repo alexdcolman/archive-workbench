@@ -1,3 +1,11 @@
+## 0.89.0 - documentación pre-release - 2026-09-05
+
+- Separa la documentación pública de GitHub Pages de las bitácoras internas de desarrollo y continuidad.
+- `docs/` queda reservado al sitio público; el estado operativo, la arquitectura y el historial detallado pasan al contexto privado distribuido con las candidatas de trabajo.
+- Agrega `docs/desarrollo.html` para explicar los identificadores de trabajo que aparecen en este historial sin publicar las bitácoras internas.
+- Corrige el desborde de texto del cuadro **Exportación** en el diagrama general.
+- Sin cambios de código de la aplicación ni de esquema SQLite.
+
 ## 0.89.0 RC84 - 2026-09-04
 
 - Convierte el retorno administrado de Google Drive en una pantalla auxiliar terminal después de OAuth o Google Picker.

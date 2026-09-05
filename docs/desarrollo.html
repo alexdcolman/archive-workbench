@@ -1,0 +1,31 @@
+<!doctype html>
+<html lang="es-AR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Desarrollo · Archive Workbench</title>
+<meta name="description" content="Estado de desarrollo de Archive Workbench y guía para interpretar los identificadores y candidatas del historial público.">
+<meta name="theme-color" content="#f4f0e6">
+<link rel="stylesheet" href="assets/site.css">
+</head>
+<body>
+<a class="skip" href="#contenido">Saltar al contenido</a>
+<header class="site-head"><div class="head-inner"><div class="brand"><a href="index.html">Archive Workbench</a><span>documentación pública · 0.89.0</span></div><nav aria-label="Navegación principal"><ul><li><a href="index.html">Inicio</a></li><li><a href="instalacion.html">Instalación</a></li><li><a href="tutorial.html">Tutorial</a></li><li><a href="catalogo.html">Catálogo</a></li><li><a href="procesamiento.html">Procesamiento</a></li><li><a href="revision.html">Revisión</a></li><li><a href="entidades.html">Entidades</a></li><li><a href="busquedas.html">Búsquedas</a></li><li><a href="relaciones.html">Relaciones</a></li><li><a href="audiovisual.html">Audio y video</a></li><li><a href="exportacion.html">Exportación</a></li><li><a href="intercambio.html">Intercambio</a></li><li><a href="resguardo.html">Resguardo</a></li><li><a href="conceptos.html">Conceptos</a></li><li><a href="referencia.html">Referencia</a></li><li><a href="desarrollo.html" aria-current="page">Desarrollo</a></li><li><a href="problemas.html">Problemas frecuentes</a></li></ul></nav></div></header>
+<main id="contenido">
+<p class="kicker">Estado del pre-release</p><h1>Cómo leer el historial de desarrollo</h1>
+<p class="lead">Archive Workbench está en la serie 0.89.0, previa a la versión 1.0. El historial público usa identificadores breves para agrupar trabajos de desarrollo y números RC para distinguir candidatas de publicación.</p>
+<h2>Identificadores</h2>
+<p>Los códigos como <code>WEB-01</code>, <code>QA-01</code>, <code>OPS-02</code> u <code>OPS-03</code> nombran bloques de trabajo. Permiten seguir una misma tarea a través de varias candidatas sin convertir esos nombres internos en controles de la interfaz.</p>
+<p><code>RC</code> significa <em>release candidate</em>, una candidata que se prueba antes de la publicación estable. Por ejemplo, RC84 identifica una candidata de la versión 0.89.0.</p>
+<h2>Secuencia previa a 1.0</h2>
+<table><thead><tr><th>Bloque</th><th>Estado público</th><th>Alcance</th></tr></thead><tbody>
+<tr><td><code>WEB-01</code></td><td>En curso</td><td>Reescritura de la documentación pública, tutoriales y capturas reales de la interfaz.</td></tr>
+<tr><td><code>QA-01</code> + <code>OPS-02</code></td><td>Pendiente</td><td>Controles estáticos y clasificación de la suite de pruebas antes del release.</td></tr>
+<tr><td><code>OPS-03</code></td><td>Pendiente</td><td>Instalación limpia, requisitos finales, contratos públicos y candidata a la versión 1.0.</td></tr>
+</tbody></table>
+<h2>Historial público</h2>
+<p>El <a href="https://github.com/alexdcolman/archive-workbench/blob/main/CHANGELOG.md">CHANGELOG</a> registra cambios visibles, correcciones y decisiones de release. Esta página explica los códigos que aparecen allí; las bitácoras de trabajo, auditorías internas y documentación de continuidad no forman parte del sitio público.</p>
+</main>
+<footer class="site-foot"><p>Archive Workbench · software libre AGPL-3.0-or-later · <a href="https://github.com/alexdcolman/archive-workbench">repositorio</a> · <a href="https://github.com/alexdcolman/archive-workbench/blob/main/CITATION.cff">cita</a> · <a href="https://github.com/alexdcolman/archive-workbench/blob/main/CHANGELOG.md">cambios</a></p></footer>
+</body>
+</html>

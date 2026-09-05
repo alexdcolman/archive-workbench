@@ -165,7 +165,7 @@ Al cerrar una implementación con impacto público se revisa:
 - comandos públicos si cambia el CLI;
 - capturas y figuras si la interfaz o los resultados visibles cambiaron.
 
-La fuente de verdad para trabajo abierto sigue siendo `docs/operativos/PENDIENTES_ACTIVOS.md`. El sitio público no debe presentar como disponible una función pendiente.
+La fuente de verdad para trabajo abierto sigue siendo `.assistant/project_docs/operativos/PENDIENTES_ACTIVOS.md`. El sitio público no debe presentar como disponible una función pendiente.
 """
 
 DESIGN_WRITING_POLICY = """# Lineamientos de diseño y escritura para Archive Workbench
