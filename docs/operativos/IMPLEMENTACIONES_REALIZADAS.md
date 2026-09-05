@@ -1,3 +1,13 @@
+## RC84 - cierre pre-release de OPS-01
+
+RC84 quedó publicada y su callback auxiliar de Google Drive fue validado materialmente en Windows CPU: la pestaña auxiliar termina después de OAuth o Google Picker sin continuar hacia el launcher, mientras la pestaña original conserva el proyecto abierto y puede utilizar la selección persistida.
+
+Con esta validación se cierra `OPS-01` para el pre-release dentro del hardware disponible. Windows CPU quedó validado materialmente sobre la distribución administrada y las validaciones Linux ya cubrían CPU y NVIDIA GPU, incluidas Surya y transcripción audiovisual CUDA. Las imágenes publicadas cubren CPU `linux/amd64` y `linux/arm64` y NVIDIA GPU `linux/amd64`.
+
+No se dispone actualmente de una máquina Windows con GPU NVIDIA ni de una máquina macOS. Sus primeros inicios administrados quedan registrados como validaciones materiales no realizadas por falta de hardware disponible. No existe un defecto conocido asociado a esas dos rutas y su ausencia no bloquea el pre-release; si esos equipos están disponibles más adelante, corresponde ejecutar únicamente sus recorridos de arranque.
+
+No hay migración de base. Continúa `0047_authority_relation_profiles`.
+
 ## RC83 - cierre Windows CPU de interacción, copia completa y ciclo de vida
 
 La validación material Windows CPU de RC83 cerró sus cuatro objetivos. Las pestañas volvieron a cambiar con un solo clic y conservaron respuesta prácticamente inmediata; una copia completa recibida pudo adoptarse dentro de un proyecto vacío sin salir de Archive Workbench; el mismo intento quedó bloqueado de forma segura cuando el proyecto ya contenía trabajo; y **Cerrar Archive Workbench** terminó la instancia administrada propia y liberó el puerto.

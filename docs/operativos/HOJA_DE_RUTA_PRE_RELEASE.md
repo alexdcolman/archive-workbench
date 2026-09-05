@@ -9,10 +9,11 @@ Esta hoja ordena el trabajo restante hasta v1.0. El detalle y el estado de cada 
 
 `OCR-01` quedó implementado, validado y cerrado en 0.83.0. `AV-01` quedó implementado, validado y cerrado en 0.84.0. `AV-02` quedó implementado, validado y cerrado en 0.85.0. `AV-03` quedó implementado, validado y cerrado en 0.86.0. `INT-01` quedó implementado, validado y cerrado en 0.87.0. `EXP-01` quedó implementado, validado y cerrado en 0.88.0.
 
-1. Completar y validar `OPS-01`: RC83 ya quedó materialmente verde en Windows CPU, incluidos pestañas a un clic, adopción de copia completa y cierre explícito. Validar RC84 sólo sobre la pestaña auxiliar de retorno de Google Drive y después continuar Windows GPU y macOS.
-2. Retomar `WEB-01` sólo después de estabilizar la instalación pública y reescribir sitio/README bajo la regla de lectores sin conocimiento previo. La publicación final seguirá usando GitHub Pages.
-3. Ejecutar `QA-01` junto con `OPS-02`.
-4. Cerrar `OPS-03`, congelar contratos públicos y preparar la candidata a v1.0.
+`OPS-01` quedó cerrado para el pre-release con validación material Linux CPU/GPU y Windows CPU. Windows + NVIDIA GPU y macOS CPU quedan documentados como comprobaciones materiales no realizadas por falta de hardware disponible, sin fallos conocidos asociados.
+
+1. Retomar `WEB-01` y reescribir sitio/README bajo la regla de lectores sin conocimiento previo. La publicación final seguirá usando GitHub Pages.
+2. Ejecutar `QA-01` junto con `OPS-02`.
+3. Cerrar `OPS-03`, congelar contratos públicos y preparar la candidata a v1.0.
 
 ## Línea paralela vinculada
 

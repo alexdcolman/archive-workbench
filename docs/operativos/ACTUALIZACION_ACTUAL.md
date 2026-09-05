@@ -65,4 +65,8 @@ No repetir rendimiento, OAuth funcional, inicialización SQLite, audiovisual sin
 
 ## Estado de OPS-01
 
-`OPS-01` permanece **parcial, en curso**. RC83 queda publicada y materialmente verde en Windows CPU. RC84 es una corrección acotada del callback auxiliar de Google Drive antes de continuar Windows GPU y macOS. `WEB-01` permanece parcial y queda pausado hasta estabilizar la distribución multiplataforma. No se incorporan capturas hasta realizar esa reescritura para lectores sin conocimiento previo.
+`OPS-01` queda **cerrado para el pre-release con alcance de validación explícito**. RC84 está publicada y la ruta Windows CPU quedó materialmente verde, incluido el callback auxiliar de Google Drive. Las validaciones materiales Linux ya cubren CPU y NVIDIA GPU. La construcción publicada también cubre CPU `linux/amd64` y `linux/arm64` y GPU NVIDIA `linux/amd64`.
+
+No se dispone de una máquina Windows con GPU NVIDIA ni de una máquina macOS para realizar las dos comprobaciones materiales restantes. Esas ausencias se registran como limitaciones de validación por hardware no disponible, no como fallos conocidos ni como bloqueantes del pre-release. Si más adelante se dispone de esos equipos, corresponde ejecutar únicamente sus recorridos de arranque administrado.
+
+`WEB-01` deja de estar pausado y vuelve a ser el bloque activo de la secuencia principal: corresponde reescribir el sitio y el README para lectores sin conocimiento previo.

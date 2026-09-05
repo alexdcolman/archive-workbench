@@ -95,11 +95,12 @@ def test_active_pending_ledger_has_index_and_recovers_all_major_lines() -> None:
     for item in (
         "AI-01 — Pipeline CLI opcional de análisis con LLM",
         "AI-02 — Sistema RAG trazable",
-        "OPS-01 — Distribución multiplataforma e imagen Docker",
         "WEB-01 — Sitio público y documentación de release",
         "GIAR-01 — Base de conocimiento y sitio",
     ):
         assert item in text
+    assert "OPS-01 — Distribución multiplataforma e imagen Docker" not in text
+    assert "## RC84 - cierre pre-release de OPS-01" in implemented
     assert "AV-01 — Registro local de audio y video y transcripción" not in text
     assert "AV-01 — audio/video local, segmentos y corrección — 0.84.0" in implemented
     assert "AV-02 — incorporación autorizada desde plataformas — 0.85.0" in implemented
@@ -577,8 +578,8 @@ def test_current_update_guide_describes_0890_rc84_google_drive_callback_candidat
     assert "Archive Workbench 0.89.0 RC84" in text
     assert "0.89.0-rc84-cpu" in text
     assert "0.89.0-rc84-gpu" in text
-    assert "| WEB-01 | Alta | Parcial pre-release, pausado |" in pending
-    assert "| OPS-01 | Alta | Parcial, en curso |" in pending
+    assert "| WEB-01 | Alta | Parcial pre-release, en curso |" in pending
+    assert "| OPS-01 |" not in pending
     assert "## RC80 - PyTorch CPU explícito en runtime principal multi-arquitectura" in implemented
     assert "## RC79 - transcripción audiovisual GPU validada y métrica VRAM en Docker" in implemented
     assert "peak_gpu_memory_mib" in implemented
@@ -596,7 +597,8 @@ def test_current_update_guide_describes_0890_rc84_google_drive_callback_candidat
     assert "OPS-01-TABS" not in pending
     assert "OPS-01-COPY" not in pending
     assert "OPS-01-STOP" not in pending
-    assert "OPS-01-CALLBACK" in pending
+    assert "OPS-01-CALLBACK" not in pending
+    assert "## RC84 - cierre pre-release de OPS-01" in implemented
     assert "sesión auxiliar terminal" in text
     assert "Google Drive" in text
     assert "st.stop()" in text
@@ -762,14 +764,14 @@ def test_public_site_diagrams_are_accessible_and_readme_points_to_site() -> None
     assert "versión 0.89.0" in readme.lower()
 
 
-def test_web01_is_paused_until_distribution_and_full_novice_reader_rewrite() -> None:
+def test_web01_resumes_after_distribution_closure_and_requires_full_novice_reader_rewrite() -> None:
     pending = (OPERATIVE / "PENDIENTES_ACTIVOS.md").read_text(encoding="utf-8")
     current = (OPERATIVE / "ACTUALIZACION_ACTUAL.md").read_text(encoding="utf-8")
     guidelines = (ROOT / ".assistant" / "LINEAMIENTOS_DE_DISENO_Y_ESCRITURA.md").read_text(encoding="utf-8")
     assert "UX-02 |" not in pending
-    assert "WEB-01 | Alta | Parcial pre-release, pausado" in pending
-    assert "WEB-01` permanece parcial y queda pausado" in current
-    assert "No se incorporan capturas hasta realizar esa reescritura" in current
+    assert "WEB-01 | Alta | Parcial pre-release, en curso" in pending
+    assert "`WEB-01` deja de estar pausado" in current
+    assert "reescribir el sitio y el README para lectores sin conocimiento previo" in current
     assert "lectores sin conocimiento previo" in current
     assert "no usar `candidato` como sustantivo autónomo" in guidelines.lower()
 
@@ -817,8 +819,9 @@ def test_pre_release_roadmap_includes_public_site_export_and_parallel_giar() -> 
     assert "`EXP-01` quedó implementado, validado y cerrado en 0.88.0" in text
     assert "1. Cerrar `DISC-03`" not in text
     assert "1. Completar `UX-02`" not in text
-    assert "1. Completar y validar `OPS-01`" in text
-    assert "2. Retomar `WEB-01`" in text
+    assert "1. Completar y validar `OPS-01`" not in text
+    assert "`OPS-01` quedó cerrado para el pre-release" in text
+    assert "1. Retomar `WEB-01`" in text
     assert "1. Ejecutar `PILOT-01`" not in text
     assert "Validar y cerrar `EXP-01`" not in text
     assert "Validar y cerrar `INT-01`" not in text
