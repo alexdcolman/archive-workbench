@@ -567,7 +567,7 @@ def test_automatic_analysis_quality_decision_is_preserved_and_auditable() -> Non
     assert "st.form" in text
 
 
-def test_current_update_guide_describes_0890_rc84_google_drive_callback_candidate() -> None:
+def test_current_update_guide_describes_0890_rc85_and_preserves_rc84_callback_history() -> None:
     text = (OPERATIVE / "ACTUALIZACION_ACTUAL.md").read_text(encoding="utf-8")
     pending = (OPERATIVE / "PENDIENTES_ACTIVOS.md").read_text(encoding="utf-8")
     implemented = (OPERATIVE / "IMPLEMENTACIONES_REALIZADAS.md").read_text(encoding="utf-8")
@@ -576,10 +576,10 @@ def test_current_update_guide_describes_0890_rc84_google_drive_callback_candidat
     architecture = (REFERENCE / "ARQUITECTURA_Y_MODELO_ACTUAL.md").read_text(encoding="utf-8")
     historical_rc76 = HISTORICAL_UPDATES / "ACTUALIZACION_Y_PRUEBA_0.89.0_RC76.md"
 
-    assert "Archive Workbench 0.89.0 RC84" in text
-    assert "0.89.0-rc84-cpu" in text
-    assert "0.89.0-rc84-gpu" in text
-    assert "| WEB-01 | Alta | Parcial pre-release, en curso |" in pending
+    assert "Archive Workbench 0.89.0 RC85" in text
+    assert "0.89.0-rc85-cpu" in text
+    assert "0.89.0-rc85-gpu" in text
+    assert "| WEB-01 | Alta | Cerrado |" in pending
     assert "| OPS-01 |" not in pending
     assert "## RC80 - PyTorch CPU explícito en runtime principal multi-arquitectura" in implemented
     assert "## RC79 - transcripción audiovisual GPU validada y métrica VRAM en Docker" in implemented
@@ -589,7 +589,7 @@ def test_current_update_guide_describes_0890_rc84_google_drive_callback_candidat
     assert "## RC78 - diagnóstico administrado GPU y validación material Linux/NVIDIA" in implemented
     assert "## RC77 - guardas de inferencia para Surya/llama.cpp administrado" in implemented
     assert "no cambia el esquema SQLite" in text
-    assert "0.89.0 RC84" in continuity
+    assert "0.89.0 RC85" in continuity
     assert "2.5 Regla obligatoria para lectores sin conocimiento previo" in guidelines
     assert "Cada sustantivo que pueda tener más de un referente" in guidelines
     assert "Distribución administrada y espacio de trabajo multiplataforma - RC72/RC84" in architecture
@@ -766,15 +766,15 @@ def test_public_site_diagrams_are_accessible_and_readme_points_to_site() -> None
     assert "versión 0.89.0" in readme.lower()
 
 
-def test_web01_resumes_after_distribution_closure_and_requires_full_novice_reader_rewrite() -> None:
+def test_web01_is_closed_after_publication_and_keeps_novice_reader_rules() -> None:
     pending = (OPERATIVE / "PENDIENTES_ACTIVOS.md").read_text(encoding="utf-8")
     current = (OPERATIVE / "ACTUALIZACION_ACTUAL.md").read_text(encoding="utf-8")
     guidelines = (ROOT / ".assistant" / "LINEAMIENTOS_DE_DISENO_Y_ESCRITURA.md").read_text(encoding="utf-8")
     assert "UX-02 |" not in pending
-    assert "WEB-01 | Alta | Parcial pre-release, en curso" in pending
-    assert "`WEB-01` deja de estar pausado" in current
-    assert "reescribir el sitio y el README para lectores sin conocimiento previo" in current
-    assert "lectores sin conocimiento previo" in current
+    assert "WEB-01 | Alta | Cerrado" in pending
+    assert "WEB-01" in current and "publicada y verificada" in current
+    assert "Mesa de consulta" in current
+    assert "lectores sin conocimiento previo" in pending
     assert "no usar `candidato` como sustantivo autónomo" in guidelines.lower()
 
 
@@ -1026,13 +1026,13 @@ def test_web01_screenshots_are_clickable_wide_and_tracked_privately() -> None:
     worklog = (OPERATIVE / "WEB01_CAPTURAS" / "REGISTRO_TRABAJO.md").read_text(encoding="utf-8")
 
     assert ".figure--screenshot" in site_css
-    assert "--reading: 68ch;" in site_css
-    assert "--wide: 980px;" in site_css
+    assert "--reading: 69ch;" in site_css
+    assert "--wide: 64rem;" in site_css
     assert "grid-template-columns: var(--sidebar) minmax(0, 1fr);" in site_css
     assert ".site-sidebar" in site_css and "position: sticky;" in site_css
     assert ".figure--portrait" in site_css
-    assert "max-height: min(760px, 78vh);" in site_css
-    assert "background: transparent;" in site_css
+    assert "max-height: min(78vh, 56rem);" in site_css
+    assert ".lightbox[data-open=\"true\"]" in site_css
     assert "cursor: zoom-in" in site_css
     assert ".ui-label" in site_css and "font-weight: 400;" in site_css
     assert "abrirse a resolución completa mediante clic" in site_policy
@@ -1061,10 +1061,14 @@ def test_web01_redesign_uses_single_hierarchy_and_documented_design_contract() -
     ):
         assert source in research
 
-    assert "--reading: 68ch;" in css
+    assert "--reading: 69ch;" in css
     assert ".site-sidebar" in css and "position: sticky;" in css
-    assert ".figure--portrait" in css and "width: min(540px, 100%);" in css
+    assert ".figure--portrait" in css and "width: min(42rem, 100%);" in css
     assert ".ui-label" in css and "font-weight: 400;" in css
+    assert 'html[data-theme="dark"]' in css
+    assert ".page-rail" in css and "position: sticky;" in css
+    assert ".lightbox" in css
+    assert ".reading-progress" in css
 
     question_heading = re.compile(
         r"<h[23][^>]*>\s*(?:Qué|Cómo|Dónde|Cuándo|Por qué|Para qué)\b",
