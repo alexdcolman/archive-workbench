@@ -516,6 +516,14 @@ def test_graph_canvas_uses_curved_paths_arrows_and_automatic_label_displacement(
     assert "path.setAttribute('marker-end', 'url(#awg-arrowhead)')" in canvas._COMPONENT_JS
     assert "edge.edge_type !== 'shared_entity'" in canvas._COMPONENT_JS
     assert "targetNodeRadius" in canvas._COMPONENT_JS
+    assert "class: 'awg-node-shape'" in canvas._COMPONENT_JS
+    assert "makeSvg('polygon'" in canvas._COMPONENT_JS
+    assert "boxesOverlap" in canvas._COMPONENT_JS
+    assert "label-hidden" in canvas._COMPONENT_JS
+    assert "separateDraggedNode" in canvas._COMPONENT_JS
+    assert "zoomAt" in canvas._COMPONENT_JS
+    assert "fitGraph" in canvas._COMPONENT_JS
+    assert '.awg-label-link {' in canvas._COMPONENT_CSS
 
 
 def test_graph_canvas_supports_local_fullscreen_legend_and_quieter_structural_labels() -> None:
@@ -540,7 +548,7 @@ def test_graph_canvas_supports_local_fullscreen_legend_and_quieter_structural_la
     assert "'forma parte de'" in canvas._COMPONENT_JS
     assert "repetitiveStructuralLabels.has(normalizedEdgeLabel)" in canvas._COMPONENT_JS
     assert "['hierarchy', 'document', 'part'].includes(edge.edge_type)" in canvas._COMPONENT_JS
-    assert "state.scale >= 1.45" in canvas._COMPONENT_JS
+    assert "state.scale >= 1.35" in canvas._COMPONENT_JS
     assert '.awg-edge-label.repetitive { opacity: 0; }' in canvas._COMPONENT_CSS
     assert '.awg-edge-group:hover .awg-edge-label.repetitive' in canvas._COMPONENT_CSS
 

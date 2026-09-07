@@ -72,13 +72,13 @@ _COMPONENT_CSS = """
 .awg-legend-group { display: flex; flex-wrap: wrap; align-items: center; gap: .45rem .8rem; }
 .awg-legend-group span { display: inline-flex; align-items: center; gap: .32rem; white-space: nowrap; }
 .awg-legend-node {
-  display: inline-block; width: .72rem; height: .72rem; border-radius: 50%;
-  border: 2px solid color-mix(in srgb, var(--st-text-color) 55%, transparent);
+  display: inline-block; width: .68rem; height: .68rem; box-sizing: border-box;
+  border: 1.5px solid color-mix(in srgb, var(--st-text-color) 55%, transparent);
 }
-.awg-legend-node.entity { background: color-mix(in srgb, var(--st-primary-color) 46%, var(--st-background-color)); }
-.awg-legend-node.archival_unit { background: color-mix(in srgb, #d99728 46%, var(--st-background-color)); }
-.awg-legend-node.digital_object { background: color-mix(in srgb, #6f73d2 46%, var(--st-background-color)); }
-.awg-legend-node.document_part { background: color-mix(in srgb, #3d9b74 46%, var(--st-background-color)); }
+.awg-legend-node.entity { border-radius: 50%; background: color-mix(in srgb, var(--st-primary-color) 46%, var(--st-background-color)); }
+.awg-legend-node.archival_unit { border-radius: .18rem; width: .82rem; height: .56rem; background: color-mix(in srgb, #d99728 46%, var(--st-background-color)); }
+.awg-legend-node.digital_object { border-radius: .08rem; background: color-mix(in srgb, #6f73d2 46%, var(--st-background-color)); }
+.awg-legend-node.document_part { transform: rotate(45deg) scale(.78); border-radius: .06rem; background: color-mix(in srgb, #3d9b74 46%, var(--st-background-color)); }
 .awg-legend-edge { display: inline-block; width: 1.55rem; height: 0; border-top: 2px solid color-mix(in srgb, var(--st-text-color) 48%, transparent); }
 .awg-legend-edge.analytical { border-top-width: 3px; }
 .awg-legend-edge.role { border-top-width: 3px; border-top-style: dashed; }
@@ -102,7 +102,7 @@ _COMPONENT_CSS = """
 .awg-edge.shared_entity { stroke-width: 1.3; stroke-dasharray: 2 5; }
 .awg-edge:hover, .awg-edge.selected { stroke: var(--st-primary-color); stroke-width: 4.2; }
 .awg-edge-label {
-  font: 12px var(--st-font, sans-serif); fill: var(--st-text-color); opacity: .78;
+  font: 10.5px var(--st-font, sans-serif); fill: var(--st-text-color); opacity: .74;
   paint-order: stroke; stroke: var(--st-background-color); stroke-width: 4px; stroke-linejoin: round;
   pointer-events: none; text-anchor: middle; transition: opacity .12s ease;
 }
@@ -118,18 +118,31 @@ _COMPONENT_CSS = """
 .awg-fullscreen .awg-viewport { height: calc(100vh - 4.9rem); min-height: 0; }
 .awg-fullscreen.awg-legend-open .awg-viewport { height: calc(100vh - 8.2rem); }
 .awg-node { cursor: pointer; }
-.awg-node circle { stroke-width: 2.5; stroke: color-mix(in srgb, var(--st-text-color) 55%, transparent); }
-.awg-node.entity circle { fill: color-mix(in srgb, var(--st-primary-color) 46%, var(--st-background-color)); }
-.awg-node.archival_unit circle { fill: color-mix(in srgb, #d99728 46%, var(--st-background-color)); }
-.awg-node.digital_object circle { fill: color-mix(in srgb, #6f73d2 46%, var(--st-background-color)); }
-.awg-node.document_part circle { fill: color-mix(in srgb, #3d9b74 46%, var(--st-background-color)); }
-.awg-node:hover circle, .awg-node.selected circle { stroke: var(--st-primary-color); stroke-width: 5; }
-.awg-node text {
-  font: 13px var(--st-font, sans-serif); font-weight: 650; fill: var(--st-text-color);
-  paint-order: stroke; stroke: var(--st-background-color); stroke-width: 4px; stroke-linejoin: round;
-  pointer-events: none; text-anchor: middle;
+.awg-node .awg-node-shape {
+  stroke-width: 1.8; stroke: color-mix(in srgb, var(--st-text-color) 55%, transparent);
 }
-.awg-node .awg-kind { font-size: 10px; font-weight: 500; opacity: .72; }
+.awg-node.entity .awg-node-shape { fill: color-mix(in srgb, var(--st-primary-color) 46%, var(--st-background-color)); }
+.awg-node.archival_unit .awg-node-shape { fill: color-mix(in srgb, #d99728 46%, var(--st-background-color)); }
+.awg-node.digital_object .awg-node-shape { fill: color-mix(in srgb, #6f73d2 46%, var(--st-background-color)); }
+.awg-node.document_part .awg-node-shape { fill: color-mix(in srgb, #3d9b74 46%, var(--st-background-color)); }
+.awg-node:hover .awg-node-shape, .awg-node.selected .awg-node-shape { stroke: var(--st-primary-color); stroke-width: 3.2; }
+.awg-label-link {
+  stroke: color-mix(in srgb, var(--st-text-color) 42%, transparent); stroke-width: 1;
+  pointer-events: none; opacity: .48; transition: opacity .12s ease;
+}
+.awg-node text {
+  font: 10.5px var(--st-font, sans-serif); font-weight: 620; fill: var(--st-text-color);
+  paint-order: stroke; stroke: var(--st-background-color); stroke-width: 3.2px; stroke-linejoin: round;
+  pointer-events: none; text-anchor: middle; transition: opacity .12s ease;
+}
+.awg-node .awg-kind { font-size: 8.5px; font-weight: 500; opacity: 0; }
+.awg-node:hover .awg-kind, .awg-node.selected .awg-kind, .awg-detail-labels .awg-node .awg-kind { opacity: .64; }
+.awg-node.label-hidden > text, .awg-node.label-hidden > .awg-label-link { opacity: 0; }
+.awg-node.label-hidden:hover > text, .awg-node.label-hidden:hover > .awg-label-link,
+.awg-node.label-hidden.selected > text, .awg-node.label-hidden.selected > .awg-label-link,
+.awg-detail-labels .awg-node.label-hidden > text, .awg-detail-labels .awg-node.label-hidden > .awg-label-link { opacity: 1; }
+.awg-node.label-hidden:hover > .awg-kind, .awg-node.label-hidden.selected > .awg-kind,
+.awg-detail-labels .awg-node.label-hidden > .awg-kind { opacity: .64; }
 .awg-empty { font: 18px var(--st-font, sans-serif); fill: var(--st-text-color); text-anchor: middle; opacity: .7; }
 """
 
@@ -163,7 +176,7 @@ export default function(component) {
   const applyTransform = () => {
     world.setAttribute('transform', `translate(${state.tx} ${state.ty}) scale(${state.scale})`);
     zoomLabel.textContent = `${Math.round(state.scale * 100)}%`;
-    root.classList.toggle('awg-detail-labels', state.scale >= 1.45);
+    root.classList.toggle('awg-detail-labels', state.scale >= 1.35);
   };
   applyTransform();
 
@@ -178,7 +191,7 @@ export default function(component) {
     element.appendChild(title);
   };
   const truncate = (value, maximum) => value.length > maximum ? `${value.slice(0, maximum - 1)}…` : value;
-  const wrapLabel = (value, maximum = 25) => {
+  const wrapLabel = (value, maximum = 23) => {
     const words = String(value || '').split(/\s+/).filter(Boolean);
     const lines = [];
     let current = '';
@@ -207,7 +220,8 @@ export default function(component) {
   }
 
   const nodeById = Object.fromEntries((data.nodes || []).map((node) => [node.id, node]));
-  const nodeRadius = (node) => Math.max(15, Math.min(27, 14 + Math.sqrt(Number(node?.degree || 0)) * 3));
+  const nodeRadius = (node) => Math.max(9, Math.min(17, 8 + Math.sqrt(Number(node?.degree || 0)) * 2.1));
+  const nodeBoundaryRadius = (node) => nodeRadius(node) * (node?.kind === 'archival_unit' ? 1.35 : node?.kind === 'digital_object' ? 1.15 : 1.08);
   const unitVector = (from, toward) => {
     const dx = toward[0] - from[0];
     const dy = toward[1] - from[1];
@@ -222,8 +236,8 @@ export default function(component) {
     const slot = Number(edge.parallel_slot || 0);
     const direction = Number(edge.parallel_direction || 1);
     const directed = edge.edge_type !== 'shared_entity';
-    const sourceNodeRadius = nodeRadius(nodeById[edge.source]) + 3;
-    const targetNodeRadius = nodeRadius(nodeById[edge.target]) + (directed ? 5 : 3);
+    const sourceNodeRadius = nodeBoundaryRadius(nodeById[edge.source]) + 3;
+    const targetNodeRadius = nodeBoundaryRadius(nodeById[edge.target]) + (directed ? 5 : 3);
     if (edge.source === edge.target) {
       const loopRadius = 48 + Math.abs(slot) * 24;
       const side = slot < 0 ? -1 : 1;
@@ -304,8 +318,19 @@ export default function(component) {
       tabindex: 0, role: 'button', 'aria-label': node.tooltip || `${kindLabel[node.kind] || node.kind}: ${node.label}`,
     });
     addTitle(group, node.tooltip || node.label);
-    const circle = makeSvg('circle', {cx: 0, cy: 0, r: radius});
-    group.appendChild(circle);
+    let shape;
+    if (node.kind === 'archival_unit') {
+      shape = makeSvg('rect', {class: 'awg-node-shape', x: -radius * 1.32, y: -radius * .78, width: radius * 2.64, height: radius * 1.56, rx: 3});
+    } else if (node.kind === 'digital_object') {
+      shape = makeSvg('rect', {class: 'awg-node-shape', x: -radius, y: -radius, width: radius * 2, height: radius * 2, rx: 2});
+    } else if (node.kind === 'document_part') {
+      shape = makeSvg('polygon', {class: 'awg-node-shape', points: `0,${-radius} ${radius},0 0,${radius} ${-radius},0`});
+    } else {
+      shape = makeSvg('circle', {class: 'awg-node-shape', cx: 0, cy: 0, r: radius});
+    }
+    group.appendChild(shape);
+    const labelLink = makeSvg('line', {class: 'awg-label-link'});
+    group.appendChild(labelLink);
     const text = makeSvg('text');
     group.appendChild(text);
     const subtype = makeSvg('text', {class: 'awg-kind'});
@@ -330,7 +355,9 @@ export default function(component) {
       moved = true;
       const [x, y] = pointerToWorld(event);
       state.positions[node.id] = [x, y];
-      group.setAttribute('transform', `translate(${x} ${y})`);
+      clampNodePosition(state.positions[node.id], node);
+      separateDraggedNode(node.id);
+      syncNodeTransforms();
       scheduleGeometryRefresh();
     };
     group.onpointerup = (event) => {
@@ -345,36 +372,73 @@ export default function(component) {
       }
     };
     world.appendChild(group);
-    nodeElements.push({node, group, text, subtype, radius});
+    nodeElements.push({node, group, text, subtype, labelLink, radius});
   }
 
-  const labelPlacement = (item) => {
+  const boxesOverlap = (left, right, padding = 4) => !(
+    left.x2 + padding < right.x1 || right.x2 + padding < left.x1 ||
+    left.y2 + padding < right.y1 || right.y2 + padding < left.y1
+  );
+
+  const labelBox = (placement, lines) => {
+    const width = Math.max(34, Math.max(...lines.map((line) => line.length)) * 5.9);
+    const height = lines.length * 12 + 10;
+    let x1;
+    if (placement.anchor === 'start') x1 = placement.x;
+    else if (placement.anchor === 'end') x1 = placement.x - width;
+    else x1 = placement.x - width / 2;
+    return {x1, y1: placement.y - 11, x2: x1 + width, y2: placement.y - 11 + height};
+  };
+
+  const labelPlacement = (item, occupiedLabels) => {
     const position = state.positions[item.node.id];
     const radius = item.radius;
+    const lines = wrapLabel(item.node.label);
     const candidates = [
-      {name: 'below', x: 0, y: radius + 17, anchor: 'middle', bias: 3},
-      {name: 'above', x: 0, y: -radius - 30, anchor: 'middle', bias: 2},
-      {name: 'right', x: radius + 12, y: -7, anchor: 'start', bias: 1},
-      {name: 'left', x: -radius - 12, y: -7, anchor: 'end', bias: 0},
+      {name: 'below', x: 0, y: radius + 14, anchor: 'middle', bias: 4},
+      {name: 'above', x: 0, y: -radius - 18, anchor: 'middle', bias: 3},
+      {name: 'right', x: radius + 10, y: -3, anchor: 'start', bias: 2},
+      {name: 'left', x: -radius - 10, y: -3, anchor: 'end', bias: 1},
     ];
     for (const candidate of candidates) {
-      const wx = position[0] + candidate.x;
-      const wy = position[1] + candidate.y;
+      const boxLocal = labelBox(candidate, lines);
+      const box = {
+        x1: position[0] + boxLocal.x1, y1: position[1] + boxLocal.y1,
+        x2: position[0] + boxLocal.x2, y2: position[1] + boxLocal.y2,
+      };
       let nearest = 1000;
+      let nodeCollision = false;
       for (const other of data.nodes || []) {
         if (other.id === item.node.id) continue;
         const otherPosition = state.positions[other.id];
-        nearest = Math.min(nearest, Math.hypot(wx - otherPosition[0], wy - otherPosition[1]));
+        const otherRadius = nodeBoundaryRadius(other) + 6;
+        const closestX = Math.max(box.x1, Math.min(otherPosition[0], box.x2));
+        const closestY = Math.max(box.y1, Math.min(otherPosition[1], box.y2));
+        const distance = Math.hypot(closestX - otherPosition[0], closestY - otherPosition[1]);
+        nearest = Math.min(nearest, distance);
+        if (distance < otherRadius) nodeCollision = true;
       }
-      candidate.score = nearest + candidate.bias;
+      const labelCollision = occupiedLabels.some((otherBox) => boxesOverlap(box, otherBox));
+      candidate.box = box;
+      candidate.lines = lines;
+      candidate.collides = nodeCollision || labelCollision;
+      candidate.score = nearest + candidate.bias - (nodeCollision ? 5000 : 0) - (labelCollision ? 3000 : 0);
     }
     return candidates.sort((left, right) => right.score - left.score || right.bias - left.bias)[0];
   };
 
   const refreshNodeLabels = () => {
-    for (const item of nodeElements) {
-      const placement = labelPlacement(item);
-      const lines = wrapLabel(item.node.label);
+    const occupiedLabels = [];
+    const ordered = [...nodeElements].sort((left, right) => {
+      const selectedDelta = Number(Boolean(right.node.selected)) - Number(Boolean(left.node.selected));
+      if (selectedDelta) return selectedDelta;
+      return Number(right.node.degree || 0) - Number(left.node.degree || 0) || left.node.id.localeCompare(right.node.id);
+    });
+    for (const item of ordered) {
+      const placement = labelPlacement(item, occupiedLabels);
+      const lines = placement.lines;
+      item.group.classList.toggle('label-hidden', Boolean(placement.collides && !item.node.selected));
+      if (!placement.collides || item.node.selected) occupiedLabels.push(placement.box);
       item.text.replaceChildren();
       item.text.setAttribute('x', placement.x);
       item.text.setAttribute('y', placement.y);
@@ -382,14 +446,62 @@ export default function(component) {
       lines.forEach((line, index) => {
         const tspan = makeSvg('tspan', {
           x: placement.x,
-          dy: index === 0 ? 0 : 14,
+          dy: index === 0 ? 0 : 12,
         });
         tspan.textContent = line;
         item.text.appendChild(tspan);
       });
       item.subtype.setAttribute('x', placement.x);
-      item.subtype.setAttribute('y', placement.y + lines.length * 14);
+      item.subtype.setAttribute('y', placement.y + lines.length * 12);
       item.subtype.setAttribute('text-anchor', placement.anchor);
+
+      const distance = Math.max(1, Math.hypot(placement.x, placement.y));
+      const startDistance = Math.min(distance, nodeBoundaryRadius(item.node) + 3);
+      const endDistance = Math.max(startDistance, distance - 7);
+      item.labelLink.setAttribute('x1', placement.x / distance * startDistance);
+      item.labelLink.setAttribute('y1', placement.y / distance * startDistance);
+      item.labelLink.setAttribute('x2', placement.x / distance * endDistance);
+      item.labelLink.setAttribute('y2', placement.y / distance * endDistance);
+    }
+  };
+
+  const clampNodePosition = (position, node) => {
+    const margin = nodeBoundaryRadius(node) + 8;
+    position[0] = Math.min(1000 - margin, Math.max(margin, position[0]));
+    position[1] = Math.min(720 - margin, Math.max(margin, position[1]));
+  };
+
+  const separateDraggedNode = (activeId) => {
+    const activeNode = nodeById[activeId];
+    const active = state.positions[activeId];
+    if (!activeNode || !active) return;
+    for (let pass = 0; pass < 4; pass += 1) {
+      for (const otherNode of data.nodes || []) {
+        if (otherNode.id === activeId) continue;
+        const other = state.positions[otherNode.id];
+        if (!other) continue;
+        let dx = active[0] - other[0];
+        let dy = active[1] - other[1];
+        let distance = Math.hypot(dx, dy);
+        const minimum = nodeBoundaryRadius(activeNode) + nodeBoundaryRadius(otherNode) + 12;
+        if (distance >= minimum) continue;
+        if (distance < .001) {
+          const seed = [...`${activeId}|${otherNode.id}`].reduce((acc, char) => acc + char.charCodeAt(0), 0);
+          const angle = (seed % 360) * Math.PI / 180;
+          dx = Math.cos(angle); dy = Math.sin(angle); distance = 1;
+        }
+        const push = minimum - distance;
+        active[0] += dx / distance * push;
+        active[1] += dy / distance * push;
+        clampNodePosition(active, activeNode);
+      }
+    }
+  };
+
+  const syncNodeTransforms = () => {
+    for (const item of nodeElements) {
+      const position = state.positions[item.node.id];
+      item.group.setAttribute('transform', `translate(${position[0]} ${position[1]})`);
     }
   };
 
@@ -451,14 +563,43 @@ export default function(component) {
     if (viewport.hasPointerCapture(event.pointerId)) viewport.releasePointerCapture(event.pointerId);
   };
   viewport.onpointerup = endPan; viewport.onpointercancel = endPan;
+  const zoomAt = (nextScale, clientX = null, clientY = null) => {
+    const next = Math.max(.35, Math.min(3.5, nextScale));
+    let anchorX = 500, anchorY = 360;
+    if (clientX !== null && clientY !== null) {
+      const point = svg.createSVGPoint();
+      point.x = clientX; point.y = clientY;
+      const local = point.matrixTransform(svg.getScreenCTM().inverse());
+      anchorX = local.x; anchorY = local.y;
+    }
+    const worldX = (anchorX - state.tx) / state.scale;
+    const worldY = (anchorY - state.ty) / state.scale;
+    state.scale = next;
+    state.tx = anchorX - worldX * next;
+    state.ty = anchorY - worldY * next;
+    applyTransform();
+  };
+  const fitGraph = () => {
+    const positions = Object.values(state.positions || {});
+    if (!positions.length) { state.scale = 1; state.tx = 0; state.ty = 0; applyTransform(); return; }
+    const xs = positions.map((position) => position[0]);
+    const ys = positions.map((position) => position[1]);
+    const minX = Math.min(...xs) - 55, maxX = Math.max(...xs) + 55;
+    const minY = Math.min(...ys) - 55, maxY = Math.max(...ys) + 55;
+    const width = Math.max(120, maxX - minX), height = Math.max(100, maxY - minY);
+    const next = Math.max(.35, Math.min(1.55, 900 / width, 620 / height));
+    state.scale = next;
+    state.tx = 500 - ((minX + maxX) / 2) * next;
+    state.ty = 360 - ((minY + maxY) / 2) * next;
+    applyTransform();
+  };
   viewport.onwheel = (event) => {
     event.preventDefault();
-    const next = Math.max(.35, Math.min(3.5, state.scale + (event.deltaY < 0 ? .12 : -.12)));
-    state.scale = next; applyTransform();
+    zoomAt(state.scale + (event.deltaY < 0 ? .12 : -.12), event.clientX, event.clientY);
   };
-  root.querySelector('[data-action="zoom-in"]').onclick = () => { state.scale = Math.min(3.5, state.scale + .2); applyTransform(); };
-  root.querySelector('[data-action="zoom-out"]').onclick = () => { state.scale = Math.max(.35, state.scale - .2); applyTransform(); };
-  root.querySelector('[data-action="fit"]').onclick = () => { state.scale = 1; state.tx = 0; state.ty = 0; applyTransform(); };
+  root.querySelector('[data-action="zoom-in"]').onclick = () => zoomAt(state.scale + .2);
+  root.querySelector('[data-action="zoom-out"]').onclick = () => zoomAt(state.scale - .2);
+  root.querySelector('[data-action="fit"]').onclick = fitGraph;
 
   const syncLegend = () => {
     legend.hidden = !state.legendOpen;

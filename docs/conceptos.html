@@ -1,21 +1,44 @@
-<!doctype html>
+<!DOCTYPE html>
+
 <html lang="es-AR">
 <head>
-<meta charset="utf-8">
-<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1" name="viewport"/>
 <title>Conceptos · Archive Workbench</title>
-<meta name="description" content="Conceptos de Archive Workbench: originales, derivados, corridas, candidatas, selección canónica, capa editable y autoridades.">
-<meta name="theme-color" content="#f4f0e6">
-<link rel="stylesheet" href="assets/site.css">
+<meta content="Glosario de proyecto, catálogo, originales, derivados, extracción, revisión, entidades, relaciones, índices e intercambio." name="description"/>
+<meta content="#fffdf8" name="theme-color"/>
+<script>document.documentElement.classList.add("js")</script>
+<link href="assets/site.css?v=web01-redesign-r1-20260907" rel="stylesheet"/>
 </head>
 <body>
 <a class="skip" href="#contenido">Saltar al contenido</a>
-<header class="site-head"><div class="head-inner"><div class="brand"><a href="index.html">Archive Workbench</a><span>documentación pública · 0.89.0</span></div><nav aria-label="Navegación principal"><ul><li><a href="index.html">Inicio</a></li><li><a href="instalacion.html">Instalación</a></li><li><a href="tutorial.html">Tutorial</a></li><li><a href="catalogo.html">Catálogo</a></li><li><a href="procesamiento.html">Procesamiento</a></li><li><a href="revision.html">Revisión</a></li><li><a href="entidades.html">Entidades</a></li><li><a href="busquedas.html">Búsquedas</a></li><li><a href="relaciones.html">Relaciones</a></li><li><a href="audiovisual.html">Audio y video</a></li><li><a href="exportacion.html">Exportación</a></li><li><a href="intercambio.html">Intercambio</a></li><li><a href="resguardo.html">Resguardo</a></li><li><a href="conceptos.html" aria-current="page">Conceptos</a></li><li><a href="referencia.html">Referencia</a></li><li><a href="desarrollo.html">Desarrollo</a></li><li><a href="problemas.html">Problemas frecuentes</a></li></ul></nav></div></header>
-<main id="contenido">
-<p class="kicker">Decisiones metodológicas</p><h1>Conceptos para interpretar el proyecto</h1><p class="lead">Archive Workbench separa deliberadamente datos canónicos, candidatos automáticos, decisiones explícitas y resultados reconstruibles.</p>
-<table><thead><tr><th>Concepto</th><th>Qué significa</th></tr></thead><tbody><tr><td>Original</td><td>Archivo incorporado cuya identidad se conserva; no se modifica durante OCR o revisión.</td></tr><tr><td>Derivado</td><td>Representación preparada a partir del original, con procedencia y parámetros.</td></tr><tr><td>Corrida</td><td>Ejecución identificable de un procesamiento o análisis con configuración registrada.</td></tr><tr><td>Candidata</td><td>Salida automática disponible para revisión; todavía no es una decisión explícita.</td></tr><tr><td>Selección canónica</td><td>Elección explícita de la extracción que alimenta la revisión de una página.</td></tr><tr><td>Capa editable</td><td>Texto versionado que conserva correcciones, historial y vínculos analíticos.</td></tr><tr><td>Autoridad</td><td>Registro canónico de una entidad; se distingue de las menciones concretas.</td></tr><tr><td>Índice</td><td>Estructura reconstruible para búsqueda; no sustituye la fuente de verdad SQLite.</td></tr></tbody></table>
-<h2>Confianza y automatización</h2><p>Una puntuación de similitud, un OCR o una propuesta de entidad no constituyen una verdad documental. La interfaz conserva la procedencia de esas salidas para que puedan revisarse y compararse.</p>
-</main>
-<footer class="site-foot"><p>Archive Workbench · software libre AGPL-3.0-or-later · <a href="https://github.com/alexdcolman/archive-workbench">repositorio</a> · <a href="https://github.com/alexdcolman/archive-workbench/blob/main/CITATION.cff">cita</a> · <a href="https://github.com/alexdcolman/archive-workbench/blob/main/CHANGELOG.md">cambios</a></p></footer>
-</body>
+
+
+
+<div class="site-shell"><aside class="site-sidebar"><div class="sidebar-inner"><div class="sidebar-top"><div class="brand"><a href="index.html">Archive Workbench</a><span>documentación pública · 0.89.0</span></div><button aria-controls="site-navigation" aria-expanded="false" class="menu-toggle" data-menu-toggle="" type="button">Menú</button></div><nav aria-label="Navegación principal" class="site-nav" data-site-nav="" id="site-navigation"><section class="nav-group"><p class="nav-group__title">Orientación</p><ul><li><a href="index.html">Inicio</a></li><li><a href="instalacion.html">Instalación</a></li><li><a href="tutorial.html">Tutorial</a></li></ul></section><section class="nav-group"><p class="nav-group__title">Preparación</p><ul><li><a href="catalogo.html">Catálogo</a></li><li><a href="audiovisual.html">Audio y video</a></li><li><a href="procesamiento.html">Procesar documentos</a></li></ul></section><section class="nav-group"><p class="nav-group__title">Organización y revisión</p><ul><li><a href="trabajo.html">Organizar trabajo</a></li><li><a href="revision.html">Revisar documentos</a></li></ul></section><section class="nav-group"><p class="nav-group__title">Exploración y descripción</p><ul><li><a href="busquedas.html">Búsquedas</a></li><li><a href="entidades.html">Entidades y menciones</a></li><li><a href="relaciones.html">Explorar relaciones</a></li></ul></section><section class="nav-group"><p class="nav-group__title">Resultados y preservación</p><ul><li><a href="exportacion.html">Exportar corpus</a></li><li><a href="intercambio.html">Intercambiar cambios</a></li><li><a href="resguardo.html">Administrar y recuperar</a></li></ul></section><section class="nav-group"><p class="nav-group__title">Referencia</p><ul><li><a aria-current="page" href="conceptos.html">Conceptos</a></li><li><a href="referencia.html">Referencia técnica</a></li><li><a href="desarrollo.html">Desarrollo</a></li><li><a href="problemas.html">Problemas frecuentes</a></li></ul></section></nav></div></aside><div class="site-stage"><main class="doc-main" id="contenido"><header class="page-head"><p class="kicker">Referencia</p><h1>Conceptos</h1><p class="lead">Estas definiciones explican los objetos que aparecen en la interfaz y en la referencia técnica. Los términos describen capas distintas del proyecto y conviene no tratarlos como sinónimos.</p></header>
+
+<dl class="glossary">
+<dt>Proyecto</dt><dd>Carpeta de trabajo que reúne configuración, una base de datos local SQLite, archivos incorporados o vinculados, resultados derivados, exportaciones y copias de seguridad.</dd>
+<dt>Unidad del catálogo</dt><dd>Registro descriptivo de una parte del archivo o del contexto de custodia, por ejemplo un fondo, una sección, una serie o una unidad documental, según los niveles definidos para el proyecto.</dd>
+<dt>Archivo digital</dt><dd>Objeto identificado por su contenido digital. Puede tener una o más copias de archivo registradas en ubicaciones concretas.</dd>
+<dt>Archivo original</dt><dd>Archivo incorporado como fuente. Su contenido no se sobrescribe durante el reconocimiento óptico de caracteres (OCR), la revisión o el análisis.</dd>
+<dt>Derivado</dt><dd>Archivo o representación producido a partir de una fuente, por ejemplo una imagen preparada para OCR. Conserva la referencia al archivo del que proviene.</dd>
+<dt>Corrida</dt><dd>Ejecución concreta de un proceso, como OCR o transcripción, con motor de procesamiento, versión, modelo, opciones y fecha identificables.</dd>
+<dt>Extracción de texto</dt><dd>Resultado de una corrida de reconocimiento sobre un documento o página. Puede haber varias extracciones disponibles para comparar.</dd>
+<dt>Texto elegido para revisión</dt><dd>Extracción completa que una persona seleccionó como punto de partida para una página en Revisar documentos.</dd>
+<dt>Capa editable</dt><dd>Texto y estructura que se corrigen en Revisar documentos. Las modificaciones generan revisiones nuevas y no reescriben el archivo original.</dd>
+<dt>Bloque de texto</dt><dd>Parte delimitada de una página, como un párrafo, título o encabezado, que puede editarse y revisarse de manera independiente.</dd>
+<dt>Revisión</dt><dd>Versión registrada después de una modificación explícita. Las revisiones permiten reconstruir el historial de un bloque, una unidad, una entidad u otros objetos versionados.</dd>
+<dt>Entidad</dt><dd>Referente reutilizable del corpus, por ejemplo una persona, organización, lugar, acontecimiento u obra.</dd>
+<dt>Mención</dt><dd>Aparición concreta de una entidad o posible entidad en un texto. La mención conserva el fragmento y su ubicación documental.</dd>
+<dt>Relación</dt><dd>Vínculo registrado entre dos elementos. Puede expresar estructura archivística, producción o gestión, una mención documental o una relación analítica.</dd>
+<dt>Evidencia</dt><dd>Información que sustenta una relación, decisión o descripción, por ejemplo un pasaje documental o una referencia bibliográfica.</dd>
+<dt>Procedencia</dt><dd>Registro del origen de un dato o resultado: archivo, página, corrida, persona, operación o fuente externa que permite reconstruir cómo llegó al estado actual.</dd>
+<dt>Índice textual</dt><dd>Estructura reconstruible utilizada para buscar coincidencias de palabras o frases dentro de los textos del proyecto.</dd>
+<dt>Índice semántico</dt><dd>Estructura reconstruible que representa fragmentos mediante vectores numéricos para compararlos por similitud de significado.</dd>
+<dt>Paquete incremental</dt><dd>ZIP con cambios realizados en una copia después de un punto compartido. Se inspecciona y simula antes de aplicarse en otra copia compatible.</dd>
+<dt>Copia completa para trabajar en equipo</dt><dd>ZIP que transporta la base y configuración del proyecto y, según el perfil elegido, archivos originales, derivados, transcripciones u otros materiales. Sirve para iniciar una nueva copia local del mismo proyecto.</dd>
+<dt>Copia de seguridad</dt><dd>Estado verificable del proyecto preparado para recuperación. Puede probarse en un entorno temporal antes de una restauración real.</dd>
+</dl>
+</main><footer class="site-foot"><p>Archive Workbench · software libre AGPL-3.0-or-later · <a href="https://github.com/alexdcolman/archive-workbench">repositorio</a> · <a href="https://github.com/alexdcolman/archive-workbench/blob/main/CITATION.cff">cita</a> · <a href="https://github.com/alexdcolman/archive-workbench/blob/main/CHANGELOG.md">cambios</a></p></footer></div></div><script src="assets/site.js?v=web01-redesign-r1-20260907"></script></body>
 </html>

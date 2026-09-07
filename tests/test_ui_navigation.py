@@ -672,8 +672,8 @@ def test_exchange_ui_uses_plain_spanish_for_main_workflow() -> None:
         "Archivar paquete",
     ):
         assert phrase in view
-    assert "No hace falta " in view
-    assert "indicar quién lo va a recibir" in view
+    assert "indicar quién lo va a recibir" not in view
+    assert "Archive Workbench reúne en un ZIP los cambios nuevos de esta copia" not in view
     assert "ZIP puede enviarse a varias personas" in view
     assert "Punto de partida del paquete" not in view
     assert "Ejecutar dry-run" not in view

@@ -4045,11 +4045,6 @@ def _render_exchange_view(st, *, project_root: Path, db_path: Path, reviewer: st
         )
 
     if exchange_task == "send":
-        st.caption(
-            "Archive Workbench reúne en un ZIP los cambios nuevos de esta copia. No hace falta "
-            "indicar quién lo va a recibir: cualquier otra copia compatible del mismo proyecto "
-            "puede revisarlo."
-        )
         if not checkpoints:
             st.info(
                 "Todavía no existe un punto de partida para intercambiar cambios. Si vas a "

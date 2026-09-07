@@ -1,11 +1,54 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 430" role="img" aria-labelledby="title desc"><title id="title">Recorrido general de Archive Workbench</title><desc id="desc">Flujo desde catálogo e incorporación hasta procesamiento, revisión, análisis, exportación, intercambio y resguardo.</desc><style>text{font-family:Arial,sans-serif;fill:#20211f}.box{fill:#fbf9f3;stroke:#6d2f2f;stroke-width:2}.arr{stroke:#244b5a;stroke-width:3;fill:none;marker-end:url(#m)}.small{font-size:16px}.head{font-size:20px;font-weight:700}</style><defs><marker id="m" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M 0 0 L 10 5 L 0 10 z" fill="#244b5a"/></marker></defs>
-<rect class="box" x="25" y="45" width="200" height="95"/><text class="head" x="45" y="78">Catálogo</text><text class="small" x="45" y="106">unidades + originales</text>
-<rect class="box" x="275" y="45" width="200" height="95"/><text class="head" x="295" y="78">Procesamiento</text><text class="small" x="295" y="106">derivados + OCR</text>
-<rect class="box" x="525" y="45" width="200" height="95"/><text class="head" x="545" y="78">Revisión</text><text class="small" x="545" y="106">texto + decisiones</text>
-<rect class="box" x="775" y="45" width="200" height="95"/><text class="head" x="795" y="78">Análisis</text><text class="small" x="795" y="106">búsqueda + entidades</text>
-<rect class="box" x="1000" y="45" width="175" height="95"/><text class="head" x="1020" y="78">Exportación</text><text class="small" x="1020" y="106">CSV / JSONL / ZIP</text>
-<path class="arr" d="M225 92 H268"/><path class="arr" d="M475 92 H518"/><path class="arr" d="M725 92 H768"/><path class="arr" d="M975 92 H993"/>
-<rect class="box" x="300" y="255" width="240" height="95"/><text class="head" x="320" y="288">Intercambio</text><text class="small" x="320" y="316">copias locales + paquetes</text>
-<rect class="box" x="660" y="255" width="240" height="95"/><text class="head" x="680" y="288">Resguardo</text><text class="small" x="680" y="316">integridad + backups</text>
-<path class="arr" d="M625 140 V205 H420 V248"/><path class="arr" d="M1100 140 V205 H780 V248"/>
-<text class="small" x="35" y="405">Los originales permanecen inmutables. Las extracciones y propuestas automáticas son candidatas hasta una decisión explícita.</text></svg>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1690 520" role="img" aria-labelledby="title desc">
+<title id="title">Recorrido general de Archive Workbench</title>
+<desc id="desc">Cinco fases: preparar el corpus, organizar y revisar, explorar y describir, preparar resultados, y compartir y preservar.</desc>
+<style>
+text{font-family:Arial,sans-serif;fill:#20211f}.phase{fill:#fbf9f3;stroke:#6d2f2f;stroke-width:2.5}.arr{stroke:#244b5a;stroke-width:3;fill:none;marker-end:url(#arrow)}.n{font-size:18px;font-weight:700;fill:#6d2f2f}.head{font-size:25px;font-weight:700}.item{font-size:18px}.note{font-size:16px;fill:#64635d}
+</style>
+<defs><marker id="arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto"><path d="M0 0L10 5L0 10z" fill="#244b5a"/></marker></defs>
+
+<rect class="phase" x="35" y="70" width="280" height="285"/>
+<text class="n" x="60" y="105">1</text><text class="head" x="88" y="105">Preparar el corpus</text>
+<text class="item" x="60" y="155">Catálogo</text>
+<text class="item" x="60" y="198">Audio y video</text>
+<text class="item" x="60" y="241">Procesar documentos</text>
+<text class="note" x="60" y="292">Unidades, archivos, imágenes,</text>
+<text class="note" x="60" y="318">transcripciones y extracciones.</text>
+
+<rect class="phase" x="365" y="70" width="280" height="285"/>
+<text class="n" x="390" y="105">2</text><text class="head" x="418" y="105">Organizar y revisar</text>
+<text class="item" x="390" y="170">Organizar trabajo</text>
+<text class="item" x="390" y="213">Revisar documentos</text>
+<text class="note" x="390" y="272">Asignaciones, correcciones,</text>
+<text class="note" x="390" y="298">estructura e historial.</text>
+
+<rect class="phase" x="695" y="45" width="390" height="335"/>
+<text class="n" x="720" y="82">3</text><text class="head" x="748" y="82">Explorar y describir</text>
+<text class="item" x="720" y="137">Búsqueda textual</text>
+<text class="item" x="720" y="180">Búsqueda semántica</text>
+<text class="item" x="720" y="223">Entidades y menciones</text>
+<text class="item" x="720" y="266">Explorar relaciones</text>
+<text class="note" x="720" y="326">Consultas, referentes y conexiones</text>
+<text class="note" x="720" y="352">con procedencia revisable.</text>
+
+<rect class="phase" x="1135" y="70" width="220" height="285"/>
+<text class="n" x="1160" y="105">4</text><text class="head" x="1188" y="105">Preparar</text>
+<text class="head" x="1188" y="135">resultados</text>
+<text class="item" x="1160" y="190">Exportar corpus</text>
+<text class="note" x="1160" y="244">Datos, texto</text>
+<text class="note" x="1160" y="270">e imágenes.</text>
+
+<rect class="phase" x="1405" y="45" width="250" height="335"/>
+<text class="n" x="1430" y="82">5</text><text class="head" x="1458" y="82">Compartir</text>
+<text class="head" x="1458" y="112">y preservar</text>
+<text class="item" x="1430" y="170">Intercambiar cambios</text>
+<text class="item" x="1430" y="225">Administrar y recuperar</text>
+<text class="note" x="1430" y="292">Paquetes, integridad y</text>
+<text class="note" x="1430" y="318">copias de seguridad.</text>
+
+<path class="arr" d="M315 212 H355"/>
+<path class="arr" d="M645 212 H685"/>
+<path class="arr" d="M1085 212 H1125"/>
+<path class="arr" d="M1355 212 H1395"/>
+
+<text class="note" x="35" y="460">El diagrama resume un recorrido de trabajo. Las secciones pueden usarse en otro orden según el material y la tarea.</text>
+</svg>

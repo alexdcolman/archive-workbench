@@ -710,7 +710,7 @@ def test_pilot_guide_delegates_future_work_to_single_pending_ledger() -> None:
 def test_readme_points_only_to_current_documentation_map() -> None:
     text = (ROOT / "README.md").read_text(encoding="utf-8")
     citation = (ROOT / "CITATION.cff").read_text(encoding="utf-8")
-    assert "**Versión actual:** 0.89.0" in text
+    assert "Versión actual: 0.89.0" in text
     assert 'version: "0.89.0"' in citation
     assert "archive-workbench review-app" in text
     assert "Abrir un proyecto existente" in text
@@ -730,7 +730,7 @@ def test_readme_points_only_to_current_documentation_map() -> None:
 def test_public_site_web01_has_required_pages_metadata_and_local_links() -> None:
     required = {
         "index.html", "instalacion.html", "tutorial.html", "catalogo.html",
-        "procesamiento.html", "revision.html", "entidades.html", "busquedas.html",
+        "procesamiento.html", "trabajo.html", "revision.html", "entidades.html", "busquedas.html",
         "relaciones.html", "audiovisual.html", "exportacion.html", "intercambio.html",
         "resguardo.html", "conceptos.html", "referencia.html", "desarrollo.html", "problemas.html", "404.html",
     }
@@ -738,10 +738,10 @@ def test_public_site_web01_has_required_pages_metadata_and_local_links() -> None
     for path in [DOCS / name for name in required]:
         text = path.read_text(encoding="utf-8")
         assert 'lang="es-AR"' in text
-        assert '<meta name="description"' in text
-        assert 'href="assets/site.css"' in text
+        assert __import__('re').search(r'<meta\s+[^>]*name="description"[^>]*>', text)
+        assert 'href="assets/site.css' in text
         assert 'class="skip"' in text
-        assert '<nav aria-label="Navegación principal">' in text
+        assert __import__('re').search(r'<nav\s+[^>]*aria-label="Navegación principal"[^>]*>', text)
         assert 'href="desarrollo.html"' in text or path.name == "desarrollo.html"
         assert "placeholder" not in text.lower()
     for html in DOCS.glob("*.html"):
@@ -749,7 +749,7 @@ def test_public_site_web01_has_required_pages_metadata_and_local_links() -> None
         for target in __import__("re").findall(r'(?:href|src)="([^"]+)"', text):
             if target.startswith(("http://", "https://", "#", "mailto:")):
                 continue
-            resolved = (html.parent / target.split("#", 1)[0]).resolve()
+            resolved = (html.parent / target.split("#", 1)[0].split("?", 1)[0]).resolve()
             assert resolved.exists(), f"broken local link in {html.name}: {target}"
 
 
@@ -823,7 +823,7 @@ def test_pre_release_roadmap_includes_public_site_export_and_parallel_giar() -> 
     assert "1. Completar `UX-02`" not in text
     assert "1. Completar y validar `OPS-01`" not in text
     assert "`OPS-01` quedó cerrado para el pre-release" in text
-    assert "1. Retomar `WEB-01`" in text
+    assert "1. Revisar visualmente y publicar mediante GitHub Pages la reescritura integral de `WEB-01`" in text
     assert "1. Ejecutar `PILOT-01`" not in text
     assert "Validar y cerrar `EXP-01`" not in text
     assert "Validar y cerrar `INT-01`" not in text
@@ -987,8 +987,9 @@ def test_public_docs_do_not_expose_private_project_ledgers() -> None:
     assert "docs/operativos/" not in readme
     assert "ARQUITECTURA_Y_MODELO_ACTUAL.md" not in reference
     development = (DOCS / "desarrollo.html").read_text(encoding="utf-8")
-    for code in ("WEB-01", "QA-01", "OPS-02", "OPS-03", "RC"):
-        assert code in development
+    for private_code in ("WEB-01", "QA-01", "OPS-02", "OPS-03"):
+        assert private_code not in development
+    assert ".assistant" not in development
 
 
 def test_web01_requires_current_code_vocabulary_and_screenshot_coverage() -> None:
@@ -1014,3 +1015,66 @@ def test_operational_docs_contain_only_canonical_active_documents() -> None:
     assert (historical / "AUDITORIA_INTERFAZ_RC11_5_PASADAS.txt").is_file()
     assert (historical / "AUDITORIA_INTERFAZ_RC12_5_PASADAS.txt").is_file()
     assert (historical / "ACTUALIZACION_Y_PRUEBA_0.89.0_RC12.md").is_file()
+
+
+def test_web01_screenshots_are_clickable_wide_and_tracked_privately() -> None:
+    site_css = (DOCS / "assets" / "site.css").read_text(encoding="utf-8")
+    site_policy = (ROOT / ".assistant" / "POLITICA_SITIO_PUBLICO.md").read_text(encoding="utf-8")
+    guidelines = (ROOT / ".assistant" / "LINEAMIENTOS_DE_DISENO_Y_ESCRITURA.md").read_text(encoding="utf-8")
+    pending = (OPERATIVE / "PENDIENTES_ACTIVOS.md").read_text(encoding="utf-8")
+    matrix = (OPERATIVE / "WEB01_CAPTURAS" / "MATRIZ.md").read_text(encoding="utf-8")
+    worklog = (OPERATIVE / "WEB01_CAPTURAS" / "REGISTRO_TRABAJO.md").read_text(encoding="utf-8")
+
+    assert ".figure--screenshot" in site_css
+    assert "--reading: 68ch;" in site_css
+    assert "--wide: 980px;" in site_css
+    assert "grid-template-columns: var(--sidebar) minmax(0, 1fr);" in site_css
+    assert ".site-sidebar" in site_css and "position: sticky;" in site_css
+    assert ".figure--portrait" in site_css
+    assert "max-height: min(760px, 78vh);" in site_css
+    assert "background: transparent;" in site_css
+    assert "cursor: zoom-in" in site_css
+    assert ".ui-label" in site_css and "font-weight: 400;" in site_css
+    assert "abrirse a resolución completa mediante clic" in site_policy
+    assert "enlazar a su archivo original" in guidelines
+    assert "hacer clickeable cada captura publicada" in pending
+    assert "AV-02-transcribir-revisar.png" in matrix
+    assert "PRO-02-preparar-extraer-2.png" in matrix
+    assert "AV-02-transcribir-revisar.png" in worklog
+    assert "PRO-06-enviar-revision.png" in worklog
+
+
+def test_web01_redesign_uses_single_hierarchy_and_documented_design_contract() -> None:
+    import re
+
+    research = (
+        OPERATIVE / "WEB01_SITIO" / "INVESTIGACION_Y_PLAN_DE_REDISENO_20260907.md"
+    ).read_text(encoding="utf-8")
+    css = (DOCS / "assets" / "site.css").read_text(encoding="utf-8")
+
+    for source in (
+        "U.S. Web Design System",
+        "GOV.UK Design System",
+        "WCAG 2.2",
+        "web.dev",
+        "Diátaxis",
+    ):
+        assert source in research
+
+    assert "--reading: 68ch;" in css
+    assert ".site-sidebar" in css and "position: sticky;" in css
+    assert ".figure--portrait" in css and "width: min(540px, 100%);" in css
+    assert ".ui-label" in css and "font-weight: 400;" in css
+
+    question_heading = re.compile(
+        r"<h[23][^>]*>\s*(?:Qué|Cómo|Dónde|Cuándo|Por qué|Para qué)\b",
+        re.IGNORECASE,
+    )
+    for path in DOCS.glob("*.html"):
+        text = path.read_text(encoding="utf-8")
+        assert "<strong" not in text.lower()
+        assert "<b>" not in text.lower()
+        assert not question_heading.search(text), path.name
+        assert 'class="site-sidebar"' in text
+        assert "Orientación" in text
+        assert "Resultados y preservación" in text
