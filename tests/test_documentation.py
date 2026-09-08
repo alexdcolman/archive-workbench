@@ -233,8 +233,10 @@ def test_streamlit_form_policy_prevents_circular_disabled_buttons() -> None:
     assert "Casilleros y campos" in implemented
     assert "UX-03" not in pending
     assert "UX-03" in implemented and "recorridos separados" in implemented
-    assert "un solo bloque ejecutable" in tests_policy
-    assert "un único bloque de comandos" in interaction
+    assert "pasos cortos, legibles y recuperables" in tests_policy
+    assert "no se debe dejar activo `set -e`" in tests_policy
+    assert "pasos cortos y recuperables" in interaction
+    assert "ni envolver secuencias largas en `bash -lc`" in interaction
 
 
 def test_interface_policy_requires_persistent_interactive_panels() -> None:
@@ -564,9 +566,9 @@ def test_current_update_guide_describes_0890_rc85_and_preserves_rc84_callback_hi
     architecture = (REFERENCE / "ARQUITECTURA_Y_MODELO_ACTUAL.md").read_text(encoding="utf-8")
     historical_rc76 = HISTORICAL_UPDATES / "ACTUALIZACION_Y_PRUEBA_0.89.0_RC76.md"
 
-    assert "Archive Workbench 0.89.0 RC85" in text
-    assert "0.89.0-rc85-cpu" in text
-    assert "0.89.0-rc85-gpu" in text
+    assert "Archive Workbench 0.89.0 RC86" in text
+    assert "0.89.0-rc86-cpu" in text
+    assert "0.89.0-rc86-gpu" in text
     assert "| WEB-01 | Alta | Cerrado |" in pending
     assert "| OPS-01 |" not in pending
     assert "## RC80 - PyTorch CPU explícito en runtime principal multi-arquitectura" in implemented
@@ -581,13 +583,15 @@ def test_current_update_guide_describes_0890_rc85_and_preserves_rc84_callback_hi
     )
     assert "## RC77 - guardas de inferencia para Surya/llama.cpp administrado" in implemented
     assert "no cambia el esquema SQLite" in text
-    assert "0.89.0 RC85" in continuity
+    assert "0.89.0 RC86" in continuity
     assert "2.5 Regla obligatoria para lectores sin conocimiento previo" in guidelines
     assert "Cada sustantivo que pueda tener más de un referente" in guidelines
     assert (
         "Distribución administrada y espacio de trabajo multiplataforma - RC72/RC84" in architecture
     )
     assert "ARCHIVE_WORKBENCH_SELECTED_PROJECT_ROOT" in architecture
+    assert "RC86 no modifica ese contrato de OAuth administrado" in architecture
+    assert "SecretsUsedInArgOrEnv" in architecture
     assert "0047_authority_relation_profiles" in text
     assert "OPS-01-TABS" not in pending
     assert "OPS-01-COPY" not in pending
@@ -681,6 +685,8 @@ def test_testing_strategy_is_explicit_and_does_not_discard_slow_tests() -> None:
     assert "No eliminar pruebas por ser lentas" in text
     assert "fast" in text and "integration" in text and "slow" in text
     assert "no atribuir a la suite completa" in text
+    assert "pasos cortos y recuperables" in text
+    assert "bash -lc" in text
 
 
 def test_pilot_guide_delegates_future_work_to_single_pending_ledger() -> None:
@@ -838,10 +844,10 @@ def test_pre_release_roadmap_includes_public_site_export_and_parallel_giar() -> 
     assert "1. Completar `UX-02`" not in text
     assert "1. Completar y validar `OPS-01`" not in text
     assert "`OPS-01` quedó cerrado para el pre-release" in text
-    assert "Las imágenes RC85 publicadas inicialmente quedaron verificadas" in text
+    assert "Las imágenes RC86 ya incorporan" in text
     assert "`QA-01` y `OPS-02` quedaron cerrados" in text
-    assert "1. Reconstruir y publicar las imágenes CPU/GPU" in text
-    assert "2. Cerrar `OPS-03`" in text
+    assert "1. Cerrar `OPS-03`" in text
+    assert "2. Congelar contratos públicos y esquema 1.0" in text
     assert "Resolver `ENT-REF-01`" not in text
     assert "Validar `PERF-DISC-01`" not in text
     assert "1. Ejecutar `PILOT-01`" not in text

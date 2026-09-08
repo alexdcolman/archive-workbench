@@ -6,7 +6,7 @@
       "from": "docs/HISTORIAL_DE_CAMBIOS.md",
       "to": ".assistant/project_docs/HISTORIAL_DE_CAMBIOS.md",
       "from_sha256": "bc8c734969380581a3f6a0911943f8ab79a503973c7010a9defcca6eb972804a",
-      "to_sha256": "9dfe2cc6472b2e2c402536e9e03792218b1f5f197b28edcf2442fd59579a5eba"
+      "to_sha256": "e4dda347dba3baa94f08fed4db572d1dbd33726e0addfb39294e38feadaa74d9"
     },
     {
       "from": "docs/historico/actualizaciones/ACTUALIZACION_Y_PRUEBA_0.46.0.md",
@@ -762,13 +762,13 @@
       "from": "docs/operativos/ACTUALIZACION_ACTUAL.md",
       "to": ".assistant/project_docs/operativos/ACTUALIZACION_ACTUAL.md",
       "from_sha256": "52d0486e27a2bec74b7e00758ea2ac84fe207b257246e11797f041f7d27dd834",
-      "to_sha256": "c427c2d8ba51ce7a09fceb84e66048f7d8d3f1184288ec06762e1431dc29f378"
+      "to_sha256": "5b1c0c839e8e52ffe762b4aeb58e9a665248c5cb29905691635fa1ab50181e0d"
     },
     {
       "from": "docs/operativos/ESTRATEGIA_DE_PRUEBAS.md",
       "to": ".assistant/project_docs/operativos/ESTRATEGIA_DE_PRUEBAS.md",
       "from_sha256": "af257c784a1ad8743f760049ddf1738b82739c953f96cf3a4813ebe37d9a3952",
-      "to_sha256": "6faf039b6ba4f1770a60f8d597895c126b347d303f362c2016a127e2ebd1799f"
+      "to_sha256": "a549da6dd58025e24cff99c13c8a04da82198113821aca1550d45b733b8abde3"
     },
     {
       "from": "docs/operativos/GUIA_PRUEBA_PILOTO.md",
@@ -780,25 +780,25 @@
       "from": "docs/operativos/HOJA_DE_RUTA_PRE_RELEASE.md",
       "to": ".assistant/project_docs/operativos/HOJA_DE_RUTA_PRE_RELEASE.md",
       "from_sha256": "05dc4e3561d036562a9a677f0f173572f9e6c177fc4064232cd2f0fe8428c0b6",
-      "to_sha256": "4d53e2810c46ad35d6735f93572f71635b5dcd6f54054b09a3df40d094a13372"
+      "to_sha256": "e46964049f62e9af1cb86a74cb7b1bfe30c92b508f7c632d0710c1d22a519489"
     },
     {
       "from": "docs/operativos/IMPLEMENTACIONES_REALIZADAS.md",
       "to": ".assistant/project_docs/operativos/IMPLEMENTACIONES_REALIZADAS.md",
       "from_sha256": "f502c275f3a3725ad3c15307c6e75dd0fe2a40cbaa905b02099d2661239f269d",
-      "to_sha256": "6782542cddb8ec38ccd54fd8246714af8e99e8f21a8e116d8e2c0d9eef13d474"
+      "to_sha256": "971d12eed1108f5d59f4dae27f5bda2e92b7e9291fff66cf44a74134221942d2"
     },
     {
       "from": "docs/operativos/PENDIENTES_ACTIVOS.md",
       "to": ".assistant/project_docs/operativos/PENDIENTES_ACTIVOS.md",
       "from_sha256": "29d397c22105c1edf23a1024cdeeb6282ad47fc1633e71940bc9d59030ed77f1",
-      "to_sha256": "2067f1dc948d15909ebc0ae09d27bd934e510b143bd5942809a7e490b6597326"
+      "to_sha256": "951682f6120861ce1aba6e536512ba677c67b45a792555be512bf66fdb6a1166"
     },
     {
       "from": "docs/referencia/ARQUITECTURA_Y_MODELO_ACTUAL.md",
       "to": ".assistant/project_docs/referencia/ARQUITECTURA_Y_MODELO_ACTUAL.md",
       "from_sha256": "41d5482a700b090e6b13d0610be82be71aa3cdcc075ca0c726d2463960064433",
-      "to_sha256": "27f312850b2b3370576894c3e764d9916312c7d0a3ab1c0885787262472e8a09"
+      "to_sha256": "07df71561b68a900086ae77189ba5ae11a56e47759324472c902063b4b620211"
     },
     {
       "from": "docs/referencia/BENCHMARK_OCR_VERDAD_TERRENO.md",
