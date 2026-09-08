@@ -847,7 +847,7 @@ def test_pre_release_roadmap_includes_public_site_export_and_parallel_giar() -> 
     assert "Las imágenes RC86 ya incorporan" in text
     assert "`QA-01` y `OPS-02` quedaron cerrados" in text
     assert "1. Cerrar `OPS-03`" in text
-    assert "2. Congelar contratos públicos y esquema 1.0" in text
+    assert "2. Contratos públicos y esquema 1.0 ya congelados" in text
     assert "Resolver `ENT-REF-01`" not in text
     assert "Validar `PERF-DISC-01`" not in text
     assert "1. Ejecutar `PILOT-01`" not in text

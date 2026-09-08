@@ -162,6 +162,47 @@ def test_analysis_quality_audit_validation_project_generator_is_packaged() -> No
     assert "Perfiles, índices y autorizaciones anteriores reiniciados" in source
 
 
+def test_release_example_project_tools_are_packaged() -> None:
+    root = Path(__file__).parents[1]
+    creator = root / "scripts" / "create_release_example_project.py"
+    verifier = root / "scripts" / "verify_release_example_project.py"
+
+    for script in (creator, verifier):
+        assert script.is_file()
+        assert script.stat().st_mode & 0o111
+
+    creator_source = creator.read_text(encoding="utf-8")
+    assert "Proyecto de ejemplo Archive Workbench" in creator_source
+    assert "0047_authority_relation_profiles" in creator_source
+    assert "create_ready_project" in creator_source
+    assert "register_test_corpus" in creator_source
+    assert "bootstrap_editable_layer" in creator_source
+    assert "create_authority" in creator_source
+    assert "create_mention" in creator_source
+    assert "create_entity_relation" in creator_source
+    assert "pilot_data no fue leído ni modificado" in creator_source
+
+    verifier_source = verifier.read_text(encoding="utf-8")
+    assert "0047_authority_relation_profiles" in verifier_source
+    assert "synthetic_data_only" in verifier_source
+    assert "verified_sha256" in verifier_source
+    assert "ZIP PORTABLE: OK" in verifier_source
+
+
+def test_release_contract_freeze_verifier_is_packaged() -> None:
+    root = Path(__file__).parents[1]
+    stable_contracts = root / "src" / "archive_workbench" / "contracts" / "stable_v1.py"
+    verifier = root / "scripts" / "verify_release_contracts.py"
+
+    assert stable_contracts.is_file()
+    assert verifier.is_file()
+    assert verifier.stat().st_mode & 0o111
+    source = verifier.read_text(encoding="utf-8")
+    assert "PUBLIC_CONTRACT_EXPORTS_V1" in source
+    assert "0047_authority_relation_profiles" not in source
+    assert "DATABASE_REVISION_V1" in source
+
+
 def test_version_docs_and_discovery_plan_are_packaged() -> None:
     root = Path(__file__).parents[1]
     data = tomllib.loads((root / "pyproject.toml").read_text(encoding="utf-8"))

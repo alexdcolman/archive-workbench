@@ -20,7 +20,6 @@ from archive_workbench.db.models import (
     AuthorityRecord,
     DiscoveryCandidate,
     DiscoveryCandidateContinuity,
-    DiscoveryCandidateGroup,
     DiscoveryContextRecord,
     DiscoveryDecision,
     DiscoveryGroupAction,

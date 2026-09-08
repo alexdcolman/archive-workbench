@@ -12,6 +12,9 @@
 - Cierra el gate estático pre-release: Ruff check y Ruff format quedan verdes sobre `src`/`tests`, mypy queda verde en el alcance gradual de 22 archivos y se normaliza el formato de 175 archivos sin retirar cobertura.
 - Refuerza el aplicador de candidatas para que nunca copie rutas locales de repositorio, entornos virtuales ni datos persistentes del proyecto aunque aparezcan accidentalmente en la fuente.
 - Sin cambios de esquema SQLite; continúa `0047_authority_relation_profiles`.
+- Valida materialmente el proyecto de ejemplo sintético y su ZIP portable para `OPS-03`.
+- Congela para 1.0 los 30 contratos públicos exportados por `archive_workbench.contracts` mediante huellas de JSON Schema y fija `0047_authority_relation_profiles` como revisión SQLite de la candidata.
+- Agrega `scripts/verify_release_contracts.py` como gate explícito de candidata.
 
 ## 0.89.0 RC84 - 2026-09-04
 

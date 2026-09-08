@@ -159,7 +159,7 @@ def create_validation_project(destination: Path) -> dict[str, object]:
                 relative_path=audio_target.relative_to(destination).as_posix(),
                 registered_by="validation_script",
             )
-            video_result = register_local_file(
+            register_local_file(
                 session,
                 project_root=destination,
                 project_id=decisions.project_id,

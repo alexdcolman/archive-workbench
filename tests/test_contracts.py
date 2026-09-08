@@ -48,3 +48,9 @@ def test_image_uses_reference_or_base64_but_not_both() -> None:
 def test_normalized_geometry_range() -> None:
     with pytest.raises(ValidationError):
         PageGeometry(page=1, polygon=[(0, 0), (2, 0), (2, 1), (0, 1)])
+
+
+def test_public_contracts_and_database_revision_are_frozen_for_v1() -> None:
+    from scripts.verify_release_contracts import verify
+
+    verify()

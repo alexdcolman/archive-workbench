@@ -16,7 +16,6 @@ from archive_workbench.db import (
     upgrade_database,
 )
 from archive_workbench.exchange import (
-    current_editable_state_sha256,
     fork_exchange_workspace,
 )
 
