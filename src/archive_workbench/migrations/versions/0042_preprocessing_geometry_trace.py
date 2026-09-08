@@ -4,6 +4,7 @@ Revision ID: 0042_preprocessing_geometry_trace
 Revises: 0041_catalog_authority_roles_graph_layers
 Create Date: 2026-08-05
 """
+
 from __future__ import annotations
 
 from alembic import op

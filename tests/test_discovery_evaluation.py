@@ -27,7 +27,9 @@ from tests.test_open_discovery import _seed_discovery_project
 ROOT = Path(__file__).parents[1]
 CORPUS = ROOT / "config" / "discovery_evaluation_corpus.jsonl"
 DISC03_CORPUS = ROOT / "config" / "discovery_evaluation_corpus_disc03.jsonl"
-DISC03_REAL_PATTERN_CORPUS = ROOT / "config" / "discovery_evaluation_corpus_disc03_real_patterns.jsonl"
+DISC03_REAL_PATTERN_CORPUS = (
+    ROOT / "config" / "discovery_evaluation_corpus_disc03_real_patterns.jsonl"
+)
 DISC03_RC68_CORPUS = ROOT / "config" / "discovery_evaluation_corpus_disc03_rc68.jsonl"
 DISC03_LOCAL_FAMILIES = ("actor", "space", "time", "event", "action_process", "work")
 
@@ -45,18 +47,12 @@ class _FakeSpacyPipeline:
 
     def __call__(self, text: str):
         exact = "Valentina Orbe"
-        return SimpleNamespace(
-            ents=[_FakeEntity(exact, text.index(exact), "PER")]
-        )
+        return SimpleNamespace(ents=[_FakeEntity(exact, text.index(exact), "PER")])
 
 
 def test_initial_evaluation_corpus_covers_every_family_and_preserves_offsets() -> None:
     corpus = load_evaluation_corpus(CORPUS)
-    families = {
-        annotation.family
-        for record in corpus.records
-        for annotation in record.annotations
-    }
+    families = {annotation.family for record in corpus.records for annotation in record.annotations}
     assert families == {
         "actor",
         "space",
@@ -146,9 +142,7 @@ def test_spacy_adapter_uses_same_detection_contract(monkeypatch) -> None:
     assert rows[0].confidence is None
 
 
-def test_spacy_profile_persists_provider_and_model_metadata(
-    tmp_path: Path, monkeypatch
-) -> None:
+def test_spacy_profile_persists_provider_and_model_metadata(tmp_path: Path, monkeypatch) -> None:
     import archive_workbench.discovery_providers as providers
 
     monkeypatch.setattr(providers.importlib.util, "find_spec", lambda _name: object())
@@ -336,7 +330,9 @@ def test_disc03_v3_closes_rc66_holdouts_without_changing_v1_v2_metrics() -> None
 def test_disc03_real_pattern_regression_is_synthetic_and_separate_from_real_corpus() -> None:
     corpus = load_evaluation_corpus(DISC03_REAL_PATTERN_CORPUS)
     assert len(corpus.records) == 41
-    assert all(record.source.get("kind") == "synthetic_real_pattern_audit" for record in corpus.records)
+    assert all(
+        record.source.get("kind") == "synthetic_real_pattern_audit" for record in corpus.records
+    )
     assert all("pilot_data" not in json.dumps(record.source) for record in corpus.records)
     cases = {str(record.source.get("case")) for record in corpus.records}
     assert {
@@ -403,8 +399,6 @@ def test_local_provider_v3_preserves_v1_and_v2_as_explicit_historical_versions()
     assert ("work", "Crónica del domingo") in detections["local_rules_v3"]
 
 
-
-
 def test_disc03_rc68_v4_repairs_entity_boundaries_and_quoted_work_precision() -> None:
     corpus = load_evaluation_corpus(DISC03_RC68_CORPUS)
     assert len(corpus.records) == 17
@@ -461,13 +455,17 @@ def test_local_provider_v4_and_v5_preserve_history_and_fix_reported_boundaries()
         "local_rules_v4",
         "local_rules_v5",
     ]
-    assert ("actor", "Secretaría General de la Presidencia de la Nación") in detections["local_rules_v4"]
+    assert ("actor", "Secretaría General de la Presidencia de la Nación") in detections[
+        "local_rules_v4"
+    ]
     assert ("actor", "Dr. Guillermo W. KLEIN") in detections["local_rules_v4"]
     assert ("actor", "profesora Encarnación Díaz de Mulhall") in detections["local_rules_v4"]
     assert ("actor", "Sr. Reberte Equiza") in detections["local_rules_v4"]
     assert ("work", "La situación exige prudencia") not in detections["local_rules_v4"]
     assert ("work", "La casa vacía") in detections["local_rules_v4"]
-    assert ("actor", "Secretaría General de la Presidencia de la Nación") in detections["local_rules_v5"]
+    assert ("actor", "Secretaría General de la Presidencia de la Nación") in detections[
+        "local_rules_v5"
+    ]
     assert ("actor", "Dr. Guillermo W. KLEIN") in detections["local_rules_v5"]
     assert ("actor", "profesora Encarnación Díaz de Mulhall") in detections["local_rules_v5"]
     assert ("actor", "Sr. Reberte Equiza") in detections["local_rules_v5"]
@@ -478,9 +476,10 @@ def test_local_provider_v4_and_v5_preserve_history_and_fix_reported_boundaries()
     assert ("actor", "profesora Encarnación Díaz") in detections["local_rules_v3"]
     assert ("actor", "Sr. Reberte Equiza- Esquel") in detections["local_rules_v3"]
 
+
 def test_local_provider_v5_does_not_turn_unrelated_quotes_into_works_from_distant_context() -> None:
     text = (
-        'Se analizó la obra completa en el informe. '
+        "Se analizó la obra completa en el informe. "
         'El testigo se identificó como "El Flaco", de Trelew. '
         'La organización llamó "Plan de acción", de Trelew, a su campaña.'
     )
@@ -515,7 +514,9 @@ def test_disc03_evaluation_errors_preserve_source_metadata() -> None:
 
 
 def test_local_provider_versions_preserve_historical_v1_behavior() -> None:
-    text = 'El testigo dijo: “No vi nada esa noche”. El archivo fue revisado en el expediente 1976/4.'
+    text = (
+        "El testigo dijo: “No vi nada esa noche”. El archivo fue revisado en el expediente 1976/4."
+    )
     _contract_v1, v1 = detect_with_provider(
         text,
         families=("work", "action_process", "time"),
@@ -542,7 +543,7 @@ def test_local_provider_versions_preserve_historical_v1_behavior() -> None:
 
 def test_v2_time_filter_does_not_depend_on_work_family_being_selected() -> None:
     _contract, rows = detect_with_provider(
-        'El informe “Balance anual 1984” quedó incorporado.',
+        "El informe “Balance anual 1984” quedó incorporado.",
         families=("time",),
         provider_key="local_deterministic",
         provider_version="local_rules_v2",

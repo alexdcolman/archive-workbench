@@ -4,6 +4,7 @@ Revision ID: 0038_open_discovery
 Revises: 0037_exchange_state_adoptions
 Create Date: 2026-08-03
 """
+
 from __future__ import annotations
 
 import sqlalchemy as sa
@@ -127,7 +128,9 @@ def upgrade() -> None:
         sa.ForeignKeyConstraint(["project_id"], ["projects.id"], ondelete="CASCADE"),
         sa.ForeignKeyConstraint(["run_id"], ["discovery_runs.id"], ondelete="CASCADE"),
         sa.ForeignKeyConstraint(["profile_id"], ["discovery_profiles.id"], ondelete="RESTRICT"),
-        sa.ForeignKeyConstraint(["editable_object_id"], ["editable_objects.id"], ondelete="RESTRICT"),
+        sa.ForeignKeyConstraint(
+            ["editable_object_id"], ["editable_objects.id"], ondelete="RESTRICT"
+        ),
         sa.ForeignKeyConstraint(["editable_page_id"], ["editable_pages.id"], ondelete="RESTRICT"),
         sa.ForeignKeyConstraint(["digital_object_id"], ["digital_objects.id"], ondelete="RESTRICT"),
         sa.ForeignKeyConstraint(["document_part_id"], ["document_parts.id"], ondelete="SET NULL"),
@@ -163,9 +166,7 @@ def upgrade() -> None:
 
 
 def downgrade() -> None:
-    op.drop_index(
-        "ix_discovery_candidates_project_created", table_name="discovery_candidates"
-    )
+    op.drop_index("ix_discovery_candidates_project_created", table_name="discovery_candidates")
     op.drop_index("ix_discovery_candidates_object", table_name="discovery_candidates")
     op.drop_index("ix_discovery_candidates_run", table_name="discovery_candidates")
     op.drop_table("discovery_candidates")

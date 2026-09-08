@@ -75,7 +75,6 @@ def test_page_export_inserts_marker_and_separators(tmp_path: Path) -> None:
     try:
         with session_scope(engine) as session:
             existing = session.query(EditableObject).one()
-            page = session.get(EditablePage, existing.editable_page_id)
             second = EditableObject(
                 id="second-object",
                 editable_page_id=existing.editable_page_id,
@@ -327,12 +326,15 @@ def test_export_execution_requires_current_quality_authorization(tmp_path: Path)
     try:
         with session_scope(engine) as session:
             profile = _profile(session)
-            assert preview_export(
-                session,
-                project_id="search_project",
-                profile=profile,
-                limit=1,
-            ).total_records == 1
+            assert (
+                preview_export(
+                    session,
+                    project_id="search_project",
+                    profile=profile,
+                    limit=1,
+                ).total_records
+                == 1
+            )
 
             profile.text_policy = "original_only"
             session.flush()

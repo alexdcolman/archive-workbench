@@ -7,7 +7,12 @@ from PIL import Image
 from typer.testing import CliRunner
 
 from archive_workbench.cli import app
-from archive_workbench.db import create_sqlite_engine, database_path, session_scope, upgrade_database
+from archive_workbench.db import (
+    create_sqlite_engine,
+    database_path,
+    session_scope,
+    upgrade_database,
+)
 from archive_workbench.db.models import (
     ArchivalUnit,
     DerivativeAsset,
@@ -368,7 +373,6 @@ def test_clickable_canvas_payload_contains_only_valid_boxes(tmp_path: Path) -> N
     assert payload["boxes"][0]["selected"] is True
 
 
-
 def test_review_canvas_component_callback_syncs_selected_object_before_rerun() -> None:
     from types import SimpleNamespace
 
@@ -398,6 +402,7 @@ def test_review_canvas_component_callback_syncs_selected_object_before_rerun() -
         valid_object_ids={"object-a", "object-b"},
     )
     assert st.session_state["selector"] == "object-b"
+
 
 def test_run_action_queues_selection_without_mutating_widget_key() -> None:
     class FakeStreamlit:

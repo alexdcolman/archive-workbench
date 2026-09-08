@@ -4,6 +4,7 @@ Revision ID: 0024_semantic_search
 Revises: 0023_reproducible_corpus_exports
 Create Date: 2026-07-24
 """
+
 from __future__ import annotations
 
 from alembic import op
@@ -24,10 +25,14 @@ def upgrade() -> None:
         sa.Column("description", sa.Text(), nullable=True),
         sa.Column("model_name", sa.String(length=500), nullable=False),
         sa.Column("model_revision", sa.String(length=100), nullable=True),
-        sa.Column("aggregation_level", sa.String(length=32), nullable=False, server_default="object"),
+        sa.Column(
+            "aggregation_level", sa.String(length=32), nullable=False, server_default="object"
+        ),
         sa.Column("include_object_types_json", sa.JSON(), nullable=False, server_default="[]"),
         sa.Column("include_review_statuses_json", sa.JSON(), nullable=False, server_default="[]"),
-        sa.Column("include_page_review_statuses_json", sa.JSON(), nullable=False, server_default="[]"),
+        sa.Column(
+            "include_page_review_statuses_json", sa.JSON(), nullable=False, server_default="[]"
+        ),
         sa.Column("chunk_size", sa.Integer(), nullable=False, server_default="1800"),
         sa.Column("chunk_overlap", sa.Integer(), nullable=False, server_default="200"),
         sa.Column("query_prefix", sa.Text(), nullable=False, server_default="query: "),
@@ -68,7 +73,9 @@ def upgrade() -> None:
         sa.Column("created_by", sa.String(length=200), nullable=False),
         sa.Column("created_at", sa.DateTime(timezone=True), nullable=False),
         sa.ForeignKeyConstraint(["project_id"], ["projects.id"], ondelete="CASCADE"),
-        sa.ForeignKeyConstraint(["profile_id"], ["semantic_search_profiles.id"], ondelete="CASCADE"),
+        sa.ForeignKeyConstraint(
+            ["profile_id"], ["semantic_search_profiles.id"], ondelete="CASCADE"
+        ),
         sa.PrimaryKeyConstraint("id"),
     )
     op.create_index(

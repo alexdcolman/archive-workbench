@@ -43,4 +43,4 @@ def slugify(value: str, max_length: int = 80) -> str:
     ascii_value = normalized.encode("ascii", "ignore").decode("ascii")
     slug = re.sub(r"[^a-zA-Z0-9]+", "_", ascii_value).strip("_").lower()
     slug = re.sub(r"_+", "_", slug)
-    return (slug[:max_length].rstrip("_") or "sin_titulo")
+    return slug[:max_length].rstrip("_") or "sin_titulo"

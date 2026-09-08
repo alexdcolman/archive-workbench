@@ -230,8 +230,11 @@ def test_semantic_search_can_post_filter_by_entity_period(tmp_path: Path) -> Non
                 session,
                 project_id="search_project",
                 values=SemanticProfileValues(
-                    name="Temporal", model_name="fake/model", model_revision="test",
-                    query_prefix="", document_prefix="",
+                    name="Temporal",
+                    model_name="fake/model",
+                    model_revision="test",
+                    query_prefix="",
+                    document_prefix="",
                 ),
                 changed_by="tests",
             )

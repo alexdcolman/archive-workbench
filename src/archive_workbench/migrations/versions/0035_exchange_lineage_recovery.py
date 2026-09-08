@@ -4,6 +4,7 @@ Revision ID: 0035_exchange_lineage_recovery
 Revises: 0034_automatic_analysis_authorizations
 Create Date: 2026-08-03
 """
+
 from __future__ import annotations
 
 import sqlalchemy as sa
@@ -44,12 +45,8 @@ def upgrade() -> None:
         sa.Column("closed_by", sa.String(length=200), nullable=False),
         sa.Column("closed_at", sa.DateTime(timezone=True), nullable=False),
         sa.ForeignKeyConstraint(["project_id"], ["projects.id"], ondelete="CASCADE"),
-        sa.ForeignKeyConstraint(
-            ["workspace_id"], ["exchange_workspaces.id"], ondelete="CASCADE"
-        ),
-        sa.ForeignKeyConstraint(
-            ["dry_run_id"], ["exchange_dry_runs.id"], ondelete="RESTRICT"
-        ),
+        sa.ForeignKeyConstraint(["workspace_id"], ["exchange_workspaces.id"], ondelete="CASCADE"),
+        sa.ForeignKeyConstraint(["dry_run_id"], ["exchange_dry_runs.id"], ondelete="RESTRICT"),
         sa.ForeignKeyConstraint(
             ["bundle_record_id"], ["exchange_bundle_records.id"], ondelete="RESTRICT"
         ),
@@ -88,9 +85,7 @@ def upgrade() -> None:
         ),
         sa.Column("details_json", sa.JSON(), nullable=False),
         sa.Column("recorded_at", sa.DateTime(timezone=True), nullable=False),
-        sa.ForeignKeyConstraint(
-            ["case_id"], ["exchange_lineage_cases.id"], ondelete="RESTRICT"
-        ),
+        sa.ForeignKeyConstraint(["case_id"], ["exchange_lineage_cases.id"], ondelete="RESTRICT"),
         sa.PrimaryKeyConstraint("id"),
     )
     op.create_index(
@@ -143,18 +138,12 @@ def upgrade() -> None:
         sa.Column("result", sa.String(length=32), nullable=False),
         sa.Column("rejection_reason", sa.Text(), nullable=True),
         sa.Column("created_at", sa.DateTime(timezone=True), nullable=False),
-        sa.ForeignKeyConstraint(
-            ["case_id"], ["exchange_lineage_cases.id"], ondelete="RESTRICT"
-        ),
+        sa.ForeignKeyConstraint(["case_id"], ["exchange_lineage_cases.id"], ondelete="RESTRICT"),
         sa.ForeignKeyConstraint(["project_id"], ["projects.id"], ondelete="CASCADE"),
-        sa.ForeignKeyConstraint(
-            ["workspace_id"], ["exchange_workspaces.id"], ondelete="CASCADE"
-        ),
+        sa.ForeignKeyConstraint(["workspace_id"], ["exchange_workspaces.id"], ondelete="CASCADE"),
         sa.PrimaryKeyConstraint("id"),
         sa.UniqueConstraint("case_id", name="uq_exchange_lineage_decision_case"),
-        sa.UniqueConstraint(
-            "target_bundle_id", name="uq_exchange_lineage_decision_bundle"
-        ),
+        sa.UniqueConstraint("target_bundle_id", name="uq_exchange_lineage_decision_bundle"),
     )
     op.create_index(
         "ix_exchange_lineage_decisions_workspace_created",

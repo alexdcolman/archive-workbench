@@ -5,11 +5,10 @@ from collections import Counter
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import Iterable
 
 import yaml
 from PIL import Image, ImageDraw, ImageFont, ImageOps
-from sqlalchemy import delete, select, update
+from sqlalchemy import select, update
 from sqlalchemy.orm import Session
 
 from archive_workbench.sources import PROCESSABLE_SOURCE_TYPES
@@ -27,7 +26,6 @@ from archive_workbench.extraction import (
     ExtractionSummary,
     _current_assets,
     extract_documents_preferred,
-    extraction_doctor,
     load_extraction_profile,
     resolve_extraction_profile,
 )
@@ -36,6 +34,7 @@ from archive_workbench.region_extraction import extract_regions, load_region_tem
 
 # Alias local para conservar un punto de extensión estable en pruebas e integraciones.
 extract_documents = extract_documents_preferred
+
 
 @dataclass(slots=True)
 class ContactSheetResult:
@@ -147,10 +146,7 @@ def representative_pages(page_count: int, sample_count: int = 5) -> list[int]:
     count = min(max(1, sample_count), page_count)
     if count == 1:
         return [1]
-    pages = {
-        1 + int(index * (page_count - 1) / (count - 1) + 0.5)
-        for index in range(count)
-    }
+    pages = {1 + int(index * (page_count - 1) / (count - 1) + 0.5) for index in range(count)}
     return sorted(pages)
 
 
@@ -272,7 +268,9 @@ def render_contact_sheets(
                 asset = asset_by_page[page]
                 source = root / asset.relative_path
                 if sha256_file(source) != asset.sha256:
-                    raise RuntimeError(f"el derivado de vista fue modificado: {asset.relative_path}")
+                    raise RuntimeError(
+                        f"el derivado de vista fue modificado: {asset.relative_path}"
+                    )
                 with Image.open(source) as raw:
                     image = ImageOps.contain(raw.convert("RGB"), (thumb_width, thumb_width * 2))
                     thumbnails.append((page, image.copy()))
@@ -452,12 +450,8 @@ def execute_document_plan(
     force: bool = False,
 ) -> PlanExecutionSummary:
     root = Path(project_root)
-    validate_plan_against_catalog(
-        session, project_root=root, plan=plan, require_ready=True
-    )
-    imported = import_document_plan(
-        session, project_root=root, plan=plan, source_path=plan_path
-    )
+    validate_plan_against_catalog(session, project_root=root, plan=plan, require_ready=True)
+    imported = import_document_plan(session, project_root=root, plan=plan, source_path=plan_path)
     summary = PlanExecutionSummary(plan_id=imported.plan_id)
 
     for assignment in plan.assignments:
@@ -481,7 +475,9 @@ def execute_document_plan(
             ]
             if failures:
                 details = "; ".join(f"{check.name}: {check.detail}" for check in failures)
-                raise RuntimeError(f"El entorno no está listo para {assignment.assignment_key}: {details}")
+                raise RuntimeError(
+                    f"El entorno no está listo para {assignment.assignment_key}: {details}"
+                )
             result = extract_documents(
                 session,
                 project_root=root,
@@ -606,7 +602,9 @@ def document_part_status_rows(
     if source_key:
         query = query.where(SourceRegistration.source_key == source_key)
     rows = session.execute(
-        query.order_by(SourceRegistration.source_key, DocumentPart.page_start, DocumentPart.part_key)
+        query.order_by(
+            SourceRegistration.source_key, DocumentPart.page_start, DocumentPart.part_key
+        )
     ).all()
     result: list[DocumentPartStatusRow] = []
     for registration, part in rows:

@@ -6,10 +6,19 @@ from pathlib import Path
 from sqlalchemy import select
 
 from archive_workbench.catalog import register_test_corpus
-from archive_workbench.db import create_sqlite_engine, database_path, session_scope, upgrade_database
+from archive_workbench.db import (
+    create_sqlite_engine,
+    database_path,
+    session_scope,
+    upgrade_database,
+)
 from archive_workbench.db.models import EditableObject, EditablePage
 from archive_workbench.decisions import load_decisions
-from archive_workbench.editing import add_editable_object, bootstrap_editable_layer, export_editable_layer
+from archive_workbench.editing import (
+    add_editable_object,
+    bootstrap_editable_layer,
+    export_editable_layer,
+)
 from archive_workbench.layout_structure import (
     apply_layout_proposal,
     assign_object_to_column,
@@ -76,13 +85,23 @@ def test_proposal_detects_columns_and_does_not_change_canonical_order(tmp_path: 
     _root, engine, _decisions, ids = _prepare(tmp_path)
     try:
         with session_scope(engine) as session:
-            before = [item.id for item in session.scalars(
-                select(EditableObject).where(EditableObject.lifecycle_status == "active").order_by(EditableObject.current_order_index)
-            ).all()]
+            before = [
+                item.id
+                for item in session.scalars(
+                    select(EditableObject)
+                    .where(EditableObject.lifecycle_status == "active")
+                    .order_by(EditableObject.current_order_index)
+                ).all()
+            ]
             proposal = layout_proposal(session, editable_page_id=ids["page"])
-            after = [item.id for item in session.scalars(
-                select(EditableObject).where(EditableObject.lifecycle_status == "active").order_by(EditableObject.current_order_index)
-            ).all()]
+            after = [
+                item.id
+                for item in session.scalars(
+                    select(EditableObject)
+                    .where(EditableObject.lifecycle_status == "active")
+                    .order_by(EditableObject.current_order_index)
+                ).all()
+            ]
             assert len(proposal.columns) == 2
             assert proposal.proposed_order == (ids["l1"], ids["l2"], ids["r1"], ids["r2"])
             assert proposal.changed_positions == 4
@@ -112,12 +131,16 @@ def test_apply_manual_assignment_undo_redo_history_and_export(tmp_path: Path) ->
             )
         with session_scope(engine) as session:
             structure = layout_structure(session, editable_page_id=ids["page"])
-            assert [item.label for item in structure.columns if item.lifecycle_status == "active"] == [
+            assert [
+                item.label for item in structure.columns if item.lifecycle_status == "active"
+            ] == [
                 "Columna 1",
                 "Columna 2",
             ]
             active = session.scalars(
-                select(EditableObject).where(EditableObject.lifecycle_status == "active").order_by(EditableObject.current_order_index)
+                select(EditableObject)
+                .where(EditableObject.lifecycle_status == "active")
+                .order_by(EditableObject.current_order_index)
             ).all()
             assert [item.id for item in active] == [ids["l1"], ids["l2"], ids["r1"], ids["r2"]]
             manual_id = ensure_layout_column(
@@ -173,10 +196,38 @@ def test_fragmentation_and_duplicate_candidates_are_only_diagnostics() -> None:
     from types import SimpleNamespace
 
     objects = [
-        SimpleNamespace(id="a", order_index=0, object_type="paragraph", text="Primera línea", geometry_json=_geometry(0.1, 0.1, 0.45, 0.14), lifecycle_status="active"),
-        SimpleNamespace(id="b", order_index=1, object_type="paragraph", text="continúa aquí.", geometry_json=_geometry(0.1, 0.145, 0.45, 0.185), lifecycle_status="active"),
-        SimpleNamespace(id="c", order_index=2, object_type="paragraph", text="Duplicado", geometry_json=_geometry(0.6, 0.2, 0.9, 0.26), lifecycle_status="active"),
-        SimpleNamespace(id="d", order_index=3, object_type="paragraph", text="Duplicado", geometry_json=_geometry(0.605, 0.202, 0.895, 0.258), lifecycle_status="active"),
+        SimpleNamespace(
+            id="a",
+            order_index=0,
+            object_type="paragraph",
+            text="Primera línea",
+            geometry_json=_geometry(0.1, 0.1, 0.45, 0.14),
+            lifecycle_status="active",
+        ),
+        SimpleNamespace(
+            id="b",
+            order_index=1,
+            object_type="paragraph",
+            text="continúa aquí.",
+            geometry_json=_geometry(0.1, 0.145, 0.45, 0.185),
+            lifecycle_status="active",
+        ),
+        SimpleNamespace(
+            id="c",
+            order_index=2,
+            object_type="paragraph",
+            text="Duplicado",
+            geometry_json=_geometry(0.6, 0.2, 0.9, 0.26),
+            lifecycle_status="active",
+        ),
+        SimpleNamespace(
+            id="d",
+            order_index=3,
+            object_type="paragraph",
+            text="Duplicado",
+            geometry_json=_geometry(0.605, 0.202, 0.895, 0.258),
+            lifecycle_status="active",
+        ),
     ]
     proposal = propose_layout(objects, page_number=1)
     assert proposal.fragment_candidates[0].object_ids == ("a", "b")
@@ -189,9 +240,7 @@ def test_layout_validation_project_is_controlled_and_noncanonical(tmp_path: Path
     import importlib.util
 
     script_path = (
-        Path(__file__).parents[1]
-        / "scripts"
-        / "create_layout_structure_validation_project.py"
+        Path(__file__).parents[1] / "scripts" / "create_layout_structure_validation_project.py"
     )
     spec = importlib.util.spec_from_file_location("layout_validation_script", script_path)
     assert spec and spec.loader
@@ -216,9 +265,7 @@ def test_confirmed_fragment_and_duplicate_actions_are_reversible(tmp_path: Path)
     import importlib.util
 
     script_path = (
-        Path(__file__).parents[1]
-        / "scripts"
-        / "create_layout_structure_validation_project.py"
+        Path(__file__).parents[1] / "scripts" / "create_layout_structure_validation_project.py"
     )
     spec = importlib.util.spec_from_file_location("layout_validation_actions", script_path)
     assert spec and spec.loader
@@ -284,9 +331,7 @@ def test_confirmed_fragment_and_duplicate_actions_are_reversible(tmp_path: Path)
         with session_scope(engine) as session:
             active_count = len(
                 session.scalars(
-                    select(EditableObject).where(
-                        EditableObject.lifecycle_status == "active"
-                    )
+                    select(EditableObject).where(EditableObject.lifecycle_status == "active")
                 ).all()
             )
             assert active_count == 5
@@ -296,9 +341,7 @@ def test_confirmed_fragment_and_duplicate_actions_are_reversible(tmp_path: Path)
         with session_scope(engine) as session:
             active_count = len(
                 session.scalars(
-                    select(EditableObject).where(
-                        EditableObject.lifecycle_status == "active"
-                    )
+                    select(EditableObject).where(EditableObject.lifecycle_status == "active")
                 ).all()
             )
             assert active_count == 6
@@ -362,9 +405,7 @@ def test_diagnostic_verifier_reports_complete_manual_validation(tmp_path: Path) 
 
     root = tmp_path / "layout_verified"
     create_path = (
-        Path(__file__).parents[1]
-        / "scripts"
-        / "create_layout_structure_validation_project.py"
+        Path(__file__).parents[1] / "scripts" / "create_layout_structure_validation_project.py"
     )
     create_spec = importlib.util.spec_from_file_location("layout_create_verified", create_path)
     assert create_spec and create_spec.loader
@@ -470,9 +511,7 @@ def test_diagnostic_verifier_reports_complete_manual_validation(tmp_path: Path) 
         engine.dispose()
 
     verify_path = (
-        Path(__file__).parents[1]
-        / "scripts"
-        / "verify_layout_structure_validation_project.py"
+        Path(__file__).parents[1] / "scripts" / "verify_layout_structure_validation_project.py"
     )
     verify_spec = importlib.util.spec_from_file_location("layout_verify", verify_path)
     assert verify_spec and verify_spec.loader

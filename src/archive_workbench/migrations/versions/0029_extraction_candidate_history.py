@@ -4,6 +4,7 @@ Revision ID: 0029_extraction_candidate_history
 Revises: 0028_operational_readiness
 Create Date: 2026-07-29
 """
+
 from __future__ import annotations
 
 from alembic import op
@@ -24,7 +25,12 @@ def _uuid_sql() -> str:
 
 
 def _baseline_event_sql(
-    *, entity_type: str, entity_id: str, project_id: str, actor: str, occurred_at: str,
+    *,
+    entity_type: str,
+    entity_id: str,
+    project_id: str,
+    actor: str,
+    occurred_at: str,
     changed_fields: str,
 ) -> str:
     return f"""
@@ -212,14 +218,16 @@ def upgrade() -> None:
         AFTER INSERT ON extraction_page_selection_revisions
         WHEN NEW.operation <> 'import'
         BEGIN
-            {_baseline_event_sql(
-                entity_type='extraction_selection_baseline',
-                entity_id='NEW.selection_id',
-                project_id='(SELECT project_id FROM digital_objects WHERE id = NEW.digital_object_id)',
-                actor='NEW.selected_by',
-                occurred_at='NEW.created_at',
+            {
+            _baseline_event_sql(
+                entity_type="extraction_selection_baseline",
+                entity_id="NEW.selection_id",
+                project_id="(SELECT project_id FROM digital_objects WHERE id = NEW.digital_object_id)",
+                actor="NEW.selected_by",
+                occurred_at="NEW.created_at",
                 changed_fields=selection_changed_fields,
-            )}
+            )
+        }
         END
         """
     )
@@ -246,14 +254,16 @@ def upgrade() -> None:
         AFTER INSERT ON editable_page_revisions
         WHEN NEW.operation IN ('candidate_adopted', 'manual_keep_edits')
         BEGIN
-            {_baseline_event_sql(
-                entity_type='editable_page_baseline',
-                entity_id='NEW.editable_page_id',
-                project_id='(SELECT d.project_id FROM editable_pages p JOIN digital_objects d ON d.id = p.digital_object_id WHERE p.id = NEW.editable_page_id)',
-                actor='NEW.created_by',
-                occurred_at='NEW.created_at',
+            {
+            _baseline_event_sql(
+                entity_type="editable_page_baseline",
+                entity_id="NEW.editable_page_id",
+                project_id="(SELECT d.project_id FROM editable_pages p JOIN digital_objects d ON d.id = p.digital_object_id WHERE p.id = NEW.editable_page_id)",
+                actor="NEW.created_by",
+                occurred_at="NEW.created_at",
                 changed_fields=editable_changed_fields,
-            )}
+            )
+        }
         END
         """
     )

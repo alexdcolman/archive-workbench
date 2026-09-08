@@ -4,6 +4,7 @@ Revision ID: 0014_exchange_dry_run
 Revises: 0013_offline_exchange_log
 Create Date: 2026-07-23
 """
+
 from __future__ import annotations
 
 from alembic import op
@@ -36,8 +37,12 @@ def upgrade() -> None:
         sa.Column("assessed_by", sa.String(length=200), nullable=False),
         sa.Column("assessed_at", sa.DateTime(timezone=True), nullable=False),
         sa.ForeignKeyConstraint(["workspace_id"], ["exchange_workspaces.id"], ondelete="CASCADE"),
-        sa.ForeignKeyConstraint(["bundle_record_id"], ["exchange_bundle_records.id"], ondelete="CASCADE"),
-        sa.ForeignKeyConstraint(["common_checkpoint_id"], ["exchange_checkpoints.id"], ondelete="SET NULL"),
+        sa.ForeignKeyConstraint(
+            ["bundle_record_id"], ["exchange_bundle_records.id"], ondelete="CASCADE"
+        ),
+        sa.ForeignKeyConstraint(
+            ["common_checkpoint_id"], ["exchange_checkpoints.id"], ondelete="SET NULL"
+        ),
         sa.UniqueConstraint("bundle_id", name="uq_exchange_dry_run_bundle"),
     )
     op.create_index(

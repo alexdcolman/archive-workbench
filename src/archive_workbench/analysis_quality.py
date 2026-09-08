@@ -29,7 +29,9 @@ class AutomaticAnalysisSpec:
 _AUTOMATIC_ANALYSIS_SPECS = (
     AutomaticAnalysisSpec("corpus_export", "Exportación de corpus", "implemented"),
     AutomaticAnalysisSpec("semantic_index", "Índice y búsqueda semántica", "implemented"),
-    AutomaticAnalysisSpec("mention_suggestions", "Sugerencias automáticas de menciones", "implemented"),
+    AutomaticAnalysisSpec(
+        "mention_suggestions", "Sugerencias automáticas de menciones", "implemented"
+    ),
     AutomaticAnalysisSpec("summary", "Resúmenes automáticos", "contract_ready"),
     AutomaticAnalysisSpec("statistics", "Estadísticas automáticas", "contract_ready"),
     AutomaticAnalysisSpec("open_discovery", "Descubrimiento abierto", "implemented"),
@@ -109,9 +111,7 @@ def normalize_page_review_statuses(
         selected = tuple(default_when_empty)
     invalid = set(selected) - set(PAGE_REVIEW_STATUSES)
     if invalid:
-        raise ValueError(
-            "Estado de revisión de página inválido: " + ", ".join(sorted(invalid))
-        )
+        raise ValueError("Estado de revisión de página inválido: " + ", ".join(sorted(invalid)))
     return tuple(value for value in PAGE_REVIEW_STATUSES if value in selected)
 
 

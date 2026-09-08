@@ -11,6 +11,14 @@ import sys
 from pathlib import Path
 
 MANIFEST_NAME = "candidate_update_manifest.json"
+LOCAL_ONLY_TOP_LEVEL = {
+    ".git",
+    ".venv",
+    "venv",
+    "pilot_data",
+    "pilot_data_2",
+    "ArchiveWorkbenchData",
+}
 
 
 def sha256_file(path: Path) -> str:
@@ -86,6 +94,8 @@ def preflight_relocations(source: Path, target: Path, relocations: list[dict]) -
 
 def copy_candidate(source: Path, target: Path) -> None:
     for child in source.iterdir():
+        if child.name in LOCAL_ONLY_TOP_LEVEL:
+            continue
         destination = target / child.name
         if child.is_dir():
             shutil.copytree(child, destination, dirs_exist_ok=True, copy_function=shutil.copy2)

@@ -115,7 +115,9 @@ def _file_instance_id(storage_root: str, relative_path: str) -> str:
 
 
 def _link_id(digital_object_id: str, archival_unit_id: str) -> str:
-    return stable_id(_APP_NAMESPACE, "digital_object_unit_link", digital_object_id, archival_unit_id)
+    return stable_id(
+        _APP_NAMESPACE, "digital_object_unit_link", digital_object_id, archival_unit_id
+    )
 
 
 def _source_registration_id(project_id: str, source_type: str, source_key: str) -> str:
@@ -184,9 +186,7 @@ def _build_archival_path(
         if raw_value is None or str(raw_value).strip() == "":
             continue
         title = str(raw_value).strip()
-        identity_hint = (
-            f"test_corpus:{document.test_id}" if level.key == "documento" else None
-        )
+        identity_hint = f"test_corpus:{document.test_id}" if level.key == "documento" else None
         unit, was_created = _get_or_create_unit(
             session,
             project_id=decisions.project_id,
@@ -293,9 +293,7 @@ def register_test_corpus(
             )
             summary.links_created += 1
 
-        source_id = _source_registration_id(
-            decisions.project_id, "test_corpus", document.test_id
-        )
+        source_id = _source_registration_id(decisions.project_id, "test_corpus", document.test_id)
         registration = session.get(SourceRegistration, source_id)
         payload = document.model_dump(mode="json")
         if registration is None:

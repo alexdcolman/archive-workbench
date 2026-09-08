@@ -5,17 +5,14 @@ import difflib
 import hashlib
 import io
 import json
-import math
 import mimetypes
 import os
-import re
 import shutil
 import subprocess
 import sys
 import threading
 import time
 from dataclasses import asdict, dataclass
-from datetime import date
 from pathlib import Path
 from typing import Any, Protocol
 
@@ -36,7 +33,6 @@ from archive_workbench.db.models import (
     AudiovisualTimelineAnnotation,
     AudiovisualTimelineAnnotationRevision,
     DigitalObject,
-    DigitalObjectUnitLink,
     CorpusExportRun,
     FileInstance,
     SegmentEntityMention,
@@ -52,10 +48,31 @@ from archive_workbench.exchange import current_editable_state_sha256
 from archive_workbench.sources import PROCESSABLE_SOURCE_TYPES
 
 AUDIO_EXTENSIONS = {
-    ".aac", ".aif", ".aiff", ".alac", ".flac", ".m4a", ".mp3", ".ogg", ".opus", ".wav", ".wma"
+    ".aac",
+    ".aif",
+    ".aiff",
+    ".alac",
+    ".flac",
+    ".m4a",
+    ".mp3",
+    ".ogg",
+    ".opus",
+    ".wav",
+    ".wma",
 }
 VIDEO_EXTENSIONS = {
-    ".avi", ".m4v", ".mkv", ".mov", ".mp4", ".mpeg", ".mpg", ".mts", ".m2ts", ".ts", ".webm", ".wmv"
+    ".avi",
+    ".m4v",
+    ".mkv",
+    ".mov",
+    ".mp4",
+    ".mpeg",
+    ".mpg",
+    ".mts",
+    ".m2ts",
+    ".ts",
+    ".webm",
+    ".wmv",
 }
 _BROWSER_AUDIO_EXTENSIONS = {".mp3", ".wav", ".ogg", ".m4a", ".aac", ".flac"}
 _BROWSER_VIDEO_EXTENSIONS = {".mp4", ".webm", ".mov", ".m4v"}
@@ -102,7 +119,9 @@ class AudiovisualExportRunResult:
     corpus_state_sha256: str
 
 
-def _validate_audiovisual_export_options(options: AudiovisualExportOptions) -> AudiovisualExportOptions:
+def _validate_audiovisual_export_options(
+    options: AudiovisualExportOptions,
+) -> AudiovisualExportOptions:
     if options.text_policy not in AUDIOVISUAL_EXPORT_TEXT_POLICIES:
         raise ValueError("Política de texto audiovisual inválida")
     invalid_statuses = set(options.include_review_statuses) - set(REVIEW_STATUSES)
@@ -115,9 +134,7 @@ def _validate_audiovisual_export_options(options: AudiovisualExportOptions) -> A
         include_review_statuses=tuple(sorted(set(options.include_review_statuses))),
         run_scope=options.run_scope,
         media_ids=(
-            tuple(sorted(set(options.media_ids)))
-            if options.media_ids is not None
-            else None
+            tuple(sorted(set(options.media_ids))) if options.media_ids is not None else None
         ),
         include_timeline_annotations=bool(options.include_timeline_annotations),
     )
@@ -135,7 +152,9 @@ def _audiovisual_export_text(segment: TranscriptSegment, policy: str) -> tuple[s
     return original, "original_transcription"
 
 
-def _transcription_lifecycle_entry(*, action: str, actor: str, from_status: str, to_status: str, note: str | None) -> dict[str, Any]:
+def _transcription_lifecycle_entry(
+    *, action: str, actor: str, from_status: str, to_status: str, note: str | None
+) -> dict[str, Any]:
     return {
         "action": action,
         "actor": actor or "local_user",
@@ -270,9 +289,9 @@ def _gpu_memory_mib_for_pid(pid: int) -> float | None:
     if direct:
         return sum(direct)
 
-    containerized = bool(os.environ.get("ARCHIVE_WORKBENCH_RUNTIME_VARIANT")) or Path(
-        "/.dockerenv"
-    ).exists()
+    containerized = (
+        bool(os.environ.get("ARCHIVE_WORKBENCH_RUNTIME_VARIANT")) or Path("/.dockerenv").exists()
+    )
     if not containerized:
         return None
 
@@ -283,9 +302,7 @@ def _gpu_memory_mib_for_pid(pid: int) -> float | None:
     # local application. Ambiguous matches deliberately remain unmeasured.
     executable = Path(sys.executable).name
     matching_pids = {
-        row_pid
-        for row_pid, process_name, _memory in rows
-        if Path(process_name).name == executable
+        row_pid for row_pid, process_name, _memory in rows if Path(process_name).name == executable
     }
     if len(matching_pids) != 1:
         return None
@@ -312,9 +329,7 @@ class _TranscriptionRuntimeMonitor:
             gpu = _gpu_memory_mib_for_pid(self.pid)
             if gpu is not None:
                 self.peak_gpu_memory_mib = (
-                    gpu
-                    if self.peak_gpu_memory_mib is None
-                    else max(self.peak_gpu_memory_mib, gpu)
+                    gpu if self.peak_gpu_memory_mib is None else max(self.peak_gpu_memory_mib, gpu)
                 )
 
     def start(self) -> None:
@@ -465,7 +480,9 @@ class FasterWhisperBackend:
                 "audiovisual para usar faster-whisper."
             ) from exc
 
-        compute_type = str(options.get("compute_type") or ("int8" if device == "cpu" else "float16"))
+        compute_type = str(
+            options.get("compute_type") or ("int8" if device == "cpu" else "float16")
+        )
         cpu_threads = int(options.get("cpu_threads") or 0)
         model_kwargs: dict[str, Any] = {"device": device, "compute_type": compute_type}
         if cpu_threads > 0:
@@ -596,10 +613,12 @@ def probe_audiovisual(path: str | Path, *, media_type: MediaType) -> Audiovisual
     payload = _run_json_command(
         [
             "ffprobe",
-            "-v", "error",
+            "-v",
+            "error",
             "-show_format",
             "-show_streams",
-            "-of", "json",
+            "-of",
+            "json",
             str(source),
         ]
     )
@@ -621,10 +640,14 @@ def probe_audiovisual(path: str | Path, *, media_type: MediaType) -> Audiovisual
         duration_seconds=duration,
         audio_codec=str((audio_stream or {}).get("codec_name") or "") or None,
         video_codec=str((video_stream or {}).get("codec_name") or "") or None,
-        channels=(int(audio_stream["channels"]) if audio_stream and audio_stream.get("channels") else None),
+        channels=(
+            int(audio_stream["channels"]) if audio_stream and audio_stream.get("channels") else None
+        ),
         sample_rate_hz=sample_rate_hz,
         width=(int(video_stream["width"]) if video_stream and video_stream.get("width") else None),
-        height=(int(video_stream["height"]) if video_stream and video_stream.get("height") else None),
+        height=(
+            int(video_stream["height"]) if video_stream and video_stream.get("height") else None
+        ),
         frame_rate=_parse_fraction((video_stream or {}).get("avg_frame_rate")),
         raw_probe=payload,
     )
@@ -781,7 +804,9 @@ def audiovisual_media_rows(
         if latest is not None:
             count = len(
                 session.scalars(
-                    select(TranscriptSegment.id).where(TranscriptSegment.transcription_run_id == latest.id)
+                    select(TranscriptSegment.id).where(
+                        TranscriptSegment.transcription_run_id == latest.id
+                    )
                 ).all()
             )
         output.append(
@@ -895,14 +920,44 @@ def ensure_transcription_audio(
     if not output.is_file():
         temporary = output.with_suffix(".wav.tmp")
         command = [
-            "ffmpeg", "-nostdin", "-hide_banner", "-loglevel", "error", "-y",
-            "-i", str(source), "-vn", "-ac", "1", "-ar", "16000", "-c:a", "pcm_s16le", "-f", "wav", str(temporary),
+            "ffmpeg",
+            "-nostdin",
+            "-hide_banner",
+            "-loglevel",
+            "error",
+            "-y",
+            "-i",
+            str(source),
+            "-vn",
+            "-ac",
+            "1",
+            "-ar",
+            "16000",
+            "-c:a",
+            "pcm_s16le",
+            "-f",
+            "wav",
+            str(temporary),
         ]
         _run_ffmpeg(command)
         temporary.replace(output)
     command = [
-        "ffmpeg", "-nostdin", "-hide_banner", "-loglevel", "error", "-y",
-        "-i", str(source), "-vn", "-ac", "1", "-ar", "16000", "-c:a", "pcm_s16le", str(output),
+        "ffmpeg",
+        "-nostdin",
+        "-hide_banner",
+        "-loglevel",
+        "error",
+        "-y",
+        "-i",
+        str(source),
+        "-vn",
+        "-ac",
+        "1",
+        "-ar",
+        "16000",
+        "-c:a",
+        "pcm_s16le",
+        str(output),
     ]
     return _record_derivative(
         session,
@@ -979,15 +1034,44 @@ def ensure_playback_asset(
     if digital.media_type == MediaType.AUDIO.value:
         output = output_dir / f"playback_{digital.sha256[:16]}.mp3"
         command = [
-            "ffmpeg", "-nostdin", "-hide_banner", "-loglevel", "error", "-y", "-i", str(source),
-            "-vn", "-c:a", "libmp3lame", "-q:a", "3", str(output),
+            "ffmpeg",
+            "-nostdin",
+            "-hide_banner",
+            "-loglevel",
+            "error",
+            "-y",
+            "-i",
+            str(source),
+            "-vn",
+            "-c:a",
+            "libmp3lame",
+            "-q:a",
+            "3",
+            str(output),
         ]
         container_format, codec = "mp3", "mp3"
     else:
         output = output_dir / f"playback_{digital.sha256[:16]}.mp4"
         command = [
-            "ffmpeg", "-nostdin", "-hide_banner", "-loglevel", "error", "-y", "-i", str(source),
-            "-c:v", "libx264", "-preset", "veryfast", "-crf", "23", "-c:a", "aac", "-movflags", "+faststart", str(output),
+            "ffmpeg",
+            "-nostdin",
+            "-hide_banner",
+            "-loglevel",
+            "error",
+            "-y",
+            "-i",
+            str(source),
+            "-c:v",
+            "libx264",
+            "-preset",
+            "veryfast",
+            "-crf",
+            "23",
+            "-c:a",
+            "aac",
+            "-movflags",
+            "+faststart",
+            str(output),
         ]
         container_format, codec = "mp4", "h264+aac"
     if not output.is_file():
@@ -1065,7 +1149,9 @@ def transcribe_audiovisual(
             start = max(0.0, float(item.start_time))
             end = max(start, float(item.end_time))
             if start + 1e-6 < previous_end:
-                raise ValueError("El backend devolvió segmentos temporales solapados o desordenados")
+                raise ValueError(
+                    "El backend devolvió segmentos temporales solapados o desordenados"
+                )
             previous_end = end
             text = item.text.strip()
             segment = TranscriptSegment(
@@ -1150,7 +1236,6 @@ def transcript_segment_rows(session: Session, *, run_id: str) -> list[Transcript
         )
         for row in rows
     ]
-
 
 
 @dataclass(slots=True)
@@ -1358,6 +1443,7 @@ def update_transcript_document(
         review_status=review_status,
     )
 
+
 def update_transcript_segment(
     session: Session,
     *,
@@ -1427,7 +1513,9 @@ def create_segment_mention(
     text = mention_text.strip()
     if not text:
         raise ValueError("La mención no puede estar vacía")
-    current_text = segment.corrected_text if segment.corrected_text is not None else segment.original_text
+    current_text = (
+        segment.corrected_text if segment.corrected_text is not None else segment.original_text
+    )
     start = current_text.casefold().find(text.casefold())
     start_offset = start if start >= 0 else None
     end_offset = start + len(text) if start >= 0 else None
@@ -1652,9 +1740,7 @@ def assign_speaker_from_time(
     ).all()
     epsilon = 0.01
     future_starts = [
-        float(row.start_time)
-        for row in speakers
-        if float(row.start_time) > current + epsilon
+        float(row.start_time) for row in speakers if float(row.start_time) > current + epsilon
     ]
     next_boundary = min(future_starts) if future_starts else duration
     if next_boundary < current:
@@ -1775,9 +1861,7 @@ def assign_speaker_to_segment(
 
         if old_start < start - epsilon and old_end > end + epsilon:
             # El turno existente atraviesa todo el segmento: se conservan sus dos lados.
-            _update_timeline_annotation(
-                session, row=row, end_time=start, actor=actor
-            )
+            _update_timeline_annotation(session, row=row, end_time=start, actor=actor)
             create_timeline_annotation(
                 session,
                 media_id=media_id,
@@ -1790,14 +1874,10 @@ def assign_speaker_to_segment(
             )
         elif old_start < start - epsilon:
             # Se conserva sólo la parte anterior al segmento.
-            _update_timeline_annotation(
-                session, row=row, end_time=start, actor=actor
-            )
+            _update_timeline_annotation(session, row=row, end_time=start, actor=actor)
         elif old_end > end + epsilon:
             # Se conserva sólo la parte posterior al segmento.
-            _update_timeline_annotation(
-                session, row=row, start_time=end, actor=actor
-            )
+            _update_timeline_annotation(session, row=row, start_time=end, actor=actor)
         else:
             # La marca existente está enteramente dentro del segmento reemplazado.
             archive_timeline_annotation(session, annotation_id=row.id, actor=actor)
@@ -1822,7 +1902,9 @@ def timeline_annotation_rows(
 ) -> list[TimelineAnnotationRow]:
     statement = (
         select(AudiovisualTimelineAnnotation, AuthorityRecord.preferred_name)
-        .outerjoin(AuthorityRecord, AuthorityRecord.id == AudiovisualTimelineAnnotation.authority_id)
+        .outerjoin(
+            AuthorityRecord, AuthorityRecord.id == AudiovisualTimelineAnnotation.authority_id
+        )
         .where(AudiovisualTimelineAnnotation.audiovisual_media_id == media_id)
         .order_by(
             AudiovisualTimelineAnnotation.start_time,
@@ -2004,7 +2086,9 @@ def search_transcript_segments(
                 original_filename=digital.original_filename,
                 start_time=segment.start_time,
                 end_time=segment.end_time,
-                text=segment.corrected_text if segment.corrected_text is not None else segment.original_text,
+                text=segment.corrected_text
+                if segment.corrected_text is not None
+                else segment.original_text,
                 review_status=segment.review_status,
             )
         )
@@ -2066,7 +2150,8 @@ def _export_rows(
     options: AudiovisualExportOptions | None = None,
 ) -> list[dict[str, Any]]:
     selected_options = _validate_audiovisual_export_options(
-        options or AudiovisualExportOptions(
+        options
+        or AudiovisualExportOptions(
             run_scope="all_completed", include_review_statuses=REVIEW_STATUSES
         )
     )
@@ -2109,7 +2194,9 @@ def _export_rows(
         )
     ).all()
     media_ids = {media.id for _, _, media, _, _ in rows}
-    annotation_map: dict[str, list[TimelineAnnotationRow]] = {media_id: [] for media_id in media_ids}
+    annotation_map: dict[str, list[TimelineAnnotationRow]] = {
+        media_id: [] for media_id in media_ids
+    }
     if selected_options.include_timeline_annotations:
         for media_id in media_ids:
             annotation_map[media_id] = timeline_annotation_rows(session, media_id=media_id)
@@ -2191,18 +2278,47 @@ def _serialize_audiovisual_rows(rows: list[dict[str, Any]], output_format: str) 
         return payload.encode("utf-8")
     if output_format == "csv":
         buffer = io.StringIO(newline="")
-        fieldnames = list(rows[0]) if rows else [
-            "export_schema_version", "record_type", "project_id", "export_configuration",
-            "source_key", "source_type",
-            "source_origin", "platform", "platform_id", "source_url",
-            "source_access_conditions", "digital_object_id", "original_filename",
-            "original_sha256", "media_type", "media_id", "media_title",
-            "transcription_run_id", "transcription_run_created_at", "backend",
-            "backend_version", "model_name", "device", "language", "segment_id",
-            "segment_index", "start_time", "end_time", "text", "text_source",
-            "original_text", "corrected_text", "review_status", "revision_number",
-            "timeline_annotations",
-        ]
+        fieldnames = (
+            list(rows[0])
+            if rows
+            else [
+                "export_schema_version",
+                "record_type",
+                "project_id",
+                "export_configuration",
+                "source_key",
+                "source_type",
+                "source_origin",
+                "platform",
+                "platform_id",
+                "source_url",
+                "source_access_conditions",
+                "digital_object_id",
+                "original_filename",
+                "original_sha256",
+                "media_type",
+                "media_id",
+                "media_title",
+                "transcription_run_id",
+                "transcription_run_created_at",
+                "backend",
+                "backend_version",
+                "model_name",
+                "device",
+                "language",
+                "segment_id",
+                "segment_index",
+                "start_time",
+                "end_time",
+                "text",
+                "text_source",
+                "original_text",
+                "corrected_text",
+                "review_status",
+                "revision_number",
+                "timeline_annotations",
+            ]
+        )
         writer = csv.DictWriter(buffer, fieldnames=fieldnames)
         writer.writeheader()
         for row in rows:
@@ -2344,4 +2460,3 @@ def run_audiovisual_export(
         output_sha256=digest,
         corpus_state_sha256=state_digest,
     )
-

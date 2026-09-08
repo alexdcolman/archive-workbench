@@ -7,7 +7,6 @@ from pydantic import Field, model_validator
 from archive_workbench.contracts.common import ContractModel
 
 
-
 RegionSemanticRole = Literal[
     "body_text",
     "cover",
@@ -33,6 +32,7 @@ REGION_SEMANTIC_OBJECT_TYPES: dict[str, str] = {
     "illustration": "figure",
     "preprinted": "form_field",
 }
+
 
 class NormalizedRegionBox(ContractModel):
     x0: float = Field(ge=0, le=1)
@@ -144,6 +144,7 @@ class RegionExportRecord(ContractModel):
     status: str
     warning: str | None = None
     note: str | None = None
+
 
 class RegionExtractionManifest(ContractModel):
     schema_version: str = "1.0"

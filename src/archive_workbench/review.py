@@ -55,6 +55,7 @@ class ReviewPartRow:
     page_sequence: list[int]
     status: str
 
+
 @dataclass(slots=True)
 class ReviewObjectRow:
     object_id: str
@@ -113,7 +114,6 @@ def _registration(
     return row[0], row[1], row[2]
 
 
-
 def _source_preview_fallback(
     session: Session,
     *,
@@ -146,13 +146,7 @@ def _source_preview_fallback(
     if source is None:
         return None, None, None
 
-    cache = (
-        Path(project_root)
-        / ".cache"
-        / "review_previews"
-        / digital.id
-        / f"page_{page:04d}.png"
-    )
+    cache = Path(project_root) / ".cache" / "review_previews" / digital.id / f"page_{page:04d}.png"
     try:
         if cache.is_file() and cache.stat().st_mtime_ns >= source.stat().st_mtime_ns:
             with Image.open(cache) as image:
@@ -184,6 +178,7 @@ def _source_preview_fallback(
             return cache, width, height
     except (OSError, ValueError, RuntimeError, fitz.FileDataError):
         return None, None, None
+
 
 def review_document_rows(session: Session) -> list[ReviewDocumentRow]:
     rows = session.execute(
@@ -256,7 +251,9 @@ def review_page_view(
             ExtractionPageSelection.page_number == page,
         )
     )
-    is_stale = selection is None or selection.extraction_page_id != editable_page.source_extraction_page_id
+    is_stale = (
+        selection is None or selection.extraction_page_id != editable_page.source_extraction_page_id
+    )
 
     preprocessing = session.scalar(
         select(PreprocessingRun)
@@ -286,7 +283,11 @@ def review_page_view(
     editable_objects = session.scalars(
         query.order_by(EditableObject.current_order_index, EditableObject.id)
     ).all()
-    source_ids = [item.source_extracted_object_id for item in editable_objects if item.source_extracted_object_id]
+    source_ids = [
+        item.source_extracted_object_id
+        for item in editable_objects
+        if item.source_extracted_object_id
+    ]
     originals = {
         item.id: item.original_text
         for item in (

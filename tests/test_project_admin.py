@@ -21,7 +21,9 @@ def test_project_health_and_backup_are_verifiable(tmp_path: Path) -> None:
     root = tmp_path / "project"
     _seed_search_project(root)
     (root / "config").mkdir(parents=True, exist_ok=True)
-    (root / "config" / "decisions.yaml").write_text("project_id: search_project\n", encoding="utf-8")
+    (root / "config" / "decisions.yaml").write_text(
+        "project_id: search_project\n", encoding="utf-8"
+    )
     engine = create_sqlite_engine(database_path(root))
     try:
         with session_scope(engine) as session:
@@ -41,7 +43,9 @@ def test_restore_creates_safety_backup_and_restores_database(tmp_path: Path) -> 
     root = tmp_path / "project"
     _seed_search_project(root)
     (root / "config").mkdir(parents=True, exist_ok=True)
-    (root / "config" / "decisions.yaml").write_text("project_id: search_project\n", encoding="utf-8")
+    (root / "config" / "decisions.yaml").write_text(
+        "project_id: search_project\n", encoding="utf-8"
+    )
     backup = create_project_backup(project_root=root, created_by="tests")
 
     engine = create_sqlite_engine(database_path(root))
@@ -94,9 +98,7 @@ def test_project_health_can_dismiss_expected_missing_export_and_restore_it(
             )
         with session_scope(engine) as session:
             report = check_project_health(session, project_root=root)
-            issue = next(
-                item for item in report.issues if item.code == "missing_export_file"
-            )
+            issue = next(item for item in report.issues if item.code == "missing_export_file")
             assert issue.dismissible
             assert issue.subject_key == "missing-export"
 
@@ -107,13 +109,8 @@ def test_project_health_can_dismiss_expected_missing_export_and_restore_it(
         )
         with session_scope(engine) as session:
             dismissed_report = check_project_health(session, project_root=root)
-        assert not any(
-            item.code == "missing_export_file" for item in dismissed_report.issues
-        )
-        assert any(
-            item.code == "missing_export_file"
-            for item in dismissed_report.dismissed_issues
-        )
+        assert not any(item.code == "missing_export_file" for item in dismissed_report.issues)
+        assert any(item.code == "missing_export_file" for item in dismissed_report.dismissed_issues)
 
         backup = create_project_backup(
             project_root=root,
@@ -126,9 +123,7 @@ def test_project_health_can_dismiss_expected_missing_export_and_restore_it(
         restore_project_health_issue(project_root=root, issue=issue)
         with session_scope(engine) as session:
             restored_report = check_project_health(session, project_root=root)
-        assert any(
-            item.code == "missing_export_file" for item in restored_report.issues
-        )
+        assert any(item.code == "missing_export_file" for item in restored_report.issues)
     finally:
         engine.dispose()
 

@@ -205,9 +205,7 @@ def _render_health_issue(st, *, issue, project_root: Path, actor: str) -> None:
                 st.write(f"Detalle: `{issue.detail}`")
 
 
-def _render_dismissed_health_issues(
-    st, *, issues, project_root: Path
-) -> None:
+def _render_dismissed_health_issues(st, *, issues, project_root: Path) -> None:
     if not issues:
         return
     show = st.toggle(
@@ -275,9 +273,7 @@ def render_admin_view(st, *, project_root: Path, db_path: Path, actor: str) -> N
                 active_attention = [
                     issue for issue in report.issues if issue.severity in {"error", "warning"}
                 ]
-                information = [
-                    issue for issue in report.issues if issue.severity == "info"
-                ]
+                information = [issue for issue in report.issues if issue.severity == "info"]
                 if active_attention:
                     st.subheader("Problemas que requieren atención")
                     for issue in active_attention:
@@ -285,7 +281,9 @@ def render_admin_view(st, *, project_root: Path, db_path: Path, actor: str) -> N
                             st, issue=issue, project_root=project_root, actor=actor
                         )
                 else:
-                    st.success("No hay problemas activos que impidan continuar ni advertencias pendientes.")
+                    st.success(
+                        "No hay problemas activos que impidan continuar ni advertencias pendientes."
+                    )
 
                 if information:
                     show_info = st.toggle(
@@ -348,15 +346,24 @@ def render_admin_view(st, *, project_root: Path, db_path: Path, actor: str) -> N
                     if info.note:
                         st.write(info.note)
                     st.caption(f"SHA-256 ZIP: {info.backup_sha256}")
-                    if st.button("Volver a comprobar esta copia de seguridad", key=f"admin_verify_{info.backup_sha256}"):
+                    if st.button(
+                        "Volver a comprobar esta copia de seguridad",
+                        key=f"admin_verify_{info.backup_sha256}",
+                    ):
                         try:
                             verified = inspect_project_backup(info.path)
                         except (ValueError, OSError) as exc:
                             st.error(str(exc))
                         else:
-                            st.success("La copia de seguridad está íntegra y puede usarse para una recuperación.")
-                            with st.expander("Detalles técnicos de esta comprobación", expanded=False):
-                                st.write(f"Huella de la base incluida: `{verified.database_sha256}`")
+                            st.success(
+                                "La copia de seguridad está íntegra y puede usarse para una recuperación."
+                            )
+                            with st.expander(
+                                "Detalles técnicos de esta comprobación", expanded=False
+                            ):
+                                st.write(
+                                    f"Huella de la base incluida: `{verified.database_sha256}`"
+                                )
                                 st.write(
                                     f"Archivos de configuración incluidos: {verified.config_file_count}"
                                 )
@@ -372,7 +379,9 @@ def render_admin_view(st, *, project_root: Path, db_path: Path, actor: str) -> N
                 format_func=lambda row: f"{row.path.name} · {row.created_at}",
                 key="admin_recovery_backup",
             )
-            recovery_note = st.text_input("Nota opcional sobre esta prueba de recuperación", key="admin_recovery_note")
+            recovery_note = st.text_input(
+                "Nota opcional sobre esta prueba de recuperación", key="admin_recovery_note"
+            )
             if st.button("Ejecutar prueba de recuperación", type="primary"):
                 engine = create_sqlite_engine(db_path)
                 try:
@@ -408,7 +417,9 @@ def render_admin_view(st, *, project_root: Path, db_path: Path, actor: str) -> N
             with st.expander(
                 f"{icon} {row.backup_relative_path} · {row.tested_at.isoformat(timespec='minutes')}"
             ):
-                st.write(f"Estado de la prueba de recuperación: **{_RECOVERY_STATUS_LABELS.get(row.status, row.status)}**")
+                st.write(
+                    f"Estado de la prueba de recuperación: **{_RECOVERY_STATUS_LABELS.get(row.status, row.status)}**"
+                )
                 st.write(f"Prueba ejecutada por: `{row.tested_by}`")
                 st.write(
                     f"Revisión de la base: `{row.source_database_revision or '-'}` → "
@@ -481,9 +492,7 @@ def render_admin_view(st, *, project_root: Path, db_path: Path, actor: str) -> N
                 "Origen de la autorización",
                 options=[""] + list(filter_options.sources),
                 format_func=lambda value: (
-                    "Todos los orígenes"
-                    if not value
-                    else _ANALYSIS_SOURCE_LABELS.get(value, value)
+                    "Todos los orígenes" if not value else _ANALYSIS_SOURCE_LABELS.get(value, value)
                 ),
                 key="admin_analysis_source",
             )
@@ -492,9 +501,7 @@ def render_admin_view(st, *, project_root: Path, db_path: Path, actor: str) -> N
                 "Alcance de páginas",
                 options=[""] + list(filter_options.scope_keys),
                 format_func=lambda value: (
-                    "Todos los alcances"
-                    if not value
-                    else _ANALYSIS_SCOPE_LABELS.get(value, value)
+                    "Todos los alcances" if not value else _ANALYSIS_SCOPE_LABELS.get(value, value)
                 ),
                 key="admin_analysis_scope",
             )
@@ -525,7 +532,9 @@ def render_admin_view(st, *, project_root: Path, db_path: Path, actor: str) -> N
         if not analysis_rows:
             st.caption("No hay autorizaciones que coincidan con los filtros actuales.")
             return
-        st.caption(f"Mostrando {len(analysis_rows)} autorizaciones, de la más reciente a la más antigua.")
+        st.caption(
+            f"Mostrando {len(analysis_rows)} autorizaciones, de la más reciente a la más antigua."
+        )
         for row in analysis_rows:
             scope_label = quality_scope_caption(row.page_review_statuses)
             title = (
@@ -541,10 +550,7 @@ def render_admin_view(st, *, project_root: Path, db_path: Path, actor: str) -> N
                 if row.confirmation_reason:
                     st.write(f"Fundamento: {row.confirmation_reason}")
                 if row.target_type or row.target_id:
-                    st.write(
-                        "Destino: "
-                        f"`{row.target_type or '-'}` · `{row.target_id or '-'}`"
-                    )
+                    st.write(f"Destino: `{row.target_type or '-'}` · `{row.target_id or '-'}`")
                 with st.expander("Datos técnicos de esta autorización"):
                     st.code(
                         "\n".join(

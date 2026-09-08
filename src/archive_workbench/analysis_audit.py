@@ -51,18 +51,16 @@ def record_automatic_analysis_authorization(
     target_id: str | None = None,
     parameters: Mapping[str, Any] | None = None,
 ) -> AutomaticAnalysisAuthorization:
-    values: AutomaticAnalysisAuthorizationValues = (
-        validate_automatic_analysis_authorization(
-            analysis_kind=analysis_kind,
-            page_review_statuses=page_review_statuses,
-            broader_scope_confirmed=broader_scope_confirmed,
-            confirmed_by=confirmed_by,
-            confirmation_reason=confirmation_reason,
-            source=source,
-            target_type=target_type,
-            target_id=target_id,
-            parameters=parameters,
-        )
+    values: AutomaticAnalysisAuthorizationValues = validate_automatic_analysis_authorization(
+        analysis_kind=analysis_kind,
+        page_review_statuses=page_review_statuses,
+        broader_scope_confirmed=broader_scope_confirmed,
+        confirmed_by=confirmed_by,
+        confirmation_reason=confirmation_reason,
+        source=source,
+        target_type=target_type,
+        target_id=target_id,
+        parameters=parameters,
     )
     scope = analysis_quality_scope(values.page_review_statuses)
     row = AutomaticAnalysisAuthorization(
@@ -162,19 +160,13 @@ def automatic_analysis_authorization_rows(
         AutomaticAnalysisAuthorization.project_id == project_id
     )
     if analysis_kind:
-        statement = statement.where(
-            AutomaticAnalysisAuthorization.analysis_kind == analysis_kind
-        )
+        statement = statement.where(AutomaticAnalysisAuthorization.analysis_kind == analysis_kind)
     if confirmed_by:
-        statement = statement.where(
-            AutomaticAnalysisAuthorization.confirmed_by == confirmed_by
-        )
+        statement = statement.where(AutomaticAnalysisAuthorization.confirmed_by == confirmed_by)
     if source:
         statement = statement.where(AutomaticAnalysisAuthorization.source == source)
     if scope_key:
-        statement = statement.where(
-            AutomaticAnalysisAuthorization.scope_key == scope_key
-        )
+        statement = statement.where(AutomaticAnalysisAuthorization.scope_key == scope_key)
     clean_query = " ".join((query or "").split()).lower()
     if clean_query:
         pattern = f"%{clean_query}%"
@@ -215,6 +207,7 @@ def automatic_analysis_authorization_rows(
         )
     return result
 
+
 def require_automatic_analysis_authorization(
     session: Session,
     *,
@@ -240,8 +233,7 @@ def require_automatic_analysis_authorization(
         select(AutomaticAnalysisAuthorization)
         .where(
             AutomaticAnalysisAuthorization.project_id == project_id,
-            AutomaticAnalysisAuthorization.policy_version
-            == ANALYSIS_QUALITY_POLICY_VERSION,
+            AutomaticAnalysisAuthorization.policy_version == ANALYSIS_QUALITY_POLICY_VERSION,
             AutomaticAnalysisAuthorization.analysis_kind == analysis_kind,
             AutomaticAnalysisAuthorization.target_type == target_type,
             AutomaticAnalysisAuthorization.target_id == target_id,

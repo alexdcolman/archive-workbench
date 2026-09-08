@@ -89,9 +89,7 @@ class _CheckboxHtmlParser(HTMLParser):
             state = "unmarked"
         self._pending = {
             "state": state,
-            "label": (
-                str(values.get("aria-label") or values.get("value") or "").strip() or None
-            ),
+            "label": (str(values.get("aria-label") or values.get("value") or "").strip() or None),
             "marker": f"<{input_type or 'input'}>",
         }
 
@@ -122,9 +120,7 @@ def _view(item: Any) -> _ObjectView:
         source_label = attributes.get("source_label")
     return _ObjectView(
         object_id=str(getattr(item, "id", getattr(item, "object_id", ""))),
-        order_index=int(
-            getattr(item, "current_order_index", getattr(item, "order_index", 0))
-        ),
+        order_index=int(getattr(item, "current_order_index", getattr(item, "order_index", 0))),
         object_type=str(
             getattr(
                 item,
@@ -358,8 +354,7 @@ def checkbox_candidates(objects: Iterable[Any], *, page_number: int) -> list[dic
             continue
         box = boxes.get(item.object_id)
         source_is_form = (
-            item.object_type == "form_field"
-            or (item.source_label or "").casefold() == "form"
+            item.object_type == "form_field" or (item.source_label or "").casefold() == "form"
         )
         marker_is_unambiguous = text not in {"x", "X", "×"}
         marker_is_small = bool(
@@ -399,9 +394,7 @@ def structural_quality_metrics(objects: Iterable[Any], *, page_number: int) -> d
         "checkbox_candidates": checkboxes,
         "checkbox_candidate_count": len(checkboxes),
         "checkbox_marked_count": sum(item["state"] == "marked" for item in checkboxes),
-        "checkbox_unmarked_count": sum(
-            item["state"] == "unmarked" for item in checkboxes
-        ),
+        "checkbox_unmarked_count": sum(item["state"] == "unmarked" for item in checkboxes),
         "checkbox_indeterminate_count": sum(
             item["state"] == "indeterminate" for item in checkboxes
         ),

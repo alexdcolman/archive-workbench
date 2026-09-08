@@ -55,6 +55,7 @@ def current_revision(project_root: str | Path) -> str | None:
     finally:
         engine.dispose()
 
+
 class DatabaseRevisionError(ValueError):
     """La base no está lista para operar con la versión instalada."""
 
@@ -62,9 +63,7 @@ class DatabaseRevisionError(ValueError):
 def head_revision() -> str:
     migrations_ref = files("archive_workbench").joinpath("migrations")
     with as_file(migrations_ref) as migrations_path:
-        script = ScriptDirectory.from_config(
-            _new_config(Path(":memory:"), migrations_path)
-        )
+        script = ScriptDirectory.from_config(_new_config(Path(":memory:"), migrations_path))
         head = script.get_current_head()
     if head is None:
         raise RuntimeError("No se pudo determinar la revisión actual de la aplicación")

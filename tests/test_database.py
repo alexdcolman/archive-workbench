@@ -128,7 +128,9 @@ def test_scan_detects_modified_file(tmp_path: Path) -> None:
     assert summary.modified == 1
 
 
-def test_quality_and_page_selection_migrations_upgrade_existing_0003_database(tmp_path: Path) -> None:
+def test_quality_and_page_selection_migrations_upgrade_existing_0003_database(
+    tmp_path: Path,
+) -> None:
     from sqlalchemy import inspect
 
     root = tmp_path / "project"
@@ -140,9 +142,7 @@ def test_quality_and_page_selection_migrations_upgrade_existing_0003_database(tm
     try:
         inspector = inspect(engine)
         columns = {item["name"] for item in inspector.get_columns("extraction_runs")}
-        editable_page_columns = {
-            item["name"] for item in inspector.get_columns("editable_pages")
-        }
+        editable_page_columns = {item["name"] for item in inspector.get_columns("editable_pages")}
         editable_object_columns = {
             item["name"] for item in inspector.get_columns("editable_objects")
         }
@@ -208,8 +208,12 @@ def test_temporal_migration_upgrades_existing_031_database(tmp_path: Path) -> No
     finally:
         engine.dispose()
     expected = {
-        "temporal_expression", "temporal_start", "temporal_end",
-        "temporal_precision", "temporal_approximate", "temporal_note",
+        "temporal_expression",
+        "temporal_start",
+        "temporal_end",
+        "temporal_precision",
+        "temporal_approximate",
+        "temporal_note",
     }
     assert expected.issubset(authority_columns)
     assert expected.issubset(relation_columns)
@@ -228,9 +232,7 @@ def test_operational_readiness_migration_upgrades_existing_032_database(tmp_path
     try:
         inspector = inspect(engine)
         tables = set(inspector.get_table_names())
-        columns = {
-            row["name"] for row in inspector.get_columns("project_recovery_checks")
-        }
+        columns = {row["name"] for row in inspector.get_columns("project_recovery_checks")}
     finally:
         engine.dispose()
     assert "project_recovery_checks" in tables
@@ -477,9 +479,7 @@ def test_temporal_migration_preserves_authority_mentions_and_relations(tmp_path:
                 (relation_id,),
             ).one()
             counts = {
-                table: connection.exec_driver_sql(
-                    f"SELECT COUNT(*) FROM {table}"
-                ).scalar_one()
+                table: connection.exec_driver_sql(f"SELECT COUNT(*) FROM {table}").scalar_one()
                 for table in (
                     "authority_records",
                     "authority_aliases",
@@ -490,9 +490,7 @@ def test_temporal_migration_preserves_authority_mentions_and_relations(tmp_path:
                     "entity_relation_revisions",
                 )
             }
-            foreign_key_errors = connection.exec_driver_sql(
-                "PRAGMA foreign_key_check"
-            ).all()
+            foreign_key_errors = connection.exec_driver_sql("PRAGMA foreign_key_check").all()
     finally:
         engine.dispose()
 
@@ -519,30 +517,23 @@ def test_candidate_history_migration_preserves_populated_0331_database(tmp_path:
     from sqlalchemy import select, text
 
     from archive_workbench.db.models import (
-        DigitalObject,
         EditableObject,
         EditablePage,
         EditablePageRevision,
-        ExtractionPage,
         ExtractionPageSelection,
         ExtractionPageSelectionRevision,
-        ExtractionRun,
     )
     from archive_workbench.identity import new_id
     from tests.test_search import _seed_search_project
 
     root = tmp_path / "project"
-    object_id, page_id = _seed_search_project(
-        root, revision="0028_operational_readiness"
-    )
+    object_id, page_id = _seed_search_project(root, revision="0028_operational_readiness")
     engine = create_sqlite_engine(database_path(root))
     try:
         with session_scope(engine) as session:
             digital_id = session.scalar(text("SELECT id FROM digital_objects LIMIT 1"))
             run_id = session.scalar(text("SELECT id FROM extraction_runs LIMIT 1"))
-            extraction_page_id = session.scalar(
-                text("SELECT id FROM extraction_pages LIMIT 1")
-            )
+            extraction_page_id = session.scalar(text("SELECT id FROM extraction_pages LIMIT 1"))
             assert digital_id and run_id and extraction_page_id
             selection_id = new_id()
             session.execute(
@@ -586,9 +577,7 @@ def test_candidate_history_migration_preserves_populated_0331_database(tmp_path:
             assert obj is not None and obj.editable_page_id == page_id
             assert selection is not None
             page_revision = session.scalar(
-                select(EditablePageRevision).where(
-                    EditablePageRevision.editable_page_id == page_id
-                )
+                select(EditablePageRevision).where(EditablePageRevision.editable_page_id == page_id)
             )
             selection_revision = session.scalar(
                 select(ExtractionPageSelectionRevision).where(
@@ -740,15 +729,9 @@ def test_export_exchange_lifecycle_migration_upgrades_existing_0032_database(
         profile_columns = {
             row["name"]: row for row in inspector.get_columns("corpus_export_profiles")
         }
-        dry_run_columns = {
-            row["name"]: row for row in inspector.get_columns("exchange_dry_runs")
-        }
-        profile_indexes = {
-            row["name"] for row in inspector.get_indexes("corpus_export_profiles")
-        }
-        dry_run_indexes = {
-            row["name"] for row in inspector.get_indexes("exchange_dry_runs")
-        }
+        dry_run_columns = {row["name"]: row for row in inspector.get_columns("exchange_dry_runs")}
+        profile_indexes = {row["name"] for row in inspector.get_indexes("corpus_export_profiles")}
+        dry_run_indexes = {row["name"] for row in inspector.get_indexes("exchange_dry_runs")}
         with engine.connect() as connection:
             profile_row = connection.exec_driver_sql(
                 "SELECT name, lifecycle_status FROM corpus_export_profiles "
@@ -761,9 +744,7 @@ def test_export_exchange_lifecycle_migration_upgrades_existing_0032_database(
     finally:
         engine.dispose()
 
-    assert {"lifecycle_status", "archived_by", "archived_at"} <= set(
-        profile_columns
-    )
+    assert {"lifecycle_status", "archived_by", "archived_at"} <= set(profile_columns)
     assert {
         "lifecycle_status",
         "archived_by",
@@ -829,8 +810,7 @@ def test_analysis_authorization_migration_upgrades_existing_0033_database(
         inspector = inspect(engine)
         assert "automatic_analysis_authorizations" in inspector.get_table_names()
         columns = {
-            row["name"]: row
-            for row in inspector.get_columns("automatic_analysis_authorizations")
+            row["name"]: row for row in inspector.get_columns("automatic_analysis_authorizations")
         }
         assert {
             "id",
@@ -959,9 +939,7 @@ def test_lineage_recovery_migration_upgrades_existing_0034_database(
             "exchange_lineage_evidence",
             "exchange_lineage_decisions",
         } <= tables
-        dry_columns = {
-            row["name"]: row for row in inspector.get_columns("exchange_dry_runs")
-        }
+        dry_columns = {row["name"]: row for row in inspector.get_columns("exchange_dry_runs")}
         assert "base_match_method" in dry_columns
         assert dry_columns["base_match_method"]["nullable"] is False
         with engine.connect() as connection:
@@ -972,9 +950,7 @@ def test_lineage_recovery_migration_upgrades_existing_0034_database(
                 """
             ).one()
             counts = {
-                table: connection.exec_driver_sql(
-                    f'SELECT COUNT(*) FROM "{table}"'
-                ).scalar_one()
+                table: connection.exec_driver_sql(f'SELECT COUNT(*) FROM "{table}"').scalar_one()
                 for table in (
                     "exchange_lineage_cases",
                     "exchange_lineage_evidence",
@@ -1008,10 +984,7 @@ def test_common_base_migration_upgrades_existing_0035_database(tmp_path: Path) -
     try:
         inspector = inspect(engine)
         tables = set(inspector.get_table_names())
-        columns = {
-            row["name"]
-            for row in inspector.get_columns("exchange_common_base_agreements")
-        }
+        columns = {row["name"] for row in inspector.get_columns("exchange_common_base_agreements")}
     finally:
         engine.dispose()
     assert "exchange_common_base_agreements" in tables
@@ -1047,8 +1020,7 @@ def test_state_adoption_migration_upgrades_existing_0036_database(
             row["name"] for row in inspector.get_columns("exchange_state_adoptions")
         }
         rollback_columns = {
-            row["name"]
-            for row in inspector.get_columns("exchange_state_adoption_rollbacks")
+            row["name"] for row in inspector.get_columns("exchange_state_adoption_rollbacks")
         }
         with engine.connect() as connection:
             integrity = connection.execute(text("PRAGMA integrity_check")).scalar_one()
@@ -1093,18 +1065,12 @@ def test_open_discovery_migration_upgrades_existing_0037_database(tmp_path: Path
     try:
         inspector = inspect(engine)
         tables = set(inspector.get_table_names())
-        profile_columns = {
-            row["name"] for row in inspector.get_columns("discovery_profiles")
-        }
+        profile_columns = {row["name"] for row in inspector.get_columns("discovery_profiles")}
         run_columns = {row["name"] for row in inspector.get_columns("discovery_runs")}
-        candidate_columns = {
-            row["name"] for row in inspector.get_columns("discovery_candidates")
-        }
+        candidate_columns = {row["name"] for row in inspector.get_columns("discovery_candidates")}
         with engine.connect() as connection:
             counts = {
-                table: connection.exec_driver_sql(
-                    f'SELECT COUNT(*) FROM "{table}"'
-                ).scalar_one()
+                table: connection.exec_driver_sql(f'SELECT COUNT(*) FROM "{table}"').scalar_one()
                 for table in (
                     "discovery_profiles",
                     "discovery_runs",
@@ -1167,18 +1133,13 @@ def test_discovery_decisions_migration_upgrades_existing_0038_database(
     try:
         inspector = inspect(engine)
         tables = set(inspector.get_table_names())
-        decision_columns = {
-            row["name"] for row in inspector.get_columns("discovery_decisions")
-        }
+        decision_columns = {row["name"] for row in inspector.get_columns("discovery_decisions")}
         context_columns = {
-            row["name"]
-            for row in inspector.get_columns("discovery_context_records")
+            row["name"] for row in inspector.get_columns("discovery_context_records")
         }
         with engine.connect() as connection:
             counts = {
-                table: connection.exec_driver_sql(
-                    f'SELECT COUNT(*) FROM "{table}"'
-                ).scalar_one()
+                table: connection.exec_driver_sql(f'SELECT COUNT(*) FROM "{table}"').scalar_one()
                 for table in (
                     "discovery_decisions",
                     "discovery_context_records",
@@ -1240,9 +1201,7 @@ def test_discovery_grouping_continuity_migration_upgrades_existing_0039_database
         tables = set(inspector.get_table_names())
         with engine.connect() as connection:
             counts = {
-                table: connection.exec_driver_sql(
-                    f'SELECT COUNT(*) FROM "{table}"'
-                ).scalar_one()
+                table: connection.exec_driver_sql(f'SELECT COUNT(*) FROM "{table}"').scalar_one()
                 for table in (
                     "discovery_candidate_groups",
                     "discovery_group_memberships",
@@ -1501,9 +1460,7 @@ def test_preprocessing_geometry_migration_preserves_existing_derivative_assets(
     assert current_revision(root) == "0047_authority_relation_profiles"
     engine = create_sqlite_engine(database_path(root))
     try:
-        columns = {
-            item["name"] for item in inspect(engine).get_columns("derivative_assets")
-        }
+        columns = {item["name"] for item in inspect(engine).get_columns("derivative_assets")}
         with engine.connect() as connection:
             row = connection.execute(
                 text(
@@ -1625,12 +1582,9 @@ def test_form_structure_migration_preserves_editable_pages_and_revision_history(
     engine = create_sqlite_engine(database_path(root))
     try:
         inspector = inspect(engine)
-        page_columns = {
-            item["name"] for item in inspector.get_columns("editable_pages")
-        }
+        page_columns = {item["name"] for item in inspector.get_columns("editable_pages")}
         revision_columns = {
-            item["name"]
-            for item in inspector.get_columns("editable_page_revisions")
+            item["name"] for item in inspector.get_columns("editable_page_revisions")
         }
         triggers = {
             row[0]
@@ -1774,9 +1728,7 @@ def test_layout_structure_migration_preserves_pages_and_adds_exchange_trigger(
     try:
         inspector = inspect(engine)
         page_columns = {row["name"] for row in inspector.get_columns("editable_pages")}
-        revision_columns = {
-            row["name"] for row in inspector.get_columns("editable_page_revisions")
-        }
+        revision_columns = {row["name"] for row in inspector.get_columns("editable_page_revisions")}
         with engine.connect() as connection:
             page_value = connection.execute(
                 text(
@@ -1822,8 +1774,12 @@ def test_authority_relation_profile_migration_adds_nullable_json_columns(tmp_pat
     engine = create_sqlite_engine(database_path(root))
     try:
         inspector = inspect(engine)
-        authority_columns = {item["name"]: item for item in inspector.get_columns("authority_records")}
-        relation_columns = {item["name"]: item for item in inspector.get_columns("entity_relations")}
+        authority_columns = {
+            item["name"]: item for item in inspector.get_columns("authority_records")
+        }
+        relation_columns = {
+            item["name"]: item for item in inspector.get_columns("entity_relations")
+        }
     finally:
         engine.dispose()
 
@@ -1855,8 +1811,7 @@ def test_upgrade_database_serializes_concurrent_alembic_calls(tmp_path: Path, mo
     monkeypatch.setattr(migration_module.command, "upgrade", fake_upgrade)
     roots = [tmp_path / "one", tmp_path / "two"]
     threads = [
-        threading.Thread(target=migration_module.upgrade_database, args=(root,))
-        for root in roots
+        threading.Thread(target=migration_module.upgrade_database, args=(root,)) for root in roots
     ]
     for thread in threads:
         thread.start()

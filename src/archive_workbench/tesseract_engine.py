@@ -260,8 +260,7 @@ def normalize_tesseract_result(
 
     if granularity == "line":
         groups: list[tuple[tuple[int, int, int], list[TesseractLine]]] = [
-            ((line.block_num, line.paragraph_num, line.line_num), [line])
-            for line in result.lines
+            ((line.block_num, line.paragraph_num, line.line_num), [line]) for line in result.lines
         ]
     else:
         grouped: OrderedDict[tuple[int, int, int], list[TesseractLine]] = OrderedDict()
@@ -340,9 +339,7 @@ def text_quality_metrics(text: str, lines: list[TesseractLine]) -> dict[str, flo
         if confidences
         else None
     )
-    alphanumeric_ratio = (
-        sum(char.isalnum() for char in visible) / len(visible) if visible else 0.0
-    )
+    alphanumeric_ratio = sum(char.isalnum() for char in visible) / len(visible) if visible else 0.0
     suspicious = sum(
         not (char.isalnum() or char in ".,;:!?¿¡'\"()[]{}-/°ºª%+&@#") for char in visible
     )
@@ -376,7 +373,9 @@ def write_tesseract_raw(result: TesseractPageResult, raw_dir: Path) -> tuple[Pat
     json_path = raw_dir / f"{stem}.json"
     tsv_path = raw_dir / f"{stem}.tsv"
     text_path = raw_dir / f"{stem}.txt"
-    json_path.write_text(json.dumps(result_to_json(result), ensure_ascii=False, indent=2), encoding="utf-8")
+    json_path.write_text(
+        json.dumps(result_to_json(result), ensure_ascii=False, indent=2), encoding="utf-8"
+    )
     tsv_path.write_text(result.tsv_text, encoding="utf-8")
     text_path.write_text(result.full_text, encoding="utf-8")
     return json_path, tsv_path, text_path

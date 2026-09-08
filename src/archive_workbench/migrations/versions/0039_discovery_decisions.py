@@ -4,6 +4,7 @@ Revision ID: 0039_discovery_decisions
 Revises: 0038_open_discovery
 Create Date: 2026-08-03
 """
+
 from __future__ import annotations
 
 import sqlalchemy as sa
@@ -36,9 +37,7 @@ def upgrade() -> None:
         sa.Column("decided_by", sa.String(length=200), nullable=False),
         sa.Column("decided_at", sa.DateTime(timezone=True), nullable=False),
         sa.ForeignKeyConstraint(["project_id"], ["projects.id"], ondelete="CASCADE"),
-        sa.ForeignKeyConstraint(
-            ["candidate_id"], ["discovery_candidates.id"], ondelete="CASCADE"
-        ),
+        sa.ForeignKeyConstraint(["candidate_id"], ["discovery_candidates.id"], ondelete="CASCADE"),
         sa.ForeignKeyConstraint(
             ["target_authority_id"], ["authority_records.id"], ondelete="SET NULL"
         ),
@@ -46,9 +45,7 @@ def upgrade() -> None:
             ["created_mention_id"], ["entity_mentions.id"], ondelete="SET NULL"
         ),
         sa.PrimaryKeyConstraint("id"),
-        sa.UniqueConstraint(
-            "candidate_id", "decision_number", name="uq_discovery_decision_number"
-        ),
+        sa.UniqueConstraint("candidate_id", "decision_number", name="uq_discovery_decision_number"),
     )
     op.create_index(
         "ix_discovery_decisions_project_decided",
@@ -92,24 +89,14 @@ def upgrade() -> None:
         sa.Column("created_by", sa.String(length=200), nullable=False),
         sa.Column("created_at", sa.DateTime(timezone=True), nullable=False),
         sa.ForeignKeyConstraint(["project_id"], ["projects.id"], ondelete="CASCADE"),
-        sa.ForeignKeyConstraint(
-            ["candidate_id"], ["discovery_candidates.id"], ondelete="RESTRICT"
-        ),
-        sa.ForeignKeyConstraint(
-            ["decision_id"], ["discovery_decisions.id"], ondelete="CASCADE"
-        ),
+        sa.ForeignKeyConstraint(["candidate_id"], ["discovery_candidates.id"], ondelete="RESTRICT"),
+        sa.ForeignKeyConstraint(["decision_id"], ["discovery_decisions.id"], ondelete="CASCADE"),
         sa.ForeignKeyConstraint(
             ["editable_object_id"], ["editable_objects.id"], ondelete="RESTRICT"
         ),
-        sa.ForeignKeyConstraint(
-            ["editable_page_id"], ["editable_pages.id"], ondelete="RESTRICT"
-        ),
-        sa.ForeignKeyConstraint(
-            ["digital_object_id"], ["digital_objects.id"], ondelete="RESTRICT"
-        ),
-        sa.ForeignKeyConstraint(
-            ["document_part_id"], ["document_parts.id"], ondelete="SET NULL"
-        ),
+        sa.ForeignKeyConstraint(["editable_page_id"], ["editable_pages.id"], ondelete="RESTRICT"),
+        sa.ForeignKeyConstraint(["digital_object_id"], ["digital_objects.id"], ondelete="RESTRICT"),
+        sa.ForeignKeyConstraint(["document_part_id"], ["document_parts.id"], ondelete="SET NULL"),
         sa.ForeignKeyConstraint(
             ["target_authority_id"], ["authority_records.id"], ondelete="SET NULL"
         ),
@@ -140,10 +127,6 @@ def downgrade() -> None:
         table_name="discovery_context_records",
     )
     op.drop_table("discovery_context_records")
-    op.drop_index(
-        "ix_discovery_decisions_candidate", table_name="discovery_decisions"
-    )
-    op.drop_index(
-        "ix_discovery_decisions_project_decided", table_name="discovery_decisions"
-    )
+    op.drop_index("ix_discovery_decisions_candidate", table_name="discovery_decisions")
+    op.drop_index("ix_discovery_decisions_project_decided", table_name="discovery_decisions")
     op.drop_table("discovery_decisions")

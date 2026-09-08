@@ -101,7 +101,9 @@ def _column_example(key: str, decisions: ProjectDecisions) -> str:
         return _BASE_EXAMPLES[key]
     if key.startswith("field:"):
         field_key = key.split(":", 1)[1]
-        definition = next((item for item in decisions.descriptive_fields if item.key == field_key), None)
+        definition = next(
+            (item for item in decisions.descriptive_fields if item.key == field_key), None
+        )
         if definition and definition.examples:
             return "; ".join(definition.examples)
         return "Ejemplo no configurado para este proyecto"
@@ -306,7 +308,9 @@ def _set_widths(sheet, widths: dict[int, float], default: float = 18) -> None:
         sheet.column_dimensions[get_column_letter(index)].width = widths.get(index, default)
 
 
-def _add_catalog_validations(sheet, headers: dict[str, int], lists_sheet, max_row: int = 5000) -> None:
+def _add_catalog_validations(
+    sheet, headers: dict[str, int], lists_sheet, max_row: int = 5000
+) -> None:
     formulas = {
         "action": "=LISTAS!$B$2:$B$5",
         "level_key": f"=LISTAS!$A$2:$A${max(2, lists_sheet.max_row)}",
@@ -382,7 +386,9 @@ def export_catalog_template_bytes(
         instructions.cell(row=row_index, column=1, value=key)
         instructions.cell(row=row_index, column=2, value=value)
         instructions.cell(row=row_index, column=1).font = Font(bold=True)
-        instructions.cell(row=row_index, column=2).alignment = Alignment(wrap_text=True, vertical="top")
+        instructions.cell(row=row_index, column=2).alignment = Alignment(
+            wrap_text=True, vertical="top"
+        )
 
     start = 14
     instructions.cell(row=start, column=1, value="Cómo completar la plantilla")
@@ -409,7 +415,9 @@ def export_catalog_template_bytes(
     _style_header(instructions, dictionary_row)
     dictionary_entries: list[tuple[str, str, str, str, str]] = []
     for key, label, description in _BASE_COLUMNS + tuple(_field_columns(decisions)):
-        dictionary_entries.append(("CATALOGO", label, key, description, _column_example(key, decisions)))
+        dictionary_entries.append(
+            ("CATALOGO", label, key, description, _column_example(key, decisions))
+        )
     dictionary_entries.extend(
         [
             (
@@ -453,7 +461,8 @@ def export_catalog_template_bytes(
     _style_header(structure, 1)
     override_map = structure_parent_overrides or {}
     levels = sorted(
-        [item for item in decisions.archival_levels if item.enabled], key=lambda item: item.display_order
+        [item for item in decisions.archival_levels if item.enabled],
+        key=lambda item: item.display_order,
     )
     for row_index, level in enumerate(levels, start=2):
         template_parents = tuple(override_map.get(level.key, level.parent_keys))
@@ -478,7 +487,13 @@ def export_catalog_template_bytes(
     _set_widths(structure, {1: 20, 2: 24, 3: 24, 4: 10, 5: 36, 6: 42, 7: 30, 8: 12, 9: 12})
 
     lists.append(["Niveles", "Acciones", "Estados de registro", "Booleanos", "Estados de campo"])
-    max_list_rows = max(len(levels), len(TEMPLATE_ACTIONS), len(REGISTRATION_STATUSES), len(BOOLEAN_VALUES), len(FIELD_STATES))
+    max_list_rows = max(
+        len(levels),
+        len(TEMPLATE_ACTIONS),
+        len(REGISTRATION_STATUSES),
+        len(BOOLEAN_VALUES),
+        len(FIELD_STATES),
+    )
     for index in range(max_list_rows):
         lists.append(
             [
@@ -537,7 +552,11 @@ def export_catalog_template_bytes(
                 if not definition.enabled or definition.key == "reference_code":
                     continue
                 values = by_key.get(definition.key, [])
-                provided = [str(item.value) for item in values if item.value_state == "provided" and item.value is not None]
+                provided = [
+                    str(item.value)
+                    for item in values
+                    if item.value_state == "provided" and item.value is not None
+                ]
                 state = values[0].value_state if values else "pending"
                 note = next((item.source_note for item in values if item.source_note), "")
                 payload[f"field:{definition.key}"] = "\n".join(provided)
@@ -560,13 +579,17 @@ def export_catalog_template_bytes(
     catalog.conditional_formatting.add(
         f"{title_column}2:{title_column}5000",
         FormulaRule(
-            formula=[f'LEN(TRIM({title_column}2))=0'],
+            formula=[f"LEN(TRIM({title_column}2))=0"],
             fill=PatternFill("solid", fgColor="F4CCCC"),
         ),
     )
     widths: dict[int, float] = {}
     for key, column in header_map.items():
-        if key in {"title", "source_note"} or key.startswith("field:") or key.startswith("field_note:"):
+        if (
+            key in {"title", "source_note"}
+            or key.startswith("field:")
+            or key.startswith("field_note:")
+        ):
             widths[column] = 32
         elif key in {"source_url", "reference_code", "parent_local_id", "local_id"}:
             widths[column] = 24
@@ -619,7 +642,9 @@ def _metadata_from_sheet(sheet) -> dict[str, str]:
     return result
 
 
-def _parse_template(source: Path | bytes | bytearray | BinaryIO, decisions: ProjectDecisions) -> _ParsedTemplate:
+def _parse_template(
+    source: Path | bytes | bytearray | BinaryIO, decisions: ProjectDecisions
+) -> _ParsedTemplate:
     issues: list[CatalogTemplateIssue] = []
     try:
         workbook = _load_source(source)
@@ -719,7 +744,11 @@ def _parse_template(source: Path | bytes | bytearray | BinaryIO, decisions: Proj
             issues,
         )
 
-    field_map = {item.key: item for item in decisions.descriptive_fields if item.enabled and item.key != "reference_code"}
+    field_map = {
+        item.key: item
+        for item in decisions.descriptive_fields
+        if item.enabled and item.key != "reference_code"
+    }
     rows: list[CatalogTemplateRow] = []
     for row_number in range(2, catalog_sheet.max_row + 1):
         raw = {
@@ -1203,7 +1232,9 @@ def _normalized_existing_fields(session: Session, unit_id: str) -> dict[str, dic
     return result
 
 
-def _applicable_payload(row: CatalogTemplateRow, decisions: ProjectDecisions) -> dict[str, dict[str, Any]]:
+def _applicable_payload(
+    row: CatalogTemplateRow, decisions: ProjectDecisions
+) -> dict[str, dict[str, Any]]:
     definitions = {
         item.key: item
         for item in decisions.descriptive_fields
@@ -1213,7 +1244,10 @@ def _applicable_payload(row: CatalogTemplateRow, decisions: ProjectDecisions) ->
         key: payload
         for key, payload in row.field_values.items()
         if key in definitions
-        and ("all" in definitions[key].applies_to_levels or row.level_key in definitions[key].applies_to_levels)
+        and (
+            "all" in definitions[key].applies_to_levels
+            or row.level_key in definitions[key].applies_to_levels
+        )
     }
 
 
@@ -1224,7 +1258,9 @@ def _fields_equal(left: dict[str, dict[str, Any]], right: dict[str, dict[str, An
         b = right.get(key, {"state": "pending", "values": [], "source_note": None})
         if a.get("state", "pending") != b.get("state", "pending"):
             return False
-        if [str(item) for item in a.get("values", [])] != [str(item) for item in b.get("values", [])]:
+        if [str(item) for item in a.get("values", [])] != [
+            str(item) for item in b.get("values", [])
+        ]:
             return False
         if (a.get("source_note") or None) != (b.get("source_note") or None):
             return False
@@ -1250,11 +1286,7 @@ def apply_catalog_template(
 
     actor = changed_by.strip() or "local_user"
     ensure_project(session, decisions)
-    local_to_unit_id = {
-        row.local_id: row.unit_id
-        for row in report.rows
-        if row.unit_id
-    }
+    local_to_unit_id = {row.local_id: row.unit_id for row in report.rows if row.unit_id}
     created = updated = moved = unchanged = skipped = 0
     pending = [row for row in report.rows if _effective_action(row) != "omitir"]
     skipped = sum(_effective_action(row) == "omitir" for row in report.rows)
@@ -1289,11 +1321,7 @@ def apply_catalog_template(
                 )
                 local_to_unit_id[row.local_id] = unit.id
                 created += 1
-                if (
-                    payload
-                    or row.registration_status != "incomplete"
-                    or row.completion_confirmed
-                ):
+                if payload or row.registration_status != "incomplete" or row.completion_confirmed:
                     update_archival_unit(
                         session,
                         decisions=decisions,
@@ -1309,7 +1337,9 @@ def apply_catalog_template(
             else:
                 unit = session.get(ArchivalUnit, row.unit_id)
                 if unit is None:
-                    raise ValueError(f"La unidad {row.unit_id} dejó de existir durante la importación.")
+                    raise ValueError(
+                        f"La unidad {row.unit_id} dejó de existir durante la importación."
+                    )
                 did_move = unit.parent_id != parent_id
                 if did_move:
                     move_archival_unit(
@@ -1351,7 +1381,9 @@ def apply_catalog_template(
             progressed = True
         if not progressed:
             unresolved = ", ".join(row.local_id for row in pending[:5])
-            raise ValueError(f"No se pudo resolver el orden jerárquico de la importación: {unresolved}")
+            raise ValueError(
+                f"No se pudo resolver el orden jerárquico de la importación: {unresolved}"
+            )
     session.flush()
     return CatalogTemplateApplyResult(
         created=created,

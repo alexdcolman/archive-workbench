@@ -41,10 +41,14 @@ def test_surya_runtime_packaging_is_compatible_and_isolated() -> None:
         assert "surya_clean_library_path: true" in profile
         assert 'fallback_profile: "config/extraction_docling_es.yaml"' in profile
 
-    processing_source = (root / "src" / "archive_workbench" / "processing_app.py").read_text(encoding="utf-8")
+    processing_source = (root / "src" / "archive_workbench" / "processing_app.py").read_text(
+        encoding="utf-8"
+    )
     assert 'update={"surya_keep_server": len(source_keys) > 1}' in processing_source
     assert "stop_surya_servers()" in processing_source
-    assert "finally:\n        if cleanup_surya:\n            stop_surya_servers()" in processing_source
+    assert (
+        "finally:\n        if cleanup_surya:\n            stop_surya_servers()" in processing_source
+    )
     assert 'resource_cleanup="automatic_after_job"' in processing_source
 
     fallback = (root / "config/extraction_docling_es.yaml").read_text(encoding="utf-8")
@@ -132,7 +136,6 @@ def test_snapshot_divergence_validation_project_generator_is_packaged() -> None:
     assert "can_resolve_snapshot_divergence" in source
 
 
-
 def test_grouped_mention_validation_project_generator_is_packaged() -> None:
     root = Path(__file__).parents[1]
     script = root / "scripts" / "create_grouped_mention_validation_project.py"
@@ -145,6 +148,7 @@ def test_grouped_mention_validation_project_generator_is_packaged() -> None:
     assert "duplicate_group" in source
     assert "safe_relocation" in source
     assert "Entidad conjunta histórica beta" in source
+
 
 def test_analysis_quality_audit_validation_project_generator_is_packaged() -> None:
     root = Path(__file__).parents[1]
@@ -161,9 +165,7 @@ def test_analysis_quality_audit_validation_project_generator_is_packaged() -> No
 def test_version_docs_and_discovery_plan_are_packaged() -> None:
     root = Path(__file__).parents[1]
     data = tomllib.loads((root / "pyproject.toml").read_text(encoding="utf-8"))
-    version_source = (root / "src" / "archive_workbench" / "version.py").read_text(
-        encoding="utf-8"
-    )
+    version_source = (root / "src" / "archive_workbench" / "version.py").read_text(encoding="utf-8")
     migration = (
         root
         / "src"
@@ -184,12 +186,11 @@ def test_version_docs_and_discovery_plan_are_packaged() -> None:
     assert data["project"]["version"] == "0.89.0"
     assert '__version__ = "0.89.0"' in version_source
     assert migration.is_file()
-    assert 'down_revision = "0044_layout_structure_review"' in migration.read_text(
-        encoding="utf-8"
-    )
+    assert 'down_revision = "0044_layout_structure_review"' in migration.read_text(encoding="utf-8")
     assert timeline_migration.is_file()
-    assert 'down_revision = "0046_audiovisual_timeline_annotations"' in timeline_migration.read_text(
-        encoding="utf-8"
+    assert (
+        'down_revision = "0046_audiovisual_timeline_annotations"'
+        in timeline_migration.read_text(encoding="utf-8")
     )
     assert (root / "src" / "archive_workbench" / "audiovisual.py").is_file()
     assert (root / "src" / "archive_workbench" / "audiovisual_app.py").is_file()
@@ -199,9 +200,7 @@ def test_version_docs_and_discovery_plan_are_packaged() -> None:
     assert (root / "scripts" / "verify_audiovisual_validation_project.py").is_file()
     assert (root / "examples" / "av01_validation" / "testimonio_controlado.wav").is_file()
     assert (root / "examples" / "av01_validation" / "testimonio_controlado.mp4").is_file()
-    assert data["project"]["optional-dependencies"]["audiovisual"] == [
-        "faster-whisper>=1.1,<2"
-    ]
+    assert data["project"]["optional-dependencies"]["audiovisual"] == ["faster-whisper>=1.1,<2"]
     assert data["project"]["optional-dependencies"]["platform"] == [
         "yt-dlp[default,deno]>=2026.7.4,<2027"
     ]
@@ -263,7 +262,9 @@ def test_version_docs_and_discovery_plan_are_packaged() -> None:
     assert (root / "config" / "ocr_benchmark_truth.template.yaml").is_file()
     assert (root / "scripts" / "create_ocr_truth_benchmark_validation_project.py").is_file()
     assert (root / "scripts" / "verify_ocr_truth_benchmark_validation_project.py").is_file()
-    assert (root / ".assistant" / "project_docs" / "referencia" / "BENCHMARK_OCR_VERDAD_TERRENO.md").is_file()
+    assert (
+        root / ".assistant" / "project_docs" / "referencia" / "BENCHMARK_OCR_VERDAD_TERRENO.md"
+    ).is_file()
     processing_app = (root / "src" / "archive_workbench" / "processing_app.py").read_text(
         encoding="utf-8"
     )
@@ -328,9 +329,7 @@ def test_version_docs_and_discovery_plan_are_packaged() -> None:
     assert "project_data_touched" in form_validator_source
     assert "candidate_count" in form_validator_source
     assert "confirmed_controls" in form_validator_source
-    assert data["project"]["optional-dependencies"]["discovery"] == [
-        "spacy>=3.8,<4"
-    ]
+    assert data["project"]["optional-dependencies"]["discovery"] == ["spacy>=3.8,<4"]
     assert (root / "scripts" / "create_open_discovery_validation_project.py").is_file()
     assert (root / "scripts" / "prepare_open_discovery_review_validation.py").is_file()
     assert (root / "scripts" / "prepare_open_discovery_grouping_validation.py").is_file()
@@ -351,8 +350,12 @@ def test_version_docs_and_discovery_plan_are_packaged() -> None:
     assert "editable_object_id" in validator_source
     assert (root / ".assistant" / "project_docs" / "HISTORIAL_DE_CAMBIOS.md").is_file()
     assert (root / ".assistant" / "project_docs" / "operativos" / "PENDIENTES_ACTIVOS.md").is_file()
-    assert (root / ".assistant" / "project_docs" / "operativos" / "ESTRATEGIA_DE_PRUEBAS.md").is_file()
-    assert (root / ".assistant" / "project_docs" / "operativos" / "ACTUALIZACION_ACTUAL.md").is_file()
+    assert (
+        root / ".assistant" / "project_docs" / "operativos" / "ESTRATEGIA_DE_PRUEBAS.md"
+    ).is_file()
+    assert (
+        root / ".assistant" / "project_docs" / "operativos" / "ACTUALIZACION_ACTUAL.md"
+    ).is_file()
     assert ".assistant/" in (root / ".gitignore").read_text(encoding="utf-8")
     assistant_root = root / ".assistant"
     if assistant_root.is_dir():
@@ -360,18 +363,28 @@ def test_version_docs_and_discovery_plan_are_packaged() -> None:
         assert (assistant_root / "00_CHECKLIST_CAMBIOS.md").is_file()
         assert (assistant_root / "05_CRITERIOS_INTERFAZ.md").is_file()
         assert (assistant_root / "06_RELEVO_NUEVA_CONVERSACION.md").is_file()
-        security = (assistant_root / "07_SEGURIDAD_ARCHIVOS_Y_REPOSITORIO.md").read_text(encoding="utf-8")
+        security = (assistant_root / "07_SEGURIDAD_ARCHIVOS_Y_REPOSITORIO.md").read_text(
+            encoding="utf-8"
+        )
         assert "incluye `.assistant` completa y vigente" in security
         assert "se conserva y mantiene actualizada también en la copia local de trabajo" in security
     assert (
-        root / ".assistant" / "project_docs" / "historico" / "planes" / "RECUPERACION_LINAJE_EX_01.md"
+        root
+        / ".assistant"
+        / "project_docs"
+        / "historico"
+        / "planes"
+        / "RECUPERACION_LINAJE_EX_01.md"
     ).is_file()
     assert (
-        root / ".assistant" / "project_docs" / "historico" / "planes" / "DESCUBRIMIENTO_ABIERTO_DISC_01.md"
+        root
+        / ".assistant"
+        / "project_docs"
+        / "historico"
+        / "planes"
+        / "DESCUBRIMIENTO_ABIERTO_DISC_01.md"
     ).is_file()
-    assert (
-        root / "scripts" / "create_lineage_diagnostic_validation_projects.py"
-    ).is_file()
+    assert (root / "scripts" / "create_lineage_diagnostic_validation_projects.py").is_file()
     assert (root / "src" / "archive_workbench" / "lineage_diagnostics.py").is_file()
     assert (root / "scripts" / "create_common_base_validation_projects.py").is_file()
     assert (root / "scripts" / "create_state_adoption_validation_projects.py").is_file()
@@ -470,6 +483,36 @@ def test_first_project_default_configuration_is_packaged() -> None:
         assert (defaults / name).is_file(), name
 
 
+def test_candidate_update_never_copies_local_only_top_level_paths(tmp_path: Path) -> None:
+    import importlib.util
+
+    root = Path(__file__).parents[1]
+    module_path = root / "scripts" / "apply_candidate_update.py"
+    spec = importlib.util.spec_from_file_location("candidate_update_for_test", module_path)
+    assert spec is not None and spec.loader is not None
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+
+    source = tmp_path / "source"
+    target = tmp_path / "target"
+    source.mkdir()
+    target.mkdir()
+    (source / "ordinary.txt").write_text("new", encoding="utf-8")
+
+    for dirname in module.LOCAL_ONLY_TOP_LEVEL:
+        source_dir = source / dirname
+        target_dir = target / dirname
+        source_dir.mkdir(parents=True)
+        target_dir.mkdir(parents=True)
+        (source_dir / "marker.txt").write_text("source", encoding="utf-8")
+        (target_dir / "marker.txt").write_text("local", encoding="utf-8")
+
+    module.copy_candidate(source, target)
+
+    assert (target / "ordinary.txt").read_text(encoding="utf-8") == "new"
+    for dirname in module.LOCAL_ONLY_TOP_LEVEL:
+        assert (target / dirname / "marker.txt").read_text(encoding="utf-8") == "local"
+
 
 def test_candidate_update_reconciles_only_known_relocations(tmp_path: Path) -> None:
     import json
@@ -485,7 +528,7 @@ def test_candidate_update_reconciles_only_known_relocations(tmp_path: Path) -> N
     manifest = json.loads(
         (root / "scripts" / "candidate_update_manifest.json").read_text(encoding="utf-8")
     )
-    assert manifest["candidate"] == "0.89.0 RC85 / WEB-01 ACADEMIC SITE 2026-09-07"
+    assert manifest["candidate"] == "0.89.0 RC85 / QA-01 + OPS-02 cerrados 2026-09-07"
     assert len(manifest["relocations"]) > 100
     for item in manifest["relocations"]:
         assert item["from_sha256"]
@@ -494,7 +537,8 @@ def test_candidate_update_reconciles_only_known_relocations(tmp_path: Path) -> N
 
     # Use an unchanged historical file so source and destination bytes are identical.
     item = next(
-        item for item in manifest["relocations"]
+        item
+        for item in manifest["relocations"]
         if item["from"].endswith("ACTUALIZACION_Y_PRUEBA_0.46.0.md")
     )
     old = target / item["from"]
@@ -525,10 +569,13 @@ def test_candidate_update_reconciles_only_known_relocations(tmp_path: Path) -> N
     assert not (target / "docs" / "operativos").exists()
     assert not (target / "docs" / "referencia").exists()
     assert not (target / "docs" / "historico").exists()
-    assert (target / ".assistant" / "project_docs" / "operativos" / "PENDIENTES_ACTIVOS.md").is_file()
-    assert (target / ".assistant" / "project_docs" / "referencia" / "ARQUITECTURA_Y_MODELO_ACTUAL.md").is_file()
+    assert (
+        target / ".assistant" / "project_docs" / "operativos" / "PENDIENTES_ACTIVOS.md"
+    ).is_file()
+    assert (
+        target / ".assistant" / "project_docs" / "referencia" / "ARQUITECTURA_Y_MODELO_ACTUAL.md"
+    ).is_file()
     assert (target / "docs" / "desarrollo.html").is_file()
-
 
 
 def test_candidate_update_aborts_before_copy_if_known_old_file_was_modified(tmp_path: Path) -> None:
@@ -571,3 +618,37 @@ def test_candidate_update_aborts_before_copy_if_known_old_file_was_modified(tmp_
     assert marker.read_text(encoding="utf-8") == "antes"
     assert old.read_text(encoding="utf-8") == "contenido local modificado"
     assert not (target / "src" / "archive_workbench").exists()
+
+
+def test_quality_tooling_is_declared_gradually() -> None:
+    root = Path(__file__).parents[1]
+    data = tomllib.loads((root / "pyproject.toml").read_text(encoding="utf-8"))
+
+    dev = data["project"]["optional-dependencies"]["dev"]
+    assert any(item.startswith("ruff>=") for item in dev)
+    assert any(item.startswith("mypy>=") for item in dev)
+
+    pytest_config = data["tool"]["pytest"]["ini_options"]
+    marker_names = {entry.split(":", 1)[0] for entry in pytest_config["markers"]}
+    assert marker_names == {"fast", "integration", "slow"}
+
+    mypy_config = data["tool"]["mypy"]
+    assert "strict" not in mypy_config
+    assert "ignore_errors" not in mypy_config
+    assert mypy_config["files"]
+    assert all(path.startswith("src/archive_workbench") for path in mypy_config["files"])
+    assert "src/archive_workbench" not in mypy_config["files"]
+
+
+def test_ops02_classification_is_complete_and_disjoint() -> None:
+    from tests.conftest import TEST_LEVELS
+
+    root = Path(__file__).parents[1]
+    test_files = {path.name for path in (root / "tests").glob("test_*.py")}
+    classified = set().union(*TEST_LEVELS.values())
+
+    assert classified == test_files
+    levels = tuple(TEST_LEVELS.values())
+    for index, current in enumerate(levels):
+        for other in levels[index + 1 :]:
+            assert current.isdisjoint(other)

@@ -32,7 +32,6 @@ def test_docs_root_is_public_only_and_private_documents_are_unique() -> None:
     assert not list(OPERATIVE.glob("*0.*.md"))
 
 
-
 def test_assistant_continuity_documents_exist_and_define_read_order() -> None:
     assistant = ROOT / ".assistant"
     gitignore_entries = {
@@ -67,14 +66,16 @@ def test_assistant_continuity_documents_exist_and_define_read_order() -> None:
     assert "No volver a presentar como pendiente" in first
 
 
-
 def test_change_checklist_is_mandatory_and_points_to_canonical_sources() -> None:
     assistant = ROOT / ".assistant"
     first = (assistant / "00_LEER_PRIMERO.md").read_text(encoding="utf-8")
     checklist_path = assistant / "00_CHECKLIST_CAMBIOS.md"
     assert checklist_path.is_file()
     checklist = checklist_path.read_text(encoding="utf-8")
-    assert "Antes de modificar código, pruebas, configuración, documentación, empaquetado o instrucciones de una candidata" in first
+    assert (
+        "Antes de modificar código, pruebas, configuración, documentación, empaquetado o instrucciones de una candidata"
+        in first
+    )
     assert ".assistant/00_CHECKLIST_CAMBIOS.md" in first
     for name in (
         "01_INTERACCION_Y_GUIADO.md",
@@ -109,7 +110,10 @@ def test_active_pending_ledger_has_index_and_recovers_all_major_lines() -> None:
     assert "AV-01 — Registro local de audio y video y transcripción" not in text
     assert "AV-01 — audio/video local, segmentos y corrección — 0.84.0" in implemented
     assert "AV-02 — incorporación autorizada desde plataformas — 0.85.0" in implemented
-    assert "AV-03 — evaluación, revisión sincronizada y calidad de reconocimiento — 0.86.0" in implemented
+    assert (
+        "AV-03 — evaluación, revisión sincronizada y calidad de reconocimiento — 0.86.0"
+        in implemented
+    )
     assert "INT-01 — Google Drive como transporte controlado — 0.87.0" in implemented
     assert "EXP-01 — paquete visual con contexto estructurado — 0.88.0" in implemented
     assert "EXP-01 — Exportación trazable de imágenes y recortes" not in text
@@ -233,7 +237,6 @@ def test_streamlit_form_policy_prevents_circular_disabled_buttons() -> None:
     assert "un único bloque de comandos" in interaction
 
 
-
 def test_interface_policy_requires_persistent_interactive_panels() -> None:
     assistant = ROOT / ".assistant"
     if not assistant.is_dir():
@@ -314,14 +317,9 @@ def test_history_map_is_concise_and_references_historical_detail() -> None:
 
 
 def test_current_architecture_is_separate_from_historical_design() -> None:
-    current = (REFERENCE / "ARQUITECTURA_Y_MODELO_ACTUAL.md").read_text(
-        encoding="utf-8"
-    )
+    current = (REFERENCE / "ARQUITECTURA_Y_MODELO_ACTUAL.md").read_text(encoding="utf-8")
     historical_path = (
-        PRIVATE_DOCS
-        / "historico"
-        / "diseno"
-        / "DISENO_Y_PLAN_DE_IMPLEMENTACION_HASTA_0.49.2.md"
+        PRIVATE_DOCS / "historico" / "diseno" / "DISENO_Y_PLAN_DE_IMPLEMENTACION_HASTA_0.49.2.md"
     )
     historical = historical_path.read_text(encoding="utf-8")
     assert "Originales inmutables" in current
@@ -339,9 +337,7 @@ def test_current_architecture_is_separate_from_historical_design() -> None:
 
 
 def test_surya_evaluation_is_preserved_in_historical_technical_docs() -> None:
-    text = (HISTORICAL_TECH / "EVALUACION_SURYA_OCR_0.38.0.md").read_text(
-        encoding="utf-8"
-    )
+    text = (HISTORICAL_TECH / "EVALUACION_SURYA_OCR_0.38.0.md").read_text(encoding="utf-8")
     assert "## 4. Evaluación cualitativa por página" in text
     assert "Surya fue claramente superior" in text
     assert "surya-server-status" in text
@@ -349,9 +345,7 @@ def test_surya_evaluation_is_preserved_in_historical_technical_docs() -> None:
 
 
 def test_structural_ocr_control_document_is_preserved_and_conservative() -> None:
-    text = (HISTORICAL_TECH / "CONTROL_ESTRUCTURAL_OCR_0.39.0.md").read_text(
-        encoding="utf-8"
-    )
+    text = (HISTORICAL_TECH / "CONTROL_ESTRUCTURAL_OCR_0.39.0.md").read_text(encoding="utf-8")
     assert "page_quality_v2" in text
     assert "no corrige el texto" in text
     assert "Artículo 49" in text
@@ -360,9 +354,7 @@ def test_structural_ocr_control_document_is_preserved_and_conservative() -> None
 
 
 def test_editable_rebase_document_is_preserved_and_conservative() -> None:
-    text = (HISTORICAL_TECH / "REBASE_EDICION_OCR_0.40.0.md").read_text(
-        encoding="utf-8"
-    )
+    text = (HISTORICAL_TECH / "REBASE_EDICION_OCR_0.40.0.md").read_text(encoding="utf-8")
     assert "rebase conservador de tres estados" in text
     assert "vista previa" in text
     assert "no se modifica nada" in text
@@ -372,9 +364,7 @@ def test_editable_rebase_document_is_preserved_and_conservative() -> None:
 
 
 def test_rebase_conflict_resolution_document_is_preserved() -> None:
-    text = (HISTORICAL_TECH / "RESOLUCION_CONFLICTOS_REBASE_0.41.0.md").read_text(
-        encoding="utf-8"
-    )
+    text = (HISTORICAL_TECH / "RESOLUCION_CONFLICTOS_REBASE_0.41.0.md").read_text(encoding="utf-8")
     assert "resolución manual asistida" in text
     assert "autoridad canónica" in text
     assert "rebase_relocate_manual" in text
@@ -383,9 +373,9 @@ def test_rebase_conflict_resolution_document_is_preserved() -> None:
 
 
 def test_text_rebase_and_view_isolation_document_is_preserved() -> None:
-    text = (
-        HISTORICAL_TECH / "REBASE_CONFLICTOS_TEXTUALES_Y_NAVEGACION_0.42.0.md"
-    ).read_text(encoding="utf-8")
+    text = (HISTORICAL_TECH / "REBASE_CONFLICTOS_TEXTUALES_Y_NAVEGACION_0.42.0.md").read_text(
+        encoding="utf-8"
+    )
     assert "corrección humana" in text
     assert "conservar la lectura de la candidata" in text
     assert "escribir el texto resultante exacto" in text
@@ -394,9 +384,7 @@ def test_text_rebase_and_view_isolation_document_is_preserved() -> None:
 
 
 def test_structural_metadata_rebase_document_is_preserved() -> None:
-    text = (HISTORICAL_TECH / "REBASE_ESTRUCTURA_Y_METADATOS_0.43.0.md").read_text(
-        encoding="utf-8"
-    )
+    text = (HISTORICAL_TECH / "REBASE_ESTRUCTURA_Y_METADATOS_0.43.0.md").read_text(encoding="utf-8")
     assert "snapshot editable activo actual" in text
     assert "Parte documental" in text
     assert "Estado de revisión" in text
@@ -497,9 +485,7 @@ def test_historical_update_guides_046_to_0630_are_preserved() -> None:
 
 
 def test_mention_repair_decision_is_preserved_and_conservative() -> None:
-    text = (
-        HISTORICAL_TECH / "REPARACION_ASISTIDA_MENCIONES_0.57.0.md"
-    ).read_text(encoding="utf-8")
+    text = (HISTORICAL_TECH / "REPARACION_ASISTIDA_MENCIONES_0.57.0.md").read_text(encoding="utf-8")
     assert "safe_relocation" in text
     assert "snapshot_divergence" in text
     assert "repair_relocation" in text
@@ -508,9 +494,7 @@ def test_mention_repair_decision_is_preserved_and_conservative() -> None:
 
 
 def test_missing_authority_repair_decision_is_preserved_and_auditable() -> None:
-    text = (
-        HISTORICAL_TECH / "REPARACION_ENTIDAD_FALTANTE_0.58.0.md"
-    ).read_text(encoding="utf-8")
+    text = (HISTORICAL_TECH / "REPARACION_ENTIDAD_FALTANTE_0.58.0.md").read_text(encoding="utf-8")
     assert "entidad activa" in text
     assert "mismo proyecto" in text
     assert "no reescriben snapshots anteriores" in text
@@ -518,9 +502,9 @@ def test_missing_authority_repair_decision_is_preserved_and_auditable() -> None:
 
 
 def test_duplicate_repair_decision_is_preserved_and_auditable() -> None:
-    text = (
-        HISTORICAL_TECH / "REPARACION_DUPLICADOS_MENCIONES_0.59.0.md"
-    ).read_text(encoding="utf-8")
+    text = (HISTORICAL_TECH / "REPARACION_DUPLICADOS_MENCIONES_0.59.0.md").read_text(
+        encoding="utf-8"
+    )
     assert "exactamente una contraparte activa" in text
     assert "no se elimina físicamente" in text
     assert "transacción completa" in text
@@ -528,37 +512,37 @@ def test_duplicate_repair_decision_is_preserved_and_auditable() -> None:
 
 
 def test_manual_location_repair_decision_is_preserved_and_auditable() -> None:
-    text = (
-        HISTORICAL_TECH / "REPARACION_UBICACIONES_MANUALES_0.60.0.md"
-    ).read_text(encoding="utf-8")
+    text = (HISTORICAL_TECH / "REPARACION_UBICACIONES_MANUALES_0.60.0.md").read_text(
+        encoding="utf-8"
+    )
     assert "fragmento literal" in text
     assert "No se permite marcar como ausente" in text
     assert "create_unresolved_mention_validation_project.py" in text
 
 
 def test_snapshot_divergence_reconciliation_decision_is_preserved() -> None:
-    text = (
-        HISTORICAL_TECH / "RECONCILIACION_DIVERGENCIAS_MENCIONES_0.61.0.md"
-    ).read_text(encoding="utf-8")
+    text = (HISTORICAL_TECH / "RECONCILIACION_DIVERGENCIAS_MENCIONES_0.61.0.md").read_text(
+        encoding="utf-8"
+    )
     assert "campo por campo" in text
     assert "ningún valor observado desaparezca" in text
     assert "create_snapshot_divergence_validation_project.py" in text
 
 
-
 def test_grouped_mention_repair_decision_is_preserved_and_atomic() -> None:
-    text = (
-        HISTORICAL_TECH / "REPARACION_CONJUNTOS_MENCIONES_0.62.0.md"
-    ).read_text(encoding="utf-8")
+    text = (HISTORICAL_TECH / "REPARACION_CONJUNTOS_MENCIONES_0.62.0.md").read_text(
+        encoding="utf-8"
+    )
     assert "duplicate_group" in text
     assert "transaccional" in text
     assert "no permite resolver pares aislados" in text
     assert "create_grouped_mention_validation_project.py" in text
 
+
 def test_automatic_analysis_quality_decision_is_preserved_and_auditable() -> None:
-    text = (
-        HISTORICAL_TECH / "POLITICA_AUDITABLE_ANALISIS_AUTOMATICOS_0.64.0.md"
-    ).read_text(encoding="utf-8")
+    text = (HISTORICAL_TECH / "POLITICA_AUDITABLE_ANALISIS_AUTOMATICOS_0.64.0.md").read_text(
+        encoding="utf-8"
+    )
     assert "approved" in text
     assert "fundamento no vacío" in text
     assert "automatic_analysis_authorizations" in text
@@ -571,8 +555,12 @@ def test_current_update_guide_describes_0890_rc85_and_preserves_rc84_callback_hi
     text = (OPERATIVE / "ACTUALIZACION_ACTUAL.md").read_text(encoding="utf-8")
     pending = (OPERATIVE / "PENDIENTES_ACTIVOS.md").read_text(encoding="utf-8")
     implemented = (OPERATIVE / "IMPLEMENTACIONES_REALIZADAS.md").read_text(encoding="utf-8")
-    continuity = (Path(__file__).parents[1] / ".assistant" / "06_RELEVO_NUEVA_CONVERSACION.md").read_text(encoding="utf-8")
-    guidelines = (Path(__file__).parents[1] / ".assistant" / "LINEAMIENTOS_DE_DISENO_Y_ESCRITURA.md").read_text(encoding="utf-8")
+    continuity = (
+        Path(__file__).parents[1] / ".assistant" / "06_RELEVO_NUEVA_CONVERSACION.md"
+    ).read_text(encoding="utf-8")
+    guidelines = (
+        Path(__file__).parents[1] / ".assistant" / "LINEAMIENTOS_DE_DISENO_Y_ESCRITURA.md"
+    ).read_text(encoding="utf-8")
     architecture = (REFERENCE / "ARQUITECTURA_Y_MODELO_ACTUAL.md").read_text(encoding="utf-8")
     historical_rc76 = HISTORICAL_UPDATES / "ACTUALIZACION_Y_PRUEBA_0.89.0_RC76.md"
 
@@ -582,17 +570,23 @@ def test_current_update_guide_describes_0890_rc85_and_preserves_rc84_callback_hi
     assert "| WEB-01 | Alta | Cerrado |" in pending
     assert "| OPS-01 |" not in pending
     assert "## RC80 - PyTorch CPU explícito en runtime principal multi-arquitectura" in implemented
-    assert "## RC79 - transcripción audiovisual GPU validada y métrica VRAM en Docker" in implemented
+    assert (
+        "## RC79 - transcripción audiovisual GPU validada y métrica VRAM en Docker" in implemented
+    )
     assert "peak_gpu_memory_mib" in implemented
     assert "nvidia-smi" in implemented
     assert "llama-server" in implemented
-    assert "## RC78 - diagnóstico administrado GPU y validación material Linux/NVIDIA" in implemented
+    assert (
+        "## RC78 - diagnóstico administrado GPU y validación material Linux/NVIDIA" in implemented
+    )
     assert "## RC77 - guardas de inferencia para Surya/llama.cpp administrado" in implemented
     assert "no cambia el esquema SQLite" in text
     assert "0.89.0 RC85" in continuity
     assert "2.5 Regla obligatoria para lectores sin conocimiento previo" in guidelines
     assert "Cada sustantivo que pueda tener más de un referente" in guidelines
-    assert "Distribución administrada y espacio de trabajo multiplataforma - RC72/RC84" in architecture
+    assert (
+        "Distribución administrada y espacio de trabajo multiplataforma - RC72/RC84" in architecture
+    )
     assert "ARCHIVE_WORKBENCH_SELECTED_PROJECT_ROOT" in architecture
     assert "0047_authority_relation_profiles" in text
     assert "OPS-01-TABS" not in pending
@@ -625,9 +619,7 @@ def test_interaction_policy_requires_explicit_checklist_confirmation_for_code_ch
 
 
 def test_authority_dictionary_format_is_versioned_and_conservative() -> None:
-    text = (
-        REFERENCE / "IMPORTACION_DICCIONARIOS_DISC_02.md"
-    ).read_text(encoding="utf-8")
+    text = (REFERENCE / "IMPORTACION_DICCIONARIOS_DISC_02.md").read_text(encoding="utf-8")
     for item in (
         "Versión del esquema",
         "authority_dictionary.schema.json",
@@ -649,9 +641,9 @@ def test_authority_dictionary_format_is_versioned_and_conservative() -> None:
 
 
 def test_ex01_lineage_recovery_plan_is_complete_and_conservative() -> None:
-    text = (
-        PRIVATE_DOCS / "historico" / "planes" / "RECUPERACION_LINAJE_EX_01.md"
-    ).read_text(encoding="utf-8")
+    text = (PRIVATE_DOCS / "historico" / "planes" / "RECUPERACION_LINAJE_EX_01.md").read_text(
+        encoding="utf-8"
+    )
     for item in (
         "## 2. Objetivo",
         "## 3. Contratos actuales que se conservan",
@@ -692,7 +684,9 @@ def test_testing_strategy_is_explicit_and_does_not_discard_slow_tests() -> None:
 
 
 def test_pilot_guide_delegates_future_work_to_single_pending_ledger() -> None:
-    text = (PRIVATE_DOCS / "historico" / "prueba_piloto" / "GUIA_PRUEBA_PILOTO.md").read_text(encoding="utf-8")
+    text = (PRIVATE_DOCS / "historico" / "prueba_piloto" / "GUIA_PRUEBA_PILOTO.md").read_text(
+        encoding="utf-8"
+    )
     assert "PENDIENTES_ACTIVOS.md" in text
     assert "HOJA_DE_RUTA_PRE_RELEASE.md" in text
     assert "PROYECTO_PARALELO_GIAR.md" in text
@@ -729,19 +723,34 @@ def test_readme_points_only_to_current_documentation_map() -> None:
 
 def test_public_site_web01_has_required_pages_metadata_and_local_links() -> None:
     required = {
-        "index.html", "instalacion.html", "tutorial.html", "catalogo.html",
-        "procesamiento.html", "trabajo.html", "revision.html", "entidades.html", "busquedas.html",
-        "relaciones.html", "audiovisual.html", "exportacion.html", "intercambio.html",
-        "resguardo.html", "conceptos.html", "referencia.html", "desarrollo.html", "problemas.html", "404.html",
+        "index.html",
+        "instalacion.html",
+        "tutorial.html",
+        "catalogo.html",
+        "procesamiento.html",
+        "trabajo.html",
+        "revision.html",
+        "entidades.html",
+        "busquedas.html",
+        "relaciones.html",
+        "audiovisual.html",
+        "exportacion.html",
+        "intercambio.html",
+        "resguardo.html",
+        "conceptos.html",
+        "referencia.html",
+        "desarrollo.html",
+        "problemas.html",
+        "404.html",
     }
     assert required.issubset({p.name for p in DOCS.glob("*.html")})
     for path in [DOCS / name for name in required]:
         text = path.read_text(encoding="utf-8")
         assert 'lang="es-AR"' in text
-        assert __import__('re').search(r'<meta\s+[^>]*name="description"[^>]*>', text)
+        assert __import__("re").search(r'<meta\s+[^>]*name="description"[^>]*>', text)
         assert 'href="assets/site.css' in text
         assert 'class="skip"' in text
-        assert __import__('re').search(r'<nav\s+[^>]*aria-label="Navegación principal"[^>]*>', text)
+        assert __import__("re").search(r'<nav\s+[^>]*aria-label="Navegación principal"[^>]*>', text)
         assert 'href="desarrollo.html"' in text or path.name == "desarrollo.html"
         assert "placeholder" not in text.lower()
     for html in DOCS.glob("*.html"):
@@ -755,7 +764,12 @@ def test_public_site_web01_has_required_pages_metadata_and_local_links() -> None
 
 def test_public_site_diagrams_are_accessible_and_readme_points_to_site() -> None:
     diagrams = DOCS / "assets" / "diagrams"
-    for name in ("flujo-general.svg", "trazabilidad-texto.svg", "arquitectura-local.svg", "intercambio.svg"):
+    for name in (
+        "flujo-general.svg",
+        "trazabilidad-texto.svg",
+        "arquitectura-local.svg",
+        "intercambio.svg",
+    ):
         text = (diagrams / name).read_text(encoding="utf-8")
         assert 'role="img"' in text
         assert "<title" in text and "<desc" in text
@@ -769,7 +783,9 @@ def test_public_site_diagrams_are_accessible_and_readme_points_to_site() -> None
 def test_web01_is_closed_after_publication_and_keeps_novice_reader_rules() -> None:
     pending = (OPERATIVE / "PENDIENTES_ACTIVOS.md").read_text(encoding="utf-8")
     current = (OPERATIVE / "ACTUALIZACION_ACTUAL.md").read_text(encoding="utf-8")
-    guidelines = (ROOT / ".assistant" / "LINEAMIENTOS_DE_DISENO_Y_ESCRITURA.md").read_text(encoding="utf-8")
+    guidelines = (ROOT / ".assistant" / "LINEAMIENTOS_DE_DISENO_Y_ESCRITURA.md").read_text(
+        encoding="utf-8"
+    )
     assert "UX-02 |" not in pending
     assert "WEB-01 | Alta | Cerrado" in pending
     assert "WEB-01" in current and "publicada y verificada" in current
@@ -801,7 +817,6 @@ def test_open_discovery_plan_separates_suggestions_from_canonical_records() -> N
     assert "Criterio de cierre cumplido" in text
 
 
-
 def test_pre_release_roadmap_includes_public_site_export_and_parallel_giar() -> None:
     text = (OPERATIVE / "HOJA_DE_RUTA_PRE_RELEASE.md").read_text(encoding="utf-8")
     assert "EXP-01" in text
@@ -823,7 +838,12 @@ def test_pre_release_roadmap_includes_public_site_export_and_parallel_giar() -> 
     assert "1. Completar `UX-02`" not in text
     assert "1. Completar y validar `OPS-01`" not in text
     assert "`OPS-01` quedó cerrado para el pre-release" in text
-    assert "1. Revisar visualmente y publicar mediante GitHub Pages la reescritura integral de `WEB-01`" in text
+    assert "Las imágenes RC85 publicadas inicialmente quedaron verificadas" in text
+    assert "`QA-01` y `OPS-02` quedaron cerrados" in text
+    assert "1. Reconstruir y publicar las imágenes CPU/GPU" in text
+    assert "2. Cerrar `OPS-03`" in text
+    assert "Resolver `ENT-REF-01`" not in text
+    assert "Validar `PERF-DISC-01`" not in text
     assert "1. Ejecutar `PILOT-01`" not in text
     assert "Validar y cerrar `EXP-01`" not in text
     assert "Validar y cerrar `INT-01`" not in text
@@ -913,21 +933,35 @@ def test_ocr01_is_closed_and_architecture_remains_conservative() -> None:
     assert "SegmentEntityMention" in architecture
     assert "AudiovisualTimelineAnnotation" in architecture
     assert "AudiovisualTimelineAnnotationRevision" in architecture
-    assert "AV-02 — Plugin opcional de incorporación desde YouTube y otras plataformas — EN VALIDACIÓN" not in pending
+    assert (
+        "AV-02 — Plugin opcional de incorporación desde YouTube y otras plataformas — EN VALIDACIÓN"
+        not in pending
+    )
     assert "AV-02 — incorporación autorizada desde plataformas — 0.85.0" in implemented
-    assert "AV-03 — Evaluación y optimización de transcripción de video real — EN VALIDACIÓN" not in pending
+    assert (
+        "AV-03 — Evaluación y optimización de transcripción de video real — EN VALIDACIÓN"
+        not in pending
+    )
     assert "Evaluación y revisión audiovisual AV-03" in implemented
-    assert "AV-03 — evaluación, revisión sincronizada y calidad de reconocimiento — 0.86.0" in implemented
+    assert (
+        "AV-03 — evaluación, revisión sincronizada y calidad de reconocimiento — 0.86.0"
+        in implemented
+    )
     assert "large-v3" in implemented and "CUDA" in implemented
     assert "Evaluación audiovisual AV-03" in architecture
     assert "_runtime_metrics" in architecture
     assert "AV-01 —" not in pending
-    assert "INT-01 — Integración opcional con Google Drive como transporte — EN VALIDACIÓN" not in pending
+    assert (
+        "INT-01 — Integración opcional con Google Drive como transporte — EN VALIDACIÓN"
+        not in pending
+    )
     assert "| INT-01 |" not in pending
     assert "INT-01 — Google Drive como transporte controlado — 0.87.0" in implemented
     assert "EXP-01 — paquete visual con contexto estructurado — 0.88.0" in implemented
     assert "EXP-01 — Exportación trazable de imágenes y recortes" not in pending
-    assert "Desde Google Drive" in (ROOT / "src" / "archive_workbench" / "review_app.py").read_text(encoding="utf-8")
+    assert "Desde Google Drive" in (ROOT / "src" / "archive_workbench" / "review_app.py").read_text(
+        encoding="utf-8"
+    )
     assert "Transporte opcional por Google Drive — INT-01" in architecture
     assert "drive.file" in architecture
     assert "no sincroniza una SQLite abierta" in architecture
@@ -944,14 +978,22 @@ def test_pilot_findings_are_persisted_in_project_documentation() -> None:
     assert "dejar asentado" in interaction.lower()
     assert "memoria del asistente como sustituto" in interaction
     assert 'Qué significa "dejar asentado"' in policy
-    assert "todo campo visible que solicite una carpeta debe ofrecer un selector gráfico" in interface
+    assert (
+        "todo campo visible que solicite una carpeta debe ofrecer un selector gráfico" in interface
+    )
     assert "invariante canónico de interacción Streamlit" in interface
     for task_id in ("PILOT-01A", "PILOT-01B", "PILOT-01C", "PILOT-01D"):
         assert task_id in implemented
     assert "| PILOT-01A |" not in pending
-    assert "Modelo de custodia, conjuntos documentales y audiovisual - PILOT-01A / RC65" in architecture
+    assert (
+        "Modelo de custodia, conjuntos documentales y audiovisual - PILOT-01A / RC65"
+        in architecture
+    )
     assert "`Archivo` como contexto de custodia" in architecture
-    assert "no como afirmación de que el repositorio sea un nivel interno de la colección" in architecture
+    assert (
+        "no como afirmación de que el repositorio sea un nivel interno de la colección"
+        in architecture
+    )
     assert "Diferencias entre dos transcripciones" in architecture
 
 
@@ -975,7 +1017,6 @@ def test_streamlit_interaction_architecture_has_one_canonical_source() -> None:
     assert "PILOT-01M" in (OPERATIVE / "IMPLEMENTACIONES_REALIZADAS.md").read_text(encoding="utf-8")
 
 
-
 def test_public_docs_do_not_expose_private_project_ledgers() -> None:
     assert not (DOCS / "operativos").exists()
     assert not (DOCS / "referencia").exists()
@@ -995,12 +1036,15 @@ def test_public_docs_do_not_expose_private_project_ledgers() -> None:
 def test_web01_requires_current_code_vocabulary_and_screenshot_coverage() -> None:
     pending = (OPERATIVE / "PENDIENTES_ACTIVOS.md").read_text(encoding="utf-8")
     site_policy = (ROOT / ".assistant" / "POLITICA_SITIO_PUBLICO.md").read_text(encoding="utf-8")
-    guidelines = (ROOT / ".assistant" / "LINEAMIENTOS_DE_DISENO_Y_ESCRITURA.md").read_text(encoding="utf-8")
+    guidelines = (ROOT / ".assistant" / "LINEAMIENTOS_DE_DISENO_Y_ESCRITURA.md").read_text(
+        encoding="utf-8"
+    )
     for text in (pending, site_policy):
         assert "código vigente" in text
         assert "al menos una captura" in text
         assert "sección" in text and "pestaña" in text
     assert "nombre literal" in guidelines
+
 
 def test_operational_docs_contain_only_canonical_active_documents() -> None:
     actual = {path.name for path in OPERATIVE.iterdir() if path.is_file()}
@@ -1020,7 +1064,9 @@ def test_operational_docs_contain_only_canonical_active_documents() -> None:
 def test_web01_screenshots_are_clickable_wide_and_tracked_privately() -> None:
     site_css = (DOCS / "assets" / "site.css").read_text(encoding="utf-8")
     site_policy = (ROOT / ".assistant" / "POLITICA_SITIO_PUBLICO.md").read_text(encoding="utf-8")
-    guidelines = (ROOT / ".assistant" / "LINEAMIENTOS_DE_DISENO_Y_ESCRITURA.md").read_text(encoding="utf-8")
+    guidelines = (ROOT / ".assistant" / "LINEAMIENTOS_DE_DISENO_Y_ESCRITURA.md").read_text(
+        encoding="utf-8"
+    )
     pending = (OPERATIVE / "PENDIENTES_ACTIVOS.md").read_text(encoding="utf-8")
     matrix = (OPERATIVE / "WEB01_CAPTURAS" / "MATRIZ.md").read_text(encoding="utf-8")
     worklog = (OPERATIVE / "WEB01_CAPTURAS" / "REGISTRO_TRABAJO.md").read_text(encoding="utf-8")
@@ -1032,7 +1078,7 @@ def test_web01_screenshots_are_clickable_wide_and_tracked_privately() -> None:
     assert ".site-sidebar" in site_css and "position: sticky;" in site_css
     assert ".figure--portrait" in site_css
     assert "max-height: min(78vh, 56rem);" in site_css
-    assert ".lightbox[data-open=\"true\"]" in site_css
+    assert '.lightbox[data-open="true"]' in site_css
     assert "cursor: zoom-in" in site_css
     assert ".ui-label" in site_css and "font-weight: 400;" in site_css
     assert "abrirse a resolución completa mediante clic" in site_policy

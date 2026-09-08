@@ -160,9 +160,7 @@ class DocumentProcessingPlan(ContractModel):
                 )
             overlap = occupied_assignments & pages
             if overlap:
-                raise ValueError(
-                    f"Las asignaciones se superponen en páginas: {sorted(overlap)}"
-                )
+                raise ValueError(f"Las asignaciones se superponen en páginas: {sorted(overlap)}")
             occupied_assignments |= pages
             if assignment.part_key and assignment.part_key not in part_keys:
                 raise ValueError(

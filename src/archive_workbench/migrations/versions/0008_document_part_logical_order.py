@@ -4,6 +4,7 @@ Revision ID: 0008_document_part_logical_order
 Revises: 0007_document_processing_plans
 Create Date: 2026-07-23
 """
+
 from __future__ import annotations
 
 from alembic import op

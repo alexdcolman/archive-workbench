@@ -131,7 +131,9 @@ def _platform_grouping_snapshot(info: dict[str, Any]) -> dict[str, Any] | None:
     }
 
 
-def _metadata_snapshot(info: dict[str, Any], *, request_url: str, media_kind: str) -> dict[str, Any]:
+def _metadata_snapshot(
+    info: dict[str, Any], *, request_url: str, media_kind: str
+) -> dict[str, Any]:
     requested_formats = info.get("requested_formats") or []
     if not requested_formats and info.get("format_id"):
         requested_formats = [info]
@@ -184,7 +186,9 @@ def _metadata_snapshot(info: dict[str, Any], *, request_url: str, media_kind: st
     }
 
 
-def _extract_info(*, url: str, download: bool, outtmpl: str | None = None, media_kind: str = "video") -> tuple[Any, dict[str, Any]]:
+def _extract_info(
+    *, url: str, download: bool, outtmpl: str | None = None, media_kind: str = "video"
+) -> tuple[Any, dict[str, Any]]:
     yt_dlp = _load_yt_dlp()
     options: dict[str, Any] = {
         "quiet": True,
@@ -211,11 +215,11 @@ def _extract_info(*, url: str, download: bool, outtmpl: str | None = None, media
     except Exception as exc:
         download_error = getattr(getattr(yt_dlp, "utils", None), "DownloadError", ())
         extractor_error = getattr(getattr(yt_dlp, "utils", None), "ExtractorError", ())
-        known = tuple(
-            cls for cls in (download_error, extractor_error) if isinstance(cls, type)
-        )
+        known = tuple(cls for cls in (download_error, extractor_error) if isinstance(cls, type))
         if known and isinstance(exc, known):
-            raise RuntimeError(f"La plataforma rechazó o no pudo resolver el material: {exc}") from exc
+            raise RuntimeError(
+                f"La plataforma rechazó o no pudo resolver el material: {exc}"
+            ) from exc
         raise
     if not isinstance(info, dict):
         raise RuntimeError("La plataforma no devolvió metadatos utilizables")
@@ -301,7 +305,9 @@ def import_platform_media(
         )
     )
     if registration is None:
-        raise RuntimeError("No se pudo recuperar el registro de procedencia del archivo incorporado")
+        raise RuntimeError(
+            "No se pudo recuperar el registro de procedencia del archivo incorporado"
+        )
 
     metadata = _metadata_snapshot(info, request_url=url, media_kind=request.media_kind)
     yt_version = getattr(getattr(yt_dlp, "version", None), "__version__", None)
@@ -345,7 +351,11 @@ def import_platform_media(
         description=AudiovisualDescription(
             title=str(info.get("title") or path.stem),
             producer=None,
-            channel=(str(info.get("channel") or info.get("uploader")) if (info.get("channel") or info.get("uploader")) else None),
+            channel=(
+                str(info.get("channel") or info.get("uploader"))
+                if (info.get("channel") or info.get("uploader"))
+                else None
+            ),
             responsible=None,
             provenance=canonical_url,
             recorded_date=None,

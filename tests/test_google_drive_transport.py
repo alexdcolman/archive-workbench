@@ -16,7 +16,7 @@ from archive_workbench.db import (
     session_scope,
     upgrade_database,
 )
-from archive_workbench.db.models import ExchangeCheckpoint, ExchangeWorkspace, Project, utc_now
+from archive_workbench.db.models import ExchangeCheckpoint, Project, utc_now
 from archive_workbench.exchange import compare_change_bundle_manifest, ensure_exchange_workspace
 from archive_workbench.decisions import load_decisions
 from archive_workbench.google_drive_transport import (
@@ -95,7 +95,9 @@ def _token(path: Path) -> Path:
     return path
 
 
-def _bundle(path: Path, *, project_id: str = "project-1", source_workspace_id: str = "remote") -> Path:
+def _bundle(
+    path: Path, *, project_id: str = "project-1", source_workspace_id: str = "remote"
+) -> Path:
     changes = b""
     manifest = ChangeBundleManifest(
         project_id=project_id,
@@ -191,19 +193,21 @@ def test_managed_google_drive_ui_uses_host_browser_callback_without_per_user_jso
     source = (Path(__file__).parents[1] / "src" / "archive_workbench" / "review_app.py").read_text(
         encoding="utf-8"
     )
-    managed_start = source.index("if workspace is not None:", source.index("def _render_google_drive_connection"))
+    managed_start = source.index(
+        "if workspace is not None:", source.index("def _render_google_drive_connection")
+    )
     native_start = source.index("panel_key =", managed_start)
     managed_branch = source[managed_start:native_start]
 
     assert "prepare_google_drive_authorization()" in managed_branch
-    assert 'st.link_button(' in managed_branch
+    assert "st.link_button(" in managed_branch
     assert "ArchiveWorkbenchData/Settings" in managed_branch
     assert "client_secret_path" not in managed_branch
     assert "google_drive_client_secret.json" not in managed_branch
     assert "_handle_google_drive_oauth_callback(st)" in source
-    assert source.index("_handle_google_drive_oauth_callback(st)", source.index("def main()")) < source.index(
-        "_render_global_input_policy(st)", source.index("def main()")
-    )
+    assert source.index(
+        "_handle_google_drive_oauth_callback(st)", source.index("def main()")
+    ) < source.index("_render_global_input_policy(st)", source.index("def main()"))
 
 
 def test_managed_google_drive_callback_is_terminal_before_launcher():
@@ -260,7 +264,9 @@ def test_managed_google_drive_callback_persists_terminal_state_across_query_clea
     assert review_app._handle_google_drive_oauth_callback(st) is True
     assert st.query_params == {}
     assert st.session_state["google_drive_oauth_terminal"]["is_error"] is False
-    assert "Google Drive quedó conectado" in st.session_state["google_drive_oauth_terminal"]["message"]
+    assert (
+        "Google Drive quedó conectado" in st.session_state["google_drive_oauth_terminal"]["message"]
+    )
     assert st.successes
     assert st.captions
 
@@ -353,6 +359,7 @@ def test_resumable_upload_streams_multiple_chunks(tmp_path: Path, monkeypatch):
         calls.append(request)
         if len(calls) == 1:
             import urllib.error
+
             raise urllib.error.HTTPError(
                 request.full_url,
                 308,
@@ -373,6 +380,7 @@ def test_resumable_upload_streams_multiple_chunks(tmp_path: Path, monkeypatch):
     assert len(calls) == 2
     assert len(calls[0].data) == 256 * 1024
     assert calls[1].headers["Content-range"].startswith("bytes 262144-")
+
 
 def test_upload_non_zip_fails_before_network_with_plain_error(tmp_path: Path, monkeypatch):
     secret = _client_secret(tmp_path / "client.json")
@@ -398,9 +406,7 @@ def test_upload_non_zip_fails_before_network_with_plain_error(tmp_path: Path, mo
     assert "no es un ZIP válido" in message
 
 
-def test_upload_team_copy_zip_is_supported_by_generic_drive_transport(
-    tmp_path: Path, monkeypatch
-):
+def test_upload_team_copy_zip_is_supported_by_generic_drive_transport(tmp_path: Path, monkeypatch):
     secret = _client_secret(tmp_path / "client.json")
     token_path = _token(tmp_path / "token.json")
     team_copy = tmp_path / "copia-trabajo.zip"
@@ -437,9 +443,7 @@ def test_upload_team_copy_zip_is_supported_by_generic_drive_transport(
             ).encode("utf-8")
         ),
     ]
-    monkeypatch.setattr(
-        "urllib.request.urlopen", lambda request, timeout=0: responses.pop(0)
-    )
+    monkeypatch.setattr("urllib.request.urlopen", lambda request, timeout=0: responses.pop(0))
     summary = upload_archive_workbench_zip_to_drive(
         team_copy,
         client_secret_path=secret,
@@ -448,6 +452,7 @@ def test_upload_team_copy_zip_is_supported_by_generic_drive_transport(
     assert summary.artifact_kind == "team_copy"
     assert summary.team_copy_id == "team-1"
     assert summary.project_id == "project-1"
+
 
 def test_download_valid_bundle_is_atomic_and_verified(tmp_path: Path, monkeypatch):
     secret = _client_secret(tmp_path / "client.json")
@@ -489,10 +494,7 @@ def test_download_valid_bundle_is_atomic_and_verified(tmp_path: Path, monkeypatc
     assert not summary.destination.with_suffix(summary.destination.suffix + ".tmp").exists()
 
 
-
-def test_download_team_copy_from_drive_is_verified_without_applying_it(
-    tmp_path: Path, monkeypatch
-):
+def test_download_team_copy_from_drive_is_verified_without_applying_it(tmp_path: Path, monkeypatch):
     secret = _client_secret(tmp_path / "client.json")
     token_path = _token(tmp_path / "token.json")
     team_copy = tmp_path / "team.zip"
@@ -530,9 +532,7 @@ def test_download_team_copy_from_drive_is_verified_without_applying_it(
         ),
         _FakeResponse(payload),
     ]
-    monkeypatch.setattr(
-        "urllib.request.urlopen", lambda request, timeout=0: responses.pop(0)
-    )
+    monkeypatch.setattr("urllib.request.urlopen", lambda request, timeout=0: responses.pop(0))
     result = download_archive_workbench_zip_from_drive(
         "drive-team-download",
         project_root=tmp_path / "project",
@@ -543,6 +543,7 @@ def test_download_team_copy_from_drive_is_verified_without_applying_it(
     assert result.team_copy_id == "team-download-1"
     assert result.destination.is_file()
     assert result.local_sha256 == digest
+
 
 def test_download_rejects_declared_sha_mismatch_and_removes_file(tmp_path: Path, monkeypatch):
     secret = _client_secret(tmp_path / "client.json")

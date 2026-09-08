@@ -4,6 +4,7 @@ Revision ID: 0017_exchange_conflict_resolutions
 Revises: 0016_exchange_delete_preconditions
 Create Date: 2026-07-24
 """
+
 from __future__ import annotations
 
 from alembic import op
@@ -32,7 +33,9 @@ def upgrade() -> None:
         sa.Column("resolved_at", sa.DateTime(timezone=True), nullable=False),
         sa.ForeignKeyConstraint(["dry_run_id"], ["exchange_dry_runs.id"], ondelete="CASCADE"),
         sa.UniqueConstraint(
-            "dry_run_id", "incoming_event_id", "field_name",
+            "dry_run_id",
+            "incoming_event_id",
+            "field_name",
             name="uq_exchange_resolution_event_field",
         ),
     )

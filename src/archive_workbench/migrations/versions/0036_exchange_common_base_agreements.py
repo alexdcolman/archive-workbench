@@ -4,6 +4,7 @@ Revision ID: 0036_exchange_common_base_agreements
 Revises: 0035_exchange_lineage_recovery
 Create Date: 2026-08-03
 """
+
 from __future__ import annotations
 
 import sqlalchemy as sa
@@ -56,9 +57,7 @@ def upgrade() -> None:
             ["local_checkpoint_id"], ["exchange_checkpoints.id"], ondelete="RESTRICT"
         ),
         sa.PrimaryKeyConstraint("id"),
-        sa.UniqueConstraint(
-            "agreement_id", name="uq_exchange_common_base_agreement"
-        ),
+        sa.UniqueConstraint("agreement_id", name="uq_exchange_common_base_agreement"),
     )
     op.create_index(
         "ix_exchange_common_base_workspace_registered",

@@ -134,7 +134,6 @@ def _corpus() -> CorpusDefinition:
     )
 
 
-
 def _add_historical_schema_compat_columns(engine) -> None:
     additions = {
         "editable_pages": {
@@ -169,16 +168,17 @@ def _add_historical_schema_compat_columns(engine) -> None:
     with engine.begin() as connection:
         for table, columns in additions.items():
             for column, sql_type in columns.items():
-                connection.execute(
-                    text(f"ALTER TABLE {table} ADD COLUMN {column} {sql_type}")
-                )
+                connection.execute(text(f"ALTER TABLE {table} ADD COLUMN {column} {sql_type}"))
 
 
 def _drop_historical_schema_compat_columns(root: Path) -> None:
     additions = {
         "exchange_dry_runs": [
-            "archive_note", "archived_at", "archived_by",
-            "base_match_method", "lifecycle_status",
+            "archive_note",
+            "archived_at",
+            "archived_by",
+            "base_match_method",
+            "lifecycle_status",
         ],
         "derivative_assets": ["transformations_json", "analysis_json"],
         "corpus_export_profiles": ["archived_at", "archived_by", "lifecycle_status"],
@@ -196,9 +196,7 @@ def _drop_historical_schema_compat_columns(root: Path) -> None:
         engine.dispose()
 
 
-def _seed_project(
-    root: Path, *, revision: str = "head"
-) -> tuple[object, object, str]:
+def _seed_project(root: Path, *, revision: str = "head") -> tuple[object, object, str]:
     _write_pdf(root / "corpus/doc.pdf")
     decisions = load_decisions(Path(__file__).parents[1] / "config/decisions.yaml")
     upgrade_database(root, revision=revision)
@@ -211,9 +209,7 @@ def _seed_project(
             corpus=_corpus(),
         )
         registration = session.scalar(
-            select(SourceRegistration).where(
-                SourceRegistration.source_key == "doc_exchange"
-            )
+            select(SourceRegistration).where(SourceRegistration.source_key == "doc_exchange")
         )
         assert registration and registration.digital_object_id
         digital = session.get(DigitalObject, registration.digital_object_id)
@@ -450,12 +446,9 @@ def test_exchange_migration_upgrades_existing_0012_database(tmp_path: Path) -> N
     } <= tables
 
 
-
 def test_dry_run_migration_upgrades_populated_0013_database(tmp_path: Path) -> None:
     root = tmp_path / "project"
-    engine, _decisions, object_id = _seed_project(
-        root, revision="0013_offline_exchange_log"
-    )
+    engine, _decisions, object_id = _seed_project(root, revision="0013_offline_exchange_log")
     try:
         with session_scope(engine) as session:
             assert session.get(EditableObject, object_id) is not None
@@ -473,6 +466,7 @@ def test_dry_run_migration_upgrades_populated_0013_database(tmp_path: Path) -> N
         engine.dispose()
     assert {"exchange_dry_runs", "exchange_incoming_event_assessments"} <= tables
 
+
 def test_checkpoint_sets_baseline_and_edit_creates_event(tmp_path: Path) -> None:
     root = tmp_path / "project"
     engine, decisions, object_id = _seed_project(root)
@@ -481,9 +475,7 @@ def test_checkpoint_sets_baseline_and_edit_creates_event(tmp_path: Path) -> None
             workspace = ensure_exchange_workspace(
                 session, workspace_name="alex-pc", changed_by="Alex"
             )
-            baseline = create_exchange_checkpoint(
-                session, label="baseline", created_by="Alex"
-            )
+            baseline = create_exchange_checkpoint(session, label="baseline", created_by="Alex")
             assert workspace.workspace_name == "alex-pc"
             assert baseline.sequence_number == 2  # vínculo digital + importación inicial editable
         with session_scope(engine) as session:
@@ -513,12 +505,8 @@ def test_bundle_export_and_inspection_are_verifiable(tmp_path: Path) -> None:
     engine, decisions, object_id = _seed_project(root)
     try:
         with session_scope(engine) as session:
-            ensure_exchange_workspace(
-                session, workspace_name="alex-pc", changed_by="Alex"
-            )
-            baseline = create_exchange_checkpoint(
-                session, label="baseline", created_by="Alex"
-            )
+            ensure_exchange_workspace(session, workspace_name="alex-pc", changed_by="Alex")
+            baseline = create_exchange_checkpoint(session, label="baseline", created_by="Alex")
         with session_scope(engine) as session:
             update_editable_object(
                 session,
@@ -573,9 +561,10 @@ def test_bundle_tampering_is_rejected(tmp_path: Path) -> None:
             )
         tampered = root / "exchange/incoming/tampered.zip"
         tampered.parent.mkdir(parents=True, exist_ok=True)
-        with zipfile.ZipFile(summary.output_path, "r") as source, zipfile.ZipFile(
-            tampered, "w"
-        ) as target:
+        with (
+            zipfile.ZipFile(summary.output_path, "r") as source,
+            zipfile.ZipFile(tampered, "w") as target,
+        ):
             for name in source.namelist():
                 payload = source.read(name)
                 if name == "changes.jsonl":
@@ -592,9 +581,7 @@ def test_empty_bundle_keeps_equal_sequence_bounds(tmp_path: Path) -> None:
     engine, _decisions, _object_id = _seed_project(root)
     try:
         with session_scope(engine) as session:
-            checkpoint = create_exchange_checkpoint(
-                session, label="baseline", created_by="Alex"
-            )
+            checkpoint = create_exchange_checkpoint(session, label="baseline", created_by="Alex")
         with session_scope(engine) as session:
             summary = export_change_bundle(
                 session,
@@ -615,9 +602,7 @@ def test_annotations_and_review_status_are_logged(tmp_path: Path) -> None:
     engine, _decisions, object_id = _seed_project(root)
     try:
         with session_scope(engine) as session:
-            baseline = create_exchange_checkpoint(
-                session, label="baseline", created_by="Alex"
-            )
+            baseline = create_exchange_checkpoint(session, label="baseline", created_by="Alex")
             obj = session.get(EditableObject, object_id)
             assert obj
             editable_page_id = obj.editable_page_id
@@ -670,9 +655,7 @@ def test_existing_editable_state_becomes_baseline_without_invented_events(
     tmp_path: Path,
 ) -> None:
     root = tmp_path / "project"
-    engine, _decisions, _object_id = _seed_project(
-        root, revision="0012_editable_search_fts"
-    )
+    engine, _decisions, _object_id = _seed_project(root, revision="0012_editable_search_fts")
     engine.dispose()
     assert current_revision(root) == "0012_editable_search_fts"
     upgrade_database(root)
@@ -680,9 +663,7 @@ def test_existing_editable_state_becomes_baseline_without_invented_events(
     try:
         with session_scope(engine) as session:
             assert session.scalar(select(ExchangeChangeEvent.id)) is None
-            checkpoint = create_exchange_checkpoint(
-                session, label="baseline", created_by="Alex"
-            )
+            checkpoint = create_exchange_checkpoint(session, label="baseline", created_by="Alex")
             assert checkpoint.sequence_number == 0
             assert len(checkpoint.state_sha256) == 64
     finally:
@@ -709,9 +690,7 @@ def _reset_receiver_exchange_identity(root: Path, workspace_name: str) -> tuple[
         workspace = ensure_exchange_workspace(
             session, workspace_name=workspace_name, changed_by="Receiver"
         )
-        checkpoint = create_exchange_checkpoint(
-            session, label="baseline", created_by="Receiver"
-        )
+        checkpoint = create_exchange_checkpoint(session, label="baseline", created_by="Receiver")
         workspace_id = workspace.id
         assert checkpoint.sequence_number == 0
     return engine, workspace_id
@@ -723,9 +702,7 @@ def _source_and_receiver(tmp_path: Path) -> tuple[Path, object, object, str, Pat
     source_root = tmp_path / "source"
     source_engine, decisions, object_id = _seed_project(source_root)
     with session_scope(source_engine) as session:
-        ensure_exchange_workspace(
-            session, workspace_name="source-pc", changed_by="Source"
-        )
+        ensure_exchange_workspace(session, workspace_name="source-pc", changed_by="Source")
         create_exchange_checkpoint(session, label="baseline", created_by="Source")
     source_engine.dispose()
     receiver_root = tmp_path / "receiver"
@@ -1072,9 +1049,7 @@ def test_fork_workspace_changes_identity_but_preserves_editable_state(tmp_path: 
     engine, _decisions, object_id = _seed_project(root)
     try:
         with session_scope(engine) as session:
-            old = ensure_exchange_workspace(
-                session, workspace_name="original", changed_by="Alex"
-            )
+            old = ensure_exchange_workspace(session, workspace_name="original", changed_by="Alex")
             create_exchange_checkpoint(session, label="old-baseline", created_by="Alex")
             old_id = old.id
             text_before = session.get(EditableObject, object_id).current_text
@@ -1100,9 +1075,7 @@ def test_transactional_apply_migration_upgrades_populated_0014_database(tmp_path
     from archive_workbench.db.models import ExchangeDryRun
 
     root = tmp_path / "project"
-    engine, _decisions, object_id = _seed_project(
-        root, revision="0014_exchange_dry_run"
-    )
+    engine, _decisions, object_id = _seed_project(root, revision="0014_exchange_dry_run")
     try:
         with session_scope(engine) as session:
             assert session.get(EditableObject, object_id) is not None
@@ -1371,7 +1344,6 @@ def test_applied_bundle_cannot_be_applied_twice(tmp_path: Path) -> None:
         receiver_engine.dispose()
 
 
-
 def test_delete_event_only_contains_lifecycle_precondition(tmp_path: Path) -> None:
     root = tmp_path / "project"
     engine, _decisions, object_id = _seed_project(root)
@@ -1393,9 +1365,7 @@ def test_delete_event_only_contains_lifecycle_precondition(tmp_path: Path) -> No
                 .order_by(ExchangeChangeEvent.sequence_number.desc())
             )
             assert event
-            assert event.changed_fields_json == {
-                "lifecycle_status": ["active", "deleted"]
-            }
+            assert event.changed_fields_json == {"lifecycle_status": ["active", "deleted"]}
     finally:
         engine.dispose()
 
@@ -1637,8 +1607,7 @@ def test_legacy_delete_event_with_spurious_text_is_normalized(tmp_path: Path) ->
             event = json.loads(archive.read("changes.jsonl").decode("utf-8").strip())
         event["changed_fields"]["text"] = [None, "Texto OCR"]
         changes_bytes = (
-            json.dumps(event, ensure_ascii=False, sort_keys=True, separators=(",", ":"))
-            + "\n"
+            json.dumps(event, ensure_ascii=False, sort_keys=True, separators=(",", ":")) + "\n"
         ).encode("utf-8")
         manifest["changes_sha256"] = hashlib.sha256(changes_bytes).hexdigest()
         manifest_bytes = json.dumps(
@@ -1691,9 +1660,7 @@ def test_delete_precondition_migration_upgrades_populated_0015_database(tmp_path
     assert current_revision(root) == "0047_authority_relation_profiles"
     engine = create_sqlite_engine(database_path(root))
     try:
-        columns = {
-            row["name"] for row in inspect(engine).get_columns("exchange_dry_runs")
-        }
+        columns = {row["name"] for row in inspect(engine).get_columns("exchange_dry_runs")}
         with session_scope(engine) as session:
             assert session.get(EditableObject, object_id) is not None
     finally:
@@ -1787,7 +1754,9 @@ def test_conflict_can_be_resolved_field_by_field_and_applied(tmp_path: Path) -> 
                 choice="incoming",
                 resolved_by="Receiver",
             )
-            assert resolution_status(session, bundle.bundle_id).overall_status == "ready_to_finalize"
+            assert (
+                resolution_status(session, bundle.bundle_id).overall_status == "ready_to_finalize"
+            )
             final = finalize_bundle_resolutions(
                 session,
                 bundle_ref=bundle.bundle_id,
@@ -1829,13 +1798,21 @@ def test_conflict_custom_resolution_is_applied(tmp_path: Path) -> None:
     try:
         with session_scope(source_engine) as session:
             update_editable_object(
-                session, decisions=decisions, object_id=object_id,
-                expected_revision=1, edited_by="Source", text="Remoto",
+                session,
+                decisions=decisions,
+                object_id=object_id,
+                expected_revision=1,
+                edited_by="Source",
+                text="Remoto",
             )
         with session_scope(receiver_engine) as session:
             update_editable_object(
-                session, decisions=decisions, object_id=object_id,
-                expected_revision=1, edited_by="Receiver", text="Local",
+                session,
+                decisions=decisions,
+                object_id=object_id,
+                expected_revision=1,
+                edited_by="Receiver",
+                text="Local",
             )
         with session_scope(source_engine) as session:
             bundle = export_change_bundle(
@@ -1843,13 +1820,19 @@ def test_conflict_custom_resolution_is_applied(tmp_path: Path) -> None:
             )
         with session_scope(receiver_engine) as session:
             dry_run_change_bundle(
-                session, project_root=receiver_root, bundle_path=bundle.output_path,
+                session,
+                project_root=receiver_root,
+                bundle_path=bundle.output_path,
                 assessed_by="Receiver",
             )
             row = conflict_field_rows(session, bundle.bundle_id)[0]
             save_conflict_resolution(
-                session, bundle_ref=bundle.bundle_id, event_id=row.event_id,
-                field_name="text", choice="custom", custom_value="Texto conciliado",
+                session,
+                bundle_ref=bundle.bundle_id,
+                event_id=row.event_id,
+                field_name="text",
+                choice="custom",
+                custom_value="Texto conciliado",
                 resolved_by="Receiver",
             )
             finalize_bundle_resolutions(
@@ -1857,7 +1840,9 @@ def test_conflict_custom_resolution_is_applied(tmp_path: Path) -> None:
             )
         with session_scope(receiver_engine) as session:
             apply_change_bundle(
-                session, project_root=receiver_root, bundle_ref=bundle.bundle_id,
+                session,
+                project_root=receiver_root,
+                bundle_ref=bundle.bundle_id,
                 applied_by="Receiver",
             )
             assert session.get(EditableObject, object_id).current_text == "Texto conciliado"
@@ -1887,13 +1872,21 @@ def test_conflicted_event_can_be_explicitly_skipped(tmp_path: Path) -> None:
     try:
         with session_scope(source_engine) as session:
             update_editable_object(
-                session, decisions=decisions, object_id=object_id,
-                expected_revision=1, edited_by="Source", text="Remoto",
+                session,
+                decisions=decisions,
+                object_id=object_id,
+                expected_revision=1,
+                edited_by="Source",
+                text="Remoto",
             )
         with session_scope(receiver_engine) as session:
             update_editable_object(
-                session, decisions=decisions, object_id=object_id,
-                expected_revision=1, edited_by="Receiver", text="Local",
+                session,
+                decisions=decisions,
+                object_id=object_id,
+                expected_revision=1,
+                edited_by="Receiver",
+                text="Local",
             )
         with session_scope(source_engine) as session:
             bundle = export_change_bundle(
@@ -1901,20 +1894,27 @@ def test_conflicted_event_can_be_explicitly_skipped(tmp_path: Path) -> None:
             )
         with session_scope(receiver_engine) as session:
             dry_run_change_bundle(
-                session, project_root=receiver_root, bundle_path=bundle.output_path,
+                session,
+                project_root=receiver_root,
+                bundle_path=bundle.output_path,
                 assessed_by="Receiver",
             )
             event_id = conflict_field_rows(session, bundle.bundle_id)[0].event_id
             skip_conflicted_event(
-                session, bundle_ref=bundle.bundle_id, event_id=event_id,
-                resolved_by="Receiver", note="Se conserva la versión local",
+                session,
+                bundle_ref=bundle.bundle_id,
+                event_id=event_id,
+                resolved_by="Receiver",
+                note="Se conserva la versión local",
             )
             finalize_bundle_resolutions(
                 session, bundle_ref=bundle.bundle_id, finalized_by="Receiver"
             )
         with session_scope(receiver_engine) as session:
             summary = apply_change_bundle(
-                session, project_root=receiver_root, bundle_ref=bundle.bundle_id,
+                session,
+                project_root=receiver_root,
+                bundle_ref=bundle.bundle_id,
                 applied_by="Receiver",
             )
             assert summary.applied_event_count == 0
@@ -1995,13 +1995,21 @@ def test_bulk_resolution_and_finalize_are_idempotent(tmp_path: Path) -> None:
     try:
         with session_scope(source_engine) as session:
             update_editable_object(
-                session, decisions=decisions, object_id=object_id,
-                expected_revision=1, edited_by="Source", text="Remoto",
+                session,
+                decisions=decisions,
+                object_id=object_id,
+                expected_revision=1,
+                edited_by="Source",
+                text="Remoto",
             )
         with session_scope(receiver_engine) as session:
             update_editable_object(
-                session, decisions=decisions, object_id=object_id,
-                expected_revision=1, edited_by="Receiver", text="Local",
+                session,
+                decisions=decisions,
+                object_id=object_id,
+                expected_revision=1,
+                edited_by="Receiver",
+                text="Local",
             )
         with session_scope(source_engine) as session:
             bundle = export_change_bundle(
@@ -2009,7 +2017,9 @@ def test_bulk_resolution_and_finalize_are_idempotent(tmp_path: Path) -> None:
             )
         with session_scope(receiver_engine) as session:
             dry_run_change_bundle(
-                session, project_root=receiver_root, bundle_path=bundle.output_path,
+                session,
+                project_root=receiver_root,
+                bundle_path=bundle.output_path,
                 assessed_by="Receiver",
             )
             event_id = conflict_field_rows(session, bundle.bundle_id)[0].event_id
@@ -2032,7 +2042,9 @@ def test_bulk_resolution_and_finalize_are_idempotent(tmp_path: Path) -> None:
             assert second.already_finalized is True
         with session_scope(receiver_engine) as session:
             summary = apply_change_bundle(
-                session, project_root=receiver_root, bundle_ref=bundle.bundle_id,
+                session,
+                project_root=receiver_root,
+                bundle_ref=bundle.bundle_id,
                 applied_by="Receiver",
             )
             assert summary.applied_event_count == 1
@@ -2063,13 +2075,21 @@ def test_bulk_local_resolution_is_counted_separately(tmp_path: Path) -> None:
     try:
         with session_scope(source_engine) as session:
             update_editable_object(
-                session, decisions=decisions, object_id=object_id,
-                expected_revision=1, edited_by="Source", text="Remoto",
+                session,
+                decisions=decisions,
+                object_id=object_id,
+                expected_revision=1,
+                edited_by="Source",
+                text="Remoto",
             )
         with session_scope(receiver_engine) as session:
             update_editable_object(
-                session, decisions=decisions, object_id=object_id,
-                expected_revision=1, edited_by="Receiver", text="Local",
+                session,
+                decisions=decisions,
+                object_id=object_id,
+                expected_revision=1,
+                edited_by="Receiver",
+                text="Local",
             )
         with session_scope(source_engine) as session:
             bundle = export_change_bundle(
@@ -2077,7 +2097,9 @@ def test_bulk_local_resolution_is_counted_separately(tmp_path: Path) -> None:
             )
         with session_scope(receiver_engine) as session:
             dry_run_change_bundle(
-                session, project_root=receiver_root, bundle_path=bundle.output_path,
+                session,
+                project_root=receiver_root,
+                bundle_path=bundle.output_path,
                 assessed_by="Receiver",
             )
             bulk = resolve_conflict_fields_bulk(
@@ -2092,7 +2114,9 @@ def test_bulk_local_resolution_is_counted_separately(tmp_path: Path) -> None:
             )
         with session_scope(receiver_engine) as session:
             summary = apply_change_bundle(
-                session, project_root=receiver_root, bundle_ref=bundle.bundle_id,
+                session,
+                project_root=receiver_root,
+                bundle_ref=bundle.bundle_id,
                 applied_by="Receiver",
             )
             assert summary.applied_event_count == 0
@@ -2137,9 +2161,7 @@ def test_catalog_units_and_digital_links_exchange_without_copying_local_file(
     engine, decisions, _object_id = _seed_project(source_root)
     try:
         with session_scope(engine) as session:
-            ensure_exchange_workspace(
-                session, workspace_name="source", changed_by="Alex"
-            )
+            ensure_exchange_workspace(session, workspace_name="source", changed_by="Alex")
             create_exchange_checkpoint(session, label="baseline", created_by="Alex")
     finally:
         engine.dispose()
@@ -2271,9 +2293,7 @@ def test_catalog_updates_and_moves_exchange_transactionally(tmp_path: Path) -> N
             )
             serie_id = serie.id
             fondo_b_id = fondo_b.id
-            ensure_exchange_workspace(
-                session, workspace_name="source", changed_by="Alex"
-            )
+            ensure_exchange_workspace(session, workspace_name="source", changed_by="Alex")
             create_exchange_checkpoint(session, label="baseline", created_by="Alex")
     finally:
         engine.dispose()
@@ -2282,9 +2302,7 @@ def test_catalog_updates_and_moves_exchange_transactionally(tmp_path: Path) -> N
     receiver_engine = create_sqlite_engine(database_path(receiver_root))
     try:
         with session_scope(receiver_engine) as session:
-            fork_exchange_workspace(
-                session, workspace_name="receiver", created_by="Alex"
-            )
+            fork_exchange_workspace(session, workspace_name="receiver", created_by="Alex")
     finally:
         receiver_engine.dispose()
 
@@ -2635,6 +2653,7 @@ def test_explicit_entity_relations_travel_in_bundle(tmp_path: Path) -> None:
             assert applied.applied_event_count == 3
         with session_scope(receiver_engine) as session:
             from archive_workbench.db.models import AuthorityRecord
+
             received_person = session.get(AuthorityRecord, person_id)
             assert received_person is not None
             assert received_person.profile_json == {"places": "Rawson", "sources": "Ficha revisada"}
@@ -2810,9 +2829,12 @@ def test_catalog_link_removal_travels_without_deleting_file_or_digital_object(
         with session_scope(receiver_engine) as session:
             assert session.get(DigitalObjectUnitLink, link_id) is None
             assert session.get(DigitalObject, digital_id) is not None
-            assert session.scalar(
-                select(FileInstance).where(FileInstance.digital_object_id == digital_id)
-            ) is not None
+            assert (
+                session.scalar(
+                    select(FileInstance).where(FileInstance.digital_object_id == digital_id)
+                )
+                is not None
+            )
     finally:
         receiver_engine.dispose()
 
@@ -3140,9 +3162,7 @@ def _candidate_source_and_receiver(tmp_path: Path):
         candidate_run_id, candidate_page_id, candidate_object_id = _add_shared_candidate(
             session, digital=digital
         )
-        ensure_exchange_workspace(
-            session, workspace_name="source-pc", changed_by="Source"
-        )
+        ensure_exchange_workspace(session, workspace_name="source-pc", changed_by="Source")
         create_exchange_checkpoint(session, label="baseline", created_by="Source")
     source_engine.dispose()
     receiver_root = tmp_path / "receiver"
@@ -3152,8 +3172,16 @@ def _candidate_source_and_receiver(tmp_path: Path):
     )
     source_engine = create_sqlite_engine(database_path(source_root))
     return (
-        source_root, source_engine, decisions, object_id, receiver_root, receiver_engine,
-        receiver_workspace_id, candidate_run_id, candidate_page_id, candidate_object_id,
+        source_root,
+        source_engine,
+        decisions,
+        object_id,
+        receiver_root,
+        receiver_engine,
+        receiver_workspace_id,
+        candidate_run_id,
+        candidate_page_id,
+        candidate_object_id,
     )
 
 
@@ -3163,8 +3191,16 @@ def test_bundle_transports_candidate_adoption_when_ocr_dependencies_exist(
     from archive_workbench.db.models import EditablePage, EditablePageRevision
 
     (
-        source_root, source_engine, decisions, _object_id, receiver_root, receiver_engine,
-        _receiver_workspace_id, candidate_run_id, candidate_page_id, candidate_object_id,
+        source_root,
+        source_engine,
+        decisions,
+        _object_id,
+        receiver_root,
+        receiver_engine,
+        _receiver_workspace_id,
+        candidate_run_id,
+        candidate_page_id,
+        candidate_object_id,
     ) = _candidate_source_and_receiver(tmp_path)
     try:
         with session_scope(source_engine) as session:
@@ -3241,8 +3277,16 @@ def test_bundle_transports_manual_keep_edits_when_ocr_dependencies_exist(
     from archive_workbench.db.models import EditablePage, EditablePageRevision
 
     (
-        source_root, source_engine, decisions, object_id, receiver_root, receiver_engine,
-        _receiver_workspace_id, candidate_run_id, candidate_page_id, _candidate_object_id,
+        source_root,
+        source_engine,
+        decisions,
+        object_id,
+        receiver_root,
+        receiver_engine,
+        _receiver_workspace_id,
+        candidate_run_id,
+        candidate_page_id,
+        _candidate_object_id,
     ) = _candidate_source_and_receiver(tmp_path)
     try:
         with session_scope(source_engine) as session:
@@ -3317,8 +3361,16 @@ def test_bundle_applies_sequential_candidate_decisions_from_one_checkpoint(
     from archive_workbench.db.models import EditablePage, EditablePageRevision
 
     (
-        source_root, source_engine, decisions, _object_id, receiver_root, receiver_engine,
-        _receiver_workspace_id, candidate_run_id, _candidate_page_id, candidate_object_id,
+        source_root,
+        source_engine,
+        decisions,
+        _object_id,
+        receiver_root,
+        receiver_engine,
+        _receiver_workspace_id,
+        candidate_run_id,
+        _candidate_page_id,
+        candidate_object_id,
     ) = _candidate_source_and_receiver(tmp_path)
     try:
         with session_scope(source_engine) as session:
@@ -3410,18 +3462,14 @@ def test_bundle_applies_sequential_candidate_decisions_from_one_checkpoint(
             assert active.current_text == "Corrección sobre la candidata"
             revisions = session.scalars(
                 select(EditablePageRevision).where(
-                    EditablePageRevision.operation.in_(
-                        ["candidate_adopted", "manual_keep_edits"]
-                    )
+                    EditablePageRevision.operation.in_(["candidate_adopted", "manual_keep_edits"])
                 )
             ).all()
             assert [row.operation for row in revisions] == [
                 "candidate_adopted",
                 "manual_keep_edits",
             ]
-            assert revisions[-1].note == (
-                "Conservar la edición al volver a la selección anterior"
-            )
+            assert revisions[-1].note == ("Conservar la edición al volver a la selección anterior")
     finally:
         source_engine.dispose()
         receiver_engine.dispose()
@@ -3431,25 +3479,37 @@ def test_bundle_requires_shared_ocr_dependencies_for_candidate_decisions(
     tmp_path: Path,
 ) -> None:
     (
-        source_root, source_engine, decisions, _object_id, receiver_root, receiver_engine,
-        _receiver_workspace_id, candidate_run_id, _candidate_page_id, _candidate_object_id,
+        source_root,
+        source_engine,
+        decisions,
+        _object_id,
+        receiver_root,
+        receiver_engine,
+        _receiver_workspace_id,
+        candidate_run_id,
+        _candidate_page_id,
+        _candidate_object_id,
     ) = _candidate_source_and_receiver(tmp_path)
     try:
         with session_scope(source_engine) as session:
             adopt_candidate_page(
-                session, decisions=decisions, source_key="doc_exchange", page=1,
-                candidate_run_id=candidate_run_id, adopted_by="Source",
+                session,
+                decisions=decisions,
+                source_key="doc_exchange",
+                page=1,
+                candidate_run_id=candidate_run_id,
+                adopted_by="Source",
             )
         with session_scope(source_engine) as session:
             bundle = export_change_bundle(
-                session, project_root=source_root, checkpoint_ref="baseline",
+                session,
+                project_root=source_root,
+                checkpoint_ref="baseline",
                 created_by="Source",
             )
         with session_scope(receiver_engine) as session:
             candidate_objects = session.scalars(
-                select(ExtractedObject).where(
-                    ExtractedObject.extraction_run_id == candidate_run_id
-                )
+                select(ExtractedObject).where(ExtractedObject.extraction_run_id == candidate_run_id)
             ).all()
             for row in candidate_objects:
                 session.delete(row)
@@ -3463,7 +3523,9 @@ def test_bundle_requires_shared_ocr_dependencies_for_candidate_decisions(
             session.delete(candidate_run)
         with session_scope(receiver_engine) as session:
             dry = dry_run_change_bundle(
-                session, project_root=receiver_root, bundle_path=bundle.output_path,
+                session,
+                project_root=receiver_root,
+                bundle_path=bundle.output_path,
                 assessed_by="Receiver",
             )
             assert dry.overall_status == "needs_review"
@@ -3520,9 +3582,12 @@ def test_bundle_exports_post_checkpoint_ocr_bootstrap_events_with_shared_depende
             )
             assert bundle.event_count == 1
             assert bundle.output_path.is_file()
-            assert session.scalar(
-                select(ExchangeCheckpoint).where(ExchangeCheckpoint.label.like("bundle_%"))
-            ) is not None
+            assert (
+                session.scalar(
+                    select(ExchangeCheckpoint).where(ExchangeCheckpoint.label.like("bundle_%"))
+                )
+                is not None
+            )
     finally:
         engine.dispose()
 
@@ -3551,14 +3616,21 @@ def test_exchange_fork_copy_recreates_required_project_directories(tmp_path: Pat
     assert (root / "exchange/outgoing").is_dir()
 
 
-
 def test_source_replaced_trigger_is_canonical_without_base_revision(
     tmp_path: Path,
 ) -> None:
     """Retirar un objeto solo publica active → deleted, incluso sin base histórica."""
     (
-        source_root, source_engine, decisions, object_id, _receiver_root, receiver_engine,
-        _receiver_workspace_id, candidate_run_id, _candidate_page_id, _candidate_object_id,
+        source_root,
+        source_engine,
+        decisions,
+        object_id,
+        _receiver_root,
+        receiver_engine,
+        _receiver_workspace_id,
+        candidate_run_id,
+        _candidate_page_id,
+        _candidate_object_id,
     ) = _candidate_source_and_receiver(tmp_path)
     try:
         receiver_engine.dispose()
@@ -3592,9 +3664,7 @@ def test_source_replaced_trigger_is_canonical_without_base_revision(
             )
             assert event is not None
             assert event.operation == "update"
-            assert event.changed_fields_json == {
-                "lifecycle_status": ["active", "deleted"]
-            }
+            assert event.changed_fields_json == {"lifecycle_status": ["active", "deleted"]}
     finally:
         source_engine.dispose()
 
@@ -3620,9 +3690,7 @@ def test_0030_repairs_legacy_source_replaced_bundle_end_to_end(
         ).all()
         for revision in revisions:
             session.delete(revision)
-        ensure_exchange_workspace(
-            session, workspace_name="source-pc", changed_by="Source"
-        )
+        ensure_exchange_workspace(session, workspace_name="source-pc", changed_by="Source")
         create_exchange_checkpoint(session, label="baseline", created_by="Source")
     source_engine.dispose()
 
@@ -3703,7 +3771,8 @@ def test_0030_repairs_legacy_source_replaced_bundle_end_to_end(
                 if line.strip()
             ]
         retired = next(
-            event for event in events
+            event
+            for event in events
             if event["entity_type"] == "editable_object"
             and event["entity_id"] == object_id
             and event["new_revision"] == 2
@@ -3752,7 +3821,6 @@ def test_0030_repairs_legacy_source_replaced_bundle_end_to_end(
     finally:
         source_engine.dispose()
         receiver_engine.dispose()
-
 
 
 def test_form_structure_travels_in_bundle_with_page_revision_history(
@@ -3827,12 +3895,13 @@ def test_form_structure_travels_in_bundle_with_page_revision_history(
             )
             assert applied.applied_event_count >= 1
 
-        with session_scope(source_engine) as source_session, session_scope(
-            receiver_engine
-        ) as receiver_session:
-            source_structure = form_structure(
-                source_session, editable_page_id=page_id
-            ).model_dump(mode="json")
+        with (
+            session_scope(source_engine) as source_session,
+            session_scope(receiver_engine) as receiver_session,
+        ):
+            source_structure = form_structure(source_session, editable_page_id=page_id).model_dump(
+                mode="json"
+            )
             receiver_structure = form_structure(
                 receiver_session, editable_page_id=page_id
             ).model_dump(mode="json")
@@ -3853,11 +3922,15 @@ def test_form_structure_travels_in_bundle_with_page_revision_history(
                 .where(EditablePageRevision.editable_page_id == page_id)
                 .order_by(EditablePageRevision.revision_number)
             ).all()
-            assert receiver_operations == source_operations == [
-                "bootstrap",
-                "form_structure",
-                "form_structure",
-            ]
+            assert (
+                receiver_operations
+                == source_operations
+                == [
+                    "bootstrap",
+                    "form_structure",
+                    "form_structure",
+                ]
+            )
             source_action = source_session.scalar(
                 select(EditablePageAction).where(
                     EditablePageAction.editable_page_id == page_id,
@@ -3873,6 +3946,7 @@ def test_form_structure_travels_in_bundle_with_page_revision_history(
     finally:
         source_engine.dispose()
         receiver_engine.dispose()
+
 
 def test_bundle_preserves_object_revision_operations_and_page_undo_redo_history(
     tmp_path: Path,
@@ -3906,12 +3980,8 @@ def test_bundle_preserves_object_revision_operations_and_page_undo_redo_history(
                     text="Texto corregido",
                 ),
             )
-            undo_page_action(
-                session, editable_page_id=obj.editable_page_id, changed_by="Source"
-            )
-            redo_page_action(
-                session, editable_page_id=obj.editable_page_id, changed_by="Source"
-            )
+            undo_page_action(session, editable_page_id=obj.editable_page_id, changed_by="Source")
+            redo_page_action(session, editable_page_id=obj.editable_page_id, changed_by="Source")
 
         with session_scope(source_engine) as session:
             bundle = export_change_bundle(
@@ -3937,9 +4007,10 @@ def test_bundle_preserves_object_revision_operations_and_page_undo_redo_history(
                 applied_by="Receiver",
             )
 
-        with session_scope(source_engine) as source_session, session_scope(
-            receiver_engine
-        ) as receiver_session:
+        with (
+            session_scope(source_engine) as source_session,
+            session_scope(receiver_engine) as receiver_session,
+        ):
             source_operations = source_session.scalars(
                 select(EditableObjectRevision.operation)
                 .where(EditableObjectRevision.editable_object_id == object_id)
@@ -3950,12 +4021,16 @@ def test_bundle_preserves_object_revision_operations_and_page_undo_redo_history(
                 .where(EditableObjectRevision.editable_object_id == object_id)
                 .order_by(EditableObjectRevision.revision_number)
             ).all()
-            assert receiver_operations == source_operations == [
-                "import",
-                "edit",
-                "undo",
-                "redo",
-            ]
+            assert (
+                receiver_operations
+                == source_operations
+                == [
+                    "import",
+                    "edit",
+                    "undo",
+                    "redo",
+                ]
+            )
             source_action = source_session.scalar(select(EditablePageAction))
             receiver_action = receiver_session.get(
                 EditablePageAction, source_action.id if source_action else ""
@@ -3998,12 +4073,8 @@ def test_0031_backfills_legacy_page_action_and_preserves_history_end_to_end(
                 text="Texto común",
             ),
         )
-        ensure_exchange_workspace(
-            session, workspace_name="source-pc", changed_by="Source"
-        )
-        create_exchange_checkpoint(
-            session, label="baseline_actions", created_by="Source"
-        )
+        ensure_exchange_workspace(session, workspace_name="source-pc", changed_by="Source")
+        create_exchange_checkpoint(session, label="baseline_actions", created_by="Source")
     source_engine.dispose()
 
     receiver_root = tmp_path / "receiver"
@@ -4033,12 +4104,8 @@ def test_0031_backfills_legacy_page_action_and_preserves_history_end_to_end(
                 text="Texto final",
             ),
         )
-        undo_page_action(
-            session, editable_page_id=obj.editable_page_id, changed_by="Source"
-        )
-        redo_page_action(
-            session, editable_page_id=obj.editable_page_id, changed_by="Source"
-        )
+        undo_page_action(session, editable_page_id=obj.editable_page_id, changed_by="Source")
+        redo_page_action(session, editable_page_id=obj.editable_page_id, changed_by="Source")
     source_engine.dispose()
 
     _drop_historical_schema_compat_columns(source_root)
@@ -4080,9 +4147,10 @@ def test_0031_backfills_legacy_page_action_and_preserves_history_end_to_end(
             assert applied.applied_event_count == 4
             assert applied.duplicate_event_count == 1
 
-        with session_scope(source_engine) as source_session, session_scope(
-            receiver_engine
-        ) as receiver_session:
+        with (
+            session_scope(source_engine) as source_session,
+            session_scope(receiver_engine) as receiver_session,
+        ):
             source_operations = source_session.scalars(
                 select(EditableObjectRevision.operation)
                 .where(EditableObjectRevision.editable_object_id == object_id)
@@ -4093,13 +4161,17 @@ def test_0031_backfills_legacy_page_action_and_preserves_history_end_to_end(
                 .where(EditableObjectRevision.editable_object_id == object_id)
                 .order_by(EditableObjectRevision.revision_number)
             ).all()
-            assert receiver_operations == source_operations == [
-                "import",
-                "edit",
-                "edit",
-                "undo",
-                "redo",
-            ]
+            assert (
+                receiver_operations
+                == source_operations
+                == [
+                    "import",
+                    "edit",
+                    "edit",
+                    "undo",
+                    "redo",
+                ]
+            )
             source_actions = source_session.scalars(
                 select(EditablePageAction).order_by(EditablePageAction.sequence_number)
             ).all()
@@ -4296,8 +4368,7 @@ def _rewrite_bundle_manifest(
     manifest = json.loads(entries["manifest.json"].decode("utf-8"))
     manifest.update(updates)
     manifest_bytes = (
-        json.dumps(manifest, ensure_ascii=False, sort_keys=True, separators=(",", ":"))
-        + "\n"
+        json.dumps(manifest, ensure_ascii=False, sort_keys=True, separators=(",", ":")) + "\n"
     ).encode("utf-8")
     entries["manifest.json"] = manifest_bytes
     entries["checksums.sha256"] = (
@@ -4893,9 +4964,7 @@ def test_lineage_diagnostic_rejects_backup_from_different_project(tmp_path: Path
         entries["manifest.json"] = (
             json.dumps(manifest, ensure_ascii=False, indent=2, sort_keys=True) + "\n"
         ).encode("utf-8")
-        with zipfile.ZipFile(
-            foreign_backup, "w", compression=zipfile.ZIP_DEFLATED
-        ) as archive:
+        with zipfile.ZipFile(foreign_backup, "w", compression=zipfile.ZIP_DEFLATED) as archive:
             for name, payload in entries.items():
                 archive.writestr(name, payload)
 
@@ -4958,9 +5027,7 @@ def test_lineage_validation_script_creates_recoverable_discardable_pair(
     )
 
     script_path = (
-        Path(__file__).parents[1]
-        / "scripts"
-        / "create_lineage_diagnostic_validation_projects.py"
+        Path(__file__).parents[1] / "scripts" / "create_lineage_diagnostic_validation_projects.py"
     )
     spec = importlib.util.spec_from_file_location("lineage_validation_script", script_path)
     assert spec and spec.loader
@@ -5049,13 +5116,9 @@ def _create_lineage_recovery_validation_pair(tmp_path: Path) -> dict[str, object
         base / "config" / "decisions.yaml",
     )
     script_path = (
-        Path(__file__).parents[1]
-        / "scripts"
-        / "create_lineage_diagnostic_validation_projects.py"
+        Path(__file__).parents[1] / "scripts" / "create_lineage_diagnostic_validation_projects.py"
     )
-    spec = importlib.util.spec_from_file_location(
-        "lineage_recovery_validation_script", script_path
-    )
+    spec = importlib.util.spec_from_file_location("lineage_recovery_validation_script", script_path)
     assert spec and spec.loader
     module = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(module)
@@ -5596,13 +5659,9 @@ def test_common_base_validation_script_creates_distinct_identical_copies(
         base / "config" / "decisions.yaml",
     )
     script_path = (
-        Path(__file__).parents[1]
-        / "scripts"
-        / "create_common_base_validation_projects.py"
+        Path(__file__).parents[1] / "scripts" / "create_common_base_validation_projects.py"
     )
-    spec = importlib.util.spec_from_file_location(
-        "common_base_validation_script", script_path
-    )
+    spec = importlib.util.spec_from_file_location("common_base_validation_script", script_path)
     assert spec and spec.loader
     module = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(module)
@@ -5775,9 +5834,7 @@ def test_state_adoption_is_transactional_audited_and_rollback_restores_previous_
             assert current_editable_state_sha256(session, target_project_id) == source_state
             editable = session.get(EditableObject, pair["object_id"])
             assert editable and editable.current_text == "Estado remoto adoptable"
-            adopted_structure = form_structure(
-                session, editable_page_id=editable.editable_page_id
-            )
+            adopted_structure = form_structure(session, editable_page_id=editable.editable_page_id)
             assert adopted_structure.groups[0].label == "Datos adoptables"
             assert adopted_structure.controls[0].state == "marked"
             assert session.scalar(select(func.count(ExchangeStateAdoption.id))) == 1
@@ -5797,15 +5854,11 @@ def test_state_adoption_is_transactional_audited_and_rollback_restores_previous_
         assert rollback.restored_state_sha256 == previous_state
         assert rollback.safety_backup.is_file()
 
-        pair["counterpart_engine"] = create_sqlite_engine(
-            database_path(pair["counterpart_root"])
-        )
+        pair["counterpart_engine"] = create_sqlite_engine(database_path(pair["counterpart_root"]))
         with session_scope(pair["counterpart_engine"]) as session:
             editable = session.get(EditableObject, pair["object_id"])
             assert editable and editable.current_text == "Estado local divergente"
-            restored_structure = form_structure(
-                session, editable_page_id=editable.editable_page_id
-            )
+            restored_structure = form_structure(session, editable_page_id=editable.editable_page_id)
             assert restored_structure.groups == []
             assert restored_structure.controls == []
             rows = state_adoption_rows(session)
@@ -5908,13 +5961,9 @@ def test_state_adoption_validation_script_creates_divergent_copies_and_package(
         base / "config" / "decisions.yaml",
     )
     script_path = (
-        Path(__file__).parents[1]
-        / "scripts"
-        / "create_state_adoption_validation_projects.py"
+        Path(__file__).parents[1] / "scripts" / "create_state_adoption_validation_projects.py"
     )
-    spec = importlib.util.spec_from_file_location(
-        "state_adoption_validation_script", script_path
-    )
+    spec = importlib.util.spec_from_file_location("state_adoption_validation_script", script_path)
     assert spec and spec.loader
     module = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(module)
@@ -5988,12 +6037,13 @@ def test_layout_structure_travels_in_bundle_with_page_revision_history(
             )
             assert applied.applied_event_count >= 1
 
-        with session_scope(source_engine) as source_session, session_scope(
-            receiver_engine
-        ) as receiver_session:
-            source_layout = layout_structure(
-                source_session, editable_page_id=page_id
-            ).model_dump(mode="json")
+        with (
+            session_scope(source_engine) as source_session,
+            session_scope(receiver_engine) as receiver_session,
+        ):
+            source_layout = layout_structure(source_session, editable_page_id=page_id).model_dump(
+                mode="json"
+            )
             receiver_layout = layout_structure(
                 receiver_session, editable_page_id=page_id
             ).model_dump(mode="json")
@@ -6012,7 +6062,6 @@ def test_layout_structure_travels_in_bundle_with_page_revision_history(
     finally:
         source_engine.dispose()
         receiver_engine.dispose()
-
 
 
 def test_team_copy_can_omit_originals_and_records_that_choice(tmp_path: Path) -> None:
@@ -6193,9 +6242,7 @@ def test_team_copy_package_can_seed_multiple_independent_copies(tmp_path: Path) 
 
     # La activación es de una sola vez y no vuelve a cambiar la identidad.
     assert (
-        activate_received_team_copy(
-            project_root=extracted_roots[0], created_by="Persona receptora"
-        )
+        activate_received_team_copy(project_root=extracted_roots[0], created_by="Persona receptora")
         is None
     )
 

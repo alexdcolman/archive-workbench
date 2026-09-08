@@ -55,21 +55,25 @@ class GeometryResult:
             "lines_detected": self.lines_detected,
             "lines_removed": self.lines_removed,
             "removed_pixels": self.removed_pixels,
-            **(self.dewarp.analysis if self.dewarp is not None else {
-                "dewarp_detected": False,
-                "dewarp_applied": False,
-                "dewarp_confidence": 0.0,
-                "dewarp_support_strips": 0,
-                "dewarp_total_strips": 0,
-                "dewarp_max_displacement_px": 0.0,
-                "dewarp_max_displacement_ratio": 0.0,
-                "dewarp_fit_quality": 0.0,
-                "dewarp_median_improvement": 0.0,
-                "dewarp_curvature_ratio": 0.0,
-                "dewarp_coefficients": [0.0, 0.0, 0.0],
-                "dewarp_reason": "disabled",
-                "dewarp_strip_offsets": [],
-            }),
+            **(
+                self.dewarp.analysis
+                if self.dewarp is not None
+                else {
+                    "dewarp_detected": False,
+                    "dewarp_applied": False,
+                    "dewarp_confidence": 0.0,
+                    "dewarp_support_strips": 0,
+                    "dewarp_total_strips": 0,
+                    "dewarp_max_displacement_px": 0.0,
+                    "dewarp_max_displacement_ratio": 0.0,
+                    "dewarp_fit_quality": 0.0,
+                    "dewarp_median_improvement": 0.0,
+                    "dewarp_curvature_ratio": 0.0,
+                    "dewarp_coefficients": [0.0, 0.0, 0.0],
+                    "dewarp_reason": "disabled",
+                    "dewarp_strip_offsets": [],
+                }
+            ),
         }
 
     @property
@@ -140,6 +144,7 @@ def _pixel_values(image: Image.Image) -> list[int]:
     if getter is not None:
         return list(getter())
     return list(image.getdata())
+
 
 def _working_gray(image: Image.Image, *, max_edge: int = 900) -> Image.Image:
     gray = ImageOps.autocontrast(ImageOps.grayscale(image))
@@ -212,9 +217,7 @@ def detect_orientation(image: Image.Image) -> tuple[int, float, dict[int, float]
     best_angle, best_score = ranked[0]
     second_score = ranked[1][1]
     perpendicular = max(
-        score
-        for angle, score in scores.items()
-        if (angle - best_angle) % 180 == 90
+        score for angle, score in scores.items() if (angle - best_angle) % 180 == 90
     )
     direction_margin = max(0.0, best_score - second_score)
     axis_margin = max(0.0, best_score - perpendicular)
@@ -357,12 +360,9 @@ def remove_long_lines(
                 current = 0
         return best
 
-    horizontal_flags = [
-        longest_run(row) >= width * min_length_ratio for row in matrix
-    ]
+    horizontal_flags = [longest_run(row) >= width * min_length_ratio for row in matrix]
     vertical_flags = [
-        longest_run([matrix[y][x] for y in range(height)])
-        >= height * min_length_ratio
+        longest_run([matrix[y][x] for y in range(height)]) >= height * min_length_ratio
         for x in range(width)
     ]
     scaled_thickness = max(1, math.ceil(max_thickness_px * scale))
@@ -377,13 +377,9 @@ def remove_long_lines(
     accepted: list[tuple[str, int, int]] = []
     for direction, group_start, group_end in candidates:
         ratio = (
-            _horizontal_intersection_ratio(
-                matrix, width, height, group_start, group_end
-            )
+            _horizontal_intersection_ratio(matrix, width, height, group_start, group_end)
             if direction == "horizontal"
-            else _vertical_intersection_ratio(
-                matrix, width, height, group_start, group_end
-            )
+            else _vertical_intersection_ratio(matrix, width, height, group_start, group_end)
         )
         if ratio <= max_intersection_ratio:
             accepted.append((direction, group_start, group_end))

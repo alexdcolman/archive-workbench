@@ -9,7 +9,12 @@ from sqlalchemy import select
 from archive_workbench.catalog import register_test_corpus
 from archive_workbench.contracts.regions import RegionTemplate
 from archive_workbench.contracts.test_corpus import TestCorpus as CorpusDefinition
-from archive_workbench.db import create_sqlite_engine, database_path, session_scope, upgrade_database
+from archive_workbench.db import (
+    create_sqlite_engine,
+    database_path,
+    session_scope,
+    upgrade_database,
+)
 from archive_workbench.db.models import (
     ExtractedObject,
     ExtractionPageSelection,
@@ -183,9 +188,7 @@ def test_render_and_extract_regions(tmp_path: Path, monkeypatch) -> None:
     )
     try:
         with session_scope(engine) as session:
-            previews = render_region_template(
-                session, project_root=root, template=template
-            )
+            previews = render_region_template(session, project_root=root, template=template)
         with session_scope(engine) as session:
             summary = extract_regions(
                 session,

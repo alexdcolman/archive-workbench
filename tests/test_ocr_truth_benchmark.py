@@ -288,7 +288,9 @@ def test_truth_benchmark_runs_three_engines_without_selecting_pages(
     assert (output / "manifest.json").is_file()
     assert (output / "summary.md").is_file()
     assert (output / "summary.csv").is_file()
-    assert (output / "ground_truth/page_0001.txt").read_text(encoding="utf-8") == GROUND_TRUTH + "\n"
+    assert (output / "ground_truth/page_0001.txt").read_text(
+        encoding="utf-8"
+    ) == GROUND_TRUTH + "\n"
     manifest = json.loads((output / "manifest.json").read_text(encoding="utf-8"))
     assert manifest["profile"]["benchmark_key"] == "ocr_truth_es_v1"
     assert len(manifest["candidates"]) == 3
@@ -304,7 +306,9 @@ def test_benchmark_doctor_checks_requested_engines(tmp_path: Path, monkeypatch) 
         "extraction_docling_es.yaml",
         "extraction_surya_es.yaml",
     ):
-        (config / name).write_text((repo_config / name).read_text(encoding="utf-8"), encoding="utf-8")
+        (config / name).write_text(
+            (repo_config / name).read_text(encoding="utf-8"), encoding="utf-8"
+        )
     monkeypatch.setattr("archive_workbench.ocr_truth_benchmark.extraction_doctor", _fake_doctor)
     rows = benchmark_doctor(project_root=root, profile=OcrTruthBenchmarkProfile())
     assert [row.engine_key for row in rows] == ["tesseract", "docling", "surya"]

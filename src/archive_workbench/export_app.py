@@ -34,7 +34,12 @@ from archive_workbench.corpus_export import (
     set_export_profile_archived,
 )
 from archive_workbench.db import create_sqlite_engine, session_scope
-from archive_workbench.ui_navigation import mount_choice_help, rerun_view, section_heading, tracked_tabs
+from archive_workbench.ui_navigation import (
+    mount_choice_help,
+    rerun_view,
+    section_heading,
+    tracked_tabs,
+)
 from archive_workbench.visual_export import VisualExportOptions
 
 _AGGREGATION_LABELS = {
@@ -98,7 +103,6 @@ def _request_profile_view_rebuild(st, *, selected_id: str | None) -> None:
         int(st.session_state.get(_EXPORT_SELECTOR_EPOCH_KEY, 0)) + 1
     )
     rerun_view(st)
-
 
 
 def _queue_profile_lifecycle_action(
@@ -200,6 +204,7 @@ def _process_pending_profile_lifecycle(
     st.session_state[_EXPORT_SELECTOR_EPOCH_KEY] = (
         int(st.session_state.get(_EXPORT_SELECTOR_EPOCH_KEY, 0)) + 1
     )
+
 
 def _save_profile_action(
     db_path,
@@ -318,11 +323,7 @@ def _render_export_result(st, *, project_root) -> None:
             mime=(
                 "application/x-ndjson"
                 if str(result["format"]) == "jsonl"
-                else (
-                    "application/zip"
-                    if str(result["format"]) == "visual_zip"
-                    else "text/csv"
-                )
+                else ("application/zip" if str(result["format"]) == "visual_zip" else "text/csv")
             ),
             use_container_width=True,
             key=f"export_download_{result['run_id']}",
@@ -350,17 +351,13 @@ def _render_profile_editor(
     runs,
 ) -> None:
     default_types = list(selected.include_object_types_json or []) if selected else []
-    default_object_statuses = (
-        list(selected.include_review_statuses_json or []) if selected else []
-    )
+    default_object_statuses = list(selected.include_review_statuses_json or []) if selected else []
     default_page_statuses = (
         list(selected.include_page_review_statuses_json or [])
         if selected
         else list(DEFAULT_AUTOMATIC_PAGE_REVIEW_STATUSES)
     )
-    default_temporal_enabled = bool(
-        selected and (selected.temporal_start or selected.temporal_end)
-    )
+    default_temporal_enabled = bool(selected and (selected.temporal_start or selected.temporal_end))
     initial_scope = analysis_quality_scope(default_page_statuses)
     if initial_scope.is_default:
         st.info(quality_scope_caption(default_page_statuses))
@@ -378,25 +375,19 @@ def _render_profile_editor(
     )
     temporal_enabled = default_temporal_enabled
     temporal_start = (
-        selected.temporal_start
-        if selected and selected.temporal_start
-        else date.today()
+        selected.temporal_start if selected and selected.temporal_start else date.today()
     )
-    temporal_end = (
-        selected.temporal_end
-        if selected and selected.temporal_end
-        else date.today()
-    )
-    temporal_include_undated = (
-        bool(selected.temporal_include_undated) if selected else False
-    )
+    temporal_end = selected.temporal_end if selected and selected.temporal_end else date.today()
+    temporal_include_undated = bool(selected.temporal_include_undated) if selected else False
     object_separator = selected.object_separator if selected else "\n\n"
     page_separator = selected.page_separator if selected else "\n\n"
     include_page_markers = bool(selected.include_page_markers) if selected else False
 
     form_key = f"corpus_export_profile_form_{selected.id if selected else 'new'}"
     with st.form(form_key, enter_to_submit=False):
-        name = st.text_input("Nombre de esta configuración de exportación", value=selected.name if selected else "")
+        name = st.text_input(
+            "Nombre de esta configuración de exportación", value=selected.name if selected else ""
+        )
         description = st.text_area(
             "Descripción opcional de esta configuración",
             value=selected.description or "" if selected else "",
@@ -407,26 +398,20 @@ def _render_profile_editor(
                 "Cómo agrupar los textos en el archivo exportado",
                 options=list(AGGREGATION_LEVELS),
                 index=(
-                    list(AGGREGATION_LEVELS).index(selected.aggregation_level)
-                    if selected
-                    else 3
+                    list(AGGREGATION_LEVELS).index(selected.aggregation_level) if selected else 3
                 ),
                 format_func=lambda value: _AGGREGATION_LABELS[value],
             )
             text_policy = st.selectbox(
                 "Qué versión del texto querés exportar",
                 options=list(TEXT_POLICIES),
-                index=(
-                    list(TEXT_POLICIES).index(selected.text_policy) if selected else 0
-                ),
+                index=(list(TEXT_POLICIES).index(selected.text_policy) if selected else 0),
                 format_func=lambda value: _TEXT_POLICY_LABELS[value],
             )
             output_format = st.selectbox(
                 "Formato de archivo predeterminado",
                 options=list(OUTPUT_FORMATS),
-                index=(
-                    list(OUTPUT_FORMATS).index(selected.output_format) if selected else 0
-                ),
+                index=(list(OUTPUT_FORMATS).index(selected.output_format) if selected else 0),
                 format_func=lambda value: _OUTPUT_FORMAT_LABELS.get(value, value.upper()),
             )
         with right:
@@ -516,7 +501,9 @@ def _render_profile_editor(
                     "Agregar marcas [Página N]",
                     value=include_page_markers,
                 )
-        submitted = st.form_submit_button("Guardar esta configuración de exportación", type="primary")
+        submitted = st.form_submit_button(
+            "Guardar esta configuración de exportación", type="primary"
+        )
 
     if submitted:
         try:
@@ -576,12 +563,9 @@ def _render_profile_editor(
             )
 
 
-
 def _render_profile_dependencies(st, *, profile_id: str, runs) -> None:
     dependent = [row for row in runs if row.profile_id == profile_id]
-    st.caption(
-        f"Archivos exportados anteriormente con esta configuración: {len(dependent)}"
-    )
+    st.caption(f"Archivos exportados anteriormente con esta configuración: {len(dependent)}")
     if dependent:
         with st.expander("Ver archivos exportados con esta configuración"):
             for row in dependent:
@@ -755,12 +739,18 @@ def _render_audiovisual_export_view(
         if preview is not None:
             cols = st.columns(2)
             cols[0].metric("Segmentos de transcripción que se exportarán", preview.total_records)
-            cols[1].metric("Caracteres de transcripción que se exportarán", preview.total_characters)
+            cols[1].metric(
+                "Caracteres de transcripción que se exportarán", preview.total_characters
+            )
             if not preview.records:
                 st.warning("La configuración actual no incluye ningún segmento de transcripción.")
             for row in preview.records:
                 with st.container(border=True):
-                    title = row.get("media_title") or row.get("original_filename") or row.get("source_key")
+                    title = (
+                        row.get("media_title")
+                        or row.get("original_filename")
+                        or row.get("source_key")
+                    )
                     st.write(f"**{title}**")
                     st.caption(
                         f"{row['start_time']:.3f}–{row['end_time']:.3f} s · "
@@ -839,7 +829,9 @@ def _render_audiovisual_export_view(
                     st.write(f"Ruta dentro del proyecto: `{row.output_relative_path}`")
                     st.write(f"Tamaño del archivo: {row.byte_size} bytes")
                     st.write(f"Política de texto: `{options_snapshot.get('text_policy', '-')}`")
-                    st.write(f"Alcance de transcripciones: `{options_snapshot.get('run_scope', '-')}`")
+                    st.write(
+                        f"Alcance de transcripciones: `{options_snapshot.get('run_scope', '-')}`"
+                    )
                     st.write(f"Huella del archivo: `{row.output_sha256}`")
                     st.write(f"Huella del estado del corpus: `{row.corpus_state_sha256}`")
 
@@ -948,7 +940,12 @@ def render_export_view(
 
     configure_tab, preview_tab, run_tab, history_tab = tracked_tabs(
         st,
-        ["Configurar qué exportar", "Revisar textos que se exportarán", "Crear archivo de exportación", "Historial de exportaciones"],
+        [
+            "Configurar qué exportar",
+            "Revisar textos que se exportarán",
+            "Crear archivo de exportación",
+            "Historial de exportaciones",
+        ],
         key="export_tabs",
         help_by_label=TAB_HELP["export_tabs"],
     )
@@ -976,9 +973,13 @@ def render_export_view(
 
     with preview_tab:
         if selected is None:
-            st.info("Guardá o seleccioná una configuración de exportación para ver una muestra de los textos que incluirá.")
+            st.info(
+                "Guardá o seleccioná una configuración de exportación para ver una muestra de los textos que incluirá."
+            )
         elif selected.lifecycle_status == "archived":
-            st.info("Restaurá esta configuración de exportación para volver a generar una muestra de textos.")
+            st.info(
+                "Restaurá esta configuración de exportación para volver a generar una muestra de textos."
+            )
         else:
             preview = None
             engine = create_sqlite_engine(db_path)

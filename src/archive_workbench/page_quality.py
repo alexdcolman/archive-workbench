@@ -78,7 +78,9 @@ class PageQualityResult:
         return [_FLAG_LABELS.get(flag, flag) for flag in self.flags]
 
 
-def _normalized_bbox(geometry: list[dict[str, Any]], page_number: int) -> tuple[float, float, float, float] | None:
+def _normalized_bbox(
+    geometry: list[dict[str, Any]], page_number: int
+) -> tuple[float, float, float, float] | None:
     boxes: list[tuple[float, float, float, float]] = []
     for item in geometry or []:
         if int(item.get("page") or 0) != page_number:
@@ -104,7 +106,9 @@ def _normalized_bbox(geometry: list[dict[str, Any]], page_number: int) -> tuple[
     )
 
 
-def _iou(first: tuple[float, float, float, float], second: tuple[float, float, float, float]) -> float:
+def _iou(
+    first: tuple[float, float, float, float], second: tuple[float, float, float, float]
+) -> float:
     left = max(first[0], second[0])
     top = max(first[1], second[1])
     right = min(first[2], second[2])
@@ -158,8 +162,7 @@ def _object_metrics(objects: list[ExtractedObject], page_number: int) -> dict[st
     tiny_ratio = sum(len(text) <= 3 for text in nonempty) / len(nonempty) if nonempty else 0.0
     short_ratio = sum(len(text) <= 12 for text in nonempty) / len(nonempty) if nonempty else 0.0
     suspicious = sum(
-        not (char.isalnum() or char in ".,;:!?¿¡'\"()[]{}-/°ºª%+&@#—…")
-        for char in visible
+        not (char.isalnum() or char in ".,;:!?¿¡'\"()[]{}-/°ºª%+&@#—…") for char in visible
     )
     suspicious_ratio = suspicious / len(visible) if visible else 0.0
     boxes = [
@@ -187,11 +190,15 @@ def _object_metrics(objects: list[ExtractedObject], page_number: int) -> dict[st
         "overlapping_bbox_ratio": round(overlap_ratio, 6),
         "mean_confidence": round(
             mean([float(item.confidence) for item in objects if item.confidence is not None]), 6
-        ) if any(item.confidence is not None for item in objects) else None,
+        )
+        if any(item.confidence is not None for item in objects)
+        else None,
     }
 
 
-def evaluate_page_quality(*, image_path: Path, objects: list[ExtractedObject], page_number: int) -> tuple[str, float, dict[str, Any], list[str], list[str]]:
+def evaluate_page_quality(
+    *, image_path: Path, objects: list[ExtractedObject], page_number: int
+) -> tuple[str, float, dict[str, Any], list[str], list[str]]:
     metrics: dict[str, Any] = {"page_number": page_number}
     metrics.update(_image_metrics(image_path))
     metrics.update(_object_metrics(objects, page_number))
@@ -339,6 +346,7 @@ def assess_extraction_page_quality(
     session.flush()
     return latest_page_quality_assessment(session, page.id)  # type: ignore[return-value]
 
+
 def assess_source_page_quality(
     session: Session,
     *,
@@ -364,9 +372,7 @@ def assess_source_page_quality(
         run = session.get(ExtractionRun, run_id)
         if run is None or run.digital_object_id != digital.id:
             raise ValueError("La corrida no pertenece al documento indicado")
-        statement = select(ExtractionPage).where(
-            ExtractionPage.extraction_run_id == run.id
-        )
+        statement = select(ExtractionPage).where(ExtractionPage.extraction_run_id == run.id)
         if requested:
             statement = statement.where(ExtractionPage.page_number.in_(requested))
         targets = list(session.scalars(statement.order_by(ExtractionPage.page_number)).all())

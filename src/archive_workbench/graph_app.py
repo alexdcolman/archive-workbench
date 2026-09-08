@@ -130,7 +130,9 @@ _SNAPSHOT_FIELD_LABELS = {
 }
 
 
-def _go_to(st, *, mode: str, selection_key: str | None = None, selection: str | None = None) -> None:
+def _go_to(
+    st, *, mode: str, selection_key: str | None = None, selection: str | None = None
+) -> None:
     request_app_view(st, mode=mode)
     if selection_key and selection:
         st.session_state[selection_key] = selection
@@ -317,8 +319,7 @@ def _repair_missing_authority_action(
         )
     else:
         message = (
-            "La mención volvió al estado pendiente. "
-            "El estado anterior permanece en el historial."
+            "La mención volvió al estado pendiente. El estado anterior permanece en el historial."
         )
     st.session_state["mention_repair_notice"] = message
     rerun_view(st)
@@ -370,7 +371,6 @@ def _repair_duplicate_action(
     rerun_view(st)
 
 
-
 def _repair_duplicate_group_action(
     st,
     *,
@@ -382,10 +382,7 @@ def _repair_duplicate_group_action(
     note: str,
 ) -> None:
     group_ids = (case.mention_id, *case.duplicate_mention_ids)
-    if (
-        case.projected_start_offset is None
-        or case.projected_end_offset is None
-    ):
+    if case.projected_start_offset is None or case.projected_end_offset is None:
         st.error("La alerta no contiene una ubicación vigente verificable.")
         return
     engine = create_sqlite_engine(db_path)
@@ -441,6 +438,7 @@ def _repair_safe_group_action(
         "verificable. Todos los estados anteriores permanecen en el historial."
     )
     rerun_view(st)
+
 
 def _repair_unresolved_action(
     st,
@@ -534,7 +532,10 @@ def render_graph_view(
     focus_rows = [
         *[(f"entity:{row.id}", "entity", row.preferred_name) for row in authority_focus],
         *[(f"archival_unit:{row.id}", "archival_unit", row.title) for row in unit_focus],
-        *[(f"digital_object:{row.id}", "digital_object", row.original_filename) for row in digital_focus],
+        *[
+            (f"digital_object:{row.id}", "digital_object", row.original_filename)
+            for row in digital_focus
+        ],
         *[(f"document_part:{row.id}", "document_part", row.title) for row in part_focus],
     ]
     focus_options = [""] + [row[0] for row in focus_rows]
@@ -562,19 +563,13 @@ def render_graph_view(
     else:
         applied_graph_filters = {**default_graph_filters, **applied_graph_filters}
     applied_graph_filters["edge_types"] = [
-        value
-        for value in applied_graph_filters["edge_types"]
-        if value in GRAPH_EDGE_TYPES
+        value for value in applied_graph_filters["edge_types"] if value in GRAPH_EDGE_TYPES
     ]
     applied_graph_filters["entity_types"] = [
-        value
-        for value in applied_graph_filters["entity_types"]
-        if value in AUTHORITY_TYPES
+        value for value in applied_graph_filters["entity_types"] if value in AUTHORITY_TYPES
     ]
     applied_graph_filters["archival_levels"] = [
-        value
-        for value in applied_graph_filters["archival_levels"]
-        if value in level_options
+        value for value in applied_graph_filters["archival_levels"] if value in level_options
     ]
     applied_graph_filters["review_statuses"] = [
         value
@@ -664,7 +659,9 @@ def render_graph_view(
                             if int(applied_graph_filters["depth_value"]) in {0, 1, 2, 3}
                             else 1
                         ),
-                        format_func=lambda value: "Sin límite" if value == 0 else f"{value} salto(s)",
+                        format_func=lambda value: (
+                            "Sin límite" if value == 0 else f"{value} salto(s)"
+                        ),
                         help=(
                             "Se aplica cuando elegís un elemento en «Centrar en». "
                             "Sin foco, el mapa conserva todos los elementos y omite esta distancia."
@@ -695,9 +692,7 @@ def render_graph_view(
                 )
                 temporal_include_undated = temporal_cols[2].checkbox(
                     "Incluir sin fecha",
-                    value=bool(
-                        applied_graph_filters["temporal_include_undated"]
-                    ),
+                    value=bool(applied_graph_filters["temporal_include_undated"]),
                     key="graph_temporal_undated",
                 )
                 filters_submitted = st.form_submit_button(
@@ -733,9 +728,7 @@ def render_graph_view(
                 archival_levels=tuple(applied_graph_filters["archival_levels"]),
                 review_statuses=tuple(applied_graph_filters["review_statuses"]),
                 include_inactive=bool(applied_graph_filters["include_inactive"]),
-                include_pending_mentions=bool(
-                    applied_graph_filters["include_pending_mentions"]
-                ),
+                include_pending_mentions=bool(applied_graph_filters["include_pending_mentions"]),
                 temporal_start=(
                     applied_graph_filters["temporal_from"]
                     if applied_graph_filters["temporal_enabled"]
@@ -805,7 +798,9 @@ def render_graph_view(
     finally:
         engine.dispose()
 
-    structural_count = sum(edge.edge_type in {"hierarchy", "document", "part"} for edge in view.edges)
+    structural_count = sum(
+        edge.edge_type in {"hierarchy", "document", "part"} for edge in view.edges
+    )
     analytical_count = sum(edge.edge_type == "analytical" for edge in view.edges)
     role_count = sum(edge.edge_type in {"producer", "manager"} for edge in view.edges)
     mention_count = sum(edge.edge_type == "mention" for edge in view.edges)
@@ -901,7 +896,11 @@ def render_graph_view(
                 with st.expander("Detalles técnicos", expanded=False):
                     st.code(f"registro={node.record_id}")
                     st.code(f"nodo={node.node_id}")
-                if st.button("Abrir el registro de este elemento", type="primary", key=f"graph_open_node_{node.node_id}"):
+                if st.button(
+                    "Abrir el registro de este elemento",
+                    type="primary",
+                    key=f"graph_open_node_{node.node_id}",
+                ):
                     _navigate_node(st, node)
         elif selected_edge in edge_map:
             edge = edge_map[selected_edge]
@@ -917,7 +916,9 @@ def render_graph_view(
                     st.code(f"vinculo={edge.edge_id}")
                     st.code(f"peso={edge.weight}")
                 if edge.review_status:
-                    st.caption(f"Revisión: {_REVIEW_LABELS.get(edge.review_status, edge.review_status)}")
+                    st.caption(
+                        f"Revisión: {_REVIEW_LABELS.get(edge.review_status, edge.review_status)}"
+                    )
                 temporal_label = format_temporal_range(
                     edge.temporal_expression,
                     edge.temporal_start,
@@ -932,8 +933,14 @@ def render_graph_view(
                     st.write("**Procedencia:** " + edge.provenance_note)
                 actions = st.columns(2)
                 if edge.relation_id and source and source.kind == "entity":
-                    if actions[0].button("Abrir registro de origen", key=f"graph_open_relation_{edge.edge_id}"):
-                        if edge.edge_type in {"producer", "manager"} and target and target.kind == "archival_unit":
+                    if actions[0].button(
+                        "Abrir registro de origen", key=f"graph_open_relation_{edge.edge_id}"
+                    ):
+                        if (
+                            edge.edge_type in {"producer", "manager"}
+                            and target
+                            and target.kind == "archival_unit"
+                        ):
                             _go_to(
                                 st,
                                 mode="catalog",
@@ -948,10 +955,14 @@ def render_graph_view(
                                 selection=source.record_id,
                             )
                 if edge.source_key:
-                    if actions[1].button("Abrir evidencia textual", key=f"graph_open_evidence_{edge.edge_id}"):
+                    if actions[1].button(
+                        "Abrir evidencia textual", key=f"graph_open_evidence_{edge.edge_id}"
+                    ):
                         _navigate_edge_evidence(st, edge)
         else:
-            st.info("Seleccioná un elemento o una línea del mapa para ver qué representa, de qué registro proviene y, cuando corresponda, abrir el documento, unidad o entidad relacionada.")
+            st.info(
+                "Seleccioná un elemento o una línea del mapa para ver qué representa, de qué registro proviene y, cuando corresponda, abrir el documento, unidad o entidad relacionada."
+            )
 
     with quality_tab:
         st.caption(
@@ -976,7 +987,8 @@ def render_graph_view(
         repair_metrics_bottom[0].metric(
             "Requieren decisión explícita",
             sum(
-                case.code in {
+                case.code
+                in {
                     "unresolved_relocation",
                     "duplicate_relocation",
                     "duplicate_group",
@@ -990,9 +1002,7 @@ def render_graph_view(
         )
         if not repair_cases:
             st.success("No hay menciones activas que requieran reparación.")
-        repair_authority_map = {
-            row.authority_id: row for row in repair_authorities
-        }
+        repair_authority_map = {row.authority_id: row for row in repair_authorities}
         repair_authority_options = list(repair_authority_map)
 
         safe_groups: dict[tuple[str, int], list[MentionRepairCase]] = {}
@@ -1002,11 +1012,7 @@ def render_graph_view(
                     (safe_case.object_id, safe_case.current_object_revision),
                     [],
                 ).append(safe_case)
-        actionable_safe_groups = [
-            group
-            for group in safe_groups.values()
-            if len(group) >= 2
-        ]
+        actionable_safe_groups = [group for group in safe_groups.values() if len(group) >= 2]
         if actionable_safe_groups:
             st.markdown("### Acciones agrupadas verificables")
             st.caption(
@@ -1017,9 +1023,7 @@ def render_graph_view(
         for safe_group in actionable_safe_groups:
             first_case = safe_group[0]
             with st.container(border=True):
-                st.write(
-                    f"**Reubicar {len(safe_group)} menciones seguras de una vez**"
-                )
+                st.write(f"**Reubicar {len(safe_group)} menciones seguras de una vez**")
                 st.caption(
                     f"{first_case.document_title or '[sin título]'} · "
                     f"página {first_case.page_number} · "
@@ -1052,9 +1056,7 @@ def render_graph_view(
                         type="primary",
                     )
                 if safe_group_submit and not confirm_safe_group:
-                    st.error(
-                        "Marcá la confirmación antes de ejecutar la reubicación agrupada."
-                    )
+                    st.error("Marcá la confirmación antes de ejecutar la reubicación agrupada.")
                 elif safe_group_submit:
                     _repair_safe_group_action(
                         st,
@@ -1082,9 +1084,7 @@ def render_graph_view(
                     and case.snapshot_recorded is not None
                     and case.snapshot_current is not None
                 ):
-                    st.markdown(
-                        "**Comparar la fila vigente con el último estado registrado**"
-                    )
+                    st.markdown("**Comparar la fila vigente con el último estado registrado**")
                     st.caption(
                         "Último estado registrado: "
                         f"v{case.snapshot_revision_number} · "
@@ -1133,24 +1133,19 @@ def render_graph_view(
                 ]
                 if case.code == "duplicate_group":
                     primary_row = repair_mentions.get(case.mention_id)
-                    group_rows = (
-                        ([primary_row] if primary_row is not None else [])
-                        + duplicate_rows
-                    )
+                    group_rows = ([primary_row] if primary_row is not None else []) + duplicate_rows
                     st.markdown("**Revisar el conjunto completo**")
                     for group_row in sorted(
                         group_rows,
                         key=lambda row: (
-                            row.object_revision_number
-                            == row.current_object_revision,
+                            row.object_revision_number == row.current_object_revision,
                             row.authority_name or "",
                             row.mention_id,
                         ),
                     ):
                         temporal_position = (
                             "Vigente"
-                            if group_row.object_revision_number
-                            == group_row.current_object_revision
+                            if group_row.object_revision_number == group_row.current_object_revision
                             else "Histórica"
                         )
                         st.write(
@@ -1212,8 +1207,7 @@ def render_graph_view(
                     st.code(f"mencion={case.mention_id}")
                     st.code(f"revision_mencion={case.mention_revision}")
                     st.code(
-                        "offsets_guardados="
-                        f"{case.stored_start_offset}:{case.stored_end_offset}"
+                        f"offsets_guardados={case.stored_start_offset}:{case.stored_end_offset}"
                     )
                     if case.projected_start_offset is not None:
                         st.code(
@@ -1252,13 +1246,10 @@ def render_graph_view(
                             "adopt_current": (
                                 "Conservar la fila vigente y registrarla en el historial"
                             ),
-                            "restore_snapshot": (
-                                "Restaurar el último estado registrado"
-                            ),
+                            "restore_snapshot": ("Restaurar el último estado registrado"),
                         }[value],
                         key=(
-                            f"mention_snapshot_decision_{case.mention_id}_"
-                            f"{case.mention_revision}"
+                            f"mention_snapshot_decision_{case.mention_id}_{case.mention_revision}"
                         ),
                     )
                     if divergence_decision == "adopt_current":
@@ -1295,9 +1286,7 @@ def render_graph_view(
                             type="primary",
                         )
                     if divergence_submit and not confirm_divergence:
-                        st.error(
-                            "Marcá la confirmación antes de reconciliar la divergencia."
-                        )
+                        st.error("Marcá la confirmación antes de reconciliar la divergencia.")
                     elif divergence_submit:
                         _repair_snapshot_divergence_action(
                             st,
@@ -1342,7 +1331,9 @@ def render_graph_view(
                 if case.can_resolve_unresolved:
                     object_info = repair_objects.get(case.object_id)
                     if object_info is None:
-                        st.error("No pudo cargarse el texto vigente del bloque de texto asociado con esta mención.")
+                        st.error(
+                            "No pudo cargarse el texto vigente del bloque de texto asociado con esta mención."
+                        )
                     else:
                         current_text = str(object_info["text"])
                         original_occurrences = exact_mention_occurrences(
@@ -1372,9 +1363,7 @@ def render_graph_view(
                                 "relocate": (
                                     "Reubicar la mención en un fragmento del texto vigente"
                                 ),
-                                "mark_absent": (
-                                    "Registrar que el fragmento ya no está presente"
-                                ),
+                                "mark_absent": ("Registrar que el fragmento ya no está presente"),
                             }[value],
                             key=(
                                 f"mention_unresolved_decision_{case.mention_id}_"
@@ -1416,10 +1405,7 @@ def render_graph_view(
                                     before = current_text[max(0, start - 45) : start]
                                     selected = current_text[start:end]
                                     after = current_text[end : min(len(current_text), end + 45)]
-                                    return (
-                                        f"Aparición {index + 1} · …{before}[{selected}]"
-                                        f"{after}…"
-                                    )
+                                    return f"Aparición {index + 1} · …{before}[{selected}]{after}…"
 
                                 selected_occurrence = st.selectbox(
                                     "Aparición que corresponde a la mención",
@@ -1430,9 +1416,7 @@ def render_graph_view(
                                         f"{case.mention_revision}_{selected_fragment}"
                                     ),
                                 )
-                                selected_start, selected_end = occurrences[
-                                    selected_occurrence
-                                ]
+                                selected_start, selected_end = occurrences[selected_occurrence]
                                 st.caption(
                                     f"Ubicación seleccionada: {selected_start}:{selected_end}"
                                 )
@@ -1474,9 +1458,7 @@ def render_graph_view(
                                 disabled=not can_submit_unresolved,
                             )
                         if unresolved_submit and not confirm_unresolved:
-                            st.error(
-                                "Marcá la confirmación antes de registrar la decisión."
-                            )
+                            st.error("Marcá la confirmación antes de registrar la decisión.")
                         elif unresolved_submit:
                             _repair_unresolved_action(
                                 st,
@@ -1504,8 +1486,7 @@ def render_graph_view(
                             row = repair_mentions[mention_id]
                             temporal_position = (
                                 "vigente"
-                                if row.object_revision_number
-                                == row.current_object_revision
+                                if row.object_revision_number == row.current_object_revision
                                 else "histórica"
                             )
                             return (
@@ -1555,8 +1536,7 @@ def render_graph_view(
                                 db_path=db_path,
                                 case=case,
                                 mention_revisions={
-                                    row.mention_id: row.revision
-                                    for row in group_rows
+                                    row.mention_id: row.revision for row in group_rows
                                 },
                                 winner_mention_id=winner_id,
                                 actor=actor,
@@ -1575,9 +1555,7 @@ def render_graph_view(
                                 "keep_current": (
                                     "Conservar la mención ya ubicada en el texto vigente"
                                 ),
-                                "keep_historical": (
-                                    "Conservar la mención histórica y reubicarla"
-                                ),
+                                "keep_historical": ("Conservar la mención histórica y reubicarla"),
                             }[value],
                             key=(
                                 f"mention_duplicate_decision_{case.mention_id}_"
@@ -1616,9 +1594,7 @@ def render_graph_view(
                                 type="primary",
                             )
                         if duplicate_submit and not confirm_duplicate:
-                            st.error(
-                                "Marcá la confirmación antes de registrar la decisión."
-                            )
+                            st.error("Marcá la confirmación antes de registrar la decisión.")
                         elif duplicate_submit:
                             _repair_duplicate_action(
                                 st,
@@ -1645,10 +1621,7 @@ def render_graph_view(
                             "link": "Vincular a una entidad existente",
                             "return_pending": "Devolver la mención a pendiente",
                         }[value],
-                        key=(
-                            f"mention_missing_decision_{case.mention_id}_"
-                            f"{case.mention_revision}"
-                        ),
+                        key=(f"mention_missing_decision_{case.mention_id}_{case.mention_revision}"),
                     )
                     with st.form(
                         f"mention_missing_form_{case.mention_id}_{case.mention_revision}",
@@ -1772,7 +1745,10 @@ def render_graph_view(
             key=export_key,
         )
         if managed_workspace() is None:
-            if st.button("Elegir la carpeta donde guardar la exportación", key="graph_export_choose_directory"):
+            if st.button(
+                "Elegir la carpeta donde guardar la exportación",
+                key="graph_export_choose_directory",
+            ):
                 selected_dir, selection_error = choose_local_directory(
                     project_root / relative_dir,
                     title="Elegir carpeta de exportación dentro del proyecto",
@@ -1781,9 +1757,9 @@ def render_graph_view(
                     st.warning(selection_error)
                 elif selected_dir is not None:
                     try:
-                        relative_selected = selected_dir.resolve().relative_to(
-                            project_root.resolve()
-                        ).as_posix()
+                        relative_selected = (
+                            selected_dir.resolve().relative_to(project_root.resolve()).as_posix()
+                        )
                     except ValueError:
                         st.error("Elegí una carpeta ubicada dentro de la carpeta del proyecto.")
                     else:

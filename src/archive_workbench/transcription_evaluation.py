@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 import json
-import math
 import re
 import statistics
 import unicodedata
@@ -152,7 +151,9 @@ def _sample_indices(size: int, *, sample_size: int) -> list[int]:
     return result
 
 
-def evaluation_sample(rows: list[TranscriptSegmentRow], *, sample_size: int = 5) -> tuple[EvaluationSample, ...]:
+def evaluation_sample(
+    rows: list[TranscriptSegmentRow], *, sample_size: int = 5
+) -> tuple[EvaluationSample, ...]:
     result: list[EvaluationSample] = []
     for ordinal, index in enumerate(_sample_indices(len(rows), sample_size=sample_size), start=1):
         row = rows[index]
@@ -284,7 +285,9 @@ def evaluate_transcription_run(
         created_at=run.created_at.isoformat(),
         completed_at=run.completed_at.isoformat() if run.completed_at else None,
         wall_seconds=wall_seconds,
-        process_cpu_seconds=(float(process_cpu_seconds) if process_cpu_seconds is not None else None),
+        process_cpu_seconds=(
+            float(process_cpu_seconds) if process_cpu_seconds is not None else None
+        ),
         average_cpu_cores=(float(average_cpu_cores) if average_cpu_cores is not None else None),
         peak_rss_mib=(float(peak_rss_mib) if peak_rss_mib is not None else None),
         peak_gpu_memory_mib=(
@@ -468,12 +471,8 @@ def compare_transcription_to_reviewed_reference(
         reference_run_id=reference_run_id,
         candidate_run_id=candidate_run_id,
         sample_size=len(windows),
-        cer=(
-            _error_rate(candidate_chars, reference_chars) if all_windows_scoreable else None
-        ),
-        wer=(
-            _error_rate(candidate_words, reference_words) if all_windows_scoreable else None
-        ),
+        cer=(_error_rate(candidate_chars, reference_chars) if all_windows_scoreable else None),
+        wer=(_error_rate(candidate_words, reference_words) if all_windows_scoreable else None),
         candidate_words=len(candidate_words),
         reference_words=len(reference_words),
         windows=tuple(windows),

@@ -138,9 +138,7 @@ def test_primary_and_cross_review_assignments_are_versioned(tmp_path: Path) -> N
         with session_scope(engine) as session:
             rows = work_assignment_rows(session, project_id=decisions.project_id)
             history = work_assignment_revision_rows(session, assignment_id=cross_id)
-            candidates = cross_review_candidate_rows(
-                session, project_id=decisions.project_id
-            )
+            candidates = cross_review_candidate_rows(session, project_id=decisions.project_id)
         cross_row = next(row for row in rows if row.assignment_id == cross_id)
         assert cross_row.parent_assignee == "Alex"
         assert cross_row.status == "completed"

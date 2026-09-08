@@ -5,7 +5,12 @@ from pathlib import Path
 
 import pytest
 from sqlalchemy import inspect, text
-from archive_workbench.db import create_sqlite_engine, database_path, session_scope, upgrade_database
+from archive_workbench.db import (
+    create_sqlite_engine,
+    database_path,
+    session_scope,
+    upgrade_database,
+)
 from archive_workbench.db.models import (
     ArchivalUnit,
     DigitalObject,
@@ -24,7 +29,6 @@ from archive_workbench.review_app import (
     _apply_pending_navigation,
     _highlight_search_snippet,
 )
-from archive_workbench.ui_navigation import request_app_view
 from archive_workbench.search import (
     build_match_expression,
     rebuild_search_index,
@@ -33,9 +37,7 @@ from archive_workbench.search import (
 )
 
 
-def _seed_search_project(
-    root: Path, *, revision: str = "head"
-) -> tuple[str, str]:
+def _seed_search_project(root: Path, *, revision: str = "head") -> tuple[str, str]:
     upgrade_database(root, revision=revision)
     engine = create_sqlite_engine(database_path(root))
     try:
@@ -231,7 +233,9 @@ def test_search_finds_current_original_comment_and_tag(tmp_path: Path) -> None:
     try:
         with session_scope(engine) as session:
             current = search_editable_objects(session, query="teatral", fields=["current_text"])
-            original = search_editable_objects(session, query="subversiva", fields=["original_text"])
+            original = search_editable_objects(
+                session, query="subversiva", fields=["original_text"]
+            )
             comment = search_editable_objects(session, query="institución", fields=["comments"])
             tag = search_editable_objects(session, query="vigilancia", fields=["tags"])
     finally:
@@ -409,9 +413,7 @@ def test_entities_are_searchable_by_canonical_name_alias_and_mention(tmp_path: P
                 created_by="tests",
             )
         with session_scope(engine) as session:
-            canonical = search_editable_objects(
-                session, query="Inteligencia", fields=["entities"]
-            )
+            canonical = search_editable_objects(session, query="Inteligencia", fields=["entities"])
             alias = search_editable_objects(session, query="DIPBA", fields=["entities"])
             partial = search_editable_objects(
                 session,
@@ -655,9 +657,7 @@ def test_scan_command_reports_entity_uuid_confusion_and_scan_all_is_safe(tmp_pat
                 created_by="tests",
             )
             with pytest.raises(ValueError, match="corresponde a la entidad"):
-                suggest_dictionary_mentions(
-                    session, object_id=entity.id, created_by="tests"
-                )
+                suggest_dictionary_mentions(session, object_id=entity.id, created_by="tests")
             summary = suggest_dictionary_mentions_all(
                 session,
                 project_id="search_project",
@@ -701,9 +701,7 @@ def test_automatic_mention_suggestions_require_approved_pages_by_default(
             page.review_status = "needs_review"
 
             with pytest.raises(ValueError, match="no cumple el filtro de calidad"):
-                suggest_dictionary_mentions(
-                    session, object_id=object_id, created_by="tests"
-                )
+                suggest_dictionary_mentions(session, object_id=object_id, created_by="tests")
             blocked = suggest_dictionary_mentions_all(
                 session, project_id="search_project", created_by="tests"
             )

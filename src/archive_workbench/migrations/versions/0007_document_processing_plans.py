@@ -4,6 +4,7 @@ Revision ID: 0007_document_processing_plans
 Revises: 0006_region_extraction
 Create Date: 2026-07-23
 """
+
 from __future__ import annotations
 
 from alembic import op
@@ -100,9 +101,7 @@ def upgrade() -> None:
         "page_processing_assignments",
         ["processing_plan_id"],
     )
-    op.create_index(
-        "ix_page_processing_assignments_mode", "page_processing_assignments", ["mode"]
-    )
+    op.create_index("ix_page_processing_assignments_mode", "page_processing_assignments", ["mode"])
 
 
 def downgrade() -> None:

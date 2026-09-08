@@ -24,7 +24,6 @@ from archive_workbench.analysis_quality import (
     validate_automatic_quality_scope,
 )
 from archive_workbench.corpus_export import (
-    AGGREGATION_LEVELS,
     CorpusExportProfile,
     build_export_rows,
 )
@@ -219,9 +218,15 @@ def _validate_profile(
     )
     return SemanticProfileValues(
         name=name,
-        description=values.description.strip() if values.description and values.description.strip() else None,
+        description=values.description.strip()
+        if values.description and values.description.strip()
+        else None,
         model_name=model_name,
-        model_revision=(values.model_revision.strip() if values.model_revision and values.model_revision.strip() else None),
+        model_revision=(
+            values.model_revision.strip()
+            if values.model_revision and values.model_revision.strip()
+            else None
+        ),
         aggregation_level=values.aggregation_level,
         include_object_types=tuple(sorted(set(values.include_object_types))),
         include_review_statuses=tuple(sorted(set(values.include_review_statuses))),
@@ -569,8 +574,6 @@ def _read_vectors(path: Path, *, count: int, dimensions: int) -> list[list[float
     ]
 
 
-
-
 def _semantic_corpus_sha256(chunks: Sequence[SemanticChunk]) -> str:
     """Huella del corpus que realmente alimenta el índice semántico."""
     digest = hashlib.sha256()
@@ -584,6 +587,7 @@ def _semantic_corpus_sha256(chunks: Sequence[SemanticChunk]) -> str:
         digest.update(payload.encode("utf-8"))
         digest.update(b"\n")
     return digest.hexdigest()
+
 
 def _sha256(path: Path) -> str:
     digest = hashlib.sha256()
@@ -610,9 +614,7 @@ def build_semantic_index(
 ) -> SemanticIndexSummary:
     if profile.project_id != project_id:
         raise ValueError("El perfil pertenece a otro proyecto")
-    _require_semantic_profile_authorization(
-        session, project_id=project_id, profile=profile
-    )
+    _require_semantic_profile_authorization(session, project_id=project_id, profile=profile)
     if batch_size < 1 or batch_size > 2048:
         raise ValueError("El tamaño de lote debe estar entre 1 y 2048")
     chunks = build_semantic_chunks(session, project_id=project_id, profile=profile)
@@ -708,9 +710,7 @@ def build_semantic_index(
     )
 
 
-def latest_semantic_index_run(
-    session: Session, *, profile_id: str
-) -> SemanticIndexRun | None:
+def latest_semantic_index_run(session: Session, *, profile_id: str) -> SemanticIndexRun | None:
     return session.scalar(
         select(SemanticIndexRun)
         .where(SemanticIndexRun.profile_id == profile_id, SemanticIndexRun.status == "completed")
@@ -774,7 +774,11 @@ def semantic_index_status(
         profile_revision=profile.revision,
         indexed_profile_revision=snapshot_revision,
         files_valid=files_valid,
-        is_current=(files_valid and snapshot_revision == profile.revision and run.corpus_state_sha256 == current_state),
+        is_current=(
+            files_valid
+            and snapshot_revision == profile.revision
+            and run.corpus_state_sha256 == current_state
+        ),
         reason=reason,
     )
 
@@ -813,9 +817,7 @@ def semantic_search(
     backend: EmbeddingBackend | None = None,
     device: str = "auto",
 ) -> list[SemanticSearchResult]:
-    _require_semantic_profile_authorization(
-        session, project_id=project_id, profile=profile
-    )
+    _require_semantic_profile_authorization(session, project_id=project_id, profile=profile)
     clean_query = " ".join(query.split())
     if not clean_query:
         raise ValueError("Escribí una consulta semántica")
@@ -869,15 +871,17 @@ def semantic_search(
         else:
             left_norm = math.sqrt(_dot(query_vector, query_vector))
             right_norm = math.sqrt(_dot(vector, vector))
-            score = _dot(query_vector, vector) / (left_norm * right_norm) if left_norm and right_norm else 0.0
+            score = (
+                _dot(query_vector, vector) / (left_norm * right_norm)
+                if left_norm and right_norm
+                else 0.0
+            )
         if score >= minimum_score:
             scored.append((float(score), row))
     scored.sort(key=lambda item: (-item[0], item[1].get("chunk_id", "")))
     if temporal_start is not None or temporal_end is not None:
         candidate_object_ids = {
-            str(object_id)
-            for _score, row in scored
-            for object_id in row.get("object_ids", [])
+            str(object_id) for _score, row in scored for object_id in row.get("object_ids", [])
         }
         matching_object_ids = object_ids_matching_temporal(
             session,

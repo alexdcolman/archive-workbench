@@ -4,6 +4,7 @@ Revision ID: 0030_source_replaced_exchange
 Revises: 0029_extraction_candidate_history
 Create Date: 2026-07-29
 """
+
 from __future__ import annotations
 
 from alembic import op
@@ -15,8 +16,7 @@ depends_on = None
 
 
 _BACKFILL_NOTE = (
-    "Estado base reconstruido por 0030_source_replaced_exchange para completar "
-    "el historial previo."
+    "Estado base reconstruido por 0030_source_replaced_exchange para completar el historial previo."
 )
 _BACKFILL_ACTOR = "system:migration_0030"
 

@@ -5,10 +5,19 @@ from pathlib import Path
 
 from sqlalchemy import select
 
-from archive_workbench.db import create_sqlite_engine, database_path, session_scope, upgrade_database
+from archive_workbench.db import (
+    create_sqlite_engine,
+    database_path,
+    session_scope,
+    upgrade_database,
+)
 from archive_workbench.db.models import EditableObject, EditablePage, EditablePageRevision
 from archive_workbench.decisions import load_decisions
-from archive_workbench.editing import add_editable_object, bootstrap_editable_layer, export_editable_layer
+from archive_workbench.editing import (
+    add_editable_object,
+    bootstrap_editable_layer,
+    export_editable_layer,
+)
 from archive_workbench.form_structure import (
     archive_control,
     archive_group,
@@ -95,7 +104,10 @@ def test_candidates_use_current_editable_state_and_are_not_canonical(tmp_path: P
             assert all(not row.already_registered for row in candidates)
             page = session.get(EditablePage, ids["page"])
             assert page is not None
-            assert page.form_structure_json in ({}, {"schema_version": "1.0", "groups": [], "controls": []})
+            assert page.form_structure_json in (
+                {},
+                {"schema_version": "1.0", "groups": [], "controls": []},
+            )
     finally:
         engine.dispose()
 
@@ -165,9 +177,13 @@ def test_confirm_group_update_archive_history_and_export(tmp_path: Path) -> None
 
         with session_scope(engine) as session:
             structure = form_structure(session, editable_page_id=ids["page"])
-            active_group = next(item for item in structure.groups if item.lifecycle_status == "active")
+            active_group = next(
+                item for item in structure.groups if item.lifecycle_status == "active"
+            )
             assert active_group.label == "Identificación personal"
-            active_control = next(item for item in structure.controls if item.lifecycle_status == "active")
+            active_control = next(
+                item for item in structure.controls if item.lifecycle_status == "active"
+            )
             assert active_control.state == "indeterminate"
             assert active_control.label == "Afiliación"
             assert active_control.evidence_note == "Marca ambigua"
@@ -202,7 +218,6 @@ def test_confirm_group_update_archive_history_and_export(tmp_path: Path) -> None
         assert manifest["form_structures_path"] == "form_structures.jsonl"
     finally:
         engine.dispose()
-
 
 
 def test_confirmed_candidate_stays_registered_after_editable_label_change(
@@ -297,6 +312,7 @@ def test_archiving_group_detaches_active_controls_and_keeps_history(tmp_path: Pa
     finally:
         engine.dispose()
 
+
 def test_form_structure_page_action_can_be_undone_and_redone(tmp_path: Path) -> None:
     _root, engine, _decisions, ids = _prepare(tmp_path)
     try:
@@ -350,13 +366,9 @@ def test_form_structure_validation_project_is_controlled_and_noncanonical(
     import importlib.util
 
     script_path = (
-        Path(__file__).parents[1]
-        / "scripts"
-        / "create_form_structure_validation_project.py"
+        Path(__file__).parents[1] / "scripts" / "create_form_structure_validation_project.py"
     )
-    spec = importlib.util.spec_from_file_location(
-        "form_structure_validation_script", script_path
-    )
+    spec = importlib.util.spec_from_file_location("form_structure_validation_script", script_path)
     assert spec and spec.loader
     module = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(module)

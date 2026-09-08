@@ -52,7 +52,6 @@ def managed_workspace() -> ManagedWorkspace | None:
     )
 
 
-
 def managed_runtime_variant() -> Literal["cpu", "gpu"] | None:
     """Devuelve la variante de ejecución declarada por la distribución administrada."""
 
@@ -62,6 +61,7 @@ def managed_runtime_variant() -> Literal["cpu", "gpu"] | None:
     if value == "gpu":
         return "gpu"
     return None
+
 
 def workspace_display_path(path: str | Path) -> str:
     """Muestra una ruta administrada con el nombre que ve la persona en su equipo."""

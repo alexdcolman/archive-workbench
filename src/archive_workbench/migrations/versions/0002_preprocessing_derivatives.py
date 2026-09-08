@@ -4,6 +4,7 @@ Revision ID: 0002_preprocessing_derivatives
 Revises: 0001_initial_catalog
 Create Date: 2026-07-23
 """
+
 from __future__ import annotations
 
 from alembic import op

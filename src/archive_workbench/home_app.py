@@ -36,9 +36,13 @@ def render_home_view(st, *, project_root: Path, db_path: Path, actor: str) -> No
     metrics[2].metric("Etapas pendientes", report.pending_count)
 
     if report.overall_status == "attention":
-        st.warning("Hay etapas del proyecto que requieren revisión antes de continuar con tareas que dependan de ellas.")
+        st.warning(
+            "Hay etapas del proyecto que requieren revisión antes de continuar con tareas que dependan de ellas."
+        )
     elif report.overall_status == "in_progress":
-        st.info("El proyecto puede continuar, aunque algunas etapas del trabajo con el corpus todavía están pendientes.")
+        st.info(
+            "El proyecto puede continuar, aunque algunas etapas del trabajo con el corpus todavía están pendientes."
+        )
     else:
         st.success("Las comprobaciones principales del proyecto están al día.")
 

@@ -37,12 +37,8 @@ def upgrade() -> None:
         sa.Column("created_at", sa.DateTime(timezone=True), nullable=False),
         sa.Column("updated_by", sa.String(length=200), nullable=False),
         sa.Column("updated_at", sa.DateTime(timezone=True), nullable=False),
-        sa.CheckConstraint(
-            "start_time >= 0", name="ck_av_timeline_annotation_start_nonnegative"
-        ),
-        sa.CheckConstraint(
-            "end_time >= start_time", name="ck_av_timeline_annotation_time_order"
-        ),
+        sa.CheckConstraint("start_time >= 0", name="ck_av_timeline_annotation_start_nonnegative"),
+        sa.CheckConstraint("end_time >= start_time", name="ck_av_timeline_annotation_time_order"),
         sa.CheckConstraint(
             "annotation_type IN ('speaker', 'annotation')",
             name="ck_av_timeline_annotation_type",

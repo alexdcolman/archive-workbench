@@ -10,7 +10,12 @@ from sqlalchemy import select
 from archive_workbench.catalog import register_test_corpus
 from archive_workbench.contracts.extraction import ExtractionProfile, OcrBenchmarkProfile
 from archive_workbench.contracts.test_corpus import TestCorpus as CorpusDefinition
-from archive_workbench.db import create_sqlite_engine, database_path, session_scope, upgrade_database
+from archive_workbench.db import (
+    create_sqlite_engine,
+    database_path,
+    session_scope,
+    upgrade_database,
+)
 from archive_workbench.db.models import ExtractedObject, ExtractionRun
 from archive_workbench.decisions import load_decisions
 from archive_workbench.extraction import (
@@ -214,7 +219,9 @@ def test_ocr_benchmark_writes_ranked_candidates(tmp_path: Path, monkeypatch) -> 
             result.lines[1].confidence = 98.0
             result.full_text += "\nContenido adicional claramente reconocido"
             result.lines.append(
-                TesseractLine(2, 1, 1, "Contenido adicional claramente reconocido", 60, 150, 520, 190, 98.0, 4)
+                TesseractLine(
+                    2, 1, 1, "Contenido adicional claramente reconocido", 60, 150, 520, 190, 98.0, 4
+                )
             )
         return result
 
@@ -363,9 +370,7 @@ def test_spatial_reconstruction_option_is_rejected() -> None:
         )
 
 
-def test_restore_profile_pages_finds_separate_partial_runs(
-    tmp_path: Path, monkeypatch
-) -> None:
+def test_restore_profile_pages_finds_separate_partial_runs(tmp_path: Path, monkeypatch) -> None:
     from archive_workbench.db.models import ExtractionPageSelection
 
     root = tmp_path / "project"
@@ -530,15 +535,15 @@ def test_page_quality_flags_blank_page_without_approving_it(tmp_path: Path) -> N
     assert suggestions
 
 
-def test_quality_assessment_failure_does_not_discard_extraction(tmp_path: Path, monkeypatch) -> None:
+def test_quality_assessment_failure_does_not_discard_extraction(
+    tmp_path: Path, monkeypatch
+) -> None:
     root = tmp_path / "project"
     engine, decisions = _prepare_project(root)
 
     monkeypatch.setattr(
         "archive_workbench.extraction.run_tesseract_page",
-        lambda image_path, **kwargs: _result(
-            image_path, kwargs["psm"], kwargs["image_variant"]
-        ),
+        lambda image_path, **kwargs: _result(image_path, kwargs["psm"], kwargs["image_variant"]),
     )
     monkeypatch.setattr("archive_workbench.extraction._tesseract_version", lambda _cmd: "5.test")
     monkeypatch.setattr(

@@ -16,7 +16,12 @@ from archive_workbench.authority_dictionary import (
     validate_authority_dictionary,
 )
 from archive_workbench.catalog import ensure_project
-from archive_workbench.db import create_sqlite_engine, database_path, session_scope, upgrade_database
+from archive_workbench.db import (
+    create_sqlite_engine,
+    database_path,
+    session_scope,
+    upgrade_database,
+)
 from archive_workbench.db.models import (
     AuthorityAlias,
     AuthorityRecord,
@@ -146,7 +151,9 @@ def test_dictionary_validation_and_transactional_roundtrip_are_idempotent(tmp_pa
             assert report.authority_reuse_count == 1
             assert report.alias_add_count == 2
             assert report.relation_create_count == 1
-            assert any(issue.code == "existing_authority_not_overwritten" for issue in report.issues)
+            assert any(
+                issue.code == "existing_authority_not_overwritten" for issue in report.issues
+            )
 
         with session_scope(engine) as session:
             result = apply_authority_dictionary(
@@ -397,7 +404,10 @@ def test_exported_authority_relation_template_updates_existing_descriptions(tmp_
                 relation_kind="analytical",
                 evidence_note="Decreto original",
                 temporal_expression="1950 - 1960",
-                profile_json={"archival_category": "hierarchical", "description": "Descripción original"},
+                profile_json={
+                    "archival_category": "hierarchical",
+                    "description": "Descripción original",
+                },
                 review_status="reviewed",
                 created_by="tests",
             )
@@ -405,17 +415,17 @@ def test_exported_authority_relation_template_updates_existing_descriptions(tmp_
             relation_id = relation.id
 
         with session_scope(engine) as session:
-            exported = export_authority_dictionary_bytes(
-                session, project_id=decisions.project_id
-            )
+            exported = export_authority_dictionary_bytes(session, project_id=decisions.project_id)
         payload = json.loads(exported)
         assert payload["schema_version"] == "1.1"
         source_payload = next(
-            item for item in payload["authorities"]
+            item
+            for item in payload["authorities"]
             if item["resolution"]["authority_id"] == source_id
         )
         relation_payload = next(
-            item for item in payload["relations"]
+            item
+            for item in payload["relations"]
             if item["resolution"]["relation_id"] == relation_id
         )
         assert source_payload["resolution"]["action"] == "update_existing"
@@ -453,6 +463,9 @@ def test_exported_authority_relation_template_updates_existing_descriptions(tmp_
             assert updated_source.profile_json == {"places": "Buenos Aires; La Plata"}
             assert updated_relation is not None
             assert updated_relation.evidence_note == "Decreto revisado"
-            assert updated_relation.profile_json["description"] == "Descripción revisada desde plantilla"
+            assert (
+                updated_relation.profile_json["description"]
+                == "Descripción revisada desde plantilla"
+            )
     finally:
         engine.dispose()

@@ -4,6 +4,7 @@ Revision ID: 0016_exchange_delete_preconditions
 Revises: 0015_exchange_transactional_apply
 Create Date: 2026-07-23
 """
+
 from __future__ import annotations
 
 from alembic import op

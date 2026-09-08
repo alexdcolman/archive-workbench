@@ -4,6 +4,7 @@ Revision ID: 0011_editor_parts_tag_kinds
 Revises: 0010_review_actions_annotations
 Create Date: 2026-07-23
 """
+
 from __future__ import annotations
 
 from alembic import op

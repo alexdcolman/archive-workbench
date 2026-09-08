@@ -4,6 +4,7 @@ Revision ID: 0037_exchange_state_adoptions
 Revises: 0036_exchange_common_base_agreements
 Create Date: 2026-08-03
 """
+
 from __future__ import annotations
 
 import sqlalchemy as sa
@@ -79,9 +80,7 @@ def upgrade() -> None:
             ["adoption_record_id"], ["exchange_state_adoptions.id"], ondelete="CASCADE"
         ),
         sa.PrimaryKeyConstraint("id"),
-        sa.UniqueConstraint(
-            "adoption_record_id", name="uq_exchange_state_adoption_rollback"
-        ),
+        sa.UniqueConstraint("adoption_record_id", name="uq_exchange_state_adoption_rollback"),
     )
     op.create_index(
         "ix_exchange_state_adoption_rollbacks_time",

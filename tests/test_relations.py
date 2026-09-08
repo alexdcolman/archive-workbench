@@ -5,7 +5,12 @@ from pathlib import Path
 from archive_workbench.authorities import create_authority
 from archive_workbench.catalog import ensure_project
 from archive_workbench.catalog_management import create_archival_unit
-from archive_workbench.db import create_sqlite_engine, database_path, session_scope, upgrade_database
+from archive_workbench.db import (
+    create_sqlite_engine,
+    database_path,
+    session_scope,
+    upgrade_database,
+)
 from archive_workbench.decisions import load_decisions
 from archive_workbench.relations import (
     create_entity_relation,
@@ -78,7 +83,6 @@ def test_entity_relation_is_versioned_and_can_be_deactivated(tmp_path: Path) -> 
         engine.dispose()
 
 
-
 def test_archival_role_can_be_deleted_as_error_without_erasing_history(tmp_path: Path) -> None:
     _root, decisions, engine = _setup(tmp_path)
     try:
@@ -136,6 +140,7 @@ def test_archival_role_can_be_deleted_as_error_without_erasing_history(tmp_path:
         assert revisions[0].note == "Vínculo cargado por error"
     finally:
         engine.dispose()
+
 
 def test_relation_target_can_be_changed_and_is_versioned(tmp_path: Path) -> None:
     _root, decisions, engine = _setup(tmp_path)
@@ -250,10 +255,7 @@ def test_relation_can_target_catalog_unit(tmp_path: Path) -> None:
 
 def test_authority_ui_defaults_candidate_search_to_approved_pages() -> None:
     source = (
-        Path(__file__).parents[1]
-        / "src"
-        / "archive_workbench"
-        / "authority_app.py"
+        Path(__file__).parents[1] / "src" / "archive_workbench" / "authority_app.py"
     ).read_text(encoding="utf-8")
 
     assert '"Estado de las páginas"' in source
@@ -278,7 +280,9 @@ def test_transversal_entity_candidates_show_alias_and_can_be_included(tmp_path: 
     try:
         with session_scope(engine) as session:
             obj = session.get(EditableObject, object_id)
-            obj.current_text = "La DIPBA investigó a militantes. La Dirección de Inteligencia archivó el informe."
+            obj.current_text = (
+                "La DIPBA investigó a militantes. La Dirección de Inteligencia archivó el informe."
+            )
             entity = create_authority(
                 session,
                 project_id="search_project",
@@ -341,23 +345,22 @@ def test_transversal_entity_candidates_default_to_approved_pages(tmp_path: Path)
             )
 
             page.review_status = "needs_review"
-            assert authority_mention_candidates(
-                session, authority_id=entity.id
-            ) == []
-            assert len(
-                authority_mention_candidates(
-                    session,
-                    authority_id=entity.id,
-                    page_review_statuses=("needs_review",),
-                    broader_quality_scope_confirmed=True,
-                    quality_scope_reason="Prueba explícita de alcance ampliado.",
+            assert authority_mention_candidates(session, authority_id=entity.id) == []
+            assert (
+                len(
+                    authority_mention_candidates(
+                        session,
+                        authority_id=entity.id,
+                        page_review_statuses=("needs_review",),
+                        broader_quality_scope_confirmed=True,
+                        quality_scope_reason="Prueba explícita de alcance ampliado.",
+                    )
                 )
-            ) == 1
+                == 1
+            )
 
             page.review_status = "approved"
-            approved = authority_mention_candidates(
-                session, authority_id=entity.id
-            )
+            approved = authority_mention_candidates(session, authority_id=entity.id)
 
         assert len(approved) == 1
         assert approved[0].mention_text == "Destino comun"

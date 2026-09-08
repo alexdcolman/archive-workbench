@@ -119,11 +119,11 @@ def _parse_single_temporal_expression(value: str) -> TemporalRange:
 
     for prefix in ("desde ", "después de ", "despues de "):
         if folded.startswith(prefix):
-            lower, _upper, precision = _date_bounds(working[len(prefix):])
+            lower, _upper, precision = _date_bounds(working[len(prefix) :])
             return TemporalRange(original, lower, None, f"open_start_{precision}", approximate)
     for prefix in ("hasta ", "antes de "):
         if folded.startswith(prefix):
-            _lower, upper, precision = _date_bounds(working[len(prefix):])
+            _lower, upper, precision = _date_bounds(working[len(prefix) :])
             return TemporalRange(original, None, upper, f"open_end_{precision}", approximate)
 
     year_range = _YEAR_RANGE.fullmatch(working)
@@ -171,7 +171,9 @@ def parse_temporal_expression(value: str | None) -> TemporalRange:
     ends = [item.end for item in periods if item.end is not None]
     # Un tramo abierto conserva abierto el extremo agregado para que una consulta SQL
     # de preselección no descarte candidatos que luego se verifican tramo por tramo.
-    aggregate_start = None if any(item.start is None for item in periods) else min(starts, default=None)
+    aggregate_start = (
+        None if any(item.start is None for item in periods) else min(starts, default=None)
+    )
     aggregate_end = None if any(item.end is None for item in periods) else max(ends, default=None)
     return TemporalRange(
         _clean(value or ""),
@@ -249,4 +251,5 @@ def format_temporal_range(
         return f"{prefix}{start.isoformat()} – {end.isoformat()}"
     if start is not None:
         return f"{prefix}desde {start.isoformat()}"
+    assert end is not None
     return f"{prefix}hasta {end.isoformat()}"

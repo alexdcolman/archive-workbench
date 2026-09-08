@@ -44,6 +44,7 @@ def _write_tiff(path: Path) -> None:
     draw.text((50, 50), "Texto horizontal legible", fill="black")
     image.save(path, format="TIFF", dpi=(300, 300), compression="tiff_deflate")
 
+
 def _write_raster(path: Path, *, image_format: str) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
     image = Image.new("RGB", (320, 180), "white")
@@ -179,7 +180,6 @@ def test_tiff_derivatives_keep_native_orientation_and_resolution(tmp_path: Path)
     assert preview.width > preview.height
     assert status[0].run_status == "completed"
     assert status[0].assets == 2
-
 
 
 @pytest.mark.parametrize(
@@ -417,7 +417,9 @@ def test_conservative_ocr_treatment_is_versioned_and_reusable(tmp_path: Path) ->
                 profile=profile_for_ocr_treatment(decisions, "grayscale_autocontrast"),
             )
         with session_scope(engine) as session:
-            runs = list(session.scalars(select(PreprocessingRun).order_by(PreprocessingRun.created_at)))
+            runs = list(
+                session.scalars(select(PreprocessingRun).order_by(PreprocessingRun.created_at))
+            )
             assets = list(session.scalars(select(DerivativeAsset)))
             current = next(run for run in runs if run.is_current)
             original_run = next(run for run in runs if run.profile_key == "default")
@@ -425,10 +427,14 @@ def test_conservative_ocr_treatment_is_versioned_and_reusable(tmp_path: Path) ->
                 run for run in runs if run.profile_key == "ocr_grayscale_autocontrast"
             )
             original_assets = {
-                asset.kind: asset for asset in assets if asset.preprocessing_run_id == original_run.id
+                asset.kind: asset
+                for asset in assets
+                if asset.preprocessing_run_id == original_run.id
             }
             treated_assets = {
-                asset.kind: asset for asset in assets if asset.preprocessing_run_id == treated_run.id
+                asset.kind: asset
+                for asset in assets
+                if asset.preprocessing_run_id == treated_run.id
             }
 
         assert original.runs_created == 1
@@ -653,9 +659,7 @@ def test_geometry_profile_is_versioned_traced_and_reusable(tmp_path: Path) -> No
     )
     decisions = load_decisions(Path(__file__).parents[1] / "config/decisions.yaml")
     decisions.tiff.use_pyvips_when_available = False
-    corpus = _corpus(
-        [_document("rotated", "corpus/legajo/rotated.tiff", "tiff", "Rotada")]
-    )
+    corpus = _corpus([_document("rotated", "corpus/legajo/rotated.tiff", "tiff", "Rotada")])
 
     upgrade_database(root)
     engine = create_sqlite_engine(database_path(root))

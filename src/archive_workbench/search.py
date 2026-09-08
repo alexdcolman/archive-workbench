@@ -158,10 +158,7 @@ def _group_annotations(
     return comments, tags
 
 
-
-def _group_entities(
-    session: Session, object_ids: list[str]
-) -> dict[str, dict[str, list[str]]]:
+def _group_entities(session: Session, object_ids: list[str]) -> dict[str, dict[str, list[str]]]:
     grouped: dict[str, dict[str, list[str]]] = {
         object_id: {"names": [], "aliases": [], "mentions": [], "relations": []}
         for object_id in object_ids
@@ -212,9 +209,7 @@ def _group_entities(
                 | (EntityRelation.target_authority_id.in_(related_ids)),
             )
         ).all()
-        relation_authority_ids = {
-            relation.source_authority_id for relation in relations
-        } | {
+        relation_authority_ids = {relation.source_authority_id for relation in relations} | {
             relation.target_authority_id
             for relation in relations
             if relation.target_authority_id is not None
@@ -230,19 +225,31 @@ def _group_entities(
             for relation in relations
             if relation.target_archival_unit_id is not None
         }
-        units = {
-            unit.id: unit.title
-            for unit in session.scalars(select(ArchivalUnit).where(ArchivalUnit.id.in_(unit_ids))).all()
-        } if unit_ids else {}
+        units = (
+            {
+                unit.id: unit.title
+                for unit in session.scalars(
+                    select(ArchivalUnit).where(ArchivalUnit.id.in_(unit_ids))
+                ).all()
+            }
+            if unit_ids
+            else {}
+        )
         part_ids = {
             relation.target_document_part_id
             for relation in relations
             if relation.target_document_part_id is not None
         }
-        parts = {
-            part.id: part.title
-            for part in session.scalars(select(DocumentPart).where(DocumentPart.id.in_(part_ids))).all()
-        } if part_ids else {}
+        parts = (
+            {
+                part.id: part.title
+                for part in session.scalars(
+                    select(DocumentPart).where(DocumentPart.id.in_(part_ids))
+                ).all()
+            }
+            if part_ids
+            else {}
+        )
         for relation in relations:
             source_name = relation_authorities.get(relation.source_authority_id, "Entidad")
             if relation.target_authority_id is not None:
@@ -256,8 +263,7 @@ def _group_entities(
                 "manager": "entidad gestora",
             }.get(relation.relation_kind, "relación analítica")
             text_value = (
-                f"{source_name} — {relation.relation_label} → {target_name} "
-                f"[{relation_class}]"
+                f"{source_name} — {relation.relation_label} → {target_name} [{relation_class}]"
             )
             if relation.provenance_note:
                 text_value += f" · {relation.provenance_note}"
@@ -275,8 +281,9 @@ def _group_entities(
             bucket[key] = list(dict.fromkeys(bucket[key]))
     return grouped
 
+
 def rebuild_search_index(session: Session) -> SearchIndexSummary:
-    status = search_index_status(session)
+    search_index_status(session)
     rows = session.execute(
         select(
             EditableObject,
@@ -437,7 +444,9 @@ def _search_columns(fields: Iterable[str]) -> list[str]:
         if field == "tags":
             columns.append("all_tags")
         elif field == "entities":
-            columns.extend(("authority_names", "authority_aliases", "mention_texts", "relation_texts"))
+            columns.extend(
+                ("authority_names", "authority_aliases", "mention_texts", "relation_texts")
+            )
         else:
             columns.append(field)
     return list(dict.fromkeys(columns))
@@ -641,11 +650,15 @@ def search_editable_objects(
     if temporal_start is not None or temporal_end is not None:
         params["temporal_start"] = temporal_start.isoformat() if temporal_start else None
         params["temporal_end"] = temporal_end.isoformat() if temporal_end else None
-        dated_authority = "" if temporal_include_undated else (
-            "AND (ar.temporal_start IS NOT NULL OR ar.temporal_end IS NOT NULL) "
+        dated_authority = (
+            ""
+            if temporal_include_undated
+            else ("AND (ar.temporal_start IS NOT NULL OR ar.temporal_end IS NOT NULL) ")
         )
-        dated_relation = "" if temporal_include_undated else (
-            "AND (er.temporal_start IS NOT NULL OR er.temporal_end IS NOT NULL) "
+        dated_relation = (
+            ""
+            if temporal_include_undated
+            else ("AND (er.temporal_start IS NOT NULL OR er.temporal_end IS NOT NULL) ")
         )
         clauses.append(
             f"""(
@@ -686,7 +699,7 @@ def search_editable_objects(
                 authority_names, authority_aliases, mention_texts, relation_texts,
                 0.0 AS rank
             FROM {table}
-            WHERE {' AND '.join(clauses)}
+            WHERE {" AND ".join(clauses)}
             ORDER BY source_key, CAST(page_number AS INTEGER), CAST(order_index AS INTEGER)
             LIMIT :limit
             """
@@ -719,7 +732,7 @@ def search_editable_objects(
                 highlight({table}, 22, '[[HIT]]', '[[/HIT]]') AS relation_highlight,
                 bm25({table}) AS rank
             FROM {table}
-            WHERE {' AND '.join(clauses)}
+            WHERE {" AND ".join(clauses)}
             ORDER BY rank, source_key, CAST(page_number AS INTEGER), CAST(order_index AS INTEGER)
             LIMIT :limit
             """
@@ -742,8 +755,18 @@ def search_editable_objects(
         ("OCR original", "original_snippet", "original_text", "original_highlight"),
         ("Comentario", "comment_snippet", "comments", "comment_highlight"),
         ("Etiqueta", "tag_snippet", "all_tags", "tag_highlight"),
-        ("Nombre de entidad", "authority_name_snippet", "authority_names", "authority_name_highlight"),
-        ("Alias de entidad", "authority_alias_snippet", "authority_aliases", "authority_alias_highlight"),
+        (
+            "Nombre de entidad",
+            "authority_name_snippet",
+            "authority_names",
+            "authority_name_highlight",
+        ),
+        (
+            "Alias de entidad",
+            "authority_alias_snippet",
+            "authority_aliases",
+            "authority_alias_highlight",
+        ),
         ("Mención de entidad", "mention_snippet", "mention_texts", "mention_highlight"),
         ("Relación analítica", "relation_snippet", "relation_texts", "relation_highlight"),
     )

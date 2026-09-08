@@ -4,6 +4,7 @@ Revision ID: 0018_exchange_resolution_usability
 Revises: 0017_exchange_conflict_resolutions
 Create Date: 2026-07-24
 """
+
 from __future__ import annotations
 
 from alembic import op

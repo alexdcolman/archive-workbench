@@ -169,6 +169,7 @@ def test_page_quality_v2_adds_structural_alerts_without_silent_changes(tmp_path)
     assert metrics["legal_ordinal_candidate_count"] == 3
     assert metrics["checkbox_marked_count"] == 1
     assert any("no corregirlos automáticamente" in item for item in suggestions)
-    assert structural_quality_metrics(objects, page_number=1)["checkbox_candidates"][0][
-        "label"
-    ] == "Urgente"
+    assert (
+        structural_quality_metrics(objects, page_number=1)["checkbox_candidates"][0]["label"]
+        == "Urgente"
+    )

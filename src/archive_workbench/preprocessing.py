@@ -37,7 +37,6 @@ from archive_workbench.preprocessing_geometry import (
 from archive_workbench.tesseract_engine import otsu_threshold
 
 
-
 OCR_TREATMENT_LABELS = {
     "original": "Sin cambios",
     "grayscale_autocontrast": "Escala de grises y autocontraste",
@@ -70,9 +69,7 @@ def profile_for_preprocessing(
     )
 
 
-def profile_for_ocr_treatment(
-    decisions: ProjectDecisions, treatment: str
-) -> DerivativeProfile:
+def profile_for_ocr_treatment(decisions: ProjectDecisions, treatment: str) -> DerivativeProfile:
     return profile_for_preprocessing(decisions, treatment, "none")
 
 
@@ -90,6 +87,7 @@ def apply_ocr_treatment(image: Image.Image, treatment: str) -> Image.Image:
         threshold = otsu_threshold(gray)
         return gray.point(lambda value: 255 if value > threshold else 0, mode="1")
     raise ValueError(f"Tratamiento OCR desconocido: {treatment}")
+
 
 @dataclass(slots=True)
 class PreprocessingSummary:
@@ -158,7 +156,9 @@ def _relative(path: Path, project_root: Path) -> str:
     return path.resolve().relative_to(project_root.resolve()).as_posix()
 
 
-def _save_pillow(image: Image.Image, path: Path, fmt: str, *, quality: int, dpi: float | None) -> None:
+def _save_pillow(
+    image: Image.Image, path: Path, fmt: str, *, quality: int, dpi: float | None
+) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
     save_options: dict[str, object] = {}
     if dpi is not None and math.isfinite(dpi) and dpi > 0:
@@ -191,11 +191,7 @@ def _normalized_pillow_image(image: Image.Image) -> Image.Image:
 def _source_dpi_from_pillow(image: Image.Image) -> float | None:
     value = image.info.get("dpi")
     if isinstance(value, tuple) and value:
-        candidates = [
-            float(item)
-            for item in value[:2]
-            if item and 50 <= float(item) <= 2400
-        ]
+        candidates = [float(item) for item in value[:2] if item and 50 <= float(item) <= 2400]
         if candidates:
             return sum(candidates) / len(candidates)
     if isinstance(value, (int, float)) and 50 <= float(value) <= 2400:
@@ -311,6 +307,7 @@ def _prepare_ocr_page(
         result.warnings,
     )
 
+
 def _render_pdf(
     source: Path,
     *,
@@ -339,9 +336,7 @@ def _render_pdf(
                 rotation_applied,
                 geometry_warnings,
             ) = _prepare_ocr_page(rendered_ocr, profile=profile)
-            warnings_out.extend(
-                f"Página {page_number}: {warning}" for warning in geometry_warnings
-            )
+            warnings_out.extend(f"Página {page_number}: {warning}" for warning in geometry_warnings)
             ocr_path = output_dir / "ocr" / f"page_{page_number:04d}.{_extension(ocr_fmt)}"
             _save_pillow(
                 ocr_image,
@@ -402,9 +397,7 @@ def _render_pdf(
                     )
                 )
             if dewarp_diagnostic is not None:
-                dewarp_path = (
-                    output_dir / "diagnostic" / f"page_{page_number:04d}_dewarp.png"
-                )
+                dewarp_path = output_dir / "diagnostic" / f"page_{page_number:04d}_dewarp.png"
                 _save_pillow(
                     dewarp_diagnostic,
                     dewarp_path,
@@ -523,13 +516,9 @@ def _render_raster_pillow(
                 rotation_applied,
                 geometry_warnings,
             ) = _prepare_ocr_page(image, profile=profile)
-            warnings_out.extend(
-                f"Página {page_number}: {warning}" for warning in geometry_warnings
-            )
+            warnings_out.extend(f"Página {page_number}: {warning}" for warning in geometry_warnings)
             ocr_path = (
-                output_dir
-                / "ocr"
-                / f"page_{page_number:04d}.{_extension(profile.ocr_format)}"
+                output_dir / "ocr" / f"page_{page_number:04d}.{_extension(profile.ocr_format)}"
             )
             _save_pillow(
                 ocr_image,
@@ -590,9 +579,7 @@ def _render_raster_pillow(
                     )
                 )
             if dewarp_diagnostic is not None:
-                dewarp_path = (
-                    output_dir / "diagnostic" / f"page_{page_number:04d}_dewarp.png"
-                )
+                dewarp_path = output_dir / "diagnostic" / f"page_{page_number:04d}_dewarp.png"
                 _save_pillow(
                     dewarp_diagnostic,
                     dewarp_path,
@@ -657,11 +644,7 @@ def _render_raster_pillow(
                     fmt=profile.preview_format,
                     width=preview_image.width,
                     height=preview_image.height,
-                    dpi=(
-                        round(min(source_dpi, profile.preview_dpi))
-                        if source_dpi
-                        else None
-                    ),
+                    dpi=(round(min(source_dpi, profile.preview_dpi)) if source_dpi else None),
                     source_width=source_width,
                     source_height=source_height,
                     source_dpi=source_dpi,
@@ -748,9 +731,7 @@ def _render_raster_pyvips(
         # salida independiente y conservamos así el streaming de TIFF grandes.
         preview_source = pyvips.Image.new_from_file(str(source), **load_options)
         if preview_source.bands in {2, 4}:
-            preview_source = preview_source.flatten(
-                background=[255] * (preview_source.bands - 1)
-            )
+            preview_source = preview_source.flatten(background=[255] * (preview_source.bands - 1))
         if preview_source.bands not in {1, 3}:
             preview_source = preview_source.colourspace("srgb")
         preview = preview_source
@@ -760,7 +741,9 @@ def _render_raster_pyvips(
             output_dir / "preview" / f"page_{frame + 1:04d}.{_extension(profile.preview_format)}"
         )
         preview_path.parent.mkdir(parents=True, exist_ok=True)
-        save_options = {"Q": profile.preview_quality} if profile.preview_format in {"webp", "jpeg"} else {}
+        save_options = (
+            {"Q": profile.preview_quality} if profile.preview_format in {"webp", "jpeg"} else {}
+        )
         preview.write_to_file(str(preview_path), **save_options)
         assets.append(
             _asset_record(
@@ -954,9 +937,7 @@ def prepare_derivatives(
                 continue
 
         run_id = new_id()
-        relative_output_root = (
-            Path("derivatives") / digital_object.id / run_id
-        ).as_posix()
+        relative_output_root = (Path("derivatives") / digital_object.id / run_id).as_posix()
         final_output = root / relative_output_root
         temp_output = final_output.parent / f".{run_id}.tmp"
         if temp_output.exists():
@@ -995,7 +976,7 @@ def prepare_derivatives(
                 if not is_processable_document_path(source):
                     raise RuntimeError(
                         "Formato no admitido para derivados documentales: "
-                        f"{source.suffix.lower() or "sin extensión"}. "
+                        f"{source.suffix.lower() or 'sin extensión'}. "
                         "Usá PDF, TIFF, PNG, JPEG o WebP."
                     )
                 inspection = inspect_input(source)
@@ -1005,12 +986,12 @@ def prepare_derivatives(
                     and profile.ocr_treatment == "original"
                     and profile.geometry_mode == "none"
                     and (
-                    media_type == MediaType.TIFF
-                    or any(
-                        (float(page.width) * float(page.height)) / 1_000_000
-                        > profile.pillow_megapixel_guard
-                        for page in inspection.pages
-                    )
+                        media_type == MediaType.TIFF
+                        or any(
+                            (float(page.width) * float(page.height)) / 1_000_000
+                            > profile.pillow_megapixel_guard
+                            for page in inspection.pages
+                        )
                     )
                 )
                 if use_pyvips:

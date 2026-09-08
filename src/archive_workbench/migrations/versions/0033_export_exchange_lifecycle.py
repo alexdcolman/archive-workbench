@@ -4,6 +4,7 @@ Revision ID: 0033_export_exchange_lifecycle
 Revises: 0032_page_quality_assessments
 Create Date: 2026-08-01
 """
+
 from __future__ import annotations
 
 import sqlalchemy as sa

@@ -4,7 +4,14 @@
 - `docs/` queda reservado al sitio público; el estado operativo, la arquitectura y el historial detallado pasan al contexto privado distribuido con las candidatas de trabajo.
 - Agrega `docs/desarrollo.html` para explicar los identificadores de trabajo que aparecen en este historial sin publicar las bitácoras internas.
 - Corrige el desborde de texto del cuadro **Exportación** en el diagrama general.
-- Sin cambios de código de la aplicación ni de esquema SQLite.
+- Evita que `Duplicados y cambios de texto` muestre varias veces una misma ubicación sólo porque fue detectada en corridas sucesivas; conserva la procedencia histórica de todas las detecciones.
+- Reduce el coste de `Duplicados y cambios de texto`: las membresías, últimas decisiones y objetos editables históricos se cargan en bloque, evitando consultas repetidas por cada detección sin perder procedencia ni estado de revisión.
+- Formaliza la clasificación de pruebas con niveles `fast`, `integration` y `slow`, sin retirar cobertura existente.
+- Incorpora Ruff y mypy como controles de desarrollo pre-release; mypy comienza con un alcance gradual sobre una primera frontera tipada de `src/archive_workbench`, sin `strict` global ni silencios globales.
+- Corrige la deuda estática señalada por el primer gate de QA, incluida una construcción de f-string no compatible con Python 3.11, sin cambiar el esquema ni añadir silencios de lint o tipado.
+- Cierra el gate estático pre-release: Ruff check y Ruff format quedan verdes sobre `src`/`tests`, mypy queda verde en el alcance gradual de 22 archivos y se normaliza el formato de 175 archivos sin retirar cobertura.
+- Refuerza el aplicador de candidatas para que nunca copie rutas locales de repositorio, entornos virtuales ni datos persistentes del proyecto aunque aparezcan accidentalmente en la fuente.
+- Sin cambios de esquema SQLite; continúa `0047_authority_relation_profiles`.
 
 ## 0.89.0 RC84 - 2026-09-04
 

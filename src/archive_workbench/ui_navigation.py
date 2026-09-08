@@ -657,7 +657,6 @@ def tracked_tabs(
     return tabs
 
 
-
 @lru_cache(maxsize=1)
 def _view_scroll_keeper_renderer():
     """Registra un componente v2 sin iframe para conservar la posición vertical."""
@@ -792,6 +791,7 @@ def mount_view_scroll_keeper(st, *, view_key: str) -> None:
         data={"view_key": normalized or "default"},
         key=f"archive_workbench_scroll_keeper_{normalized or 'default'}",
     )
+
 
 def isolated_view(st, *, mode: str):
     """Devuelve un contenedor identificado para integraciones externas.

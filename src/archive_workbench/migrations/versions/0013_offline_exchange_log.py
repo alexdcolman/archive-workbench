@@ -4,6 +4,7 @@ Revision ID: 0013_offline_exchange_log
 Revises: 0012_editable_search_fts
 Create Date: 2026-07-23
 """
+
 from __future__ import annotations
 
 from alembic import op
@@ -23,9 +24,18 @@ def _uuid_sql() -> str:
     )
 
 
-def _event_insert_sql(*, entity_type: str, entity_id: str, operation: str, actor: str,
-                      timestamp: str, project_id: str, base_revision: str = "NULL",
-                      new_revision: str = "NULL", changed_fields: str = "'{}'") -> str:
+def _event_insert_sql(
+    *,
+    entity_type: str,
+    entity_id: str,
+    operation: str,
+    actor: str,
+    timestamp: str,
+    project_id: str,
+    base_revision: str = "NULL",
+    new_revision: str = "NULL",
+    changed_fields: str = "'{}'",
+) -> str:
     event_id = _uuid_sql()
     transaction_id = _uuid_sql()
     return f"""
@@ -76,8 +86,14 @@ def upgrade() -> None:
         sa.ForeignKeyConstraint(["workspace_id"], ["exchange_workspaces.id"], ondelete="CASCADE"),
         sa.UniqueConstraint("workspace_id", "sequence_number", name="uq_exchange_event_sequence"),
     )
-    op.create_index("ix_exchange_events_workspace_sequence", "exchange_change_events", ["workspace_id", "sequence_number"])
-    op.create_index("ix_exchange_events_entity", "exchange_change_events", ["entity_type", "entity_id"])
+    op.create_index(
+        "ix_exchange_events_workspace_sequence",
+        "exchange_change_events",
+        ["workspace_id", "sequence_number"],
+    )
+    op.create_index(
+        "ix_exchange_events_entity", "exchange_change_events", ["entity_type", "entity_id"]
+    )
     op.create_index("ix_exchange_events_transaction", "exchange_change_events", ["transaction_id"])
 
     op.create_table(
@@ -94,7 +110,11 @@ def upgrade() -> None:
         sa.ForeignKeyConstraint(["workspace_id"], ["exchange_workspaces.id"], ondelete="CASCADE"),
         sa.UniqueConstraint("workspace_id", "label", name="uq_exchange_checkpoint_label"),
     )
-    op.create_index("ix_exchange_checkpoints_sequence", "exchange_checkpoints", ["workspace_id", "sequence_number"])
+    op.create_index(
+        "ix_exchange_checkpoints_sequence",
+        "exchange_checkpoints",
+        ["workspace_id", "sequence_number"],
+    )
 
     op.create_table(
         "exchange_bundle_records",
@@ -114,7 +134,11 @@ def upgrade() -> None:
         sa.ForeignKeyConstraint(["workspace_id"], ["exchange_workspaces.id"], ondelete="CASCADE"),
         sa.UniqueConstraint("bundle_id", name="uq_exchange_bundle_id"),
     )
-    op.create_index("ix_exchange_bundles_workspace_created", "exchange_bundle_records", ["workspace_id", "created_at"])
+    op.create_index(
+        "ix_exchange_bundles_workspace_created",
+        "exchange_bundle_records",
+        ["workspace_id", "created_at"],
+    )
 
     now = "CURRENT_TIMESTAMP"
     op.execute(
@@ -154,17 +178,19 @@ def upgrade() -> None:
         CREATE TRIGGER trg_exchange_editable_revision_ai
         AFTER INSERT ON editable_object_revisions
         BEGIN
-            {_event_insert_sql(
-                entity_type='editable_object',
-                entity_id='NEW.editable_object_id',
+            {
+            _event_insert_sql(
+                entity_type="editable_object",
+                entity_id="NEW.editable_object_id",
                 operation="CASE WHEN NEW.operation IN ('create', 'import') THEN 'create' WHEN NEW.operation = 'delete' THEN 'delete' WHEN NEW.operation = 'restore' THEN 'restore' ELSE 'update' END",
-                actor='NEW.created_by',
-                timestamp='NEW.created_at',
+                actor="NEW.created_by",
+                timestamp="NEW.created_at",
                 project_id="(SELECT d.project_id FROM editable_objects o JOIN digital_objects d ON d.id = o.digital_object_id WHERE o.id = NEW.editable_object_id)",
-                base_revision='NEW.base_revision_number',
-                new_revision='NEW.revision_number',
+                base_revision="NEW.base_revision_number",
+                new_revision="NEW.revision_number",
                 changed_fields=changed,
-            )}
+            )
+        }
         END
         """
     )
@@ -174,12 +200,17 @@ def upgrade() -> None:
         CREATE TRIGGER trg_exchange_comment_ai
         AFTER INSERT ON editable_object_comments
         BEGIN
-            {_event_insert_sql(
-                entity_type='editable_object_comment', entity_id='NEW.id', operation="'create'",
-                actor='NEW.created_by', timestamp='NEW.created_at',
+            {
+            _event_insert_sql(
+                entity_type="editable_object_comment",
+                entity_id="NEW.id",
+                operation="'create'",
+                actor="NEW.created_by",
+                timestamp="NEW.created_at",
                 project_id="(SELECT d.project_id FROM editable_objects o JOIN digital_objects d ON d.id = o.digital_object_id WHERE o.id = NEW.editable_object_id)",
                 changed_fields="json_object('editable_object_id', json_array(NULL, NEW.editable_object_id), 'body', json_array(NULL, NEW.body))",
-            )}
+            )
+        }
         END
         """
     )
@@ -188,12 +219,17 @@ def upgrade() -> None:
         CREATE TRIGGER trg_exchange_tag_ai
         AFTER INSERT ON editable_object_tags
         BEGIN
-            {_event_insert_sql(
-                entity_type='editable_object_tag', entity_id='NEW.id', operation="'create'",
-                actor='NEW.created_by', timestamp='NEW.created_at',
+            {
+            _event_insert_sql(
+                entity_type="editable_object_tag",
+                entity_id="NEW.id",
+                operation="'create'",
+                actor="NEW.created_by",
+                timestamp="NEW.created_at",
                 project_id="(SELECT d.project_id FROM editable_objects o JOIN digital_objects d ON d.id = o.digital_object_id WHERE o.id = NEW.editable_object_id)",
                 changed_fields="json_object('editable_object_id', json_array(NULL, NEW.editable_object_id), 'tag', json_array(NULL, NEW.tag), 'normalized_tag', json_array(NULL, NEW.normalized_tag), 'tag_kind', json_array(NULL, NEW.tag_kind))",
-            )}
+            )
+        }
         END
         """
     )
@@ -202,12 +238,17 @@ def upgrade() -> None:
         CREATE TRIGGER trg_exchange_tag_ad
         AFTER DELETE ON editable_object_tags
         BEGIN
-            {_event_insert_sql(
-                entity_type='editable_object_tag', entity_id='OLD.id', operation="'delete'",
-                actor="'local_user'", timestamp='CURRENT_TIMESTAMP',
+            {
+            _event_insert_sql(
+                entity_type="editable_object_tag",
+                entity_id="OLD.id",
+                operation="'delete'",
+                actor="'local_user'",
+                timestamp="CURRENT_TIMESTAMP",
                 project_id="(SELECT d.project_id FROM editable_objects o JOIN digital_objects d ON d.id = o.digital_object_id WHERE o.id = OLD.editable_object_id)",
                 changed_fields="json_object('editable_object_id', json_array(OLD.editable_object_id, NULL), 'tag', json_array(OLD.tag, NULL), 'normalized_tag', json_array(OLD.normalized_tag, NULL), 'tag_kind', json_array(OLD.tag_kind, NULL))",
-            )}
+            )
+        }
         END
         """
     )
@@ -217,13 +258,19 @@ def upgrade() -> None:
         AFTER UPDATE OF review_status ON editable_objects
         WHEN OLD.review_status IS NOT NEW.review_status
         BEGIN
-            {_event_insert_sql(
-                entity_type='editable_object', entity_id='NEW.id', operation="'update'",
-                actor='NEW.updated_by', timestamp='NEW.updated_at',
+            {
+            _event_insert_sql(
+                entity_type="editable_object",
+                entity_id="NEW.id",
+                operation="'update'",
+                actor="NEW.updated_by",
+                timestamp="NEW.updated_at",
                 project_id="(SELECT project_id FROM digital_objects WHERE id = NEW.digital_object_id)",
-                base_revision='NEW.revision_number', new_revision='NEW.revision_number',
+                base_revision="NEW.revision_number",
+                new_revision="NEW.revision_number",
                 changed_fields="json_object('review_status', json_array(OLD.review_status, NEW.review_status))",
-            )}
+            )
+        }
         END
         """
     )
@@ -233,12 +280,17 @@ def upgrade() -> None:
         AFTER UPDATE OF review_status, review_note ON editable_pages
         WHEN OLD.review_status IS NOT NEW.review_status OR OLD.review_note IS NOT NEW.review_note
         BEGIN
-            {_event_insert_sql(
-                entity_type='editable_page', entity_id='NEW.id', operation="'update'",
-                actor="COALESCE(NEW.reviewed_by, 'local_user')", timestamp="COALESCE(NEW.reviewed_at, NEW.updated_at)",
+            {
+            _event_insert_sql(
+                entity_type="editable_page",
+                entity_id="NEW.id",
+                operation="'update'",
+                actor="COALESCE(NEW.reviewed_by, 'local_user')",
+                timestamp="COALESCE(NEW.reviewed_at, NEW.updated_at)",
                 project_id="(SELECT project_id FROM digital_objects WHERE id = NEW.digital_object_id)",
                 changed_fields="json_object('review_status', json_array(OLD.review_status, NEW.review_status), 'review_note', json_array(OLD.review_note, NEW.review_note))",
-            )}
+            )
+        }
         END
         """
     )

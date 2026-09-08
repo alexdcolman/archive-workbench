@@ -28,7 +28,17 @@ def _draft(*, role: str = "body_text", mode: str = "ocr", page: int = 1) -> dict
         "mode": mode,
         "semantic_role": role,
         "object_type": object_type_for_role(role),
-        "ocr": ({"image_variant": "original", "psm": 6, "languages": ["spa"], "object_granularity": "paragraph", "minimum_characters_warning": 1} if mode == "ocr" else None),
+        "ocr": (
+            {
+                "image_variant": "original",
+                "psm": 6,
+                "languages": ["spa"],
+                "object_granularity": "paragraph",
+                "minimum_characters_warning": 1,
+            }
+            if mode == "ocr"
+            else None
+        ),
     }
 
 
@@ -114,10 +124,7 @@ def test_template_from_drafts_uses_free_order_gap_for_duplicate_page_position() 
 
 def test_regional_ui_assigns_first_free_reading_order() -> None:
     source = (
-        Path(__file__).parents[1]
-        / "src"
-        / "archive_workbench"
-        / "processing_app.py"
+        Path(__file__).parents[1] / "src" / "archive_workbench" / "processing_app.py"
     ).read_text(encoding="utf-8")
 
     assert "while reading_order in used_orders" in source

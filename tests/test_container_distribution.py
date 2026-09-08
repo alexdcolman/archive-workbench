@@ -84,7 +84,7 @@ def test_cpu_container_forces_cpu_surya_runtime() -> None:
     ):
         assert extra in dockerfile
     assert "/opt/archive-workbench/.venv-surya" in dockerfile
-    assert 'surya-ocr==0.22.1' in dockerfile
+    assert "surya-ocr==0.22.1" in dockerfile
     assert dockerfile.count("https://download.pytorch.org/whl/cpu") == 2
     assert "main_torch=cpu" in dockerfile
     assert "torch.version.cuda is None" in dockerfile
@@ -108,7 +108,7 @@ def test_gpu_container_uses_cuda_cudnn_and_cuda_surya_runtime() -> None:
     dockerfile = (ROOT / "Dockerfile.gpu").read_text(encoding="utf-8")
 
     assert "nvidia/cuda:12.8.1-cudnn-runtime-ubuntu24.04" in dockerfile
-    assert 'surya-ocr==0.22.1' in dockerfile
+    assert "surya-ocr==0.22.1" in dockerfile
     assert "https://download.pytorch.org/whl/cu128" in dockerfile
     assert "torch.version.cuda is not None" in dockerfile
     assert "ctranslate2" in dockerfile
@@ -223,14 +223,23 @@ def test_container_publish_workflow_targets_cpu_and_gpu_images() -> None:
     assert "file: ./Dockerfile.gpu" in workflow_text
     assert "scope=archive-workbench-cpu" in workflow_text
     assert "scope=archive-workbench-gpu" in workflow_text
-    assert "ARCHIVE_WORKBENCH_GOOGLE_OAUTH_CLIENT_ID=${{ vars.ARCHIVE_WORKBENCH_GOOGLE_OAUTH_CLIENT_ID }}" in workflow_text
-    assert "ARCHIVE_WORKBENCH_GOOGLE_OAUTH_CLIENT_SECRET=${{ secrets.ARCHIVE_WORKBENCH_GOOGLE_OAUTH_CLIENT_SECRET }}" in workflow_text
+    assert (
+        "ARCHIVE_WORKBENCH_GOOGLE_OAUTH_CLIENT_ID=${{ vars.ARCHIVE_WORKBENCH_GOOGLE_OAUTH_CLIENT_ID }}"
+        in workflow_text
+    )
+    assert (
+        "ARCHIVE_WORKBENCH_GOOGLE_OAUTH_CLIENT_SECRET=${{ secrets.ARCHIVE_WORKBENCH_GOOGLE_OAUTH_CLIENT_SECRET }}"
+        in workflow_text
+    )
     for dockerfile in (
         (ROOT / "Dockerfile").read_text(encoding="utf-8"),
         (ROOT / "Dockerfile.gpu").read_text(encoding="utf-8"),
     ):
         assert 'ARG ARCHIVE_WORKBENCH_GOOGLE_OAUTH_CLIENT_SECRET=""' in dockerfile
-        assert 'ARCHIVE_WORKBENCH_GOOGLE_OAUTH_CLIENT_SECRET="${ARCHIVE_WORKBENCH_GOOGLE_OAUTH_CLIENT_SECRET}"' in dockerfile
+        assert (
+            'ARCHIVE_WORKBENCH_GOOGLE_OAUTH_CLIENT_SECRET="${ARCHIVE_WORKBENCH_GOOGLE_OAUTH_CLIENT_SECRET}"'
+            in dockerfile
+        )
 
 
 def test_container_distribution_files_are_present() -> None:
@@ -277,12 +286,12 @@ def test_windows_launcher_uses_safe_port_selection_and_ipv4_readiness() -> None:
     cpu = (ROOT / "Start Archive Workbench - Windows.bat").read_text(encoding="utf-8")
     gpu = (ROOT / "Start Archive Workbench - GPU - Windows.bat").read_text(encoding="utf-8")
 
-    assert '127.0.0.1:${AW_HOST_PORT:-8501}:8501' in compose
+    assert "127.0.0.1:${AW_HOST_PORT:-8501}:8501" in compose
     assert 'ARCHIVE_WORKBENCH_PUBLIC_URL: "http://127.0.0.1:${AW_HOST_PORT:-8501}"' in compose
     assert "Test-LoopbackPortAvailable" in helper
     assert "Archive Workbench no va a detener ni modificar ese proceso." in helper
     assert "8502..8510" in helper
-    assert 'http://127.0.0.1:$Port/_stcore/health' in helper
+    assert "http://127.0.0.1:$Port/_stcore/health" in helper
     assert '([string]$response.Content).Trim() -eq "ok"' in helper
     assert "http://localhost:8501" not in helper
     for source in (cpu, gpu):
@@ -344,7 +353,9 @@ def test_cpu_and_gpu_images_bundle_their_surya_inference_server() -> None:
     assert "ARCHIVE_WORKBENCH_SURYA_BACKEND: llamacpp" in compose
 
 
-def test_linux_project_picker_can_choose_existing_project_without_gui_state_leaking(tmp_path: Path) -> None:
+def test_linux_project_picker_can_choose_existing_project_without_gui_state_leaking(
+    tmp_path: Path,
+) -> None:
     project = tmp_path / "Proyecto con espacios"
     (project / "config").mkdir(parents=True)
     (project / "config" / "decisions.yaml").write_text("project_id: demo\n", encoding="utf-8")
@@ -354,9 +365,9 @@ def test_linux_project_picker_can_choose_existing_project_without_gui_state_leak
     fake_zenity = fake_bin / "zenity"
     fake_zenity.write_text(
         "#!/bin/sh\n"
-        "case \" $* \" in\n"
+        'case " $* " in\n'
         "  *\" --list \"*) printf '%s\\n' 'Abrir un proyecto existente' ;;\n"
-        "  *\" --file-selection \"*) printf '%s\\n' \"$FAKE_PROJECT\" ;;\n"
+        '  *" --file-selection "*) printf \'%s\\n\' "$FAKE_PROJECT" ;;\n'
         "  *) exit 1 ;;\n"
         "esac\n",
         encoding="utf-8",
@@ -386,8 +397,7 @@ def test_linux_project_picker_can_open_general_start(tmp_path: Path) -> None:
     fake_bin.mkdir()
     fake_zenity = fake_bin / "zenity"
     fake_zenity.write_text(
-        "#!/bin/sh\n"
-        "printf '%s\\n' 'Abrir el inicio de Archive Workbench'\n",
+        "#!/bin/sh\nprintf '%s\\n' 'Abrir el inicio de Archive Workbench'\n",
         encoding="utf-8",
     )
     fake_zenity.chmod(0o755)

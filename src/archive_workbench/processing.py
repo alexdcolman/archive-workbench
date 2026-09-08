@@ -146,9 +146,7 @@ class ProcessingJobItemRow:
 
 
 def _archival_paths(session: Session, project_id: str) -> dict[str, str]:
-    units = session.scalars(
-        select(ArchivalUnit).where(ArchivalUnit.project_id == project_id)
-    ).all()
+    units = session.scalars(select(ArchivalUnit).where(ArchivalUnit.project_id == project_id)).all()
     by_id = {unit.id: unit for unit in units}
     cache: dict[str, str] = {}
 
@@ -237,18 +235,12 @@ def _requested_pages(run: ExtractionRun, page_count: int | None) -> set[int]:
     return set()
 
 
-def _run_failed_pages(
-    session: Session, run: ExtractionRun, *, page_count: int | None
-) -> set[int]:
+def _run_failed_pages(session: Session, run: ExtractionRun, *, page_count: int | None) -> set[int]:
     page_rows = session.scalars(
         select(ExtractionPage).where(ExtractionPage.extraction_run_id == run.id)
     ).all()
-    completed = {
-        item.page_number for item in page_rows if item.status in _SUCCESS_PAGE_STATUSES
-    }
-    failed = {
-        item.page_number for item in page_rows if item.status not in _SUCCESS_PAGE_STATUSES
-    }
+    completed = {item.page_number for item in page_rows if item.status in _SUCCESS_PAGE_STATUSES}
+    failed = {item.page_number for item in page_rows if item.status not in _SUCCESS_PAGE_STATUSES}
     if run.status == "failed":
         failed |= _requested_pages(run, page_count) - completed
     return failed
@@ -307,7 +299,9 @@ def processing_inventory_rows(
     ).all():
         files_by_digital.setdefault(row.digital_object_id, []).append(row)
 
-    preprocessing_by_digital: dict[str, list[PreprocessingRun]] = {value: [] for value in digital_ids}
+    preprocessing_by_digital: dict[str, list[PreprocessingRun]] = {
+        value: [] for value in digital_ids
+    }
     for row in session.scalars(
         select(PreprocessingRun)
         .where(PreprocessingRun.digital_object_id.in_(digital_ids))
@@ -334,8 +328,9 @@ def processing_inventory_rows(
 
     selections_by_digital: dict[str, set[int]] = {value: set() for value in digital_ids}
     for digital_id, page_number in session.execute(
-        select(ExtractionPageSelection.digital_object_id, ExtractionPageSelection.page_number)
-        .where(ExtractionPageSelection.digital_object_id.in_(digital_ids))
+        select(
+            ExtractionPageSelection.digital_object_id, ExtractionPageSelection.page_number
+        ).where(ExtractionPageSelection.digital_object_id.in_(digital_ids))
     ).all():
         selections_by_digital.setdefault(digital_id, set()).add(page_number)
 
@@ -702,9 +697,7 @@ def processing_job_rows(
     ]
 
 
-def processing_job_item_rows(
-    session: Session, *, job_id: str
-) -> list[ProcessingJobItemRow]:
+def processing_job_item_rows(session: Session, *, job_id: str) -> list[ProcessingJobItemRow]:
     items = session.scalars(
         select(ProcessingJobItem)
         .where(ProcessingJobItem.processing_job_id == job_id)
@@ -811,9 +804,7 @@ def processing_geometry_rows(
                     dewarp_max_displacement_px=float(
                         analysis.get("dewarp_max_displacement_px") or 0.0
                     ),
-                    dewarp_support_strips=int(
-                        analysis.get("dewarp_support_strips") or 0
-                    ),
+                    dewarp_support_strips=int(analysis.get("dewarp_support_strips") or 0),
                     preview_relative_path=preview.relative_path if preview else None,
                     ocr_relative_path=ocr.relative_path,
                     mask_relative_path=mask.relative_path if mask else None,

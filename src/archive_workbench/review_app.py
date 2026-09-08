@@ -39,7 +39,6 @@ from archive_workbench.audiovisual_app import render_audiovisual_view
 from archive_workbench.authority_app import render_authorities_view
 from archive_workbench.decisions import load_decisions
 from archive_workbench.authorities import (
-    AUTHORITY_TYPES,
     LINKED_MENTION_STATUSES,
     MENTION_STATUSES,
     authority_rows,
@@ -129,7 +128,11 @@ from archive_workbench.semantic_app import (
 from archive_workbench.processing_app import render_processing_view
 from archive_workbench.work_app import render_work_view
 from archive_workbench.home_app import render_home_view
-from archive_workbench.project_setup import create_ready_project, discover_projects, suggested_project_id
+from archive_workbench.project_setup import (
+    create_ready_project,
+    discover_projects,
+    suggested_project_id,
+)
 from archive_workbench.user_preferences import (
     PALETTES,
     UserPreferences,
@@ -165,7 +168,6 @@ from archive_workbench.exchange import (
     finalize_bundle_resolutions,
     incoming_bundle_diagnostics,
     incoming_bundle_rows,
-    inspect_change_bundle,
     purge_incoming_bundle,
     resolution_status,
     resolve_conflict_fields_bulk,
@@ -386,10 +388,7 @@ def _render_section_guidance(st, app_mode: str) -> None:
     objective, prerequisite, next_step = guidance
     step_number = _WORKFLOW_STEPS.index(app_mode) + 1
     with st.container(border=True):
-        st.caption(
-            f"Paso {step_number} de {len(_WORKFLOW_STEPS)} · "
-            f"{_VIEW_PHASES[app_mode]}"
-        )
+        st.caption(f"Paso {step_number} de {len(_WORKFLOW_STEPS)} · {_VIEW_PHASES[app_mode]}")
         st.write(f"**Objetivo de esta sección:** {objective}")
         with st.expander("Antes de empezar y qué sigue"):
             st.write(f"**Conviene tener:** {prerequisite}")
@@ -596,11 +595,17 @@ def _render_launcher(st) -> None:
             if not clean_actor:
                 st.error("Escribí tu nombre antes de abrir un proyecto.")
             else:
-                root = Path(existing_path).expanduser().resolve() if str(existing_path).strip() else None
+                root = (
+                    Path(existing_path).expanduser().resolve()
+                    if str(existing_path).strip()
+                    else None
+                )
                 if root is None or not root.is_dir():
                     st.error("Elegí una carpeta de proyecto existente.")
                 elif not (root / "config" / "decisions.yaml").is_file():
-                    st.error("La carpeta elegida no contiene la configuración de un proyecto de Archive Workbench.")
+                    st.error(
+                        "La carpeta elegida no contiene la configuración de un proyecto de Archive Workbench."
+                    )
                 else:
                     try:
                         require_current_database(root)
@@ -639,8 +644,7 @@ def _render_launcher(st) -> None:
         if workspace is not None:
             parent_folder = str(workspace.projects)
             st.caption(
-                "El proyecto se guardará dentro de "
-                f"`{workspace_display_path(workspace.projects)}`."
+                f"El proyecto se guardará dentro de `{workspace_display_path(workspace.projects)}`."
             )
         else:
             pending_parent = st.session_state.pop("_pending_launcher_project_parent", None)
@@ -723,11 +727,14 @@ def _render_launcher(st) -> None:
                         except (ValueError, OSError, RuntimeError, FileExistsError) as exc:
                             st.error(str(exc))
                         else:
-                            save_user_preferences(UserPreferences(actor=clean_actor, palette=palette))
+                            save_user_preferences(
+                                UserPreferences(actor=clean_actor, palette=palette)
+                            )
                             _stage_review_preferences(st, actor=clean_actor, palette=palette)
                             st.session_state["launcher_project_root"] = str(root)
                             st.success("Proyecto creado. Abriendo la interfaz...")
                             rerun_app(st)
+
 
 def _render_preferences(st, *, current_actor: str, current_palette: str) -> tuple[str, str]:
     actor_key = "review_actor"
@@ -751,6 +758,7 @@ def _render_preferences(st, *, current_actor: str, current_palette: str) -> tupl
     return str(st.session_state.get(actor_key, "")).strip(), str(
         st.session_state.get(palette_key, "system")
     )
+
 
 def _require_reviewer_name(st, *, reviewer: str, palette: str) -> None:
     """Impide entrar en las vistas del proyecto sin una identidad explícita."""
@@ -846,8 +854,6 @@ def _database_action(db_path: Path, callback: Callable) -> str | None:
         engine.dispose()
 
 
-
-
 _LAYOUT_HISTORY_LABELS = {
     "apply_layout_proposal": "Confirmó columnas y aplicó el orden",
     "create_layout_column": "Creó una columna manual",
@@ -885,9 +891,7 @@ def _render_layout_structure_panel(
         with session_scope(engine) as session:
             proposal = layout_proposal(session, editable_page_id=view.editable_page_id)
             structure = layout_structure(session, editable_page_id=view.editable_page_id)
-            history = layout_structure_history(
-                session, editable_page_id=view.editable_page_id
-            )
+            history = layout_structure_history(session, editable_page_id=view.editable_page_id)
     finally:
         engine.dispose()
 
@@ -910,9 +914,7 @@ def _render_layout_structure_panel(
                 f"{len(proposal.fragment_candidates)} posible(s) fragmentación(es)"
             )
         if proposal.duplicate_candidates:
-            summary_parts.append(
-                f"{len(proposal.duplicate_candidates)} posible(s) duplicado(s)"
-            )
+            summary_parts.append(f"{len(proposal.duplicate_candidates)} posible(s) duplicado(s)")
         st.caption(" · ".join(summary_parts))
 
         if view.preview_path is not None and proposal.columns:
@@ -936,9 +938,7 @@ def _render_layout_structure_panel(
                 {
                     "Propuesto": position,
                     "Actual": (item.order_index + 1) if item is not None else None,
-                    "Columna": column_by_object.get(
-                        object_id, "Sin posición reconocida"
-                    ),
+                    "Columna": column_by_object.get(object_id, "Sin posición reconocida"),
                     "Tipo": item.object_type if item is not None else "",
                     "Texto": _snippet(item.text, 90) if item is not None else object_id,
                 }
@@ -958,6 +958,7 @@ def _render_layout_structure_panel(
                 disabled=not proposal.proposed_order,
             )
         if apply_layout:
+
             def apply_callback(session):
                 return execute_page_action(
                     session,
@@ -1063,10 +1064,9 @@ def _render_layout_structure_panel(
                     "Nota (opcional)",
                     key=f"layout_new_column_note_{view.editable_page_id}_{selected.object_id}",
                 )
-                create_column = st.form_submit_button(
-                    "Crear la columna y asignarle este texto"
-                )
+                create_column = st.form_submit_button("Crear la columna y asignarle este texto")
             if create_column:
+
                 def create_and_assign_callback(session):
                     return execute_page_action(
                         session,
@@ -1108,18 +1108,13 @@ def _render_layout_structure_panel(
                     options=assignment_options,
                     index=assignment_options.index(current_column_id),
                     format_func=lambda value: (
-                        "Sin columna"
-                        if value is None
-                        else active_column_map[value].label
+                        "Sin columna" if value is None else active_column_map[value].label
                     ),
                 )
-                assignment_note = move_cols[1].text_input(
-                    "Nota (opcional)"
-                )
-                assign_column = st.form_submit_button(
-                    "Guardar la columna de este texto"
-                )
+                assignment_note = move_cols[1].text_input("Nota (opcional)")
+                assign_column = st.form_submit_button("Guardar la columna de este texto")
             if assign_column:
+
                 def assign_callback(session):
                     return execute_page_action(
                         session,
@@ -1218,6 +1213,7 @@ def _render_layout_structure_panel(
                 "Combinar secuencia confirmada",
                 key=f"merge_layout_fragment_{candidate.fingerprint}",
             ):
+
                 def merge_callback(session, fingerprint=candidate.fingerprint):
                     return execute_page_action(
                         session,
@@ -1248,6 +1244,7 @@ def _render_layout_structure_panel(
                 "Confirmar y archivar duplicado",
                 key=f"archive_layout_duplicate_{candidate.fingerprint}",
             ):
+
                 def duplicate_callback(
                     session,
                     fingerprint=candidate.fingerprint,
@@ -1316,9 +1313,7 @@ def _render_document_part_panel(
 
     part_map = {item.part_id: item for item in view.parts}
     part_options = [None, *part_map]
-    current_part = (
-        selected.document_part_id if selected.document_part_id in part_map else None
-    )
+    current_part = selected.document_part_id if selected.document_part_id in part_map else None
     scope = st.radio(
         "Alcance",
         options=["text", "page"],
@@ -1346,10 +1341,9 @@ def _render_document_part_panel(
                 ),
             )
             part_note = part_cols[1].text_input("Nota (opcional)")
-            assign_part_submit = st.form_submit_button(
-                "Guardar la parte de este texto"
-            )
+            assign_part_submit = st.form_submit_button("Guardar la parte de este texto")
         if assign_part_submit:
+
             def assign_part_callback(session):
                 return execute_page_action(
                     session,
@@ -1396,6 +1390,7 @@ def _render_document_part_panel(
             "Asignar esta parte a todos los textos de la página"
         )
     if bulk_part_submit:
+
         def bulk_part_callback(session):
             return execute_page_action(
                 session,
@@ -1430,9 +1425,7 @@ def _render_move_text_panel(
     reviewer: str,
     object_state_key: str,
 ) -> None:
-    active_orders = [
-        item.order_index for item in view.objects if item.lifecycle_status == "active"
-    ]
+    active_orders = [item.order_index for item in view.objects if item.lifecycle_status == "active"]
     move_left, move_right = st.columns(2)
     move_up = move_left.button(
         "↑ Mover una posición hacia arriba",
@@ -1486,9 +1479,7 @@ def _render_merge_text_panel(
     reviewer: str,
     object_state_key: str,
 ) -> None:
-    active_orders = [
-        item.order_index for item in view.objects if item.lifecycle_status == "active"
-    ]
+    active_orders = [item.order_index for item in view.objects if item.lifecycle_status == "active"]
     separator_label = st.selectbox(
         "Separación entre los textos",
         options=["blank_line", "line", "space", "none"],
@@ -1615,24 +1606,15 @@ def _render_form_structure_tab(
         with session_scope(engine) as session:
             structure = form_structure(session, editable_page_id=view.editable_page_id)
             candidates = form_candidates(session, editable_page_id=view.editable_page_id)
-            history = form_structure_history(
-                session, editable_page_id=view.editable_page_id
-            )
+            history = form_structure_history(session, editable_page_id=view.editable_page_id)
     finally:
         engine.dispose()
 
-
-    active_groups = [
-        item for item in structure.groups if item.lifecycle_status == "active"
-    ]
-    active_controls = [
-        item for item in structure.controls if item.lifecycle_status == "active"
-    ]
+    active_groups = [item for item in structure.groups if item.lifecycle_status == "active"]
+    active_controls = [item for item in structure.controls if item.lifecycle_status == "active"]
     group_map = {item.group_id: item for item in active_groups}
     object_options = [
-        object_id
-        for object_id, item in objects_by_id.items()
-        if item.lifecycle_status == "active"
+        object_id for object_id, item in objects_by_id.items() if item.lifecycle_status == "active"
     ]
 
     pending_count = sum(not item.already_registered for item in candidates)
@@ -1654,9 +1636,7 @@ def _render_form_structure_tab(
         "history": "Historial de casilleros y grupos",
     }
     form_task_key = f"review_form_task_{view.editable_page_id}"
-    default_form_task = (
-        "candidate" if pending else "confirmed" if active_controls else "manual"
-    )
+    default_form_task = "candidate" if pending else "confirmed" if active_controls else "manual"
     if st.session_state.get(form_task_key) not in form_task_labels:
         st.session_state[form_task_key] = default_form_task
     form_task = st.selectbox(
@@ -1698,18 +1678,14 @@ def _render_form_structure_tab(
                     state = st.selectbox(
                         "Estado del casillero",
                         options=["marked", "unmarked", "indeterminate"],
-                        index=["marked", "unmarked", "indeterminate"].index(
-                            candidate.state
-                        ),
+                        index=["marked", "unmarked", "indeterminate"].index(candidate.state),
                         format_func=lambda value: {
                             "marked": "Marcado",
                             "unmarked": "No marcado",
                             "indeterminate": "Indeterminado",
                         }[value],
                     )
-                    label = st.text_input(
-                        "Rótulo del casillero", value=candidate.label or ""
-                    )
+                    label = st.text_input("Rótulo del casillero", value=candidate.label or "")
                     group_id = st.selectbox(
                         "Grupo de casilleros existente",
                         options=group_options,
@@ -1729,6 +1705,7 @@ def _render_form_structure_tab(
                         "Confirmar este casillero", type="primary"
                     )
                 if confirm_submit:
+
                     def confirm_callback(session):
                         def action():
                             target_group = group_id
@@ -1755,6 +1732,7 @@ def _render_form_structure_tab(
                                 marker_text=candidate.marker,
                                 evidence_note=evidence or None,
                             )
+
                         execute_page_action(
                             session,
                             editable_page_id=view.editable_page_id,
@@ -1767,6 +1745,7 @@ def _render_form_structure_tab(
                             action=action,
                         )
                         return candidate.label_object_id or candidate.marker_object_id
+
                     _run_action(
                         st,
                         lambda: _database_action(db_path, confirm_callback),
@@ -1780,7 +1759,9 @@ def _render_form_structure_tab(
                 "Usá esta opción cuando la página contiene un casillero real que no aparece entre los casilleros detectados. Elegí qué bloque de texto contiene el rótulo del casillero, qué bloque contiene la marca si la hay y cuál es su estado."
             )
             if not object_options:
-                st.info("La página no tiene bloques de texto disponibles para identificar el rótulo o la marca de un casillero.")
+                st.info(
+                    "La página no tiene bloques de texto disponibles para identificar el rótulo o la marca de un casillero."
+                )
             else:
                 marker_options = [None, *object_options]
                 default_label_index = (
@@ -1832,8 +1813,11 @@ def _render_form_structure_tab(
                         key=f"manual_new_group_{view.editable_page_id}",
                     )
                     evidence = st.text_area("Evidencia o nota sobre este casillero", height=90)
-                    manual_submit = st.form_submit_button("Registrar este casillero en la estructura de la página")
+                    manual_submit = st.form_submit_button(
+                        "Registrar este casillero en la estructura de la página"
+                    )
                 if manual_submit:
+
                     def manual_callback(session):
                         def action():
                             target_group = group_id
@@ -1857,6 +1841,7 @@ def _render_form_structure_tab(
                                 source="manual",
                                 evidence_note=evidence or None,
                             )
+
                         execute_page_action(
                             session,
                             editable_page_id=view.editable_page_id,
@@ -1867,6 +1852,7 @@ def _render_form_structure_tab(
                             action=action,
                         )
                         return label_object_id
+
                     _run_action(
                         st,
                         lambda: _database_action(db_path, manual_callback),
@@ -1917,19 +1903,20 @@ def _render_form_structure_tab(
                     ),
                 )
                 evidence = st.text_area(
-                    "Evidencia o nota sobre este casillero", value=control.evidence_note or "", height=90
+                    "Evidencia o nota sobre este casillero",
+                    value=control.evidence_note or "",
+                    height=90,
                 )
                 update_submit = st.form_submit_button("Guardar cambios de este casillero")
             if update_submit:
+
                 def update_callback(session):
                     execute_page_action(
                         session,
                         editable_page_id=view.editable_page_id,
                         action_type="form_structure",
                         changed_by=reviewer or "local_user",
-                        selected_object_id=(
-                            control.label_object_id or control.marker_object_id
-                        ),
+                        selected_object_id=(control.label_object_id or control.marker_object_id),
                         note=evidence or None,
                         action=lambda: update_control(
                             session,
@@ -1943,6 +1930,7 @@ def _render_form_structure_tab(
                         ),
                     )
                     return control.label_object_id or control.marker_object_id
+
                 _run_action(
                     st,
                     lambda: _database_action(db_path, update_callback),
@@ -1957,15 +1945,14 @@ def _render_form_structure_tab(
                 archive_note = st.text_input("Motivo de archivo")
                 archive_submit = st.form_submit_button("Archivar casillero")
             if archive_submit:
+
                 def archive_callback(session):
                     execute_page_action(
                         session,
                         editable_page_id=view.editable_page_id,
                         action_type="form_structure",
                         changed_by=reviewer or "local_user",
-                        selected_object_id=(
-                            control.label_object_id or control.marker_object_id
-                        ),
+                        selected_object_id=(control.label_object_id or control.marker_object_id),
                         note=archive_note or None,
                         action=lambda: archive_control(
                             session,
@@ -1976,6 +1963,7 @@ def _render_form_structure_tab(
                         ),
                     )
                     return control.label_object_id or control.marker_object_id
+
                 _run_action(
                     st,
                     lambda: _database_action(db_path, archive_callback),
@@ -1985,13 +1973,12 @@ def _render_form_structure_tab(
 
     if form_task == "groups":
         with st.container(border=True):
-            with st.form(
-                f"create_form_group_{view.editable_page_id}", enter_to_submit=False
-            ):
+            with st.form(f"create_form_group_{view.editable_page_id}", enter_to_submit=False):
                 new_label = st.text_input("Nombre del nuevo grupo de casilleros")
                 new_note = st.text_input("Nota sobre este grupo de casilleros (opcional)")
                 create_group_submit = st.form_submit_button("Crear grupo de casilleros")
             if create_group_submit:
+
                 def create_group_callback(session):
                     execute_page_action(
                         session,
@@ -2034,8 +2021,11 @@ def _render_form_structure_tab(
                     group_note = st.text_input(
                         "Nota sobre este registro (opcional)", value=target_group.note or ""
                     )
-                    rename_submit = st.form_submit_button("Guardar los cambios de este grupo de casilleros")
+                    rename_submit = st.form_submit_button(
+                        "Guardar los cambios de este grupo de casilleros"
+                    )
                 if rename_submit:
+
                     def rename_group_callback(session):
                         execute_page_action(
                             session,
@@ -2066,8 +2056,11 @@ def _render_form_structure_tab(
                     enter_to_submit=False,
                 ):
                     archive_group_note = st.text_input("Motivo de archivo del grupo")
-                    archive_group_submit = st.form_submit_button("Archivar este grupo de casilleros")
+                    archive_group_submit = st.form_submit_button(
+                        "Archivar este grupo de casilleros"
+                    )
                 if archive_group_submit:
+
                     def archive_group_callback(session):
                         execute_page_action(
                             session,
@@ -2100,13 +2093,10 @@ def _render_form_structure_tab(
             for row in reversed(history):
                 with st.container(border=True):
                     st.write(
-                        f"**Revisión {row.revision_number}** · {row.operation} · "
-                        f"{row.created_by}"
+                        f"**Revisión {row.revision_number}** · {row.operation} · {row.created_by}"
                     )
                     st.caption(row.created_at.isoformat(timespec="minutes"))
-                    st.write(
-                        f"Grupos: {row.group_count} · Casilleros: {row.control_count}"
-                    )
+                    st.write(f"Grupos: {row.group_count} · Casilleros: {row.control_count}")
                     if row.note:
                         st.write(row.note)
                     if row.details:
@@ -2115,7 +2105,21 @@ def _render_form_structure_tab(
 
 def _apply_pending_app_mode(st) -> None:
     pending = st.session_state.pop("review_pending_app_mode", None)
-    if pending in {"home", "catalog", "audiovisual", "processing", "work", "review", "search", "semantic", "authorities", "graph", "export", "exchange", "admin"}:
+    if pending in {
+        "home",
+        "catalog",
+        "audiovisual",
+        "processing",
+        "work",
+        "review",
+        "search",
+        "semantic",
+        "authorities",
+        "graph",
+        "export",
+        "exchange",
+        "admin",
+    }:
         st.session_state["review_app_mode"] = pending
 
 
@@ -2217,10 +2221,7 @@ def _render_search_result_navigation(st) -> None:
     with st.container(border=True):
         title_col, close_col = st.columns([8, 1])
         with title_col:
-            st.caption(
-                f"{search_name}"
-                + (f" · consulta «{query}»" if query else "")
-            )
+            st.caption(f"{search_name}" + (f" · consulta «{query}»" if query else ""))
         with close_col:
             st.button(
                 "✕",
@@ -2371,7 +2372,9 @@ def _render_search_concordances(st, results) -> None:
     st.dataframe(rows, hide_index=True, use_container_width=True)
 
 
-def _render_search_view(st, *, db_path: Path, project_id: str, document_map, type_labels: dict[str, str]) -> None:
+def _render_search_view(
+    st, *, db_path: Path, project_id: str, document_map, type_labels: dict[str, str]
+) -> None:
     section_heading(st, "Búsqueda textual")
     search_surface = st.radio(
         "Dónde querés buscar",
@@ -2383,7 +2386,9 @@ def _render_search_view(st, *, db_path: Path, project_id: str, document_map, typ
         key="review_search_surface",
     )
     search_surface_label = (
-        "Documentos revisados" if search_surface == "documentos" else "Transcripciones de audio y video"
+        "Documentos revisados"
+        if search_surface == "documentos"
+        else "Transcripciones de audio y video"
     )
     mount_choice_help(
         st,
@@ -2404,7 +2409,11 @@ def _render_search_view(st, *, db_path: Path, project_id: str, document_map, typ
                 )
             with limit_col:
                 av_limit = st.number_input(
-                    "Máximo de resultados", min_value=10, max_value=500, value=50, step=10,
+                    "Máximo de resultados",
+                    min_value=10,
+                    max_value=500,
+                    value=50,
+                    step=10,
                     key="av_search_limit",
                     label_visibility="collapsed",
                     help="Cantidad máxima de coincidencias que se mostrarán.",
@@ -2435,11 +2444,15 @@ def _render_search_view(st, *, db_path: Path, project_id: str, document_map, typ
                     st.markdown(
                         f"**{row.title}** · {format_timestamp(row.start_time)}–{format_timestamp(row.end_time)}"
                     )
-                    st.caption(f"Estado de revisión del fragmento: {_STATUS_LABELS.get(row.review_status, row.review_status)}")
+                    st.caption(
+                        f"Estado de revisión del fragmento: {_STATUS_LABELS.get(row.review_status, row.review_status)}"
+                    )
                     st.write(row.text)
                 with action:
                     if st.button(
-                        "Abrir este fragmento en Audio y video", key=f"open_av_search_{index}_{row.segment_id}", use_container_width=True
+                        "Abrir este fragmento en Audio y video",
+                        key=f"open_av_search_{index}_{row.segment_id}",
+                        use_container_width=True,
                     ):
                         st.session_state["av_pending_media_id"] = row.media_id
                         st.session_state["av_pending_segment_id"] = row.segment_id
@@ -2464,11 +2477,23 @@ def _render_search_view(st, *, db_path: Path, project_id: str, document_map, typ
     saved_match_mode = str(saved_params.get("match_mode") or "all")
     if saved_match_mode not in MATCH_MODES:
         saved_match_mode = "all"
-    saved_fields = [value for value in saved_params.get("fields", SEARCH_FIELDS) if value in SEARCH_FIELDS]
-    saved_source_keys = [value for value in saved_params.get("source_keys", ()) if value in document_map]
-    saved_object_types = [value for value in saved_params.get("object_types", ()) if value in type_labels]
-    saved_object_statuses = [value for value in saved_params.get("object_review_statuses", ()) if value in REVIEW_STATUSES]
-    saved_page_statuses = [value for value in saved_params.get("page_review_statuses", ()) if value in REVIEW_STATUSES]
+    saved_fields = [
+        value for value in saved_params.get("fields", SEARCH_FIELDS) if value in SEARCH_FIELDS
+    ]
+    saved_source_keys = [
+        value for value in saved_params.get("source_keys", ()) if value in document_map
+    ]
+    saved_object_types = [
+        value for value in saved_params.get("object_types", ()) if value in type_labels
+    ]
+    saved_object_statuses = [
+        value
+        for value in saved_params.get("object_review_statuses", ())
+        if value in REVIEW_STATUSES
+    ]
+    saved_page_statuses = [
+        value for value in saved_params.get("page_review_statuses", ()) if value in REVIEW_STATUSES
+    ]
     saved_tag_kinds = [value for value in saved_params.get("tag_kinds", ()) if value in TAG_KINDS]
     saved_part_keys = list(saved_params.get("document_part_keys", ()))
     saved_lifecycle = list(saved_params.get("lifecycle_statuses", ("active",)))
@@ -2487,9 +2512,7 @@ def _render_search_view(st, *, db_path: Path, project_id: str, document_map, typ
     temporal_filter = saved_temporal_filter
     temporal_start = saved_temporal_start or "today"
     temporal_end = saved_temporal_end or "today"
-    temporal_include_undated = bool(
-        saved_params.get("temporal_include_undated", False)
-    )
+    temporal_include_undated = bool(saved_params.get("temporal_include_undated", False))
     literal_filters_open = st.toggle(
         "Más filtros",
         value=False,
@@ -2501,7 +2524,9 @@ def _render_search_view(st, *, db_path: Path, project_id: str, document_map, typ
         with query_col:
             query = st.text_input(
                 "Qué querés encontrar",
-                value=str(saved_params.get("query") or st.session_state.get("review_search_query", "")),
+                value=str(
+                    saved_params.get("query") or st.session_state.get("review_search_query", "")
+                ),
                 placeholder="Buscar palabras o una frase en los documentos",
                 label_visibility="collapsed",
             )
@@ -2619,9 +2644,7 @@ def _render_search_view(st, *, db_path: Path, project_id: str, document_map, typ
             "tag_kinds": tag_kinds,
             "temporal_start": temporal_start if temporal_filter else None,
             "temporal_end": temporal_end if temporal_filter else None,
-            "temporal_include_undated": (
-                temporal_include_undated if temporal_filter else False
-            ),
+            "temporal_include_undated": (temporal_include_undated if temporal_filter else False),
             "partial_words": partial_words,
             "limit": int(limit),
         }
@@ -2774,8 +2797,7 @@ def _exchange_dry_run_message(summary) -> str:
         )
         return (
             f"Paquete revisado: {apply_count} "
-            f"{'cambio listo' if apply_count == 1 else 'cambios listos'} para incorporar."
-            + suffix
+            f"{'cambio listo' if apply_count == 1 else 'cambios listos'} para incorporar." + suffix
         )
     if duplicate_count:
         return (
@@ -2868,8 +2890,7 @@ def _purge_exchange_entry(
                 removed += 1
     suffix = f"; {failed} archivo(s) no pudieron retirarse" if failed else ""
     st.session_state["exchange_flash"] = (
-        f"Entrada {plan.bundle_id[:8]} eliminada; {removed} archivo(s) internos retirados"
-        f"{suffix}"
+        f"Entrada {plan.bundle_id[:8]} eliminada; {removed} archivo(s) internos retirados{suffix}"
     )
     st.session_state.pop("exchange_selected_bundle", None)
     rerun_view(st)
@@ -3428,9 +3449,7 @@ def _render_receive_zip_source(
     ):
         assert uploaded is not None
         try:
-            temp_path = _save_uploaded_zip(
-                project_root, uploaded, namespace="received"
-            )
+            temp_path = _save_uploaded_zip(project_root, uploaded, namespace="received")
             inspection = inspect_drive_artifact(temp_path)
         except (ValueError, RuntimeError, OSError) as exc:
             st.error(str(exc))
@@ -3496,7 +3515,10 @@ def _render_exchange_advanced_tools(
         )
         adoption_step = st.radio(
             "Qué querés hacer con la versión completa del trabajo editable",
-            options=["Crear el ZIP con todo el trabajo editable", "Revisar un ZIP completo y reemplazar el trabajo editable de esta copia"],
+            options=[
+                "Crear el ZIP con todo el trabajo editable",
+                "Revisar un ZIP completo y reemplazar el trabajo editable de esta copia",
+            ],
             horizontal=True,
             key="exchange_state_adoption_step",
         )
@@ -3616,9 +3638,7 @@ def _render_exchange_advanced_tools(
                     f"**{preview.total_removed}**, cambiar **{preview.total_changed}**."
                 )
                 changed_sections = [
-                    row
-                    for row in preview.sections
-                    if row.added or row.removed or row.changed
+                    row for row in preview.sections if row.added or row.removed or row.changed
                 ]
                 if changed_sections:
                     st.dataframe(
@@ -3658,7 +3678,9 @@ def _render_exchange_advanced_tools(
                     if not adoption_applied_by.strip():
                         st.error("Indicá quién es responsable de reemplazar el trabajo editable.")
                     elif not adoption_reason.strip():
-                        st.error("Escribí por qué se reemplazará el trabajo editable de esta copia.")
+                        st.error(
+                            "Escribí por qué se reemplazará el trabajo editable de esta copia."
+                        )
                     elif not adoption_confirmed:
                         st.error("Marcá la confirmación antes de reemplazar el trabajo editable.")
                     else:
@@ -3688,8 +3710,7 @@ def _render_exchange_advanced_tools(
             for adoption in state_adoptions:
                 status = "revertida" if adoption.rolled_back else "activa"
                 st.write(
-                    f"`{adoption.adoption_id}` · {status} · origen "
-                    f"{adoption.source_workspace_name}"
+                    f"`{adoption.adoption_id}` · {status} · origen {adoption.source_workspace_name}"
                 )
                 st.caption(
                     f"{adoption.previous_state_sha256} → {adoption.adopted_state_sha256} · "
@@ -3698,7 +3719,6 @@ def _render_exchange_advanced_tools(
             st.info(
                 "Si necesitás deshacer esta adopción completa, la recuperación se realiza con Archive Workbench cerrado usando la copia de seguridad creada antes del reemplazo. El comando técnico se muestra sólo como referencia de recuperación."
             )
-
 
     if exchange_task == "common_base":
         st.caption(
@@ -3954,7 +3974,6 @@ def _render_exchange_advanced_tools(
                     f"estado {agreement.state_sha256} · "
                     f"responsable {agreement.registered_by}"
                 )
-
 
 
 def _render_exchange_view(st, *, project_root: Path, db_path: Path, reviewer: str) -> None:
@@ -4339,9 +4358,7 @@ def _render_exchange_view(st, *, project_root: Path, db_path: Path, reviewer: st
                 st.session_state[add_open_key] = True
                 rerun_view(st)
 
-        archived_available = any(
-            row.lifecycle_status == "archived" for row in incoming_all
-        )
+        archived_available = any(row.lifecycle_status == "archived" for row in incoming_all)
         show_archived = False
         if archived_available:
             show_archived = st.checkbox(
@@ -4350,9 +4367,7 @@ def _render_exchange_view(st, *, project_root: Path, db_path: Path, reviewer: st
                 key="exchange_show_archived",
             )
         incoming = [
-            row
-            for row in incoming_all
-            if show_archived or row.lifecycle_status != "archived"
+            row for row in incoming_all if show_archived or row.lifecycle_status != "archived"
         ]
 
     if not incoming:
@@ -4414,9 +4429,7 @@ def _render_exchange_view(st, *, project_root: Path, db_path: Path, reviewer: st
                 f"{review_count} {'cambio requiere' if review_count == 1 else 'cambios requieren'} una decisión"
             )
         if conflict_count:
-            parts.append(
-                f"{conflict_count} {'conflicto' if conflict_count == 1 else 'conflictos'}"
-            )
+            parts.append(f"{conflict_count} {'conflicto' if conflict_count == 1 else 'conflictos'}")
         st.warning(" · ".join(parts) + ".")
     elif apply_count:
         st.write(
@@ -4434,10 +4447,7 @@ def _render_exchange_view(st, *, project_root: Path, db_path: Path, reviewer: st
         st.write(f"**{status_label}.**")
 
     with st.expander("Detalles del paquete y la comparación", expanded=False):
-        st.write(
-            f"Estado: {status_label} · base: {base_label} · "
-            f"eventos: {selected.event_count}."
-        )
+        st.write(f"Estado: {status_label} · base: {base_label} · eventos: {selected.event_count}.")
         st.write(
             f"Aplicables: {apply_count} · duplicados: {duplicate_count} · "
             f"a revisar: {review_count} · conflictos: {conflict_count}."
@@ -4547,32 +4557,32 @@ def _render_exchange_view(st, *, project_root: Path, db_path: Path, reviewer: st
                             bundle_ref=selected_bundle,
                             evidence_paths=evidence_paths,
                         )
-                    st.session_state[
-                        f"exchange_lineage_report_{selected_bundle}"
-                    ] = lineage_report
+                    st.session_state[f"exchange_lineage_report_{selected_bundle}"] = lineage_report
                 except (ValueError, OSError) as exc:
                     st.error(str(exc))
                 finally:
                     diagnostic_engine.dispose()
 
-            lineage_report = st.session_state.get(
-                f"exchange_lineage_report_{selected_bundle}"
-            )
+            lineage_report = st.session_state.get(f"exchange_lineage_report_{selected_bundle}")
             if lineage_report is not None:
                 labels = {
                     "recoverable": "Recuperable",
                     "ambiguous": "Ambiguo",
                     "insufficient": "Insuficiente",
                 }
-                label = labels.get(
-                    lineage_report.classification, lineage_report.classification
-                )
+                label = labels.get(lineage_report.classification, lineage_report.classification)
                 if lineage_report.classification == "recoverable":
-                    st.success(f"Resultado de la reconstrucción del historial: {label}. {lineage_report.summary}")
+                    st.success(
+                        f"Resultado de la reconstrucción del historial: {label}. {lineage_report.summary}"
+                    )
                 elif lineage_report.classification == "ambiguous":
-                    st.warning(f"Resultado de la reconstrucción del historial: {label}. {lineage_report.summary}")
+                    st.warning(
+                        f"Resultado de la reconstrucción del historial: {label}. {lineage_report.summary}"
+                    )
                 else:
-                    st.info(f"Resultado de la reconstrucción del historial: {label}. {lineage_report.summary}")
+                    st.info(
+                        f"Resultado de la reconstrucción del historial: {label}. {lineage_report.summary}"
+                    )
                 st.caption(
                     f"Evidencias: {len(lineage_report.findings)} · "
                     f"cadenas concluyentes: {len(lineage_report.recovery_candidates)} · "
@@ -4604,9 +4614,7 @@ def _render_exchange_view(st, *, project_root: Path, db_path: Path, reviewer: st
                             f"secuencia remota {candidate.remote_sequence}"
                         )
                         if candidate.chain_bundle_ids:
-                            st.caption(
-                                "Paquetes: " + " → ".join(candidate.chain_bundle_ids)
-                            )
+                            st.caption("Paquetes: " + " → ".join(candidate.chain_bundle_ids))
                 if lineage_report.classification == "recoverable":
                     if selected_recovery is None:
                         candidate = lineage_report.recovery_candidates[0]
@@ -4750,9 +4758,7 @@ def _render_exchange_view(st, *, project_root: Path, db_path: Path, reviewer: st
                         "Confirmo que quiero eliminar definitivamente esta entrada archivada",
                         key=f"exchange_confirm_purge_{selected_bundle}",
                     )
-                    purge_submitted = st.form_submit_button(
-                        "Eliminar definitivamente"
-                    )
+                    purge_submitted = st.form_submit_button("Eliminar definitivamente")
                     purge_cancelled = st.form_submit_button("Cancelar")
                 if purge_cancelled:
                     st.session_state[purge_panel_key] = False
@@ -4879,7 +4885,9 @@ def _render_exchange_view(st, *, project_root: Path, db_path: Path, reviewer: st
                     st,
                     db_path=db_path,
                     callback=lambda session: (
-                        lambda result: f"Diferencia resuelta: {result.resolved_field_count} campos locales"
+                        lambda result: (
+                            f"Diferencia resuelta: {result.resolved_field_count} campos locales"
+                        )
                     )(
                         resolve_conflict_fields_bulk(
                             session,
@@ -4906,7 +4914,9 @@ def _render_exchange_view(st, *, project_root: Path, db_path: Path, reviewer: st
                     st,
                     db_path=db_path,
                     callback=lambda session: (
-                        lambda result: f"Diferencia resuelta: {result.resolved_field_count} campos recibidos"
+                        lambda result: (
+                            f"Diferencia resuelta: {result.resolved_field_count} campos recibidos"
+                        )
                     )(
                         resolve_conflict_fields_bulk(
                             session,
@@ -4929,9 +4939,7 @@ def _render_exchange_view(st, *, project_root: Path, db_path: Path, reviewer: st
             incoming_col.code(_format_exchange_value(row.incoming_value), language="text")
             choice_key = f"exchange_choice_{selected_bundle}_{selected_event_id}_{row.field_name}"
             default_choice = (
-                row.choice
-                if row.choice in {"local", "incoming", "custom"}
-                else "local"
+                row.choice if row.choice in {"local", "incoming", "custom"} else "local"
             )
             choice = st.radio(
                 "Qué valor querés conservar para este campo",
@@ -4966,22 +4974,22 @@ def _render_exchange_view(st, *, project_root: Path, db_path: Path, reviewer: st
                     st,
                     db_path=db_path,
                     callback=lambda session, row=row, choice=choice, custom_text=custom_text, as_json=as_json: (
-                        lambda saved: f"Decisión guardada para {saved.field_name}"
-                    )(
-                        save_conflict_resolution(
-                            session,
-                            bundle_ref=selected_bundle,
-                            event_id=row.event_id,
-                            field_name=row.field_name,
-                            choice=choice,
-                            custom_value=(
-                                json.loads(custom_text)
-                                if choice == "custom" and as_json
-                                else custom_text
-                                if choice == "custom"
-                                else None
-                            ),
-                            resolved_by=reviewer or "local_user",
+                        (lambda saved: f"Decisión guardada para {saved.field_name}")(
+                            save_conflict_resolution(
+                                session,
+                                bundle_ref=selected_bundle,
+                                event_id=row.event_id,
+                                field_name=row.field_name,
+                                choice=choice,
+                                custom_value=(
+                                    json.loads(custom_text)
+                                    if choice == "custom" and as_json
+                                    else custom_text
+                                    if choice == "custom"
+                                    else None
+                                ),
+                                resolved_by=reviewer or "local_user",
+                            )
                         )
                     ),
                 )
@@ -5032,9 +5040,7 @@ def _render_exchange_view(st, *, project_root: Path, db_path: Path, reviewer: st
                     _run_exchange_action(
                         st,
                         db_path=db_path,
-                        callback=lambda session: (
-                            lambda result: _exchange_apply_message(result)
-                        )(
+                        callback=lambda session: (lambda result: _exchange_apply_message(result))(
                             apply_change_bundle(
                                 session,
                                 project_root=project_root,
@@ -5105,6 +5111,7 @@ def _render_exchange_view(st, *, project_root: Path, db_path: Path, reviewer: st
         st.session_state["exchange_recovery_mode"] = True
         rerun_view(st)
 
+
 def main() -> None:
     import streamlit as st
 
@@ -5166,8 +5173,7 @@ def main() -> None:
             st.info(
                 "Esta copia fue preparada deliberadamente sin: "
                 + ", ".join(
-                    TEAM_COPY_GROUP_LABELS[key]
-                    for key in activation.omitted_content_groups
+                    TEAM_COPY_GROUP_LABELS[key] for key in activation.omitted_content_groups
                 )
                 + ". Esos archivos no se consideran perdidos en la copia de origen."
             )
@@ -5218,8 +5224,7 @@ def main() -> None:
         if app_mode in _WORKFLOW_STEPS:
             step_index = _WORKFLOW_STEPS.index(app_mode)
             st.caption(
-                f"{_VIEW_PHASES[app_mode]} · "
-                f"paso {step_index + 1} de {len(_WORKFLOW_STEPS)}"
+                f"{_VIEW_PHASES[app_mode]} · paso {step_index + 1} de {len(_WORKFLOW_STEPS)}"
             )
             with st.popover("Guía de esta sección", use_container_width=True):
                 _render_section_guidance(st, app_mode)
@@ -5388,9 +5393,7 @@ def main() -> None:
             )
             show_boxes_key = f"review_show_boxes_{source_key}_{page}"
             include_deleted_key = f"review_include_deleted_{source_key}_{page}"
-            show_boxes = bool(
-                st.session_state.get(f"{show_boxes_key}__remembered", True)
-            )
+            show_boxes = bool(st.session_state.get(f"{show_boxes_key}__remembered", True))
             include_deleted = bool(
                 st.session_state.get(f"{include_deleted_key}__remembered", False)
             )
@@ -5409,9 +5412,7 @@ def main() -> None:
                         key=include_deleted_key,
                     )
                     st.session_state[f"{show_boxes_key}__remembered"] = bool(show_boxes)
-                    st.session_state[f"{include_deleted_key}__remembered"] = bool(
-                        include_deleted
-                    )
+                    st.session_state[f"{include_deleted_key}__remembered"] = bool(include_deleted)
             document_summary = (
                 f"{len(document.editable_pages)}/{document.page_count} páginas disponibles · "
                 f"{document.active_objects} textos activos"
@@ -5420,7 +5421,9 @@ def main() -> None:
                 document_summary += f" · {document.deleted_objects} eliminados en historial"
             st.caption(document_summary)
             if document.stale_pages:
-                st.warning("Texto desactualizado en páginas: " + ", ".join(map(str, document.stale_pages)))
+                st.warning(
+                    "Texto desactualizado en páginas: " + ", ".join(map(str, document.stale_pages))
+                )
             page_tools_open = st.toggle(
                 "Herramientas de edición de las páginas",
                 value=False,
@@ -5428,7 +5431,10 @@ def main() -> None:
             )
             if page_tools_open:
                 with st.container(border=True):
-                    if st.button("Exportar texto y estructura en revisión", use_container_width=True):
+                    if st.button(
+                        "Exportar texto y estructura en revisión", use_container_width=True
+                    ):
+
                         def export_action() -> str | None:
                             def callback(session):
                                 summary = export_editable_layer(
@@ -5437,6 +5443,7 @@ def main() -> None:
                                     source_key=source_key,
                                 )
                                 st.session_state["last_export"] = str(summary.output_root)
+
                             return _database_action(db_path, callback)
 
                         _run_action(st, export_action)
@@ -5475,8 +5482,14 @@ def main() -> None:
                             index=list(REVIEW_STATUSES).index(view.page_review_status),
                             format_func=lambda value: _STATUS_LABELS[value],
                         )
-                        page_note = st.text_area("Nota sobre el estado de revisión de esta página (opcional)", value=view.page_review_note or "", height=90)
-                        page_review_submit = st.form_submit_button("Guardar el estado de revisión de esta página")
+                        page_note = st.text_area(
+                            "Nota sobre el estado de revisión de esta página (opcional)",
+                            value=view.page_review_note or "",
+                            height=90,
+                        )
+                        page_review_submit = st.form_submit_button(
+                            "Guardar el estado de revisión de esta página"
+                        )
                     if page_review_submit:
                         _run_action(
                             st,
@@ -5504,9 +5517,7 @@ def main() -> None:
         search_target_object = st.session_state.pop("review_pending_object_id", None)
         if search_target_object in objects_by_id:
             st.session_state[_pending_selection_key(object_state_key)] = search_target_object
-        pending_selection = st.session_state.pop(
-            _pending_selection_key(object_state_key), None
-        )
+        pending_selection = st.session_state.pop(_pending_selection_key(object_state_key), None)
         if pending_selection in objects_by_id:
             st.session_state[object_state_key] = pending_selection
         selected_id = st.session_state.get(object_state_key)
@@ -5529,7 +5540,10 @@ def main() -> None:
                     disabled=not availability.can_undo,
                     use_container_width=True,
                     help=(
-                        "Deshacer " + _ACTION_LABELS.get(availability.undo_label or "", availability.undo_label or "")
+                        "Deshacer "
+                        + _ACTION_LABELS.get(
+                            availability.undo_label or "", availability.undo_label or ""
+                        )
                         if availability.can_undo
                         else "No hay acciones nuevas para deshacer"
                     ),
@@ -5540,7 +5554,10 @@ def main() -> None:
                     disabled=not availability.can_redo,
                     use_container_width=True,
                     help=(
-                        "Rehacer " + _ACTION_LABELS.get(availability.redo_label or "", availability.redo_label or "")
+                        "Rehacer "
+                        + _ACTION_LABELS.get(
+                            availability.redo_label or "", availability.redo_label or ""
+                        )
                         if availability.can_redo
                         else "No hay acciones para rehacer"
                     ),
@@ -5621,7 +5638,9 @@ def main() -> None:
             with editor_column:
                 st.subheader("Revisar texto y estructura de la página")
                 if not object_ids:
-                    st.info("Esta página no tiene bloques de texto visibles con la configuración actual.")
+                    st.info(
+                        "Esta página no tiene bloques de texto visibles con la configuración actual."
+                    )
                 else:
                     selected_id = st.selectbox(
                         "Bloque de texto de la página que querés revisar",
@@ -5633,7 +5652,9 @@ def main() -> None:
                     with st.expander("Datos del bloque de texto seleccionado", expanded=False):
                         metadata_a, metadata_b = st.columns(2)
                         with metadata_a:
-                            _render_wrapping_detail(st, "Orden de lectura", selected.order_index + 1)
+                            _render_wrapping_detail(
+                                st, "Orden de lectura", selected.order_index + 1
+                            )
                         with metadata_b:
                             _render_wrapping_detail(st, "Revisión", selected.revision_number)
                         metadata_c, metadata_d = st.columns(2)
@@ -5704,13 +5725,22 @@ def main() -> None:
                             "Historial general",
                         ],
                         key="review_object_tabs",
-            help_by_label=TAB_HELP["review_object_tabs"],
+                        help_by_label=TAB_HELP["review_object_tabs"],
                         rerun_on_change=False,
                     )
                     with edit_tab:
-                        with st.form(f"edit_{selected.object_id}_{selected.revision_number}", enter_to_submit=False):
-                            new_text = st.text_area("Texto corregido", value=selected.text, height=260)
-                            type_index = type_keys.index(selected.object_type) if selected.object_type in type_keys else 0
+                        with st.form(
+                            f"edit_{selected.object_id}_{selected.revision_number}",
+                            enter_to_submit=False,
+                        ):
+                            new_text = st.text_area(
+                                "Texto corregido", value=selected.text, height=260
+                            )
+                            type_index = (
+                                type_keys.index(selected.object_type)
+                                if selected.object_type in type_keys
+                                else 0
+                            )
                             new_type = st.selectbox(
                                 "Clase de bloque de texto",
                                 options=type_keys,
@@ -5718,8 +5748,11 @@ def main() -> None:
                                 format_func=lambda key: type_labels.get(key, key),
                             )
                             note = st.text_input("Nota sobre esta corrección (opcional)")
-                            save = st.form_submit_button("Guardar esta corrección como nueva revisión", type="primary")
+                            save = st.form_submit_button(
+                                "Guardar esta corrección como nueva revisión", type="primary"
+                            )
                         if save:
+
                             def save_callback(session):
                                 return execute_page_action(
                                     session,
@@ -5739,6 +5772,7 @@ def main() -> None:
                                         note=note or None,
                                     ),
                                 )
+
                             _run_action(
                                 st,
                                 lambda: _database_action(db_path, save_callback),
@@ -5751,13 +5785,24 @@ def main() -> None:
                                 st.text(selected.original_text)
 
                         lifecycle_label = (
-                            "Restaurar este bloque de texto" if selected.lifecycle_status == "deleted" else "Marcar este bloque de texto como eliminado"
+                            "Restaurar este bloque de texto"
+                            if selected.lifecycle_status == "deleted"
+                            else "Marcar este bloque de texto como eliminado"
                         )
-                        with st.form(f"lifecycle_{selected.object_id}_{selected.revision_number}", enter_to_submit=False):
-                            lifecycle_note = st.text_input("Motivo de este cambio en el bloque de texto", key=f"life_note_{selected.object_id}")
+                        with st.form(
+                            f"lifecycle_{selected.object_id}_{selected.revision_number}",
+                            enter_to_submit=False,
+                        ):
+                            lifecycle_note = st.text_input(
+                                "Motivo de este cambio en el bloque de texto",
+                                key=f"life_note_{selected.object_id}",
+                            )
                             lifecycle_submit = st.form_submit_button(lifecycle_label)
                         if lifecycle_submit:
-                            target_status = "active" if selected.lifecycle_status == "deleted" else "deleted"
+                            target_status = (
+                                "active" if selected.lifecycle_status == "deleted" else "deleted"
+                            )
+
                             def lifecycle_callback(session):
                                 return execute_page_action(
                                     session,
@@ -5775,6 +5820,7 @@ def main() -> None:
                                         note=lifecycle_note or None,
                                     ),
                                 )
+
                             _run_action(
                                 st,
                                 lambda: _database_action(db_path, lifecycle_callback),
@@ -5874,7 +5920,9 @@ def main() -> None:
                                 index=list(REVIEW_STATUSES).index(selected.review_status),
                                 format_func=lambda value: _STATUS_LABELS[value],
                             )
-                            object_review_submit = st.form_submit_button("Guardar el estado de revisión de este bloque")
+                            object_review_submit = st.form_submit_button(
+                                "Guardar el estado de revisión de este bloque"
+                            )
                         if object_review_submit:
                             _run_action(
                                 st,
@@ -5900,7 +5948,9 @@ def main() -> None:
                                     f"`{tag.tag}`"
                                 )
                                 if remove_col.button(
-                                    "Quitar esta etiqueta", key=f"remove_tag_{selected.object_id}_{tag.tag_id}", help="Quitar esta etiqueta del bloque de texto"
+                                    "Quitar esta etiqueta",
+                                    key=f"remove_tag_{selected.object_id}_{tag.tag_id}",
+                                    help="Quitar esta etiqueta del bloque de texto",
                                 ):
                                     _run_action(
                                         st,
@@ -5917,15 +5967,22 @@ def main() -> None:
                                     )
                         else:
                             st.caption("El bloque de texto seleccionado no tiene etiquetas.")
-                        with st.form(f"add_tag_{selected.object_id}", clear_on_submit=True, enter_to_submit=False):
+                        with st.form(
+                            f"add_tag_{selected.object_id}",
+                            clear_on_submit=True,
+                            enter_to_submit=False,
+                        ):
                             tag_kind = st.selectbox(
                                 "Categoría de la etiqueta",
                                 options=list(TAG_KINDS),
                                 format_func=lambda value: _TAG_KIND_LABELS[value],
                             )
                             new_tag = st.text_input("Texto de la nueva etiqueta")
-                            tag_submit = st.form_submit_button("Agregar esta etiqueta al bloque de texto")
+                            tag_submit = st.form_submit_button(
+                                "Agregar esta etiqueta al bloque de texto"
+                            )
                         if tag_submit:
+
                             def add_tag_callback(session):
                                 add_object_tag(
                                     session,
@@ -5935,6 +5992,7 @@ def main() -> None:
                                     created_by=reviewer or "local_user",
                                 )
                                 return selected.object_id
+
                             _run_action(
                                 st,
                                 lambda: _database_action(db_path, add_tag_callback),
@@ -5960,10 +6018,19 @@ def main() -> None:
                                 st.write(comment.body)
                         else:
                             st.caption("El bloque de texto seleccionado no tiene comentarios.")
-                        with st.form(f"comment_{selected.object_id}", clear_on_submit=True, enter_to_submit=False):
-                            comment_body = st.text_area("Nuevo comentario sobre este bloque de texto", height=100)
-                            comment_submit = st.form_submit_button("Agregar este comentario al bloque de texto")
+                        with st.form(
+                            f"comment_{selected.object_id}",
+                            clear_on_submit=True,
+                            enter_to_submit=False,
+                        ):
+                            comment_body = st.text_area(
+                                "Nuevo comentario sobre este bloque de texto", height=100
+                            )
+                            comment_submit = st.form_submit_button(
+                                "Agregar este comentario al bloque de texto"
+                            )
                         if comment_submit:
+
                             def add_comment_callback(session):
                                 add_object_comment(
                                     session,
@@ -5972,6 +6039,7 @@ def main() -> None:
                                     created_by=reviewer or "local_user",
                                 )
                                 return selected.object_id
+
                             _run_action(
                                 st,
                                 lambda: _database_action(db_path, add_comment_callback),
@@ -5984,7 +6052,9 @@ def main() -> None:
                             st.metric("Datos adicionales de este bloque", len(selected.attributes))
                             st.json(selected.attributes, expanded=True)
                         else:
-                            st.info("El bloque de texto seleccionado no tiene datos adicionales vigentes.")
+                            st.info(
+                                "El bloque de texto seleccionado no tiene datos adicionales vigentes."
+                            )
 
                     with entities_tab:
                         entities_engine = create_sqlite_engine(db_path)
@@ -6000,9 +6070,7 @@ def main() -> None:
                                 )
                         finally:
                             entities_engine.dispose()
-                        authority_map = {
-                            row.authority_id: row for row in available_authorities
-                        }
+                        authority_map = {row.authority_id: row for row in available_authorities}
                         authority_options = [None, *authority_map]
 
                         st.write("**Menciones de entidades vinculadas a este bloque de texto**")
@@ -6052,9 +6120,12 @@ def main() -> None:
                                             ),
                                         )
                                         mention_note = st.text_input(
-                                            "Nota sobre esta mención (opcional)", value=mention.note or ""
+                                            "Nota sobre esta mención (opcional)",
+                                            value=mention.note or "",
                                         )
-                                        mention_submit = st.form_submit_button("Guardar cambios de la mención")
+                                        mention_submit = st.form_submit_button(
+                                            "Guardar cambios de la mención"
+                                        )
                                     if mention_submit:
                                         if (
                                             authority_choice is None
@@ -6067,19 +6138,19 @@ def main() -> None:
                                         else:
                                             _run_action(
                                                 st,
-                                                lambda mention=mention, status_choice=status_choice,
-                                                authority_choice=authority_choice,
-                                                mention_note=mention_note: _database_action(
-                                                    db_path,
-                                                    lambda session: update_mention(
-                                                        session,
-                                                        mention_id=mention.mention_id,
-                                                        expected_revision=mention.revision,
-                                                        status=status_choice,
-                                                        authority_id=authority_choice,
-                                                        note=mention_note,
-                                                        changed_by=reviewer or "local_user",
-                                                    ),
+                                                lambda mention=mention, status_choice=status_choice, authority_choice=authority_choice, mention_note=mention_note: (
+                                                    _database_action(
+                                                        db_path,
+                                                        lambda session: update_mention(
+                                                            session,
+                                                            mention_id=mention.mention_id,
+                                                            expected_revision=mention.revision,
+                                                            status=status_choice,
+                                                            authority_id=authority_choice,
+                                                            note=mention_note,
+                                                            changed_by=reviewer or "local_user",
+                                                        ),
+                                                    )
                                                 ),
                                                 selection_key=object_state_key,
                                                 fallback_selection=selected.object_id,
@@ -6162,7 +6233,10 @@ def main() -> None:
                             manual_note = st.text_input("Nota sobre este registro (opcional)")
                             manual_submit = st.form_submit_button("Agregar esta mención de entidad")
                         if manual_submit:
-                            if manual_authority is None and manual_status in LINKED_MENTION_STATUSES:
+                            if (
+                                manual_authority is None
+                                and manual_status in LINKED_MENTION_STATUSES
+                            ):
                                 st.error(
                                     "Una mención aceptada o modificada debe estar vinculada a una ficha de entidad. Usá Pendiente o Rechazada si todavía no querés vincularla."
                                 )
@@ -6275,11 +6349,14 @@ def main() -> None:
                                             options=previous_revisions,
                                             format_func=lambda number: f"Revisión {number}",
                                         )
-                                        revert_note = st.text_input("Nota sobre esta restauración (opcional)")
+                                        revert_note = st.text_input(
+                                            "Nota sobre esta restauración (opcional)"
+                                        )
                                         revert_submit = st.form_submit_button(
                                             "Restaurar ese contenido como una nueva revisión"
                                         )
                                     if revert_submit:
+
                                         def revert_callback(session):
                                             return execute_page_action(
                                                 session,
@@ -6297,13 +6374,13 @@ def main() -> None:
                                                     note=revert_note or None,
                                                 ),
                                             )
+
                                         _run_action(
                                             st,
                                             lambda: _database_action(db_path, revert_callback),
                                             selection_key=object_state_key,
                                             fallback_selection=selected.object_id,
                                         )
-
 
                 if not object_ids:
                     st.info(
@@ -6315,6 +6392,7 @@ def main() -> None:
 
     mount_view_scroll_keeper(st, view_key=app_mode)
     render_active_view()
+
 
 if __name__ == "__main__":
     main()

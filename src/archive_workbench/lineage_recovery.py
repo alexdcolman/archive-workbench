@@ -186,9 +186,7 @@ def recover_unmatched_bundle_lineage(
     if candidate.local_checkpoint_sequence < 0:
         raise ValueError("La secuencia local recuperada no es válida")
     if candidate.local_checkpoint_sequence > current_sequence:
-        raise ValueError(
-            "La evidencia refiere a una secuencia local posterior al estado actual"
-        )
+        raise ValueError("La evidencia refiere a una secuencia local posterior al estado actual")
     if candidate.local_checkpoint_id:
         checkpoint = session.get(ExchangeCheckpoint, candidate.local_checkpoint_id)
         if checkpoint is not None:

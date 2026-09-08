@@ -5,7 +5,7 @@ from pathlib import Path
 import json
 import re
 
-from sqlalchemy import func, select
+from sqlalchemy import select
 
 from archive_workbench.db import create_sqlite_engine, session_scope
 from archive_workbench.db.models import EditableObject, EditablePage
@@ -32,7 +32,6 @@ from archive_workbench.editable_rebase import (
 )
 from archive_workbench.extraction import (
     extract_documents_preferred,
-    extraction_doctor,
     load_extraction_profile,
     select_extraction_pages,
     resolve_extraction_profile,
@@ -56,7 +55,14 @@ from archive_workbench.preprocessing import (
     prepare_derivatives,
     profile_for_preprocessing,
 )
-from archive_workbench.ui_navigation import rerun_app, rerun_view, request_app_view, request_tab, section_heading, tracked_tabs
+from archive_workbench.ui_navigation import (
+    rerun_app,
+    rerun_view,
+    request_app_view,
+    request_tab,
+    section_heading,
+    tracked_tabs,
+)
 from archive_workbench.page_quality import (
     QUALITY_ATTENTION,
     QUALITY_CLEAR,
@@ -229,9 +235,18 @@ def _render_automatic_quality(st, assessment) -> None:
         ]
         extraction_rows = [
             {"Indicador": "Objetos", "Valor": str(metrics.get("object_count", "—"))},
-            {"Indicador": "Caracteres del texto", "Valor": str(metrics.get("character_count", "—"))},
-            {"Indicador": "Objetos mínimos", "Valor": _percentage(metrics.get("tiny_object_ratio"))},
-            {"Indicador": "Bboxes solapados", "Valor": _percentage(metrics.get("overlapping_bbox_ratio"))},
+            {
+                "Indicador": "Caracteres del texto",
+                "Valor": str(metrics.get("character_count", "—")),
+            },
+            {
+                "Indicador": "Objetos mínimos",
+                "Valor": _percentage(metrics.get("tiny_object_ratio")),
+            },
+            {
+                "Indicador": "Bboxes solapados",
+                "Valor": _percentage(metrics.get("overlapping_bbox_ratio")),
+            },
         ]
         image_col, extraction_col = st.columns(2)
         with image_col:
@@ -280,7 +295,9 @@ def _render_automatic_quality(st, assessment) -> None:
             st.dataframe(
                 [
                     {
-                        "Estado detectado": state_labels.get(item.get("state"), item.get("state", "—")),
+                        "Estado detectado": state_labels.get(
+                            item.get("state"), item.get("state", "—")
+                        ),
                         "Rótulo asociado": item.get("label") or "Sin rótulo",
                         "Marca": item.get("marker", "—"),
                         "Detección": method_labels.get(item.get("method"), item.get("method", "—")),
@@ -476,9 +493,7 @@ def _execute_batch(
     cleanup_surya = False
     parameters: dict = {"force": force}
     if operation == "prepare":
-        derivative_profile = profile_for_preprocessing(
-            decisions, ocr_treatment, geometry_mode
-        )
+        derivative_profile = profile_for_preprocessing(decisions, ocr_treatment, geometry_mode)
         parameters.update(
             ocr_treatment=ocr_treatment,
             geometry_mode=geometry_mode,
@@ -491,7 +506,9 @@ def _execute_batch(
         profile = load_extraction_profile(profile_path)
         resolution = resolve_extraction_profile(project_root, profile)
         if not resolution.ready:
-            st.error("El método de extracción elegido no está disponible en este equipo y tampoco está disponible su alternativa configurada.")
+            st.error(
+                "El método de extracción elegido no está disponible en este equipo y tampoco está disponible su alternativa configurada."
+            )
             for check in resolution.effective_report.checks:
                 if check.required and not check.ok:
                     st.write(f"**{check.name}:** {check.detail}")
@@ -500,9 +517,7 @@ def _execute_batch(
         if profile.backend == "surya_cli" and not resolution.fallback_used:
             # La interfaz es dueña del ciclo de vida del servidor: se conserva sólo
             # durante un lote y se libera al finalizar la tarea completa.
-            runtime_profile = profile.model_copy(
-                update={"surya_keep_server": len(source_keys) > 1}
-            )
+            runtime_profile = profile.model_copy(update={"surya_keep_server": len(source_keys) > 1})
             cleanup_surya = True
         parameters.update(
             profile_path=profile_path.relative_to(project_root).as_posix(),
@@ -576,7 +591,9 @@ def _execute_batch(
                             assert runtime_profile is not None
                             pages = failed_extraction_pages(session, source_key=source_key)
                             if not pages:
-                                raise ValueError("No hay páginas fallidas registradas para reintentar")
+                                raise ValueError(
+                                    "No hay páginas fallidas registradas para reintentar"
+                                )
                             summary = extract_documents_preferred(
                                 session,
                                 project_root=project_root,
@@ -634,7 +651,6 @@ def _open_review(st, *, source_key: str, page: int) -> None:
     rerun_app(st)
 
 
-
 def _render_geometry_diagnostics(
     st,
     *,
@@ -687,22 +703,16 @@ def _render_geometry_diagnostics(
                         else "—"
                     ),
                     "Deskew aplicado": (
-                        f"{row.deskew_angle:.1f}°"
-                        if row.deskew_angle is not None
-                        else "—"
+                        f"{row.deskew_angle:.1f}°" if row.deskew_angle is not None else "—"
                     ),
                     "Confianza deskew": (
-                        f"{row.deskew_confidence:.3f}"
-                        if row.deskew_confidence is not None
-                        else "—"
+                        f"{row.deskew_confidence:.3f}" if row.deskew_confidence is not None else "—"
                     ),
                     "Dewarp detectado": "sí" if row.dewarp_detected else "no",
                     "Dewarp aplicado": "sí" if row.dewarp_applied else "no",
                     "Confianza dewarp": f"{row.dewarp_confidence:.3f}",
                     "Desplazamiento máximo": (
-                        f"{row.dewarp_max_displacement_px:.1f}px"
-                        if row.dewarp_detected
-                        else "—"
+                        f"{row.dewarp_max_displacement_px:.1f}px" if row.dewarp_detected else "—"
                     ),
                     "Franjas con soporte": row.dewarp_support_strips,
                     "Líneas detectadas": row.lines_detected,
@@ -774,11 +784,13 @@ def _render_regional_extraction_builder(
     inventory,
     actor: str,
 ) -> None:
-    prepared = _unique_processing_rows([
-        row
-        for row in inventory
-        if row.preprocessing_status in {"completed", "completed_with_warnings"}
-    ])
+    prepared = _unique_processing_rows(
+        [
+            row
+            for row in inventory
+            if row.preprocessing_status in {"completed", "completed_with_warnings"}
+        ]
+    )
     if not prepared:
         st.info("No hay documentos con imágenes preparadas para trabajar una zona.")
         return
@@ -984,7 +996,9 @@ def _render_regional_extraction_builder(
                     "Página": item.get("page"),
                     "Zona": item.get("label"),
                     "Contenido": region_role_label(str(item.get("semantic_role") or "")),
-                    "Acción": "Reconocer texto" if item.get("mode") == "ocr" else "Transcribir manualmente",
+                    "Acción": "Reconocer texto"
+                    if item.get("mode") == "ocr"
+                    else "Transcribir manualmente",
                 }
                 for item in sorted(
                     drafts,
@@ -1096,10 +1110,7 @@ def _processing_document_labels(rows, *, include_status: bool = False) -> dict[s
     """
 
     unique_rows = _unique_processing_rows(rows)
-    labels = {
-        _processing_row_identity(row): _processing_row_label(row)
-        for row in unique_rows
-    }
+    labels = {_processing_row_identity(row): _processing_row_label(row) for row in unique_rows}
 
     def duplicate_ids(current: dict[str, str]) -> set[str]:
         grouped: dict[str, list[str]] = {}
@@ -1247,7 +1258,8 @@ def _render_bulk_review_sender(
             options=[row.run_id for row in general_runs],
             format_func=lambda value: next(
                 f"{len(row.pages)} pág. · {row.created_at:%Y-%m-%d %H:%M}"
-                for row in general_runs if row.run_id == value
+                for row in general_runs
+                if row.run_id == value
             ),
             key=f"processing_bulk_single_run_{current_row.digital_object_id}",
         )
@@ -1306,7 +1318,9 @@ def _render_bulk_review_sender(
                     source_key=row.source_key,
                     digital_object_id=row.digital_object_id,
                 )
-                general = [item for item in runs if item.pages and item.engine != "tesseract_regions"]
+                general = [
+                    item for item in runs if item.pages and item.engine != "tesseract_regions"
+                ]
                 initialized = set(
                     session.scalars(
                         select(EditablePage.page_number).where(
@@ -1329,7 +1343,8 @@ def _render_bulk_review_sender(
                     options=[item.run_id for item in general],
                     format_func=lambda value, choices=general: next(
                         f"{len(item.pages)} pág. · {item.created_at:%Y-%m-%d %H:%M}"
-                        for item in choices if item.run_id == value
+                        for item in choices
+                        if item.run_id == value
                     ),
                     key=f"processing_bulk_multi_run_{row.digital_object_id}",
                 )
@@ -1409,7 +1424,9 @@ def _render_regional_review_integration(
                     source_key=row.source_key,
                     digital_object_id=row.digital_object_id,
                 )
-                regional = [item for item in runs if item.pages and item.engine == "tesseract_regions"]
+                regional = [
+                    item for item in runs if item.pages and item.engine == "tesseract_regions"
+                ]
                 if regional:
                     available[_processing_row_identity(row)] = (row, regional)
     finally:
@@ -1440,8 +1457,7 @@ def _render_regional_review_integration(
         "Lectura de zona",
         options=[run.run_id for run in page_runs],
         format_func=lambda value: next(
-            f"{run.created_at:%Y-%m-%d %H:%M}"
-            for run in page_runs if run.run_id == value
+            f"{run.created_at:%Y-%m-%d %H:%M}" for run in page_runs if run.run_id == value
         ),
         key=f"processing_regional_integrate_run_{row.digital_object_id}_{page}",
         help="Lectura parcial guardada para esa página. Elegí la que contiene el texto que querés incorporar.",
@@ -1467,7 +1483,8 @@ def _render_regional_review_integration(
             )
             editable_rows = (
                 _editable_rows_for_page(session, editable_page_id=assessment.editable_page_id)
-                if assessment.editable_page_id is not None else []
+                if assessment.editable_page_id is not None
+                else []
             )
     except (ValueError, RuntimeError, OSError) as exc:
         st.error(str(exc))
@@ -1551,7 +1568,8 @@ def _render_regional_review_integration(
             options=active_ids,
             format_func=lambda value: next(
                 f"{item.current_order_index + 1}. {_compact_text(item.current_text)}"
-                for item in editable_rows if item.id == value
+                for item in editable_rows
+                if item.id == value
             ),
             key=target_key,
         )
@@ -1579,15 +1597,19 @@ def _render_regional_review_integration(
         else:
             st.success("Ubicación marcada.")
         object_type_options = [item.key for item in decisions.object_types if item.editable]
-        default_type = partial.object_type if partial.object_type in object_type_options else (
-            "paragraph" if "paragraph" in object_type_options else object_type_options[0]
+        default_type = (
+            partial.object_type
+            if partial.object_type in object_type_options
+            else ("paragraph" if "paragraph" in object_type_options else object_type_options[0])
         )
         add_cols = st.columns(2)
         object_type = add_cols[0].selectbox(
             "Tipo de texto",
             options=object_type_options,
             index=object_type_options.index(default_type),
-            format_func=lambda value: next(item.label for item in decisions.object_types if item.key == value),
+            format_func=lambda value: next(
+                item.label for item in decisions.object_types if item.key == value
+            ),
             key=f"processing_regional_add_type_{row.digital_object_id}_{page}_{run_id}",
         )
         position_options = ["end"] + (["after", "before"] if editable_rows else [])
@@ -1607,7 +1629,8 @@ def _render_regional_review_integration(
                 options=active_ids,
                 format_func=lambda value: next(
                     f"{item.current_order_index + 1}. {_compact_text(item.current_text)}"
-                    for item in editable_rows if item.id == value
+                    for item in editable_rows
+                    if item.id == value
                 ),
                 key=target_key,
             )
@@ -1715,10 +1738,7 @@ def render_processing_view(
     if flash:
         st.success(flash)
 
-    inventory = _load_inventory(
-        db_path=db_path, project_root=project_root, project_id=project_id
-    )
-    counts = {key: sum(row.status == key for row in inventory) for key in _STATUS_LABELS}
+    inventory = _load_inventory(db_path=db_path, project_root=project_root, project_id=project_id)
 
     processing_tabs = [
         "Estado",
@@ -1834,15 +1854,12 @@ def render_processing_view(
                     "Primero se preparan las imágenes de página. Después se extrae el texto de esas imágenes."
                 ),
             )
-            _remember_single_widget_state(
-                st, key="processing_operation", value=operation
-            )
+            _remember_single_widget_state(st, key="processing_operation", value=operation)
 
             if operation == "prepare":
-                eligible_rows = _unique_processing_rows([
-                    row for row in inventory
-                    if row.file_presence not in {"missing", "modified"}
-                ])
+                eligible_rows = _unique_processing_rows(
+                    [row for row in inventory if row.file_presence not in {"missing", "modified"}]
+                )
             else:
                 eligible_rows = _unique_processing_rows(
                     [row for row in inventory if row.preprocessing_ready]
@@ -1851,9 +1868,7 @@ def render_processing_view(
             eligible_by_id = {_processing_row_identity(row): row for row in eligible_rows}
             document_options = list(eligible_by_id)
             document_labels = _processing_document_labels(eligible_rows, include_status=True)
-            _restore_multi_widget_state(
-                st, key="processing_document_ids", options=document_options
-            )
+            _restore_multi_widget_state(st, key="processing_document_ids", options=document_options)
             selected_document_ids = st.multiselect(
                 "Documentos",
                 options=document_options,
@@ -1876,7 +1891,9 @@ def render_processing_view(
                         "Todavía no hay documentos con imágenes preparadas. Elegí el paso 1 y prepará al menos un documento antes de extraer texto."
                     )
                 else:
-                    st.warning("No hay documentos con una copia local utilizable para preparar imágenes.")
+                    st.warning(
+                        "No hay documentos con una copia local utilizable para preparar imágenes."
+                    )
 
             profile_rows = _profiles(project_root)
             profile_path = None
@@ -1928,7 +1945,9 @@ def render_processing_view(
                 )
             else:
                 if not profile_rows:
-                    st.error("No se encontraron métodos de extracción de texto configurados para este proyecto.")
+                    st.error(
+                        "No se encontraron métodos de extracción de texto configurados para este proyecto."
+                    )
                 else:
                     selected_profile = st.selectbox(
                         "Método de extracción",
@@ -1942,9 +1961,7 @@ def render_processing_view(
                     )
                     profile_path = Path(selected_profile)
                     selected_extraction_profile = next(
-                        profile
-                        for path, profile in profile_rows
-                        if str(path) == selected_profile
+                        profile for path, profile in profile_rows if str(path) == selected_profile
                     )
                     selected_inventory = list(selected_rows)
                     with st.expander("Detalles técnicos", expanded=False):
@@ -1967,10 +1984,14 @@ def render_processing_view(
                                 image_rows.append(
                                     {
                                         "Documento": row.title,
-                                        "Tratamiento": OCR_TREATMENT_LABELS.get(treatment, treatment),
+                                        "Tratamiento": OCR_TREATMENT_LABELS.get(
+                                            treatment, treatment
+                                        ),
                                         "Geometría": GEOMETRY_MODE_LABELS.get(geometry, geometry),
                                         "Transformación del método": (
-                                            "Ninguna" if profile_variant == "original" else profile_variant
+                                            "Ninguna"
+                                            if profile_variant == "original"
+                                            else profile_variant
                                         ),
                                     }
                                 )
@@ -2097,7 +2118,11 @@ def render_processing_view(
             engine = create_sqlite_engine(db_path)
             try:
                 with session_scope(engine) as session:
-                    runs = extraction_candidate_runs(session, source_key=source_key, digital_object_id=current_row.digital_object_id)
+                    runs = extraction_candidate_runs(
+                        session,
+                        source_key=source_key,
+                        digital_object_id=current_row.digital_object_id,
+                    )
             finally:
                 engine.dispose()
             general_runs = [row for row in runs if row.pages and row.engine != "tesseract_regions"]
@@ -2136,14 +2161,14 @@ def render_processing_view(
                             session,
                             project_root=project_root,
                             source_key=source_key,
-                                    digital_object_id=current_row.digital_object_id,
+                            digital_object_id=current_row.digital_object_id,
                             page=page,
                             candidate_run_id=run_id,
                         )
                         assessment = assess_candidate_adoption(
                             session,
                             source_key=source_key,
-                                    digital_object_id=current_row.digital_object_id,
+                            digital_object_id=current_row.digital_object_id,
                             page=page,
                             candidate_run_id=run_id,
                         )
@@ -2181,7 +2206,9 @@ def render_processing_view(
                             st.error(str(exc))
                         else:
                             request_tab(st, key="processing_tabs", label=_SELECTION_TAB_LABEL)
-                            st.session_state["processing_flash"] = f"Página {page}: control automático actualizado."
+                            st.session_state["processing_flash"] = (
+                                f"Página {page}: control automático actualizado."
+                            )
                             rerun_view(st)
                         finally:
                             engine.dispose()
@@ -2202,11 +2229,15 @@ def render_processing_view(
                     with left:
                         st.write("**Elegida actualmente**")
                         if current is None:
-                            st.info("Esta página todavía no tiene una extracción elegida para Revisar documentos.")
+                            st.info(
+                                "Esta página todavía no tiene una extracción elegida para Revisar documentos."
+                            )
                         else:
                             st.caption(_extraction_run_ui_label(current))
                             _render_automatic_quality(st, current.automatic_quality)
-                            with st.expander("Detalles técnicos de esta extracción", expanded=False):
+                            with st.expander(
+                                "Detalles técnicos de esta extracción", expanded=False
+                            ):
                                 st.write(f"Motor: {_extraction_run_ui_label(current)}")
                                 st.write(f"Perfil: `{current.profile_key or current.engine}`")
                             if current.preview_path is not None:
@@ -2292,9 +2323,7 @@ def render_processing_view(
                                 f"Página {page}: extracción elegida actualizada ({changed} cambio). "
                                 "La edición existente se conservó."
                             )
-                            request_tab(
-                                st, key="processing_tabs", label=_SELECTION_TAB_LABEL
-                            )
+                            request_tab(st, key="processing_tabs", label=_SELECTION_TAB_LABEL)
                             rerun_view(st)
                         finally:
                             engine.dispose()
@@ -2335,9 +2364,7 @@ def render_processing_view(
                                 f"Textos activos: {result.objects_activated}; "
                                 f"textos anteriores conservados en el historial: {result.objects_retired}."
                             )
-                            request_tab(
-                                st, key="processing_tabs", label=_SELECTION_TAB_LABEL
-                            )
+                            request_tab(st, key="processing_tabs", label=_SELECTION_TAB_LABEL)
                             rerun_view(st)
                         finally:
                             engine.dispose()
@@ -2403,7 +2430,9 @@ def render_processing_view(
                                         f"{result.retained_objects} fragmentos de texto editables. "
                                         "La decisión quedó registrada en el historial."
                                     )
-                                    request_tab(st, key="processing_tabs", label=_SELECTION_TAB_LABEL)
+                                    request_tab(
+                                        st, key="processing_tabs", label=_SELECTION_TAB_LABEL
+                                    )
                                     rerun_view(st)
                                 finally:
                                     engine.dispose()
@@ -2439,7 +2468,9 @@ def render_processing_view(
                                             f"{run_id}_{conflict.conflict_id}"
                                         )
                                         with st.container(border=True):
-                                            st.write(f"**Conflicto textual** · `{conflict.conflict_id}`")
+                                            st.write(
+                                                f"**Conflicto textual** · `{conflict.conflict_id}`"
+                                            )
                                             st.caption(conflict.reason)
                                             columns = st.columns(3)
                                             columns[0].write("**Base anterior**")
@@ -2544,7 +2575,7 @@ def render_processing_view(
                                                 rebase_preview = preview_editable_rebase(
                                                     session,
                                                     source_key=source_key,
-                                                digital_object_id=current_row.digital_object_id,
+                                                    digital_object_id=current_row.digital_object_id,
                                                     page=page,
                                                     candidate_run_id=run_id,
                                                     text_resolutions=text_resolutions,
@@ -2575,7 +2606,10 @@ def render_processing_view(
                                                 f"{conflict.source_order_index + 1}**"
                                             )
                                             st.caption(conflict.reason)
-                                            st.code(conflict.source_text[:700] or "[fragmento de texto vacío]")
+                                            st.code(
+                                                conflict.source_text[:700]
+                                                or "[fragmento de texto vacío]"
+                                            )
                                             options = ["pending", *range(len(conflict.candidates))]
                                             selected_projection = st.selectbox(
                                                 "Fragmento del texto nuevo que recibirá sus anotaciones y datos adicionales",
@@ -2598,9 +2632,7 @@ def render_processing_view(
                                                 candidate_option = conflict.candidates[
                                                     selected_projection
                                                 ]
-                                                projection_resolutions[
-                                                    conflict.conflict_id
-                                                ] = {
+                                                projection_resolutions[conflict.conflict_id] = {
                                                     "action": "map",
                                                     "target_index": candidate_option.target_index,
                                                     "expected_candidate_ids": [
@@ -2620,13 +2652,11 @@ def render_processing_view(
                                                 rebase_preview = preview_editable_rebase(
                                                     session,
                                                     source_key=source_key,
-                                                digital_object_id=current_row.digital_object_id,
+                                                    digital_object_id=current_row.digital_object_id,
                                                     page=page,
                                                     candidate_run_id=run_id,
                                                     text_resolutions=text_resolutions,
-                                                    projection_resolutions=(
-                                                        projection_resolutions
-                                                    ),
+                                                    projection_resolutions=(projection_resolutions),
                                                 )
                                         except (ValueError, RuntimeError, OSError) as exc:
                                             st.error(str(exc))
@@ -2675,9 +2705,12 @@ def render_processing_view(
                                             ):
                                                 option = f"candidate:{index}"
                                                 option_values.append(option)
-                                                block_order = rebase_preview.candidate_objects[
-                                                    candidate_option.target_index
-                                                ].order_index + 1
+                                                block_order = (
+                                                    rebase_preview.candidate_objects[
+                                                        candidate_option.target_index
+                                                    ].order_index
+                                                    + 1
+                                                )
                                                 option_labels[option] = (
                                                     f"Fragmento {block_order} · "
                                                     f"{candidate_option.method} · "
@@ -2688,9 +2721,9 @@ def render_processing_view(
                                             choice = st.selectbox(
                                                 "Cómo trasladar este dato al texto nuevo",
                                                 options=option_values,
-                                                format_func=lambda value, labels=option_labels: labels[
-                                                    value
-                                                ],
+                                                format_func=lambda value, labels=option_labels: (
+                                                    labels[value]
+                                                ),
                                                 key=f"{key_base}_choice",
                                             )
 
@@ -2836,7 +2869,7 @@ def render_processing_view(
                                                 rebase_preview = preview_editable_rebase(
                                                     session,
                                                     source_key=source_key,
-                                                digital_object_id=current_row.digital_object_id,
+                                                    digital_object_id=current_row.digital_object_id,
                                                     page=page,
                                                     candidate_run_id=run_id,
                                                     mention_resolutions=mention_resolutions,
@@ -2865,7 +2898,9 @@ def render_processing_view(
                                             f"processing_rebase_metadata_{current_row.digital_object_id}_{page}_"
                                             f"{run_id}_{conflict.conflict_id}"
                                         )
-                                        block = rebase_preview.candidate_objects[conflict.target_index]
+                                        block = rebase_preview.candidate_objects[
+                                            conflict.target_index
+                                        ]
                                         with st.container(border=True):
                                             kind_label = {
                                                 "document_part": "Parte documental",
@@ -2877,7 +2912,10 @@ def render_processing_view(
                                             )
                                             st.caption(conflict.reason)
                                             st.code(block.rebased_text[:600] or "[fragmento vacío]")
-                                            option_values = ["pending", *range(len(conflict.options))]
+                                            option_values = [
+                                                "pending",
+                                                *range(len(conflict.options)),
+                                            ]
                                             selected = st.selectbox(
                                                 "Valor que debe quedar",
                                                 options=option_values,
@@ -2909,7 +2947,7 @@ def render_processing_view(
                                                 rebase_preview = preview_editable_rebase(
                                                     session,
                                                     source_key=source_key,
-                                                digital_object_id=current_row.digital_object_id,
+                                                    digital_object_id=current_row.digital_object_id,
                                                     page=page,
                                                     candidate_run_id=run_id,
                                                     mention_resolutions=mention_resolutions,
@@ -2978,8 +3016,7 @@ def render_processing_view(
                                                     "action": "select",
                                                     "option_key": option.option_key,
                                                     "expected_option_keys": [
-                                                        item.option_key
-                                                        for item in conflict.options
+                                                        item.option_key for item in conflict.options
                                                     ],
                                                     "method": "manual_attribute_selection",
                                                 }
@@ -3042,9 +3079,9 @@ def render_processing_view(
                                                     manual_state_key
                                                 )
                                                 if committed_resolution:
-                                                    attribute_resolutions[
-                                                        conflict.conflict_id
-                                                    ] = dict(committed_resolution)
+                                                    attribute_resolutions[conflict.conflict_id] = (
+                                                        dict(committed_resolution)
+                                                    )
                                                     st.success(
                                                         "Valor JSON confirmado para la vista previa."
                                                     )
@@ -3063,7 +3100,7 @@ def render_processing_view(
                                                 rebase_preview = preview_editable_rebase(
                                                     session,
                                                     source_key=source_key,
-                                                digital_object_id=current_row.digital_object_id,
+                                                    digital_object_id=current_row.digital_object_id,
                                                     page=page,
                                                     candidate_run_id=run_id,
                                                     mention_resolutions=mention_resolutions,
@@ -3129,9 +3166,7 @@ def render_processing_view(
                                         "Todavía quedan conflictos de menciones sin una resolución válida:"
                                     )
                                     for conflict in rebase_preview.mention_conflicts:
-                                        st.write(
-                                            f"• «{conflict.mention_text}»: {conflict.reason}"
-                                        )
+                                        st.write(f"• «{conflict.mention_text}»: {conflict.reason}")
                                 if rebase_preview.metadata_conflicts:
                                     st.error(
                                         "Todavía quedan conflictos de metadatos sin una resolución válida:"
@@ -3157,9 +3192,7 @@ def render_processing_view(
                                     )
                                 if rebase_preview.unified_text_diff:
                                     with st.expander("Ver correcciones revisadas trasladadas"):
-                                        st.code(
-                                            rebase_preview.unified_text_diff, language="diff"
-                                        )
+                                        st.code(rebase_preview.unified_text_diff, language="diff")
                                 st.dataframe(
                                     [
                                         {
@@ -3248,7 +3281,6 @@ def render_processing_view(
                         ):
                             _open_review(st, source_key=source_key, page=page)
 
-
     with regional_integration_tab:
         _render_regional_review_integration(
             st,
@@ -3300,14 +3332,17 @@ def render_processing_view(
                 st.dataframe(
                     [
                         {
-                            "Documento": history_document_labels.get(item.source_key, item.source_key),
+                            "Documento": history_document_labels.get(
+                                item.source_key, item.source_key
+                            ),
                             "Estado": _JOB_STATUS_LABELS.get(item.status, item.status),
                             "Páginas": ", ".join(map(str, item.pages)),
                             "Mensaje": (
                                 "No se pudo extraer texto porque el documento todavía no tenía imágenes preparadas."
                                 if item.status == "failed"
                                 and any(
-                                    "no tiene una corrida de preprocesamiento vigente" in str(warning)
+                                    "no tiene una corrida de preprocesamiento vigente"
+                                    in str(warning)
                                     for warning in (item.detail.get("warnings") or [])
                                 )
                                 else item.message

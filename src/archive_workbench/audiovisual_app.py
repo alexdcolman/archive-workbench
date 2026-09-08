@@ -11,7 +11,6 @@ from sqlalchemy import select
 from archive_workbench.audiovisual import (
     AUDIO_EXTENSIONS,
     VIDEO_EXTENSIONS,
-    REVIEW_STATUSES,
     TRANSCRIPTION_DISCARDED_STATUS,
     discard_transcription_run,
     restore_transcription_run,
@@ -22,7 +21,6 @@ from archive_workbench.audiovisual import (
     create_segment_mention,
     create_timeline_annotation,
     ensure_playback_asset,
-    export_transcript_segments_bytes,
     format_timestamp,
     resolve_playback_path,
     segment_mention_rows,
@@ -37,11 +35,15 @@ from archive_workbench.audiovisual import (
     transcription_compute_types,
     transcription_model_names,
     update_audiovisual_description,
-    update_transcript_segment,
 )
 from archive_workbench.contracts.audiovisual import AudiovisualDescription, TranscriptionRequest
 from archive_workbench.db import create_sqlite_engine, session_scope
-from archive_workbench.db.models import ArchivalUnit, AudiovisualMedia, AuthorityRecord, TranscriptionRun
+from archive_workbench.db.models import (
+    ArchivalUnit,
+    AudiovisualMedia,
+    AuthorityRecord,
+    TranscriptionRun,
+)
 from archive_workbench.catalog_management import register_external_file
 from archive_workbench.domain.enums import MediaType
 from archive_workbench.inspection import detect_media_type
@@ -87,9 +89,9 @@ _RUN_STATUS_LABELS = {
     TRANSCRIPTION_DISCARDED_STATUS: "Descartada",
 }
 
+
 def _format_supported_extensions(extensions: set[str]) -> str:
     return ", ".join(extension.removeprefix(".").upper() for extension in sorted(extensions))
-
 
 
 def _platform_import_form_error(
@@ -147,7 +149,9 @@ def _run_db_action(st, *, db_path: Path, callback) -> object | None:
     return result
 
 
-def _render_segment_mentions(st, *, db_path: Path, selected_segment, authorities, actor: str) -> None:
+def _render_segment_mentions(
+    st, *, db_path: Path, selected_segment, authorities, actor: str
+) -> None:
     st.write("**Registrar una mención en el segmento seleccionado**")
     authority_by_id = {row.id: row for row in authorities}
     authority_options = [None, *authority_by_id]
@@ -159,9 +163,7 @@ def _render_segment_mentions(st, *, db_path: Path, selected_segment, authorities
         "Entidad existente vinculada a esta mención (opcional)",
         options=authority_options,
         format_func=lambda value: (
-            "Sin vincular"
-            if value is None
-            else authority_by_id[value].preferred_name
+            "Sin vincular" if value is None else authority_by_id[value].preferred_name
         ),
         key=f"av_mention_authority_{selected_segment.segment_id}",
     )
@@ -202,9 +204,7 @@ def _render_segment_mentions(st, *, db_path: Path, selected_segment, authorities
     mention_engine = create_sqlite_engine(db_path)
     try:
         with session_scope(mention_engine) as session:
-            mentions = segment_mention_rows(
-                session, segment_id=selected_segment.segment_id
-            )
+            mentions = segment_mention_rows(session, segment_id=selected_segment.segment_id)
     finally:
         mention_engine.dispose()
     if mentions:
@@ -222,7 +222,6 @@ def _render_segment_mentions(st, *, db_path: Path, selected_segment, authorities
             hide_index=True,
             use_container_width=True,
         )
-
 
 
 def _media_control_script(*, rate: float, seek_to: float | None = None) -> str:
@@ -387,7 +386,9 @@ def _local_media_type_label(media_type: MediaType) -> str:
     return "Audio" if media_type == MediaType.AUDIO else "Video"
 
 
-def _validate_local_media_paths(paths: list[Path]) -> tuple[list[tuple[Path, MediaType]], list[str]]:
+def _validate_local_media_paths(
+    paths: list[Path],
+) -> tuple[list[tuple[Path, MediaType]], list[str]]:
     valid: list[tuple[Path, MediaType]] = []
     errors: list[str] = []
     for source in paths:
@@ -406,7 +407,6 @@ def _validate_local_media_paths(paths: list[Path]) -> tuple[list[tuple[Path, Med
     return valid, errors
 
 
-
 def _managed_audiovisual_import_paths(root: Path) -> list[Path]:
     if not root.is_dir():
         return []
@@ -416,6 +416,7 @@ def _managed_audiovisual_import_paths(root: Path) -> list[Path]:
         for path in root.rglob("*")
         if path.is_file() and path.suffix.lower() in supported
     )
+
 
 def _register_selected_local_media(
     session,
@@ -442,8 +443,7 @@ def _register_selected_local_media(
                 )
                 media = session.scalar(
                     select(AudiovisualMedia).where(
-                        AudiovisualMedia.digital_object_id
-                        == result.registration.digital_object_id
+                        AudiovisualMedia.digital_object_id == result.registration.digital_object_id
                     )
                 )
                 if media is None:
@@ -634,7 +634,9 @@ def _render_audiovisual_import(
                 key="av_register_local_media",
             ):
                 if selection_errors or not valid_paths:
-                    st.error("Elegí solamente archivos de audio o video válidos antes de continuar.")
+                    st.error(
+                        "Elegí solamente archivos de audio o video válidos antes de continuar."
+                    )
                 else:
                     result = _run_db_action(
                         st,
@@ -846,9 +848,7 @@ def _render_transcription_workspace(
                     for row in run_rows
                 ]
             current_annotations = (
-                timeline_annotation_rows(session, media_id=media_id)
-                if media is not None
-                else []
+                timeline_annotation_rows(session, media_id=media_id) if media is not None else []
             )
             authorities = session.scalars(
                 select(AuthorityRecord)
@@ -992,9 +992,7 @@ def _render_transcription_workspace(
         st.session_state["av_pending_seek_seconds"] = action_time
         if action_kind == "speaker":
             authority_id = (
-                str(sync_action["authority_id"])
-                if sync_action.get("authority_id")
-                else None
+                str(sync_action["authority_id"]) if sync_action.get("authority_id") else None
             )
             speaker_scope = str(sync_action.get("scope") or "segment")
             target_segment = _segment_for_time(segments, action_time)
@@ -1075,9 +1073,7 @@ def _render_transcription_workspace(
         transcript_engine = create_sqlite_engine(db_path)
         try:
             with session_scope(transcript_engine) as session:
-                current_transcript = transcript_document_text(
-                    session, run_id=str(selected_run_id)
-                )
+                current_transcript = transcript_document_text(session, run_id=str(selected_run_id))
         finally:
             transcript_engine.dispose()
 
@@ -1154,7 +1150,9 @@ def _render_transcription_workspace(
         manage_key = f"av_manage_annotations_{media_id}"
         if manage_key not in st.session_state:
             st.session_state[manage_key] = False
-        if st.toggle("Revisar marcas temporales, hablantes y anotaciones ya registradas", key=manage_key):
+        if st.toggle(
+            "Revisar marcas temporales, hablantes y anotaciones ya registradas", key=manage_key
+        ):
             st.caption(
                 "Las nuevas marcas temporales se crean junto al reproductor. "
                 "Este panel permite revisar o archivar las marcas, hablantes y anotaciones que ya fueron registrados para este audio o video."
@@ -1192,7 +1190,9 @@ def _render_transcription_workspace(
                     format_func=lambda value: _timeline_annotation_label(annotation_by_id[value]),
                     key=f"av_annotation_existing_{media_id}",
                 )
-                if st.button("Archivar esta marca temporal", key=f"av_archive_annotation_{media_id}"):
+                if st.button(
+                    "Archivar esta marca temporal", key=f"av_archive_annotation_{media_id}"
+                ):
                     result = _run_db_action(
                         st,
                         db_path=db_path,
@@ -1224,11 +1224,22 @@ def _render_transcription_workspace(
     )
     if metadata_open:
         st.write("**Descripción registrada para este audio o video**")
-        title = st.text_input("Título del audio o video", value=(media.title if media else None) or "")
-        producer = st.text_input("Productor o creador del audio o video", value=(media.producer if media else None) or "")
-        channel = st.text_input("Canal o cuenta de publicación", value=(media.channel if media else None) or "")
-        responsible = st.text_input("Responsable del registro de este material", value=(media.responsible if media else None) or "")
-        provenance = st.text_input("Procedencia del audio o video", value=(media.provenance if media else None) or "")
+        title = st.text_input(
+            "Título del audio o video", value=(media.title if media else None) or ""
+        )
+        producer = st.text_input(
+            "Productor o creador del audio o video", value=(media.producer if media else None) or ""
+        )
+        channel = st.text_input(
+            "Canal o cuenta de publicación", value=(media.channel if media else None) or ""
+        )
+        responsible = st.text_input(
+            "Responsable del registro de este material",
+            value=(media.responsible if media else None) or "",
+        )
+        provenance = st.text_input(
+            "Procedencia del audio o video", value=(media.provenance if media else None) or ""
+        )
         recorded_date = st.date_input(
             "Fecha de registro, producción o publicación",
             value=media.recorded_date if media and media.recorded_date else None,
@@ -1237,8 +1248,13 @@ def _render_transcription_workspace(
             format="DD/MM/YYYY",
             help="Fecha de registro, producción o publicación cuando sea conocida.",
         )
-        rights = st.text_input("Derechos o condiciones de uso", value=(media.rights if media else None) or "")
-        description = st.text_area("Descripción del contenido del audio o video", value=(media.description if media else None) or "")
+        rights = st.text_input(
+            "Derechos o condiciones de uso", value=(media.rights if media else None) or ""
+        )
+        description = st.text_area(
+            "Descripción del contenido del audio o video",
+            value=(media.description if media else None) or "",
+        )
         if st.button("Guardar la descripción de este audio o video"):
             result = _run_db_action(
                 st,
@@ -1360,16 +1376,22 @@ def _render_transcription_workspace(
             "Equipo que realizará el reconocimiento",
             options=device_options,
             index=0,
-            format_func=lambda value: "Procesador (CPU)" if value == "cpu" else "Placa NVIDIA (CUDA)",
+            format_func=lambda value: (
+                "Procesador (CPU)" if value == "cpu" else "Placa NVIDIA (CUDA)"
+            ),
             key=f"av_device_{media_id}",
             help=device_help,
         )
-        language = st.text_input("Idioma (código, opcional)", value="es", key=f"av_language_{media_id}")
+        language = st.text_input(
+            "Idioma (código, opcional)", value="es", key=f"av_language_{media_id}"
+        )
 
         compute_options = transcription_compute_types(device)
         preferred_compute = (
-            "float16" if device == "cuda" and "float16" in compute_options
-            else "int8" if "int8" in compute_options
+            "float16"
+            if device == "cuda" and "float16" in compute_options
+            else "int8"
+            if "int8" in compute_options
             else compute_options[0]
         )
         compute_key = f"av_compute_type_{media_id}"
@@ -1508,7 +1530,9 @@ def _render_transcription_workspace(
                 "Duración típica de un segmento",
                 _format_seconds(evaluation.median_segment_seconds),
             )
-            seg_c.metric("Tiempo sin texto entre segmentos", _format_seconds(evaluation.total_gap_seconds))
+            seg_c.metric(
+                "Tiempo sin texto entre segmentos", _format_seconds(evaluation.total_gap_seconds)
+            )
             st.caption(
                 f"Segmentos muy cortos (<0,75 s): {evaluation.short_segment_count} · "
                 f"segmentos largos (>15 s): {evaluation.long_segment_count} · "
@@ -1553,11 +1577,15 @@ def _render_transcription_workspace(
                 qual_a, qual_b = st.columns(2)
                 qual_a.metric(
                     "Caracteres diferentes respecto de la referencia",
-                    "No disponible" if evaluation.sample_cer is None else f"{evaluation.sample_cer * 100:.1f} %",
+                    "No disponible"
+                    if evaluation.sample_cer is None
+                    else f"{evaluation.sample_cer * 100:.1f} %",
                 )
                 qual_b.metric(
                     "Palabras diferentes respecto de la referencia",
-                    "No disponible" if evaluation.sample_wer is None else f"{evaluation.sample_wer * 100:.1f} %",
+                    "No disponible"
+                    if evaluation.sample_wer is None
+                    else f"{evaluation.sample_wer * 100:.1f} %",
                 )
             st.download_button(
                 "Descargar evaluación de transcripción",
@@ -1728,10 +1756,14 @@ def _render_transcription_workspace(
                                     _format_duration_share(baseline_eval.realtime_factor)
                                 ),
                                 "Caracteres diferentes en los cinco fragmentos revisados": (
-                                    "No disponible" if baseline_cmp.cer is None else f"{baseline_cmp.cer * 100:.1f} %"
+                                    "No disponible"
+                                    if baseline_cmp.cer is None
+                                    else f"{baseline_cmp.cer * 100:.1f} %"
                                 ),
                                 "Palabras diferentes en los cinco fragmentos revisados": (
-                                    "No disponible" if baseline_cmp.wer is None else f"{baseline_cmp.wer * 100:.1f} %"
+                                    "No disponible"
+                                    if baseline_cmp.wer is None
+                                    else f"{baseline_cmp.wer * 100:.1f} %"
                                 ),
                             },
                             {
@@ -1762,7 +1794,9 @@ def _render_transcription_workspace(
                         "transcripción original completa."
                     )
 
-                    with st.expander("Ver comparación de los cinco fragmentos revisados", expanded=False):
+                    with st.expander(
+                        "Ver comparación de los cinco fragmentos revisados", expanded=False
+                    ):
                         rows_for_display = []
                         for baseline_window, quality_window in zip(
                             baseline_cmp.windows, quality_cmp.windows, strict=True
@@ -1800,7 +1834,9 @@ def _render_transcription_workspace(
                     if full_transcripts_open:
                         left, right = st.columns(2)
                         with left:
-                            st.write(f"**Versión de referencia · {baseline_eval.model_name} · transcripción automática original**")
+                            st.write(
+                                f"**Versión de referencia · {baseline_eval.model_name} · transcripción automática original**"
+                            )
                             st.text_area(
                                 f"Transcripción automática original de {baseline_eval.model_name}",
                                 value=baseline_original_text,
@@ -1900,8 +1936,8 @@ def _render_transcription_workspace(
                             result = _run_db_action(
                                 st,
                                 db_path=db_path,
-                                callback=lambda session, run_id=str(discarded["id"]): restore_transcription_run(
-                                    session, run_id=run_id, actor=actor
+                                callback=lambda session, run_id=str(discarded["id"]): (
+                                    restore_transcription_run(session, run_id=run_id, actor=actor)
                                 ),
                             )
                             if result is not None:
@@ -2005,9 +2041,7 @@ def _render_transcription_workspace(
             history_engine = create_sqlite_engine(db_path)
             try:
                 with session_scope(history_engine) as session:
-                    history = segment_revision_rows(
-                        session, segment_id=selected_segment.segment_id
-                    )
+                    history = segment_revision_rows(session, segment_id=selected_segment.segment_id)
             finally:
                 history_engine.dispose()
             if history:
@@ -2016,7 +2050,9 @@ def _render_transcription_workspace(
                     [
                         {
                             "revisión": item.revision_number,
-                            "acción": "Estado inicial" if item.operation == "baseline" else "Corrección",
+                            "acción": "Estado inicial"
+                            if item.operation == "baseline"
+                            else "Corrección",
                             "responsable": item.changed_by,
                             "nota": item.note or "",
                             "fecha": item.changed_at,

@@ -106,7 +106,9 @@ def _summary_markdown(manifest: OcrBenchmarkManifest, previews: dict[str, str]) 
         "|---|---:|---|---:|---:|---:|---:|---:|",
     ]
     for candidate in ordered:
-        confidence = "-" if candidate.mean_confidence is None else f"{candidate.mean_confidence:.1f}"
+        confidence = (
+            "-" if candidate.mean_confidence is None else f"{candidate.mean_confidence:.1f}"
+        )
         lines.append(
             f"| `{candidate.candidate_id}` | {candidate.page} | {candidate.image_variant} | "
             f"{candidate.psm} | {candidate.character_count} | {candidate.word_count} | "
@@ -202,12 +204,13 @@ def run_ocr_benchmark(
     (output_dir / "manifest.json").write_text(
         manifest.model_dump_json(indent=2, exclude_none=True), encoding="utf-8"
     )
-    (output_dir / "summary.md").write_text(
-        _summary_markdown(manifest, previews), encoding="utf-8"
-    )
+    (output_dir / "summary.md").write_text(_summary_markdown(manifest, previews), encoding="utf-8")
     (output_dir / "summary.json").write_text(
         json.dumps(
-            [item.model_dump(mode="json") for item in sorted(candidates, key=lambda x: x.heuristic_score, reverse=True)],
+            [
+                item.model_dump(mode="json")
+                for item in sorted(candidates, key=lambda x: x.heuristic_score, reverse=True)
+            ],
             ensure_ascii=False,
             indent=2,
         ),

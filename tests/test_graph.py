@@ -33,11 +33,11 @@ from archive_workbench.relations import create_entity_relation
 from tests.test_search import _seed_search_project
 
 
-
 def test_graph_structural_layers_are_opt_in_by_default() -> None:
     assert "hierarchy" not in _DEFAULT_EDGE_TYPES
     assert "document" not in _DEFAULT_EDGE_TYPES
     assert set(_DEFAULT_EDGE_TYPES) == set(GRAPH_EDGE_TYPES) - {"hierarchy", "document"}
+
 
 def _seed_graph(root: Path) -> tuple[str, str, str]:
     object_id, _page_id = _seed_search_project(root)
@@ -59,7 +59,12 @@ def _seed_graph(root: Path) -> tuple[str, str, str]:
                 preferred_name="Persona investigada",
                 created_by="tests",
             )
-            editable = session.get(__import__("archive_workbench.db.models", fromlist=["EditableObject"]).EditableObject, object_id)
+            editable = session.get(
+                __import__(
+                    "archive_workbench.db.models", fromlist=["EditableObject"]
+                ).EditableObject,
+                object_id,
+            )
             assert editable is not None
             editable.current_text += " por la Dirección de Inteligencia"
             editable.revision_number += 1
@@ -102,8 +107,9 @@ def test_graph_contains_analytical_and_mention_edges(tmp_path: Path) -> None:
     assert mention_edge.object_id is not None
 
 
-
-def test_graph_layers_keep_archival_structure_documents_parts_and_roles_separate(tmp_path: Path) -> None:
+def test_graph_layers_keep_archival_structure_documents_parts_and_roles_separate(
+    tmp_path: Path,
+) -> None:
     root = tmp_path / "project"
     organization_id, person_id, _relation_id = _seed_graph(root)
     engine = create_sqlite_engine(database_path(root))
@@ -175,7 +181,13 @@ def test_graph_layers_keep_archival_structure_documents_parts_and_roles_separate
 
         edge_types = {edge.edge_type for edge in view.edges}
         assert edge_types >= {
-            "hierarchy", "document", "part", "mention", "analytical", "producer", "manager"
+            "hierarchy",
+            "document",
+            "part",
+            "mention",
+            "analytical",
+            "producer",
+            "manager",
         }
         node_kinds = {node.kind for node in view.nodes}
         assert node_kinds >= {"entity", "archival_unit", "digital_object", "document_part"}
@@ -207,6 +219,7 @@ def test_graph_layers_keep_archival_structure_documents_parts_and_roles_separate
         assert not any(edge.edge_type in {"producer", "manager"} for edge in fondos.edges)
     finally:
         engine.dispose()
+
 
 def test_graph_focus_keeps_requested_neighborhood(tmp_path: Path) -> None:
     root = tmp_path / "project"
@@ -249,7 +262,9 @@ def test_consistency_detects_duplicate_and_missing_evidence(tmp_path: Path) -> N
             issues = graph_consistency_issues(session, project_id="search_project")
     finally:
         engine.dispose()
-    assert any(issue.code == "duplicate_relation" and issue.relation_id == relation_id for issue in issues)
+    assert any(
+        issue.code == "duplicate_relation" and issue.relation_id == relation_id for issue in issues
+    )
     assert sum(issue.code == "missing_evidence" for issue in issues) == 2
 
 
@@ -275,7 +290,11 @@ def test_graph_export_writes_json_csv_and_graphml(tmp_path: Path) -> None:
     output = tmp_path / "export"
     paths = export_graph(view, output_dir=output, issues=issues)
     assert {path.name for path in paths} == {
-        "graph.json", "nodes.csv", "edges.csv", "graph.graphml", "consistency_issues.csv"
+        "graph.json",
+        "nodes.csv",
+        "edges.csv",
+        "graph.graphml",
+        "consistency_issues.csv",
     }
     payload = json.loads((output / "graph.json").read_text(encoding="utf-8"))
     assert len(payload["nodes"]) == len(view.nodes)
@@ -339,11 +358,15 @@ def test_graph_filters_entities_and_analytical_relations_by_period(tmp_path: Pat
     try:
         with session_scope(engine) as session:
             organization = session.get(
-                __import__("archive_workbench.db.models", fromlist=["AuthorityRecord"]).AuthorityRecord,
+                __import__(
+                    "archive_workbench.db.models", fromlist=["AuthorityRecord"]
+                ).AuthorityRecord,
                 organization_id,
             )
             relation = session.get(
-                __import__("archive_workbench.db.models", fromlist=["EntityRelation"]).EntityRelation,
+                __import__(
+                    "archive_workbench.db.models", fromlist=["EntityRelation"]
+                ).EntityRelation,
                 relation_id,
             )
             update_authority(
@@ -523,7 +546,7 @@ def test_graph_canvas_uses_curved_paths_arrows_and_automatic_label_displacement(
     assert "separateDraggedNode" in canvas._COMPONENT_JS
     assert "zoomAt" in canvas._COMPONENT_JS
     assert "fitGraph" in canvas._COMPONENT_JS
-    assert '.awg-label-link {' in canvas._COMPONENT_CSS
+    assert ".awg-label-link {" in canvas._COMPONENT_CSS
 
 
 def test_graph_canvas_supports_local_fullscreen_legend_and_quieter_structural_labels() -> None:
@@ -531,16 +554,16 @@ def test_graph_canvas_supports_local_fullscreen_legend_and_quieter_structural_la
 
     assert 'data-action="fullscreen"' in canvas._COMPONENT_HTML
     assert 'data-action="legend"' in canvas._COMPONENT_HTML
-    assert 'Abrir el grafo en pantalla completa' in canvas._COMPONENT_HTML
-    assert 'Unidad del catálogo' in canvas._COMPONENT_HTML
-    assert 'Estructura archivística' in canvas._COMPONENT_HTML
+    assert "Abrir el grafo en pantalla completa" in canvas._COMPONENT_HTML
+    assert "Unidad del catálogo" in canvas._COMPONENT_HTML
+    assert "Estructura archivística" in canvas._COMPONENT_HTML
     assert '<div class="awg-root">' in canvas._COMPONENT_HTML
     assert "const root = parentElement.querySelector('.awg-root')" in canvas._COMPONENT_JS
     assert "root.classList.toggle('awg-detail-labels'" in canvas._COMPONENT_JS
     assert "parentElement.classList" not in canvas._COMPONENT_JS
     assert "root.requestFullscreen" in canvas._COMPONENT_JS
     assert "parentElement.requestFullscreen" not in canvas._COMPONENT_JS
-    assert 'document.exitFullscreen' in canvas._COMPONENT_JS
+    assert "document.exitFullscreen" in canvas._COMPONENT_JS
     assert "legendButton.onclick" in canvas._COMPONENT_JS
     assert "'contiene'" in canvas._COMPONENT_JS
     assert "'contiene parte'" in canvas._COMPONENT_JS
@@ -549,20 +572,21 @@ def test_graph_canvas_supports_local_fullscreen_legend_and_quieter_structural_la
     assert "repetitiveStructuralLabels.has(normalizedEdgeLabel)" in canvas._COMPONENT_JS
     assert "['hierarchy', 'document', 'part'].includes(edge.edge_type)" in canvas._COMPONENT_JS
     assert "state.scale >= 1.35" in canvas._COMPONENT_JS
-    assert '.awg-edge-label.repetitive { opacity: 0; }' in canvas._COMPONENT_CSS
-    assert '.awg-edge-group:hover .awg-edge-label.repetitive' in canvas._COMPONENT_CSS
+    assert ".awg-edge-label.repetitive { opacity: 0; }" in canvas._COMPONENT_CSS
+    assert ".awg-edge-group:hover .awg-edge-label.repetitive" in canvas._COMPONENT_CSS
 
-    local_controls = canvas._COMPONENT_JS[canvas._COMPONENT_JS.index('const syncLegend'):]
+    local_controls = canvas._COMPONENT_JS[canvas._COMPONENT_JS.index("const syncLegend") :]
     assert "setTriggerValue(" not in local_controls
 
 
 def test_graph_distance_filter_is_never_disabled_after_submit() -> None:
-    source = (
-        Path(__file__).parents[1] / "src" / "archive_workbench" / "graph_app.py"
-    ).read_text(encoding="utf-8")
+    source = (Path(__file__).parents[1] / "src" / "archive_workbench" / "graph_app.py").read_text(
+        encoding="utf-8"
+    )
     block = source[
-        source.index('"Cantidad de relaciones a mostrar desde el elemento central"') :
-        source.index("temporal_enabled = st.checkbox")
+        source.index('"Cantidad de relaciones a mostrar desde el elemento central"') : source.index(
+            "temporal_enabled = st.checkbox"
+        )
     ]
     assert "disabled=" not in block
     assert "Sin foco, el mapa conserva todos los elementos" in block

@@ -99,8 +99,6 @@ class ProjectRestoreSummary:
     database_revision: str | None
 
 
-
-
 def _health_dismissals_path(project_root: Path) -> Path:
     return project_root.resolve() / HEALTH_DISMISSALS_RELATIVE_PATH
 
@@ -114,7 +112,9 @@ def _read_health_dismissals(project_root: Path) -> dict[str, dict[str, str]]:
     except (OSError, json.JSONDecodeError) as exc:
         raise ValueError("No se pudo leer la lista de avisos de integridad descartados") from exc
     if payload.get("format") != HEALTH_DISMISSALS_FORMAT:
-        raise ValueError("La lista de avisos de integridad descartados tiene un formato incompatible")
+        raise ValueError(
+            "La lista de avisos de integridad descartados tiene un formato incompatible"
+        )
     rows = payload.get("dismissals")
     if not isinstance(rows, list):
         raise ValueError("La lista de avisos de integridad descartados es inválida")
@@ -203,15 +203,14 @@ def _filter_dismissed_health_issues(
     dismissed: list[ProjectHealthIssue] = []
     for issue in issues:
         key = (
-            f"{issue.code}:{issue.subject_key}"
-            if issue.dismissible and issue.subject_key
-            else None
+            f"{issue.code}:{issue.subject_key}" if issue.dismissible and issue.subject_key else None
         )
         if key and key in dismissals:
             dismissed.append(issue)
         else:
             active.append(issue)
     return active, dismissed
+
 
 def _sha256_path(path: Path) -> str:
     digest = hashlib.sha256()
@@ -258,7 +257,12 @@ def check_project_health(
     quick = session.execute(text("PRAGMA quick_check")).scalar_one_or_none()
     if quick != "ok":
         issues.append(
-            ProjectHealthIssue("error", "sqlite_quick_check", "SQLite informó un problema de integridad.", str(quick))
+            ProjectHealthIssue(
+                "error",
+                "sqlite_quick_check",
+                "SQLite informó un problema de integridad.",
+                str(quick),
+            )
         )
     foreign_rows = session.execute(text("PRAGMA foreign_key_check")).all()
     if foreign_rows:

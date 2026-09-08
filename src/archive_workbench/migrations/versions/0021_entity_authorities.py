@@ -4,6 +4,7 @@ Revision ID: 0021_entity_authorities
 Revises: 0020_catalog_exchange_fragment_search
 Create Date: 2026-07-24
 """
+
 from __future__ import annotations
 
 from alembic import op
@@ -74,7 +75,9 @@ def _revision_changed_fields(*, table: str, id_field: str, fields: tuple[str, ..
             "ELSE '{}' END"
         )
         expression = f"json_patch({expression}, {patch})"
-    return f"CASE WHEN NEW.operation = 'create' THEN json_object({create_parts}) ELSE {expression} END"
+    return (
+        f"CASE WHEN NEW.operation = 'create' THEN json_object({create_parts}) ELSE {expression} END"
+    )
 
 
 def _create_fts(table: str, tokenizer: str) -> None:
@@ -118,8 +121,12 @@ def upgrade() -> None:
         sa.Column("preferred_name", sa.Text(), nullable=False),
         sa.Column("normalized_name", sa.Text(), nullable=False),
         sa.Column("description", sa.Text(), nullable=True),
-        sa.Column("lifecycle_status", sa.String(length=32), nullable=False, server_default="active"),
-        sa.Column("review_status", sa.String(length=32), nullable=False, server_default="unreviewed"),
+        sa.Column(
+            "lifecycle_status", sa.String(length=32), nullable=False, server_default="active"
+        ),
+        sa.Column(
+            "review_status", sa.String(length=32), nullable=False, server_default="unreviewed"
+        ),
         sa.Column("created_by", sa.String(length=200), nullable=False),
         sa.Column("created_at", sa.DateTime(timezone=True), nullable=False),
         sa.Column("updated_by", sa.String(length=200), nullable=False),
@@ -128,8 +135,12 @@ def upgrade() -> None:
         sa.ForeignKeyConstraint(["project_id"], ["projects.id"], ondelete="CASCADE"),
         sa.PrimaryKeyConstraint("id"),
     )
-    op.create_index("ix_authority_records_project_type", "authority_records", ["project_id", "entity_type"])
-    op.create_index("ix_authority_records_project_name", "authority_records", ["project_id", "normalized_name"])
+    op.create_index(
+        "ix_authority_records_project_type", "authority_records", ["project_id", "entity_type"]
+    )
+    op.create_index(
+        "ix_authority_records_project_name", "authority_records", ["project_id", "normalized_name"]
+    )
     op.create_index("ix_authority_records_review", "authority_records", ["review_status"])
 
     op.create_table(
@@ -144,7 +155,9 @@ def upgrade() -> None:
         sa.Column("created_at", sa.DateTime(timezone=True), nullable=False),
         sa.ForeignKeyConstraint(["authority_id"], ["authority_records.id"], ondelete="CASCADE"),
         sa.PrimaryKeyConstraint("id"),
-        sa.UniqueConstraint("authority_id", "normalized_alias", name="uq_authority_alias_normalized"),
+        sa.UniqueConstraint(
+            "authority_id", "normalized_alias", name="uq_authority_alias_normalized"
+        ),
     )
     op.create_index("ix_authority_aliases_authority", "authority_aliases", ["authority_id"])
     op.create_index("ix_authority_aliases_normalized", "authority_aliases", ["normalized_alias"])
@@ -163,7 +176,11 @@ def upgrade() -> None:
         sa.PrimaryKeyConstraint("id"),
         sa.UniqueConstraint("authority_id", "revision_number", name="uq_authority_revision_number"),
     )
-    op.create_index("ix_authority_revisions_authority", "authority_revisions", ["authority_id", "revision_number"])
+    op.create_index(
+        "ix_authority_revisions_authority",
+        "authority_revisions",
+        ["authority_id", "revision_number"],
+    )
 
     op.create_table(
         "entity_mentions",
@@ -184,11 +201,15 @@ def upgrade() -> None:
         sa.Column("updated_by", sa.String(length=200), nullable=False),
         sa.Column("updated_at", sa.DateTime(timezone=True), nullable=False),
         sa.Column("revision", sa.Integer(), nullable=False, server_default="1"),
-        sa.ForeignKeyConstraint(["editable_object_id"], ["editable_objects.id"], ondelete="CASCADE"),
+        sa.ForeignKeyConstraint(
+            ["editable_object_id"], ["editable_objects.id"], ondelete="CASCADE"
+        ),
         sa.ForeignKeyConstraint(["authority_id"], ["authority_records.id"], ondelete="SET NULL"),
         sa.PrimaryKeyConstraint("id"),
     )
-    op.create_index("ix_entity_mentions_object", "entity_mentions", ["editable_object_id", "start_offset"])
+    op.create_index(
+        "ix_entity_mentions_object", "entity_mentions", ["editable_object_id", "start_offset"]
+    )
     op.create_index("ix_entity_mentions_authority", "entity_mentions", ["authority_id"])
     op.create_index("ix_entity_mentions_status", "entity_mentions", ["status"])
 
@@ -204,16 +225,24 @@ def upgrade() -> None:
         sa.Column("changed_at", sa.DateTime(timezone=True), nullable=False),
         sa.ForeignKeyConstraint(["mention_id"], ["entity_mentions.id"], ondelete="CASCADE"),
         sa.PrimaryKeyConstraint("id"),
-        sa.UniqueConstraint("mention_id", "revision_number", name="uq_entity_mention_revision_number"),
+        sa.UniqueConstraint(
+            "mention_id", "revision_number", name="uq_entity_mention_revision_number"
+        ),
     )
-    op.create_index("ix_entity_mention_revisions_mention", "entity_mention_revisions", ["mention_id", "revision_number"])
+    op.create_index(
+        "ix_entity_mention_revisions_mention",
+        "entity_mention_revisions",
+        ["mention_id", "revision_number"],
+    )
 
     # Los índices de búsqueda son derivados: se recrean con las columnas de entidades.
     op.execute("DROP TABLE IF EXISTS editable_search_fts")
     op.execute("DROP TABLE IF EXISTS editable_search_trigram_fts")
     _create_fts("editable_search_fts", "unicode61 remove_diacritics 2")
     _create_fts("editable_search_trigram_fts", "trigram case_sensitive 0")
-    op.execute("UPDATE editable_search_state SET dirty_generation = dirty_generation + 1 WHERE id = 1")
+    op.execute(
+        "UPDATE editable_search_state SET dirty_generation = dirty_generation + 1 WHERE id = 1"
+    )
 
     for table in ("authority_records", "authority_aliases", "entity_mentions"):
         for suffix, event in (("ai", "INSERT"), ("au", "UPDATE"), ("ad", "DELETE")):
@@ -229,60 +258,76 @@ def upgrade() -> None:
                 """
             )
 
-
     authority_fields = (
-        "entity_type", "preferred_name", "normalized_name", "description",
-        "lifecycle_status", "review_status", "aliases",
+        "entity_type",
+        "preferred_name",
+        "normalized_name",
+        "description",
+        "lifecycle_status",
+        "review_status",
+        "aliases",
     )
     op.execute(
         f"""
         CREATE TRIGGER trg_exchange_authority_revision_ai
         AFTER INSERT ON authority_revisions
         BEGIN
-            {_event_insert_sql(
-                entity_type='authority_record',
-                entity_id='NEW.authority_id',
+            {
+            _event_insert_sql(
+                entity_type="authority_record",
+                entity_id="NEW.authority_id",
                 operation="CASE WHEN NEW.operation = 'create' THEN 'create' ELSE 'update' END",
-                actor='NEW.changed_by',
-                timestamp='NEW.changed_at',
+                actor="NEW.changed_by",
+                timestamp="NEW.changed_at",
                 project_id="json_extract(NEW.snapshot_json, '$.project_id')",
                 base_revision="CASE WHEN NEW.operation = 'create' THEN NULL ELSE NEW.revision_number - 1 END",
-                new_revision='NEW.revision_number',
+                new_revision="NEW.revision_number",
                 changed_fields=_revision_changed_fields(
-                    table='authority_revisions',
-                    id_field='authority_id',
+                    table="authority_revisions",
+                    id_field="authority_id",
                     fields=authority_fields,
                 ),
-            )}
+            )
+        }
         END
         """
     )
 
     mention_fields = (
-        "editable_object_id", "authority_id", "mention_text", "normalized_text",
-        "start_offset", "end_offset", "object_revision_number", "status",
-        "source", "confidence", "note",
+        "editable_object_id",
+        "authority_id",
+        "mention_text",
+        "normalized_text",
+        "start_offset",
+        "end_offset",
+        "object_revision_number",
+        "status",
+        "source",
+        "confidence",
+        "note",
     )
     op.execute(
         f"""
         CREATE TRIGGER trg_exchange_entity_mention_revision_ai
         AFTER INSERT ON entity_mention_revisions
         BEGIN
-            {_event_insert_sql(
-                entity_type='entity_mention',
-                entity_id='NEW.mention_id',
+            {
+            _event_insert_sql(
+                entity_type="entity_mention",
+                entity_id="NEW.mention_id",
                 operation="CASE WHEN NEW.operation = 'create' THEN 'create' ELSE 'update' END",
-                actor='NEW.changed_by',
-                timestamp='NEW.changed_at',
+                actor="NEW.changed_by",
+                timestamp="NEW.changed_at",
                 project_id="(SELECT d.project_id FROM entity_mentions m JOIN editable_objects o ON o.id = m.editable_object_id JOIN digital_objects d ON d.id = o.digital_object_id WHERE m.id = NEW.mention_id)",
                 base_revision="CASE WHEN NEW.operation = 'create' THEN NULL ELSE NEW.revision_number - 1 END",
-                new_revision='NEW.revision_number',
+                new_revision="NEW.revision_number",
                 changed_fields=_revision_changed_fields(
-                    table='entity_mention_revisions',
-                    id_field='mention_id',
+                    table="entity_mention_revisions",
+                    id_field="mention_id",
                     fields=mention_fields,
                 ),
-            )}
+            )
+        }
         END
         """
     )
@@ -323,7 +368,9 @@ def downgrade() -> None:
         )
         """
     )
-    op.execute("UPDATE editable_search_state SET dirty_generation = dirty_generation + 1 WHERE id = 1")
+    op.execute(
+        "UPDATE editable_search_state SET dirty_generation = dirty_generation + 1 WHERE id = 1"
+    )
     op.drop_index("ix_entity_mention_revisions_mention", table_name="entity_mention_revisions")
     op.drop_table("entity_mention_revisions")
     op.drop_index("ix_entity_mentions_status", table_name="entity_mentions")

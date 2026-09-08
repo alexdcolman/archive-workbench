@@ -4,6 +4,7 @@ Revision ID: 0004_extraction_quality
 Revises: 0003_extraction_objects
 Create Date: 2026-07-23
 """
+
 from __future__ import annotations
 
 from alembic import op

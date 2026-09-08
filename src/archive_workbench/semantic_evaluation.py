@@ -92,35 +92,25 @@ def load_semantic_evaluation_corpus(path: Path) -> SemanticEvaluationCorpus:
         if case_id in seen_ids:
             raise ValueError(f"case_id duplicado: {case_id}")
         query = _clean_string(row.get("query"), field=f"{case_id}.query")
-        query_kind = _clean_string(
-            row.get("query_kind"), field=f"{case_id}.query_kind"
-        )
+        query_kind = _clean_string(row.get("query_kind"), field=f"{case_id}.query_kind")
         if query_kind not in SEMANTIC_QUERY_KINDS:
-            raise ValueError(
-                f"{case_id}.query_kind debe ser positive, negative o ambiguous"
-            )
-        fragment_type = _clean_string(
-            row.get("fragment_type"), field=f"{case_id}.fragment_type"
-        )
+            raise ValueError(f"{case_id}.query_kind debe ser positive, negative o ambiguous")
+        fragment_type = _clean_string(row.get("fragment_type"), field=f"{case_id}.fragment_type")
         if fragment_type not in SEMANTIC_AGGREGATION_LEVELS:
             raise ValueError(
                 f"{case_id}.fragment_type no corresponde a un nivel semántico admitido"
             )
-        target_field = _clean_string(
-            row.get("target_field"), field=f"{case_id}.target_field"
-        )
+        target_field = _clean_string(row.get("target_field"), field=f"{case_id}.target_field")
         if target_field not in SEMANTIC_TARGET_FIELDS:
             raise ValueError(
-                f"{case_id}.target_field debe ser uno de: "
-                + ", ".join(SEMANTIC_TARGET_FIELDS)
+                f"{case_id}.target_field debe ser uno de: " + ", ".join(SEMANTIC_TARGET_FIELDS)
             )
         expected_raw = row.get("expected")
         if not isinstance(expected_raw, list):
             raise ValueError(f"{case_id}.expected debe ser una lista")
         expected = tuple(
             dict.fromkeys(
-                _clean_string(value, field=f"{case_id}.expected")
-                for value in expected_raw
+                _clean_string(value, field=f"{case_id}.expected") for value in expected_raw
             )
         )
         if query_kind == "negative" and expected:
@@ -157,11 +147,7 @@ def load_semantic_evaluation_corpus(path: Path) -> SemanticEvaluationCorpus:
 def _metric(tp: int, fp: int, fn: int) -> dict[str, int | float]:
     precision = tp / (tp + fp) if tp + fp else 0.0
     recall = tp / (tp + fn) if tp + fn else 0.0
-    f1 = (
-        2 * precision * recall / (precision + recall)
-        if precision + recall
-        else 0.0
-    )
+    f1 = 2 * precision * recall / (precision + recall) if precision + recall else 0.0
     return {
         "true_positive": tp,
         "false_positive": fp,
@@ -187,11 +173,7 @@ def _target_values(result: SemanticSearchResult, field: str) -> tuple[str, ...]:
     if field == "record_id":
         return (result.record_id,)
     if field == "source_key":
-        return (
-            result.source_key
-            if result.source_key
-            else f"<sin-source-key>:{result.chunk_id}",
-        )
+        return (result.source_key if result.source_key else f"<sin-source-key>:{result.chunk_id}",)
     if field == "object_id":
         return tuple(result.object_ids) or (f"<sin-object-id>:{result.chunk_id}",)
     raise ValueError(f"Campo de evaluación semántica inválido: {field}")
@@ -228,9 +210,7 @@ def _case_metric(
     threshold: float,
 ) -> dict[str, Any]:
     expected = set(case.expected)
-    predicted = {
-        str(row["value"]) for row in ranked if float(row["score"]) >= threshold
-    }
+    predicted = {str(row["value"]) for row in ranked if float(row["score"]) >= threshold}
     metric = _metric(
         len(expected & predicted),
         len(predicted - expected),
@@ -273,9 +253,7 @@ def evaluate_semantic_search(
         raise ValueError("top_k debe estar entre 1 y 500")
     selected_thresholds = _thresholds(thresholds)
     corpus = load_semantic_evaluation_corpus(corpus_path)
-    cases = tuple(
-        case for case in corpus.cases if case.fragment_type == profile.aggregation_level
-    )
+    cases = tuple(case for case in corpus.cases if case.fragment_type == profile.aggregation_level)
     if not cases:
         raise ValueError(
             "El corpus no contiene consultas para el nivel de agrupación del perfil: "
@@ -342,15 +320,11 @@ def evaluate_semantic_search(
             for row in case_rows
         ]
         by_kind = {
-            kind: _aggregate_case_metrics(
-                [row for row in per_case if row["query_kind"] == kind]
-            )
+            kind: _aggregate_case_metrics([row for row in per_case if row["query_kind"] == kind])
             for kind in SEMANTIC_QUERY_KINDS
         }
         for kind in SEMANTIC_QUERY_KINDS:
-            by_kind[kind]["case_count"] = sum(
-                case.query_kind == kind for case in cases
-            )
+            by_kind[kind]["case_count"] = sum(case.query_kind == kind for case in cases)
         threshold_rows.append(
             {
                 "threshold": threshold,
@@ -440,9 +414,7 @@ def evaluate_semantic_search(
     return SemanticEvaluationResult(payload=payload)
 
 
-def write_semantic_evaluation_report(
-    result: SemanticEvaluationResult, output: Path
-) -> Path:
+def write_semantic_evaluation_report(result: SemanticEvaluationResult, output: Path) -> Path:
     resolved = output.expanduser().resolve()
     resolved.parent.mkdir(parents=True, exist_ok=True)
     resolved.write_text(
@@ -481,8 +453,7 @@ def load_semantic_evaluation_report(path: Path) -> dict[str, Any]:
 
 def compare_semantic_evaluation_reports(paths: Iterable[Path]) -> dict[str, Any]:
     loaded = [
-        (path.expanduser().resolve(), load_semantic_evaluation_report(path))
-        for path in paths
+        (path.expanduser().resolve(), load_semantic_evaluation_report(path)) for path in paths
     ]
     if len(loaded) < 2:
         raise ValueError("La comparación requiere al menos dos informes")

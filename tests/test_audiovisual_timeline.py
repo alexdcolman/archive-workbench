@@ -35,7 +35,10 @@ from archive_workbench.db.models import (
 )
 from archive_workbench.exchange import _editable_state_payload, ensure_exchange_workspace
 from archive_workbench.identity import new_id
-from archive_workbench.state_adoption import _synchronize_editable_state, create_state_adoption_package
+from archive_workbench.state_adoption import (
+    _synchronize_editable_state,
+    create_state_adoption_package,
+)
 from tests.test_audiovisual import _FakeBackend, _project
 
 
@@ -158,7 +161,9 @@ def test_timeline_marks_survive_retranscription_and_travel_in_state(tmp_path: Pa
                 actor="test",
             )
             assert second_run.id != first_run.id
-            assert {row.annotation_id for row in timeline_annotation_rows(session, media_id=media.id)} == {
+            assert {
+                row.annotation_id for row in timeline_annotation_rows(session, media_id=media.id)
+            } == {
                 speaker.id,
                 note.id,
             }
@@ -200,9 +205,9 @@ def test_timeline_marks_survive_retranscription_and_travel_in_state(tmp_path: Pa
             assert {row.label for row in restored} == {"Horacio Bau", "sonríe"}
 
             archive_timeline_annotation(session, annotation_id=note.id, actor="alex")
-            assert [row.annotation_id for row in timeline_annotation_rows(session, media_id=media.id)] == [
-                speaker.id
-            ]
+            assert [
+                row.annotation_id for row in timeline_annotation_rows(session, media_id=media.id)
+            ] == [speaker.id]
             revisions = session.scalars(
                 select(AudiovisualTimelineAnnotationRevision)
                 .where(AudiovisualTimelineAnnotationRevision.annotation_id == note.id)
@@ -288,7 +293,6 @@ def test_assign_speaker_from_time_closes_previous_turn(tmp_path: Path) -> None:
         engine.dispose()
 
 
-
 def test_assign_speaker_to_segment_preserves_neighboring_turn(tmp_path: Path) -> None:
     root, decisions, engine, result, _audio = _project(tmp_path)
     try:
@@ -331,6 +335,7 @@ def test_assign_speaker_to_segment_preserves_neighboring_turn(tmp_path: Path) ->
             ]
     finally:
         engine.dispose()
+
 
 def test_synchronized_review_payload_keeps_text_and_links() -> None:
     class Authority:
@@ -381,12 +386,10 @@ def test_synchronized_review_payload_keeps_text_and_links() -> None:
 
 def test_audiovisual_timeline_ui_is_synchronized_and_secondary_management() -> None:
     root = Path(__file__).parents[1]
-    source = (root / "src" / "archive_workbench" / "audiovisual_app.py").read_text(
+    source = (root / "src" / "archive_workbench" / "audiovisual_app.py").read_text(encoding="utf-8")
+    component = (root / "src" / "archive_workbench" / "audiovisual_review_component.py").read_text(
         encoding="utf-8"
     )
-    component = (
-        root / "src" / "archive_workbench" / "audiovisual_review_component.py"
-    ).read_text(encoding="utf-8")
 
     for literal in (
         "Revisión sincronizada",
@@ -412,4 +415,4 @@ def test_audiovisual_timeline_ui_is_synchronized_and_secondary_management() -> N
     assert "Tramo inicial" not in source
     assert "Tramo final" not in source
     assert "Guardar marca" not in source
-    assert 'st.session_state[manage_key] = False' in source
+    assert "st.session_state[manage_key] = False" in source

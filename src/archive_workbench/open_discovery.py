@@ -206,7 +206,13 @@ _WORK_PATTERNS: tuple[tuple[str, re.Pattern[str], float, str], ...] = (
 # DISC-03 conserva todas las versiones locales previas para reproducibilidad.
 # RC69 agrega local_rules_v5 después de comprobar que una configuración persistida
 # podía seguir ejecutando v3 aunque la aplicación ya tuviera reglas más nuevas.
-_LOCAL_RULES_VERSIONS = ("local_rules_v1", "local_rules_v2", "local_rules_v3", "local_rules_v4", "local_rules_v5")
+_LOCAL_RULES_VERSIONS = (
+    "local_rules_v1",
+    "local_rules_v2",
+    "local_rules_v3",
+    "local_rules_v4",
+    "local_rules_v5",
+)
 
 _TIME_PATTERNS_V2: tuple[tuple[str, re.Pattern[str], float, str], ...] = (
     _TIME_PATTERNS[0],
@@ -340,9 +346,7 @@ _WORK_CAPTURE_PATTERNS_V2: tuple[tuple[str, re.Pattern[str], float, str], ...] =
 # are kept here and in the evaluation corpus.
 _WEEKDAY_WORDS = "lunes|martes|miércoles|miercoles|jueves|viernes|sábado|sabado|domingo"
 
-_ABBREVIATED_YEAR_SEQUENCE_V3 = re.compile(
-    r"\b(?:18|19|20)\d{2}(?:\s*[-/]\s*\d{2})+\b"
-)
+_ABBREVIATED_YEAR_SEQUENCE_V3 = re.compile(r"\b(?:18|19|20)\d{2}(?:\s*[-/]\s*\d{2})+\b")
 _MODEL_OR_IDENTIFIER_BEFORE_YEAR_V3 = re.compile(
     r"(?i)(?:modelo|equipo\s+modelo|expediente|legajo|código|codigo|identificador)\s*$"
 )
@@ -764,16 +768,13 @@ def _validate_profile(
         raise ValueError("El perfil debe incluir al menos una familia semántica")
     invalid_families = set(values.families) - set(DISCOVERY_FAMILIES)
     if invalid_families:
-        raise ValueError(
-            "Familias semánticas inválidas: " + ", ".join(sorted(invalid_families))
-        )
+        raise ValueError("Familias semánticas inválidas: " + ", ".join(sorted(invalid_families)))
     invalid_object_statuses = set(values.include_object_review_statuses) - set(
         OBJECT_REVIEW_STATUSES
     )
     if invalid_object_statuses:
         raise ValueError(
-            "Estados de revisión de objeto inválidos: "
-            + ", ".join(sorted(invalid_object_statuses))
+            "Estados de revisión de objeto inválidos: " + ", ".join(sorted(invalid_object_statuses))
         )
     page_scope = validate_automatic_quality_scope(
         values.include_page_review_statuses,
@@ -817,9 +818,7 @@ def profile_values(profile: DiscoveryProfile) -> DiscoveryProfileValues:
         description=profile.description,
         families=tuple(profile.families_json or ()),
         include_object_types=tuple(profile.include_object_types_json or ()),
-        include_object_review_statuses=tuple(
-            profile.include_object_review_statuses_json or ()
-        ),
+        include_object_review_statuses=tuple(profile.include_object_review_statuses_json or ()),
         include_page_review_statuses=tuple(profile.include_page_review_statuses_json or ()),
         minimum_confidence=float(profile.minimum_confidence),
         provider_key=profile.provider_key,
@@ -892,9 +891,7 @@ def save_discovery_profile(
             provider_version=clean.provider_version,
             families_json=list(clean.families),
             include_object_types_json=list(clean.include_object_types),
-            include_object_review_statuses_json=list(
-                clean.include_object_review_statuses
-            ),
+            include_object_review_statuses_json=list(clean.include_object_review_statuses),
             include_page_review_statuses_json=list(clean.include_page_review_statuses),
             minimum_confidence=clean.minimum_confidence,
             lifecycle_status="active",
@@ -925,12 +922,8 @@ def save_discovery_profile(
         profile.provider_version = clean.provider_version
         profile.families_json = list(clean.families)
         profile.include_object_types_json = list(clean.include_object_types)
-        profile.include_object_review_statuses_json = list(
-            clean.include_object_review_statuses
-        )
-        profile.include_page_review_statuses_json = list(
-            clean.include_page_review_statuses
-        )
+        profile.include_object_review_statuses_json = list(clean.include_object_review_statuses)
+        profile.include_page_review_statuses_json = list(clean.include_page_review_statuses)
         profile.minimum_confidence = clean.minimum_confidence
         profile.updated_by = actor
         profile.updated_at = now
@@ -1047,7 +1040,6 @@ def _pattern_detections(
                 yield detection
 
 
-
 def _make_detection(
     text: str,
     *,
@@ -1100,8 +1092,8 @@ def _time_detections_v3(text: str) -> list[_Detection]:
         start, end = match.span()
         if any(a <= start and end <= b for a, b in abbreviated_spans):
             continue
-        before = text[max(0, start - 48):start]
-        after = text[end:min(len(text), end + 12)]
+        before = text[max(0, start - 48) : start]
+        after = text[end : min(len(text), end + 12)]
         if _MODEL_OR_IDENTIFIER_BEFORE_YEAR_V3.search(before):
             continue
         # A one-digit suffix such as 1976/4 is treated as an identifier, not a year range.
@@ -1123,8 +1115,8 @@ def _time_detections_v3(text: str) -> list[_Detection]:
         exact = match.group(0)
         start, end = match.span()
         if exact.casefold() == "mañana":
-            before = text[max(0, start - 40):start]
-            after = text[end:min(len(text), end + 32)]
+            before = text[max(0, start - 40) : start]
+            after = text[end : min(len(text), end + 32)]
             if re.search(r"(?i)(?:\bla\s+|\bpor\s+la\s+|\ba\s+la\s+|\bturnos?\s+)$", before):
                 continue
             if re.match(r"(?i)\s+y\s+tarde\b", after):
@@ -1147,8 +1139,8 @@ def _time_detections_v3(text: str) -> list[_Detection]:
         start, end = match.span()
         if any(a <= start and end <= b for a, b in quoted_spans):
             continue
-        before = text[max(0, start - 64):start]
-        after = text[end:min(len(text), end + 64)]
+        before = text[max(0, start - 64) : start]
+        after = text[end : min(len(text), end + 64)]
         temporal_context = bool(
             re.search(
                 r"(?i)(?:\bfecha\s*[:,\-]?\s*|\bel\s+|\beste\s+|\bese\s+|\baquel\s+|"
@@ -1162,7 +1154,7 @@ def _time_detections_v3(text: str) -> list[_Detection]:
             )
         )
         if not temporal_context:
-            nearby = text[max(0, start - 52):min(len(text), end + 72)]
+            nearby = text[max(0, start - 52) : min(len(text), end + 72)]
             weekday_count = len(_WEEKDAY_V3.findall(nearby))
             temporal_context = weekday_count >= 2 and bool(
                 re.search(
@@ -1208,16 +1200,14 @@ def _quoted_spans_v3(text: str) -> list[tuple[int, int, str]]:
 def _work_detections_v3(text: str) -> list[_Detection]:
     detections: list[_Detection] = []
     accepted_spans: list[tuple[int, int]] = []
-    previous_quote_span: tuple[int, int] | None = None
-    previous_quote_accepted = False
     for start, end, _exact in _quoted_spans_v3(text):
         # _quoted_spans_v3 returns the capture inside the quotes. Context cues
         # therefore exclude the opening/closing quote themselves.
-        cue_start = start - 1 if start > 0 and text[start - 1] in {'"', '“'} else start
-        cue_end = end + 1 if end < len(text) and text[end] in {'"', '”'} else end
-        before = text[max(0, cue_start - 180):cue_start]
-        after = text[cue_end:min(len(text), cue_end + 120)]
-        immediate_before = text[max(0, cue_start - 72):cue_start]
+        cue_start = start - 1 if start > 0 and text[start - 1] in {'"', "“"} else start
+        cue_end = end + 1 if end < len(text) and text[end] in {'"', "”"} else end
+        before = text[max(0, cue_start - 180) : cue_start]
+        after = text[cue_end : min(len(text), cue_end + 120)]
+        immediate_before = text[max(0, cue_start - 72) : cue_start]
         if _DIRECT_SPEECH_PREFIX_V3.search(immediate_before):
             continue
         if _NON_WORK_PREFIX_V3.search(immediate_before):
@@ -1225,7 +1215,9 @@ def _work_detections_v3(text: str) -> list[_Detection]:
         work_class_match = _WORK_CLASS_PREFIX_V3.search(before)
         work_verb_match = _WORK_VERB_PREFIX_V3.search(before)
         work_list_match = _WORK_LIST_CUE_V3.search(before)
-        work_matches = [match for match in (work_class_match, work_verb_match, work_list_match) if match]
+        work_matches = [
+            match for match in (work_class_match, work_verb_match, work_list_match) if match
+        ]
         latest_work_cue = max((match.start() for match in work_matches), default=-1)
         non_work_context = _NON_WORK_CONTEXT_V3.search(immediate_before)
         non_work_start = (
@@ -1274,7 +1266,6 @@ def _work_detections_v3(text: str) -> list[_Detection]:
     return detections
 
 
-
 def _work_detections_v4(text: str) -> list[_Detection]:
     detections: list[_Detection] = []
     for start, end, exact_raw in _quoted_spans_v3(text):
@@ -1286,12 +1277,12 @@ def _work_detections_v4(text: str) -> list[_Detection]:
         if first_letter and first_letter.islower():
             continue
 
-        cue_start = start - 1 if start > 0 and text[start - 1] in {'"', '“'} else start
-        cue_end = end + 1 if end < len(text) and text[end] in {'"', '”'} else end
-        before = text[max(0, cue_start - 200):cue_start]
-        after = text[cue_end:min(len(text), cue_end + 120)]
-        immediate_before = text[max(0, cue_start - 72):cue_start]
-        immediate_after = text[cue_end:min(len(text), cue_end + 72)]
+        cue_start = start - 1 if start > 0 and text[start - 1] in {'"', "“"} else start
+        cue_end = end + 1 if end < len(text) and text[end] in {'"', "”"} else end
+        before = text[max(0, cue_start - 200) : cue_start]
+        after = text[cue_end : min(len(text), cue_end + 120)]
+        immediate_before = text[max(0, cue_start - 72) : cue_start]
+        immediate_after = text[cue_end : min(len(text), cue_end + 72)]
 
         if _DIRECT_SPEECH_PREFIX_V3.search(immediate_before):
             continue
@@ -1313,9 +1304,7 @@ def _work_detections_v4(text: str) -> list[_Detection]:
         list_near = bool(_WORK_LIST_CUE_V4.search(before))
         suffix_type = bool(_WORK_SUFFIX_TYPE_V4.search(after))
         suffix_author = bool(_WORK_SUFFIX_CUE_V3.search(after))
-        author_with_work_context = suffix_author and bool(
-            _WORK_CONTEXT_V4.search(before[-150:])
-        )
+        author_with_work_context = suffix_author and bool(_WORK_CONTEXT_V4.search(before[-150:]))
 
         if not (class_near or verb_near or list_near or suffix_type or author_with_work_context):
             continue
@@ -1352,10 +1341,10 @@ def _work_detections_v5(text: str) -> list[_Detection]:
         if first_letter and first_letter.islower():
             continue
 
-        cue_start = start - 1 if start > 0 and text[start - 1] in {'"', '“'} else start
-        cue_end = end + 1 if end < len(text) and text[end] in {'"', '”'} else end
-        immediate_before = text[max(0, cue_start - 96):cue_start]
-        immediate_after = text[cue_end:min(len(text), cue_end + 96)]
+        cue_start = start - 1 if start > 0 and text[start - 1] in {'"', "“"} else start
+        cue_end = end + 1 if end < len(text) and text[end] in {'"', "”"} else end
+        immediate_before = text[max(0, cue_start - 96) : cue_start]
+        immediate_after = text[cue_end : min(len(text), cue_end + 96)]
 
         if _DIRECT_SPEECH_PREFIX_V3.search(immediate_before):
             continue
@@ -1396,6 +1385,7 @@ def _work_detections_v5(text: str) -> list[_Detection]:
         if detection is not None:
             detections.append(detection)
     return detections
+
 
 def detect_local_candidates(
     text: str,
@@ -1453,19 +1443,25 @@ def detect_local_candidates(
         if "time" in selected:
             detections.extend(_pattern_detections(text, family="time", patterns=_TIME_PATTERNS_V2))
         if "event" in selected:
-            detections.extend(_pattern_detections(text, family="event", patterns=_EVENT_PATTERNS_V2))
+            detections.extend(
+                _pattern_detections(text, family="event", patterns=_EVENT_PATTERNS_V2)
+            )
         if "action_process" in selected:
             detections.extend(
                 _pattern_detections(text, family="action_process", patterns=_ACTION_PATTERNS_V2)
             )
-        v2_work_detections = list(
-            _pattern_detections(
-                text,
-                family="work",
-                patterns=_WORK_CAPTURE_PATTERNS_V2,
-                quoted_capture=True,
+        v2_work_detections = (
+            list(
+                _pattern_detections(
+                    text,
+                    family="work",
+                    patterns=_WORK_CAPTURE_PATTERNS_V2,
+                    quoted_capture=True,
+                )
             )
-        ) if {"time", "work"} & selected else []
+            if {"time", "work"} & selected
+            else []
+        )
         if "work" in selected:
             detections.extend(v2_work_detections)
         work_spans = [(item.start, item.end) for item in v2_work_detections]
@@ -1518,7 +1514,9 @@ def detect_local_candidates(
         if "time" in selected:
             detections.extend(_time_detections_v3(text))
         if "event" in selected:
-            detections.extend(_pattern_detections(text, family="event", patterns=_EVENT_PATTERNS_V3))
+            detections.extend(
+                _pattern_detections(text, family="event", patterns=_EVENT_PATTERNS_V3)
+            )
         if "action_process" in selected:
             detections.extend(
                 _pattern_detections(text, family="action_process", patterns=_ACTION_PATTERNS_V2[:1])
@@ -1546,7 +1544,9 @@ def detect_local_candidates(
         ]
     elif provider_version == "local_rules_v4":
         if "actor" in selected:
-            detections.extend(_pattern_detections(text, family="actor", patterns=_ACTOR_PATTERNS_V4))
+            detections.extend(
+                _pattern_detections(text, family="actor", patterns=_ACTOR_PATTERNS_V4)
+            )
             detections.extend(
                 _pattern_detections(
                     text,
@@ -1576,7 +1576,9 @@ def detect_local_candidates(
         if "time" in selected:
             detections.extend(_time_detections_v3(text))
         if "event" in selected:
-            detections.extend(_pattern_detections(text, family="event", patterns=_EVENT_PATTERNS_V3))
+            detections.extend(
+                _pattern_detections(text, family="event", patterns=_EVENT_PATTERNS_V3)
+            )
         if "action_process" in selected:
             detections.extend(
                 _pattern_detections(text, family="action_process", patterns=_ACTION_PATTERNS_V2[:1])
@@ -1604,7 +1606,9 @@ def detect_local_candidates(
         ]
     else:
         if "actor" in selected:
-            detections.extend(_pattern_detections(text, family="actor", patterns=_ACTOR_PATTERNS_V4))
+            detections.extend(
+                _pattern_detections(text, family="actor", patterns=_ACTOR_PATTERNS_V4)
+            )
             detections.extend(
                 _pattern_detections(
                     text,
@@ -1634,7 +1638,9 @@ def detect_local_candidates(
         if "time" in selected:
             detections.extend(_time_detections_v3(text))
         if "event" in selected:
-            detections.extend(_pattern_detections(text, family="event", patterns=_EVENT_PATTERNS_V3))
+            detections.extend(
+                _pattern_detections(text, family="event", patterns=_EVENT_PATTERNS_V3)
+            )
         if "action_process" in selected:
             detections.extend(
                 _pattern_detections(text, family="action_process", patterns=_ACTION_PATTERNS_V2[:1])
@@ -1714,10 +1720,7 @@ def _existing_mention_keys(session: Session) -> set[tuple[str, int, int]]:
             EntityMention.end_offset.is_not(None),
         )
     ).all()
-    return {
-        (row.editable_object_id, int(row.start_offset), int(row.end_offset))
-        for row in rows
-    }
+    return {(row.editable_object_id, int(row.start_offset), int(row.end_offset)) for row in rows}
 
 
 def _source_keys(session: Session, digital_ids: Iterable[str]) -> dict[str, str]:
@@ -1780,9 +1783,7 @@ def run_open_discovery(
     actor = _clean_text(created_by, field="La persona responsable", maximum=200)
     if profile.project_id != project_id:
         raise ValueError("El perfil pertenece a otro proyecto")
-    authorization = _require_profile_authorization(
-        session, project_id=project_id, profile=profile
-    )
+    authorization = _require_profile_authorization(session, project_id=project_id, profile=profile)
     parameters = discovery_profile_authorization_parameters(profile)
     parameters_sha256 = sha256(
         json.dumps(
@@ -1843,9 +1844,8 @@ def run_open_discovery(
             if runtime_provider != provider:
                 raise RuntimeError("El proveedor cambió durante la corrida")
             for detection in detections:
-                if (
-                    detection.confidence is not None
-                    and detection.confidence < float(profile.minimum_confidence)
+                if detection.confidence is not None and detection.confidence < float(
+                    profile.minimum_confidence
                 ):
                     continue
                 if detection.family in {"actor", "space", "event", "work"}:
@@ -1979,21 +1979,29 @@ def discovery_candidate_rows(
         query = query.limit(max(1, int(limit)))
     rows = session.scalars(query).all()
     object_ids = {row.editable_object_id for row in rows}
-    objects = {
-        row.id: row
-        for row in session.scalars(
-            select(EditableObject).where(EditableObject.id.in_(object_ids))
-        ).all()
-    } if object_ids else {}
+    objects = (
+        {
+            row.id: row
+            for row in session.scalars(
+                select(EditableObject).where(EditableObject.id.in_(object_ids))
+            ).all()
+        }
+        if object_ids
+        else {}
+    )
     candidate_ids = [row.id for row in rows]
-    decisions = session.scalars(
-        select(DiscoveryDecision)
-        .where(DiscoveryDecision.candidate_id.in_(candidate_ids))
-        .order_by(
-            DiscoveryDecision.candidate_id,
-            DiscoveryDecision.decision_number,
-        )
-    ).all() if candidate_ids else []
+    decisions = (
+        session.scalars(
+            select(DiscoveryDecision)
+            .where(DiscoveryDecision.candidate_id.in_(candidate_ids))
+            .order_by(
+                DiscoveryDecision.candidate_id,
+                DiscoveryDecision.decision_number,
+            )
+        ).all()
+        if candidate_ids
+        else []
+    )
     decisions_by: dict[str, list[DiscoveryDecision]] = {}
     for decision in decisions:
         decisions_by.setdefault(decision.candidate_id, []).append(decision)
@@ -2033,21 +2041,15 @@ def discovery_candidate_rows(
                 parameters_sha256=row.parameters_sha256,
                 status=row.status,
                 decision_count=len(candidate_decisions),
-                latest_decision_type=(
-                    latest_decision.decision_type if latest_decision else None
-                ),
+                latest_decision_type=(latest_decision.decision_type if latest_decision else None),
                 effective_text=(
                     latest_decision.reviewed_text if latest_decision else row.exact_text
                 ),
                 effective_family=(
-                    latest_decision.semantic_family
-                    if latest_decision
-                    else row.semantic_family
+                    latest_decision.semantic_family if latest_decision else row.semantic_family
                 ),
                 effective_subtype=(
-                    latest_decision.reviewed_subtype
-                    if latest_decision
-                    else row.suggested_subtype
+                    latest_decision.reviewed_subtype if latest_decision else row.suggested_subtype
                 ),
                 is_stale=stale,
                 created_at=row.created_at,
@@ -2056,9 +2058,7 @@ def discovery_candidate_rows(
     return result
 
 
-def discovery_audit_payload(
-    session: Session, *, project_id: str, run_id: str
-) -> dict[str, Any]:
+def discovery_audit_payload(session: Session, *, project_id: str, run_id: str) -> dict[str, Any]:
     run = session.get(DiscoveryRun, run_id)
     if run is None or run.project_id != project_id:
         raise ValueError("La corrida de descubrimiento no existe en este proyecto")

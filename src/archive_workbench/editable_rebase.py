@@ -22,7 +22,6 @@ from archive_workbench.db.models import (
     DocumentPart,
     AuthorityRecord,
     ExtractedObject,
-    ExtractionPage,
     ExtractionPageSelection,
     utc_now,
 )
@@ -313,25 +312,37 @@ def _validated_text_resolution(
     if expected_human is not None and str(expected_human) != human_text:
         return None, None, "La edición revisada cambió desde que se eligió la resolución textual."
     if action == "keep_candidate":
-        return [], {
-            "conflict_id": conflict_id,
-            "action": action,
-            "method": str(resolution.get("method") or "manual_keep_candidate"),
-        }, None
+        return (
+            [],
+            {
+                "conflict_id": conflict_id,
+                "action": action,
+                "method": str(resolution.get("method") or "manual_keep_candidate"),
+            },
+            None,
+        )
     if action == "apply_human":
-        return _TOKEN_RE.findall(human_text), {
-            "conflict_id": conflict_id,
-            "action": action,
-            "method": str(resolution.get("method") or "manual_apply_human"),
-        }, None
+        return (
+            _TOKEN_RE.findall(human_text),
+            {
+                "conflict_id": conflict_id,
+                "action": action,
+                "method": str(resolution.get("method") or "manual_apply_human"),
+            },
+            None,
+        )
     if action == "manual_text":
         manual_text = str(resolution.get("manual_text") or "")
-        return _TOKEN_RE.findall(manual_text), {
-            "conflict_id": conflict_id,
-            "action": action,
-            "method": str(resolution.get("method") or "manual_custom_text"),
-            "manual_text": manual_text,
-        }, None
+        return (
+            _TOKEN_RE.findall(manual_text),
+            {
+                "conflict_id": conflict_id,
+                "action": action,
+                "method": str(resolution.get("method") or "manual_custom_text"),
+                "manual_text": manual_text,
+            },
+            None,
+        )
     return None, None, "La resolución textual elegida no tiene una acción válida."
 
 
@@ -349,7 +360,9 @@ def _merge_human_changes(
     edited_tokens = _TOKEN_RE.findall(edited)
     candidate_tokens = _TOKEN_RE.findall(candidate)
     human_opcodes = SequenceMatcher(None, base_tokens, edited_tokens, autojunk=False).get_opcodes()
-    base_candidate = SequenceMatcher(None, base_tokens, candidate_tokens, autojunk=False).get_opcodes()
+    base_candidate = SequenceMatcher(
+        None, base_tokens, candidate_tokens, autojunk=False
+    ).get_opcodes()
     boundary = _boundary_map(base_candidate, len(base_tokens))
     replacements: list[tuple[int, int, list[str], str]] = []
     text_conflicts: list[RebaseTextConflict] = []
@@ -441,6 +454,7 @@ def _merge_human_changes(
         merged[c1:c2] = replacement
     return "".join(merged), [], [], changes, resolution_plan
 
+
 def _map_span(source: str, target: str, start: int, end: int) -> tuple[int, int]:
     opcodes = SequenceMatcher(None, source, target, autojunk=False).get_opcodes()
     boundary = _boundary_map(opcodes, len(source))
@@ -462,7 +476,6 @@ def _best_target(spans: list[tuple[int, int]], start: int, end: int) -> int | No
     midpoint = (start + end) / 2
     distances = [abs(((left + right) / 2) - midpoint) for left, right in spans]
     return min(range(len(spans)), key=distances.__getitem__)
-
 
 
 def _context(text: str, start: int, end: int, *, radius: int = 70) -> str:
@@ -732,12 +745,16 @@ def _validated_projection_resolution(
     valid_targets = {item.target_index for item in candidates}
     if target_index not in valid_targets:
         return None, None, "El bloque elegido ya no está disponible entre los destinos revisados."
-    return target_index, {
-        "conflict_id": conflict_id,
-        "action": "map",
-        "target_index": target_index,
-        "method": str(resolution.get("method") or "manual_object_projection"),
-    }, None
+    return (
+        target_index,
+        {
+            "conflict_id": conflict_id,
+            "action": "map",
+            "target_index": target_index,
+            "method": str(resolution.get("method") or "manual_object_projection"),
+        },
+        None,
+    )
 
 
 def _metadata_conflict_id(*, target_index: int, kind: str, values: list[str | None]) -> str:
@@ -764,12 +781,16 @@ def _validated_metadata_resolution(
     selected = resolution.get("value")
     if selected not in current_values:
         return None, None, "El valor elegido ya no está disponible para este bloque."
-    return selected, {
-        "conflict_id": conflict_id,
-        "action": "select",
-        "value": selected,
-        "method": str(resolution.get("method") or "manual_metadata_selection"),
-    }, None
+    return (
+        selected,
+        {
+            "conflict_id": conflict_id,
+            "action": "select",
+            "value": selected,
+            "method": str(resolution.get("method") or "manual_metadata_selection"),
+        },
+        None,
+    )
 
 
 def _attribute_conflict_id(
@@ -803,45 +824,62 @@ def _validated_attribute_resolution(
     expected_keys = resolution.get("expected_option_keys")
     current_keys = [item.option_key for item in options]
     if expected_keys is not None and list(expected_keys) != current_keys:
-        return False, None, None, (
-            "Las opciones del atributo cambiaron desde que se tomó la decisión."
+        return (
+            False,
+            None,
+            None,
+            ("Las opciones del atributo cambiaron desde que se tomó la decisión."),
         )
     if action == "select":
         option_key = str(resolution.get("option_key") or "")
         selected = next((item for item in options if item.option_key == option_key), None)
         if selected is None:
-            return False, None, None, (
-                "El valor elegido ya no está disponible para este atributo."
-            )
+            return False, None, None, ("El valor elegido ya no está disponible para este atributo.")
         if selected.action == "remove":
-            return False, None, {
+            return (
+                False,
+                None,
+                {
+                    "conflict_id": conflict_id,
+                    "action": "remove",
+                    "option_key": option_key,
+                    "method": str(resolution.get("method") or "manual_attribute_selection"),
+                },
+                None,
+            )
+        return (
+            True,
+            selected.value,
+            {
                 "conflict_id": conflict_id,
-                "action": "remove",
+                "action": "set",
                 "option_key": option_key,
-                "method": str(
-                    resolution.get("method") or "manual_attribute_selection"
-                ),
-            }, None
-        return True, selected.value, {
-            "conflict_id": conflict_id,
-            "action": "set",
-            "option_key": option_key,
-            "value": selected.value,
-            "method": str(resolution.get("method") or "manual_attribute_selection"),
-        }, None
+                "value": selected.value,
+                "method": str(resolution.get("method") or "manual_attribute_selection"),
+            },
+            None,
+        )
     if action == "manual_json":
         expected_keys = resolution.get("expected_option_keys")
         current_keys = [item.option_key for item in options]
         if expected_keys is not None and list(expected_keys) != current_keys:
-            return False, None, None, (
-                "Las opciones del atributo cambiaron desde que se escribió el valor manual."
+            return (
+                False,
+                None,
+                None,
+                ("Las opciones del atributo cambiaron desde que se escribió el valor manual."),
             )
-        return True, resolution.get("value"), {
-            "conflict_id": conflict_id,
-            "action": "set",
-            "value": resolution.get("value"),
-            "method": str(resolution.get("method") or "manual_attribute_json"),
-        }, None
+        return (
+            True,
+            resolution.get("value"),
+            {
+                "conflict_id": conflict_id,
+                "action": "set",
+                "value": resolution.get("value"),
+                "method": str(resolution.get("method") or "manual_attribute_json"),
+            },
+            None,
+        )
     return False, None, None, "La resolución del atributo no tiene una acción válida."
 
 
@@ -890,7 +928,9 @@ def preview_editable_rebase(
     projection_resolution_map = projection_resolutions or {}
     metadata_resolution_map = metadata_resolutions or {}
     attribute_resolution_map = attribute_resolutions or {}
-    _registration_row, digital, _unit = _registration(session, source_key, digital_object_id=digital_object_id)
+    _registration_row, digital, _unit = _registration(
+        session, source_key, digital_object_id=digital_object_id
+    )
     run, candidate_page = _candidate_page(
         session,
         digital_object_id=digital.id,
@@ -912,7 +952,9 @@ def preview_editable_rebase(
     editable_rows = _active_editable_rows(session, editable_page.id)
     candidate_rows = _candidate_rows(session, run.id, page)
     if not old_source_rows or not editable_rows or not candidate_rows:
-        raise ValueError("El rebase requiere una base anterior, una edición activa y una candidata completa.")
+        raise ValueError(
+            "El rebase requiere una base anterior, una edición activa y una candidata completa."
+        )
 
     base_text, _base_spans = _join_texts(old_source_rows, "original_text")
     editable_text, editable_spans = _join_texts(editable_rows, "current_text")
@@ -1026,18 +1068,14 @@ def preview_editable_rebase(
         )
         target_index = projection_candidates[0].target_index if projection_candidates else None
         weak_projection = bool(
-            has_metadata
-            and projection_candidates
-            and projection_candidates[0].text_score < 0.20
+            has_metadata and projection_candidates and projection_candidates[0].text_score < 0.20
         )
         ambiguous_projection = bool(
             has_metadata
             and len(projection_candidates) > 1
             and projection_candidates[0].combined_score < 0.55
-            and (
-                projection_candidates[0].combined_score
-                - projection_candidates[1].combined_score
-            ) < 0.06
+            and (projection_candidates[0].combined_score - projection_candidates[1].combined_score)
+            < 0.06
         )
         if weak_projection or ambiguous_projection:
             conflict_id = _projection_conflict_id(
@@ -1402,9 +1440,7 @@ def preview_editable_rebase(
             if len(human_signatures) == 1 and (
                 not candidate_present or candidate_signature == human_signatures[0]
             ):
-                merged_attributes[attribute_key] = distinct_human[human_signatures[0]][
-                    "value"
-                ]
+                merged_attributes[attribute_key] = distinct_human[human_signatures[0]]["value"]
                 continue
 
             options: list[RebaseAttributeOption] = []
@@ -1691,9 +1727,15 @@ def apply_editable_rebase(
     if not preview.can_apply:
         raise ValueError("El rebase contiene conflictos y no puede aplicarse automáticamente.")
 
-    from archive_workbench.candidate_review import _candidate_page, _editable_attributes, _registration
+    from archive_workbench.candidate_review import (
+        _candidate_page,
+        _editable_attributes,
+        _registration,
+    )
 
-    _registration_row, digital, _unit = _registration(session, source_key, digital_object_id=digital_object_id)
+    _registration_row, digital, _unit = _registration(
+        session, source_key, digital_object_id=digital_object_id
+    )
     run, candidate_page = _candidate_page(
         session,
         digital_object_id=digital.id,
@@ -1740,7 +1782,9 @@ def apply_editable_rebase(
             object_type = "paragraph"
             _allowed_object_type(decisions, object_type)
         mapped_old = [
-            row for row in old_rows if preview._plan["object_targets"].get(row.id) == len(new_objects)
+            row
+            for row in old_rows
+            if preview._plan["object_targets"].get(row.id) == len(new_objects)
         ]
         resolved_metadata = preview._plan["metadata_plan"].get(
             len(new_objects),
@@ -1913,33 +1957,23 @@ def apply_editable_rebase(
             "human_change_count": preview.human_change_count,
             "mentions_relocated": mentions_relocated,
             "mentions_rejected": mentions_rejected,
-            "manual_mention_resolution_count": preview._plan[
-                "manual_mention_resolution_count"
-            ],
-            "manual_text_resolution_count": preview._plan[
-                "manual_text_resolution_count"
-            ],
+            "manual_mention_resolution_count": preview._plan["manual_mention_resolution_count"],
+            "manual_text_resolution_count": preview._plan["manual_text_resolution_count"],
             "manual_projection_resolution_count": preview._plan[
                 "manual_projection_resolution_count"
             ],
             "projection_resolution_methods": [
                 item.get("method") for item in preview._plan["projection_resolution_plan"]
             ],
-            "manual_metadata_resolution_count": preview._plan[
-                "manual_metadata_resolution_count"
-            ],
+            "manual_metadata_resolution_count": preview._plan["manual_metadata_resolution_count"],
             "metadata_resolution_methods": [
                 item.get("method") for item in preview._plan["metadata_resolution_plan"]
             ],
-            "manual_attribute_resolution_count": preview._plan[
-                "manual_attribute_resolution_count"
-            ],
+            "manual_attribute_resolution_count": preview._plan["manual_attribute_resolution_count"],
             "attribute_resolution_methods": [
                 item.get("method") for item in preview._plan["attribute_resolution_plan"]
             ],
-            "specialized_attribute_count": preview._plan[
-                "specialized_attribute_count"
-            ],
+            "specialized_attribute_count": preview._plan["specialized_attribute_count"],
             "structural_actions_absorbed": preview.structural_action_count,
             "text_resolution_methods": [
                 item.get("method") for item in preview._plan["text_resolution_plan"]
@@ -1965,11 +1999,7 @@ def apply_editable_rebase(
         tags_deduplicated=tags_deduplicated,
         document_parts_relocated=document_parts_relocated,
         structural_actions_absorbed=preview.structural_action_count,
-        projection_resolutions_applied=preview._plan[
-            "manual_projection_resolution_count"
-        ],
+        projection_resolutions_applied=preview._plan["manual_projection_resolution_count"],
         metadata_resolutions_applied=preview._plan["manual_metadata_resolution_count"],
-        attribute_resolutions_applied=preview._plan[
-            "manual_attribute_resolution_count"
-        ],
+        attribute_resolutions_applied=preview._plan["manual_attribute_resolution_count"],
     )

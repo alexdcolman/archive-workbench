@@ -4,6 +4,7 @@ Revision ID: 0044_layout_structure_review
 Revises: 0043_form_structure_review
 Create Date: 2026-08-06
 """
+
 from __future__ import annotations
 
 from alembic import op

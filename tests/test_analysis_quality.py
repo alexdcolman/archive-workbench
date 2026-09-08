@@ -3,7 +3,6 @@ from __future__ import annotations
 from pathlib import Path
 
 import pytest
-from sqlalchemy import select
 from typer.testing import CliRunner
 
 from archive_workbench.analysis_audit import (
@@ -48,9 +47,7 @@ def test_quality_scope_defaults_to_approved_and_preserves_canonical_order() -> N
     assert default.is_default
     assert default.key == "approved_only"
     assert not default.is_broader_than_default
-    assert quality_scope_caption(("approved",)) == (
-        "Alcance de calidad: solo páginas aprobadas."
-    )
+    assert quality_scope_caption(("approved",)) == ("Alcance de calidad: solo páginas aprobadas.")
 
 
 def test_broader_automatic_scope_requires_confirmation_and_reason() -> None:
@@ -199,42 +196,26 @@ def test_export_and_semantic_profiles_record_append_only_authorizations(
 
             export_snapshot = export_profile_snapshot(export_profile)
             semantic_snapshot = semantic_profile_snapshot(semantic_profile)
-            assert export_snapshot["analysis_quality"]["analysis_kind"] == (
-                "corpus_export"
-            )
-            assert semantic_snapshot["analysis_quality"]["analysis_kind"] == (
-                "semantic_index"
-            )
+            assert export_snapshot["analysis_quality"]["analysis_kind"] == ("corpus_export")
+            assert semantic_snapshot["analysis_quality"]["analysis_kind"] == ("semantic_index")
     finally:
         engine.dispose()
 
 
 def test_quality_controls_do_not_depend_on_reactive_state_inside_forms() -> None:
     root = Path(__file__).parents[1]
-    export_source = (root / "src/archive_workbench/export_app.py").read_text(
+    export_source = (root / "src/archive_workbench/export_app.py").read_text(encoding="utf-8")
+    semantic_source = (root / "src/archive_workbench/semantic_app.py").read_text(encoding="utf-8")
+    authority_source = (root / "src/archive_workbench/authority_app.py").read_text(encoding="utf-8")
+    discovery_source = (root / "src/archive_workbench/discovery_app.py").read_text(encoding="utf-8")
+    admin_source = (root / "src/archive_workbench/admin_app.py").read_text(encoding="utf-8")
+    audit_source = (root / "src/archive_workbench/analysis_audit.py").read_text(encoding="utf-8")
+    export_domain_source = (root / "src/archive_workbench/corpus_export.py").read_text(
         encoding="utf-8"
     )
-    semantic_source = (root / "src/archive_workbench/semantic_app.py").read_text(
+    semantic_domain_source = (root / "src/archive_workbench/semantic_search.py").read_text(
         encoding="utf-8"
     )
-    authority_source = (root / "src/archive_workbench/authority_app.py").read_text(
-        encoding="utf-8"
-    )
-    discovery_source = (root / "src/archive_workbench/discovery_app.py").read_text(
-        encoding="utf-8"
-    )
-    admin_source = (root / "src/archive_workbench/admin_app.py").read_text(
-        encoding="utf-8"
-    )
-    audit_source = (root / "src/archive_workbench/analysis_audit.py").read_text(
-        encoding="utf-8"
-    )
-    export_domain_source = (
-        root / "src/archive_workbench/corpus_export.py"
-    ).read_text(encoding="utf-8")
-    semantic_domain_source = (
-        root / "src/archive_workbench/semantic_search.py"
-    ).read_text(encoding="utf-8")
 
     for source in (export_source, semantic_source):
         assert "broader_quality_scope_confirmed = st.checkbox(" in source
@@ -252,11 +233,12 @@ def test_quality_controls_do_not_depend_on_reactive_state_inside_forms() -> None
     assert "Confirmo que esta búsqueda puede incluir páginas" not in authority_source
     assert "Por qué esta búsqueda debe incluir páginas" not in authority_source
     candidate_search = authority_source[
-        authority_source.index('st.subheader(\n            "Buscar menciones"'):
-        authority_source.index('if clear_clicked:')
+        authority_source.index(
+            'st.subheader(\n            "Buscar menciones"'
+        ) : authority_source.index("if clear_clicked:")
     ]
-    assert 'disabled=' not in candidate_search
-    assert 'search_disabled' not in candidate_search
+    assert "disabled=" not in candidate_search
+    assert "search_disabled" not in candidate_search
 
     assert "quality_scope.is_broader_than_default" in discovery_source
     assert (

@@ -22,7 +22,9 @@ def event(event_id: str, fields: dict, base: int = 1) -> ChangeEvent:
 
 
 def test_disjoint_fields_can_merge() -> None:
-    result = assess_pair(event("a", {"title": "A"}), event("b", {"scope_content": "B"}), MergeDecisions())
+    result = assess_pair(
+        event("a", {"title": "A"}), event("b", {"scope_content": "B"}), MergeDecisions()
+    )
     assert result.disposition == MergeDisposition.APPLY
 
 

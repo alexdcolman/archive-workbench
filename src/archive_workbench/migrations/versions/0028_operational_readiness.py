@@ -4,6 +4,7 @@ Revision ID: 0028_operational_readiness
 Revises: 0027_temporal_authorities_relations
 Create Date: 2026-07-24
 """
+
 from __future__ import annotations
 
 from alembic import op
@@ -49,7 +50,5 @@ def upgrade() -> None:
 
 def downgrade() -> None:
     op.drop_index("ix_project_recovery_checks_backup", table_name="project_recovery_checks")
-    op.drop_index(
-        "ix_project_recovery_checks_project_tested", table_name="project_recovery_checks"
-    )
+    op.drop_index("ix_project_recovery_checks_project_tested", table_name="project_recovery_checks")
     op.drop_table("project_recovery_checks")

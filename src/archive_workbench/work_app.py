@@ -134,10 +134,14 @@ def render_work_view(
         project_id=project_id,
     )
     inventory_map = {row.source_key: row for row in inventory}
-    assignment_map = {row.assignment_id: row for row in assignments}
     panel_tab, assignments_tab, mine_tab, cross_tab = tracked_tabs(
         st,
-        ["Estado de las tareas", "Crear y administrar asignaciones", "Tareas de la persona actual", "Asignar una segunda revisión"],
+        [
+            "Estado de las tareas",
+            "Crear y administrar asignaciones",
+            "Tareas de la persona actual",
+            "Asignar una segunda revisión",
+        ],
         key="work_tabs",
         help_by_label=TAB_HELP["work_tabs"],
     )
@@ -203,8 +207,7 @@ def render_work_view(
                         "Páginas revisadas": row.reviewed_pages,
                         "Páginas aprobadas": row.approved_pages,
                         "Asignaciones activas": sum(
-                            item.source_key == row.source_key
-                            and item.status in _ACTIVE_STATUSES
+                            item.source_key == row.source_key and item.status in _ACTIVE_STATUSES
                             for item in assignments
                         ),
                     }
@@ -231,7 +234,9 @@ def render_work_view(
                     options=["processing", "primary_review"],
                     format_func=lambda value: _KIND_LABELS[value],
                 )
-                assignee = st.text_input("Persona responsable de esta asignación", value=actor or "")
+                assignee = st.text_input(
+                    "Persona responsable de esta asignación", value=actor or ""
+                )
                 page_start, page_end = _scope_inputs(
                     st,
                     prefix="create_assignment",
@@ -319,8 +324,13 @@ def render_work_view(
                         st.write(row.note)
                     if row.parent_assignee:
                         st.caption(f"Revisión primaria realizada por {row.parent_assignee}")
-                    with st.form(f"update_assignment_{row.assignment_id}_{row.revision}", enter_to_submit=False):
-                        new_assignee = st.text_input("Persona responsable de esta asignación", value=row.assignee)
+                    with st.form(
+                        f"update_assignment_{row.assignment_id}_{row.revision}",
+                        enter_to_submit=False,
+                    ):
+                        new_assignee = st.text_input(
+                            "Persona responsable de esta asignación", value=row.assignee
+                        )
                         new_status = st.selectbox(
                             "Estado de la asignación",
                             options=list(ASSIGNMENT_STATUSES),
@@ -346,7 +356,9 @@ def render_work_view(
                             key=f"assignment_due_{row.assignment_id}",
                             help="La fecha solo se guarda cuando está marcada la opción anterior.",
                         )
-                        new_note = st.text_area("Indicaciones de esta asignación", value=row.note or "")
+                        new_note = st.text_area(
+                            "Indicaciones de esta asignación", value=row.note or ""
+                        )
                         outcome = None
                         if row.assignment_kind == "cross_review":
                             outcome_options = [None, *CROSS_REVIEW_OUTCOMES]
@@ -411,8 +423,7 @@ def render_work_view(
         mine = [
             row
             for row in assignments
-            if row.assignee.casefold() == clean_actor.casefold()
-            and row.status != "cancelled"
+            if row.assignee.casefold() == clean_actor.casefold() and row.status != "cancelled"
         ]
         if not mine:
             st.info("No hay asignaciones a tu nombre.")
@@ -426,7 +437,9 @@ def render_work_view(
                 )
                 if row.note:
                     title_col.write(row.note)
-                if action_col.button("Abrir el documento de esta tarea", key=f"mine_open_{row.assignment_id}"):
+                if action_col.button(
+                    "Abrir el documento de esta tarea", key=f"mine_open_{row.assignment_id}"
+                ):
                     _go_to_review(st, source_key=row.source_key, page=row.page_start)
                 quick_cols = st.columns(4)
                 transitions = [
@@ -450,13 +463,15 @@ def render_work_view(
                         try:
                             _database_action(
                                 db_path,
-                                lambda session, row=row, target_status=target_status: update_work_assignment(
-                                    session,
-                                    assignment_id=row.assignment_id,
-                                    expected_revision=row.revision,
-                                    changed_by=actor,
-                                    status=target_status,
-                                    change_note=f"Cambio rápido a {target_status}",
+                                lambda session, row=row, target_status=target_status: (
+                                    update_work_assignment(
+                                        session,
+                                        assignment_id=row.assignment_id,
+                                        expected_revision=row.revision,
+                                        changed_by=actor,
+                                        status=target_status,
+                                        change_note=f"Cambio rápido a {target_status}",
+                                    )
                                 ),
                             )
                         except ValueError as exc:
@@ -464,7 +479,10 @@ def render_work_view(
                         else:
                             rerun_view(st)
                 if row.assignment_kind == "cross_review":
-                    with st.form(f"mine_cross_outcome_{row.assignment_id}_{row.revision}", enter_to_submit=False):
+                    with st.form(
+                        f"mine_cross_outcome_{row.assignment_id}_{row.revision}",
+                        enter_to_submit=False,
+                    ):
                         selected_outcome = st.selectbox(
                             "Conclusión de esta segunda revisión",
                             options=list(CROSS_REVIEW_OUTCOMES),
@@ -476,7 +494,9 @@ def render_work_view(
                             format_func=lambda value: _OUTCOME_LABELS[value],
                         )
                         outcome_note = st.text_area(
-                            "Observaciones de esta segunda revisión", value=row.note or "", height=90
+                            "Observaciones de esta segunda revisión",
+                            value=row.note or "",
+                            height=90,
                         )
                         finish_cross = st.form_submit_button(
                             "Guardar la conclusión y completar esta segunda revisión"
@@ -505,7 +525,9 @@ def render_work_view(
     with cross_tab:
         st.subheader("Revisiones primarias disponibles para una segunda revisión")
         if not candidates:
-            st.info("No hay revisiones primarias enviadas o completadas que puedan recibir una segunda revisión.")
+            st.info(
+                "No hay revisiones primarias enviadas o completadas que puedan recibir una segunda revisión."
+            )
         for candidate in candidates:
             scope = (
                 "Documento completo"

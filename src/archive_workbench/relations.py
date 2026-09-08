@@ -3,7 +3,6 @@ from __future__ import annotations
 from dataclasses import dataclass
 from datetime import date, datetime
 from typing import Mapping
-from typing import Iterable
 
 from sqlalchemy import and_, or_, select
 from sqlalchemy.orm import Session
@@ -38,7 +37,13 @@ RELATION_KIND_EDGE_LABELS = {
 RELATION_REVIEW_STATUSES = ("unreviewed", "reviewed", "approved")
 RELATION_LIFECYCLE_STATUSES = ("active", "inactive", "deleted")
 RELATION_EDITABLE_LIFECYCLE_STATUSES = ("active", "inactive")
-RELATION_ARCHIVAL_CATEGORIES = ("hierarchical", "temporal_succession", "family", "associative", "other")
+RELATION_ARCHIVAL_CATEGORIES = (
+    "hierarchical",
+    "temporal_succession",
+    "family",
+    "associative",
+    "other",
+)
 _UNSET = object()
 
 
@@ -288,9 +293,7 @@ def create_entity_relation(
     )
     session.add(relation)
     session.flush()
-    _append_relation_revision(
-        session, relation, operation="create", changed_by=actor, note=note
-    )
+    _append_relation_revision(session, relation, operation="create", changed_by=actor, note=note)
     return relation
 
 
@@ -346,15 +349,15 @@ def update_entity_relation(
         and relation.relation_kind != "analytical"
         and relation_label is None
     ):
-        raise ValueError("Indicá la etiqueta al convertir un rol archivístico en relación analítica")
+        raise ValueError(
+            "Indicá la etiqueta al convertir un rol archivístico en relación analítica"
+        )
     prospective_label = relation_label if relation_label is not None else relation.relation_label
     prospective_evidence = (
         relation.evidence_note if evidence_note is None else _clean_optional(evidence_note)
     )
     prospective_provenance = (
-        relation.provenance_note
-        if provenance_note is None
-        else _clean_optional(provenance_note)
+        relation.provenance_note if provenance_note is None else _clean_optional(provenance_note)
     )
     clean_label, clean_evidence, clean_provenance = _validate_relation_contract(
         relation_kind=prospective_kind,
@@ -402,7 +405,6 @@ def update_entity_relation(
     return relation
 
 
-
 def delete_entity_relation(
     session: Session,
     *,
@@ -434,6 +436,7 @@ def delete_entity_relation(
         note=note or "Vínculo retirado porque fue registrado por error",
     )
     return relation
+
 
 def relation_target_choices(
     session: Session,
@@ -487,8 +490,14 @@ def relation_target_choices(
             if part.id in seen:
                 continue
             seen.add(part.id)
-            context = unit.title if unit is not None else (
-                registration.source_key if registration is not None else f"págs. {part.page_start}-{part.page_end}"
+            context = (
+                unit.title
+                if unit is not None
+                else (
+                    registration.source_key
+                    if registration is not None
+                    else f"págs. {part.page_start}-{part.page_end}"
+                )
             )
             result.append(RelationTargetChoice("document_part", part.id, part.title, context))
         return result
@@ -519,30 +528,44 @@ def entity_relation_rows(
             )
         )
     if archival_unit_id is not None:
-        statement = statement.where(
-            EntityRelation.target_archival_unit_id == archival_unit_id
-        )
+        statement = statement.where(EntityRelation.target_archival_unit_id == archival_unit_id)
     if relation_kinds:
         statement = statement.where(EntityRelation.relation_kind.in_(relation_kinds))
     if include_inactive:
-        statement = statement.where(EntityRelation.lifecycle_status.in_(RELATION_EDITABLE_LIFECYCLE_STATUSES))
+        statement = statement.where(
+            EntityRelation.lifecycle_status.in_(RELATION_EDITABLE_LIFECYCLE_STATUSES)
+        )
     else:
         statement = statement.where(EntityRelation.lifecycle_status == "active")
     if temporal_start is not None or temporal_end is not None:
-        if temporal_start is not None and temporal_end is not None and temporal_start > temporal_end:
+        if (
+            temporal_start is not None
+            and temporal_end is not None
+            and temporal_start > temporal_end
+        ):
             raise ValueError("El inicio del filtro temporal es posterior al final")
         overlap_parts = []
         if temporal_start is not None:
             overlap_parts.append(
-                or_(EntityRelation.temporal_end.is_(None), EntityRelation.temporal_end >= temporal_start)
+                or_(
+                    EntityRelation.temporal_end.is_(None),
+                    EntityRelation.temporal_end >= temporal_start,
+                )
             )
         if temporal_end is not None:
             overlap_parts.append(
-                or_(EntityRelation.temporal_start.is_(None), EntityRelation.temporal_start <= temporal_end)
+                or_(
+                    EntityRelation.temporal_start.is_(None),
+                    EntityRelation.temporal_start <= temporal_end,
+                )
             )
-        dated = or_(EntityRelation.temporal_start.is_not(None), EntityRelation.temporal_end.is_not(None))
+        dated = or_(
+            EntityRelation.temporal_start.is_not(None), EntityRelation.temporal_end.is_not(None)
+        )
         overlap = and_(*overlap_parts)
-        statement = statement.where(or_(overlap, ~dated) if include_undated else and_(dated, overlap))
+        statement = statement.where(
+            or_(overlap, ~dated) if include_undated else and_(dated, overlap)
+        )
     relations = session.scalars(
         statement.order_by(EntityRelation.created_at, EntityRelation.id)
     ).all()
@@ -559,25 +582,41 @@ def entity_relation_rows(
                 include_undated=include_undated,
             )
         ]
-    authority_ids = {
-        row.source_authority_id for row in relations
-    } | {row.target_authority_id for row in relations if row.target_authority_id}
-    authorities = {
-        row.id: row
-        for row in session.scalars(
-            select(AuthorityRecord).where(AuthorityRecord.id.in_(authority_ids))
-        ).all()
-    } if authority_ids else {}
+    authority_ids = {row.source_authority_id for row in relations} | {
+        row.target_authority_id for row in relations if row.target_authority_id
+    }
+    authorities = (
+        {
+            row.id: row
+            for row in session.scalars(
+                select(AuthorityRecord).where(AuthorityRecord.id.in_(authority_ids))
+            ).all()
+        }
+        if authority_ids
+        else {}
+    )
     unit_ids = {row.target_archival_unit_id for row in relations if row.target_archival_unit_id}
-    units = {
-        row.id: row
-        for row in session.scalars(select(ArchivalUnit).where(ArchivalUnit.id.in_(unit_ids))).all()
-    } if unit_ids else {}
+    units = (
+        {
+            row.id: row
+            for row in session.scalars(
+                select(ArchivalUnit).where(ArchivalUnit.id.in_(unit_ids))
+            ).all()
+        }
+        if unit_ids
+        else {}
+    )
     part_ids = {row.target_document_part_id for row in relations if row.target_document_part_id}
-    parts = {
-        row.id: row
-        for row in session.scalars(select(DocumentPart).where(DocumentPart.id.in_(part_ids))).all()
-    } if part_ids else {}
+    parts = (
+        {
+            row.id: row
+            for row in session.scalars(
+                select(DocumentPart).where(DocumentPart.id.in_(part_ids))
+            ).all()
+        }
+        if part_ids
+        else {}
+    )
     result: list[EntityRelationRow] = []
     for relation in relations:
         kind, target_id = _relation_target(relation)
@@ -592,9 +631,7 @@ def entity_relation_rows(
         else:
             target = parts.get(target_id)
             target_label = target.title if target else "Parte interna inexistente"
-            context = (
-                f"págs. {target.page_start}-{target.page_end}" if target else None
-            )
+            context = f"págs. {target.page_start}-{target.page_end}" if target else None
         source = authorities.get(relation.source_authority_id)
         result.append(
             EntityRelationRow(

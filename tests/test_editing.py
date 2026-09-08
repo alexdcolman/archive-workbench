@@ -5,16 +5,20 @@ from pathlib import Path
 
 import fitz
 import pytest
-from sqlalchemy import func, select
+from sqlalchemy import select
 
 from archive_workbench.catalog import register_test_corpus
 from archive_workbench.contracts.test_corpus import TestCorpus as CorpusDefinition
-from archive_workbench.db import create_sqlite_engine, database_path, session_scope, upgrade_database
+from archive_workbench.db import (
+    create_sqlite_engine,
+    database_path,
+    session_scope,
+    upgrade_database,
+)
 from archive_workbench.db.models import (
     DigitalObject,
     DocumentPart,
     EditableObject,
-    EditableObjectRevision,
     EditablePage,
     ExtractedObject,
     ExtractionPage,
@@ -470,9 +474,7 @@ def test_page_actions_undo_redo_structural_changes(tmp_path: Path) -> None:
     engine = create_sqlite_engine(database_path(root))
     try:
         with session_scope(engine) as session:
-            register_test_corpus(
-                session, project_root=root, decisions=decisions, corpus=_corpus()
-            )
+            register_test_corpus(session, project_root=root, decisions=decisions, corpus=_corpus())
             _seed_selected_extraction(session)
             bootstrap_editable_layer(
                 session,
@@ -505,9 +507,7 @@ def test_page_actions_undo_redo_structural_changes(tmp_path: Path) -> None:
             second = session.get(EditableObject, second.id)
             assert first and second
             assert (first.current_order_index, second.current_order_index) == (1, 0)
-            availability = page_action_availability(
-                session, editable_page_id=editable_page_id
-            )
+            availability = page_action_availability(session, editable_page_id=editable_page_id)
             assert availability.can_undo is True
             assert availability.can_redo is False
             selected = undo_page_action(
@@ -519,9 +519,7 @@ def test_page_actions_undo_redo_structural_changes(tmp_path: Path) -> None:
             second = session.get(EditableObject, second.id)
             assert first and second
             assert (first.current_order_index, second.current_order_index) == (0, 1)
-            availability = page_action_availability(
-                session, editable_page_id=editable_page_id
-            )
+            availability = page_action_availability(session, editable_page_id=editable_page_id)
             assert availability.can_redo is True
             redo_page_action(session, editable_page_id=editable_page_id, changed_by="Alex")
         with session_scope(engine) as session:
@@ -551,9 +549,7 @@ def test_review_annotations_and_export(tmp_path: Path) -> None:
     engine = create_sqlite_engine(database_path(root))
     try:
         with session_scope(engine) as session:
-            register_test_corpus(
-                session, project_root=root, decisions=decisions, corpus=_corpus()
-            )
+            register_test_corpus(session, project_root=root, decisions=decisions, corpus=_corpus())
             _seed_selected_extraction(session)
             bootstrap_editable_layer(
                 session,
@@ -617,9 +613,7 @@ def test_review_annotations_and_export(tmp_path: Path) -> None:
             page = session.get(EditablePage, obj.editable_page_id)
             assert current and current.review_status == "needs_review"
             assert page and page.review_status == "reviewed"
-            summary = export_editable_layer(
-                session, project_root=root, source_key="doc_editable"
-            )
+            summary = export_editable_layer(session, project_root=root, source_key="doc_editable")
         assert summary.comment_count == 1
         assert summary.tag_count == 2
         assert summary.comments_path.is_file()
@@ -643,9 +637,7 @@ def test_assign_internal_part_is_versioned_and_undoable(tmp_path: Path) -> None:
     engine = create_sqlite_engine(database_path(root))
     try:
         with session_scope(engine) as session:
-            register_test_corpus(
-                session, project_root=root, decisions=decisions, corpus=_corpus()
-            )
+            register_test_corpus(session, project_root=root, decisions=decisions, corpus=_corpus())
             digital_id, _source_id, _page_id = _seed_selected_extraction(session)
             part = DocumentPart(
                 id=new_id(),
@@ -692,15 +684,11 @@ def test_assign_internal_part_is_versioned_and_undoable(tmp_path: Path) -> None:
             obj = session.get(EditableObject, object_id)
             assert obj and obj.document_part_id == part_id
             assert object_revision_rows(session, object_id=object_id)[-1].operation == "assign_part"
-            undo_page_action(
-                session, editable_page_id=editable_page_id, changed_by="Alex"
-            )
+            undo_page_action(session, editable_page_id=editable_page_id, changed_by="Alex")
         with session_scope(engine) as session:
             obj = session.get(EditableObject, object_id)
             assert obj and obj.document_part_id is None
-            summary = export_editable_layer(
-                session, project_root=root, source_key="doc_editable"
-            )
+            summary = export_editable_layer(session, project_root=root, source_key="doc_editable")
         assert summary.objects_path.is_file()
     finally:
         engine.dispose()

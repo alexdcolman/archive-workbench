@@ -14,7 +14,6 @@ from sqlalchemy.orm import Session
 from archive_workbench.analysis_audit import record_automatic_analysis_authorization
 from archive_workbench.analysis_quality import (
     DEFAULT_AUTOMATIC_PAGE_REVIEW_STATUSES,
-    PAGE_REVIEW_STATUSES,
     validate_automatic_quality_scope,
 )
 from archive_workbench.db.models import (
@@ -39,7 +38,16 @@ from archive_workbench.temporal import parse_temporal_expression, temporal_expre
 AUTHORITY_TYPES = ("person", "family", "organization", "place", "event", "work", "other")
 AUTHORITY_REVIEW_STATUSES = ("unreviewed", "reviewed", "approved")
 AUTHORITY_LIFECYCLE_STATUSES = ("active", "inactive")
-ALIAS_TYPES = ("parallel", "normalized_other_rules", "variant", "abbreviation", "acronym", "former_name", "title", "other")
+ALIAS_TYPES = (
+    "parallel",
+    "normalized_other_rules",
+    "variant",
+    "abbreviation",
+    "acronym",
+    "former_name",
+    "title",
+    "other",
+)
 MENTION_STATUSES = ("pending", "accepted", "rejected", "modified")
 LINKED_MENTION_STATUSES = ("accepted", "modified")
 MENTION_SOURCES = ("manual", "dictionary", "automatic")
@@ -202,10 +210,7 @@ class MentionRepairCase:
 
     @property
     def can_resolve_duplicate(self) -> bool:
-        return (
-            self.code == "duplicate_relocation"
-            and len(self.duplicate_mention_ids) == 1
-        )
+        return self.code == "duplicate_relocation" and len(self.duplicate_mention_ids) == 1
 
     @property
     def can_resolve_duplicate_group(self) -> bool:
@@ -274,8 +279,7 @@ class MentionCandidateRow:
     @property
     def already_included(self) -> bool:
         return (
-            self.existing_mention_id is not None
-            and self.existing_authority_id == self.authority_id
+            self.existing_mention_id is not None and self.existing_authority_id == self.authority_id
         )
 
     @property
@@ -284,9 +288,9 @@ class MentionCandidateRow:
 
     @property
     def has_authority_conflict(self) -> bool:
-        return (
-            self.existing_mention_id is not None
-            and self.existing_authority_id not in (None, self.authority_id)
+        return self.existing_mention_id is not None and self.existing_authority_id not in (
+            None,
+            self.authority_id,
         )
 
 
@@ -332,7 +336,9 @@ def _authority_snapshot(session: Session, authority: AuthorityRecord) -> dict[st
         "normalized_name": authority.normalized_name,
         "description": authority.description,
         "temporal_expression": authority.temporal_expression,
-        "temporal_start": authority.temporal_start.isoformat() if authority.temporal_start else None,
+        "temporal_start": authority.temporal_start.isoformat()
+        if authority.temporal_start
+        else None,
         "temporal_end": authority.temporal_end.isoformat() if authority.temporal_end else None,
         "temporal_precision": authority.temporal_precision,
         "temporal_approximate": authority.temporal_approximate,
@@ -639,15 +645,25 @@ def authority_rows(
         overlap_parts = []
         if temporal_start is not None:
             overlap_parts.append(
-                or_(AuthorityRecord.temporal_end.is_(None), AuthorityRecord.temporal_end >= temporal_start)
+                or_(
+                    AuthorityRecord.temporal_end.is_(None),
+                    AuthorityRecord.temporal_end >= temporal_start,
+                )
             )
         if temporal_end is not None:
             overlap_parts.append(
-                or_(AuthorityRecord.temporal_start.is_(None), AuthorityRecord.temporal_start <= temporal_end)
+                or_(
+                    AuthorityRecord.temporal_start.is_(None),
+                    AuthorityRecord.temporal_start <= temporal_end,
+                )
             )
-        dated = or_(AuthorityRecord.temporal_start.is_not(None), AuthorityRecord.temporal_end.is_not(None))
+        dated = or_(
+            AuthorityRecord.temporal_start.is_not(None), AuthorityRecord.temporal_end.is_not(None)
+        )
         overlap = and_(*overlap_parts)
-        statement = statement.where(or_(overlap, ~dated) if include_undated else and_(dated, overlap))
+        statement = statement.where(
+            or_(overlap, ~dated) if include_undated else and_(dated, overlap)
+        )
     clean_query = normalize_authority_text(query)
     if clean_query:
         alias_ids = select(AuthorityAlias.authority_id).where(
@@ -787,9 +803,7 @@ def project_mention_span_to_current(
     )
     if old_revision is not None:
         old_text = old_revision.text or ""
-        matcher = difflib.SequenceMatcher(
-            None, old_text, obj.current_text or "", autojunk=False
-        )
+        matcher = difflib.SequenceMatcher(None, old_text, obj.current_text or "", autojunk=False)
         for tag, old_start, old_end, new_start, _new_end in matcher.get_opcodes():
             if (
                 tag == "equal"
@@ -858,9 +872,7 @@ def _active_mentions_at_current_span(
         statement = statement.where(EntityMention.id != exclude_mention_id)
     result: list[EntityMention] = []
     for mention in session.scalars(statement).all():
-        projected = project_mention_span_to_current(
-            session, mention, editable_object=obj
-        )
+        projected = project_mention_span_to_current(session, mention, editable_object=obj)
         if projected == (start_offset, end_offset):
             result.append(mention)
     return result
@@ -997,9 +1009,7 @@ def create_mention(
     )
     session.add(mention)
     session.flush()
-    _append_mention_revision(
-        session, mention, operation="create", changed_by=created_by, note=note
-    )
+    _append_mention_revision(session, mention, operation="create", changed_by=created_by, note=note)
     return mention
 
 
@@ -1036,7 +1046,11 @@ def update_mention(
             raise ValueError("La autoridad y la mención pertenecen a proyectos diferentes")
 
     _validate_mention_link(status=next_status, authority_id=next_authority_id)
-    if next_status != "rejected" and mention.start_offset is not None and mention.end_offset is not None:
+    if (
+        next_status != "rejected"
+        and mention.start_offset is not None
+        and mention.end_offset is not None
+    ):
         current_span = project_mention_span_to_current(session, mention)
         if current_span is not None:
             duplicates = _active_mentions_at_current_span(
@@ -1061,9 +1075,7 @@ def update_mention(
     mention.updated_by = changed_by
     mention.updated_at = utc_now()
     session.flush()
-    _append_mention_revision(
-        session, mention, operation="update", changed_by=changed_by, note=note
-    )
+    _append_mention_revision(session, mention, operation="update", changed_by=changed_by, note=note)
     return mention
 
 
@@ -1144,7 +1156,6 @@ def mention_rows(
     return result
 
 
-
 def mention_revision_rows(session: Session, mention_id: str) -> list[EntityMentionRevision]:
     return session.scalars(
         select(EntityMentionRevision)
@@ -1173,11 +1184,7 @@ def _mention_snapshot_difference_fields(
         return ("revision", "missing_snapshot")
     current = _mention_snapshot(mention)
     recorded = latest.snapshot_json
-    fields = [
-        field
-        for field in current
-        if current.get(field) != recorded.get(field)
-    ]
+    fields = [field for field in current if current.get(field) != recorded.get(field)]
     if mention.revision != latest.revision_number:
         fields.insert(0, "revision")
     return tuple(fields)
@@ -1227,9 +1234,7 @@ def mention_repair_cases(
         if not snapshot_current:
             current_snapshot = _mention_snapshot(mention)
             recorded_snapshot = (
-                dict(latest_snapshot.snapshot_json)
-                if latest_snapshot is not None
-                else None
+                dict(latest_snapshot.snapshot_json) if latest_snapshot is not None else None
             )
             difference_fields = _mention_snapshot_difference_fields(
                 mention,
@@ -1272,14 +1277,10 @@ def mention_repair_cases(
                     order_index=row.order_index,
                     explanation=explanation,
                     snapshot_revision_number=(
-                        latest_snapshot.revision_number
-                        if latest_snapshot is not None
-                        else None
+                        latest_snapshot.revision_number if latest_snapshot is not None else None
                     ),
                     snapshot_operation=(
-                        latest_snapshot.operation
-                        if latest_snapshot is not None
-                        else None
+                        latest_snapshot.operation if latest_snapshot is not None else None
                     ),
                     snapshot_current=current_snapshot,
                     snapshot_recorded=recorded_snapshot,
@@ -1288,9 +1289,7 @@ def mention_repair_cases(
             )
             continue
 
-        missing_authority = (
-            row.status in LINKED_MENTION_STATUSES and row.authority_id is None
-        )
+        missing_authority = row.status in LINKED_MENTION_STATUSES and row.authority_id is None
         if missing_authority:
             cases.append(
                 MentionRepairCase(
@@ -1326,9 +1325,7 @@ def mention_repair_cases(
             continue
         if not row.is_stale:
             continue
-        projected = project_mention_span_to_current(
-            session, mention, editable_object=editable
-        )
+        projected = project_mention_span_to_current(session, mention, editable_object=editable)
         if projected is None:
             cases.append(
                 MentionRepairCase(
@@ -1378,8 +1375,7 @@ def mention_repair_cases(
                     continue
                 emitted_duplicate_groups.add(group_key)
                 group_mentions = [
-                    session.get(EntityMention, mention_id)
-                    for mention_id in group_ids
+                    session.get(EntityMention, mention_id) for mention_id in group_ids
                 ]
                 inconsistent_ids = tuple(
                     mention.id
@@ -1412,9 +1408,7 @@ def mention_repair_cases(
                         projected_end_offset=projected[1],
                         projected_text=projected_text,
                         duplicate_mention_ids=tuple(
-                            mention_id
-                            for mention_id in group_ids
-                            if mention_id != row.mention_id
+                            mention_id for mention_id in group_ids if mention_id != row.mention_id
                         ),
                         source_key=row.source_key,
                         document_title=row.document_title,
@@ -1530,9 +1524,7 @@ def _restore_mention_snapshot_values(
     authority_id = snapshot["authority_id"]
     if authority_id is not None:
         authority = (
-            session.get(AuthorityRecord, authority_id)
-            if isinstance(authority_id, str)
-            else None
+            session.get(AuthorityRecord, authority_id) if isinstance(authority_id, str) else None
         )
         if authority is None:
             raise ValueError("La entidad registrada en el snapshot ya no existe")
@@ -1642,13 +1634,8 @@ def repair_snapshot_divergence(
 
     current_snapshot = _mention_snapshot(mention)
     if current_snapshot != expected_current_snapshot:
-        raise ValueError(
-            "La fila vigente cambió desde que se mostró la alerta; volvé a evaluarla"
-        )
-    if (
-        latest.revision_number == mention.revision
-        and latest.snapshot_json == current_snapshot
-    ):
+        raise ValueError("La fila vigente cambió desde que se mostró la alerta; volvé a evaluarla")
+    if latest.revision_number == mention.revision and latest.snapshot_json == current_snapshot:
         raise ValueError("La fila vigente ya coincide con su último snapshot")
 
     actor = changed_by.strip() or "local_user"
@@ -1666,10 +1653,7 @@ def repair_snapshot_divergence(
             mention,
             operation="repair_capture_divergent_row",
             changed_by=actor,
-            note=(
-                "Estado divergente conservado antes de restaurar el último "
-                "snapshot registrado."
-            ),
+            note=("Estado divergente conservado antes de restaurar el último snapshot registrado."),
         )
 
         _restore_mention_snapshot_values(
@@ -1746,13 +1730,9 @@ def repair_stale_mention(
             "La fila vigente no coincide con su último snapshot; revisá la divergencia antes de reparar"
         )
 
-    projected = project_mention_span_to_current(
-        session, mention, editable_object=editable
-    )
+    projected = project_mention_span_to_current(session, mention, editable_object=editable)
     if projected is None:
-        raise ValueError(
-            "El fragmento no puede localizarse de manera única en el texto vigente"
-        )
+        raise ValueError("El fragmento no puede localizarse de manera única en el texto vigente")
     if (
         expected_start_offset is not None
         and expected_end_offset is not None
@@ -1848,11 +1828,14 @@ def repair_unresolved_relocation(
         )
     if mention.object_revision_number == editable.revision_number:
         raise ValueError("La mención ya pertenece a la revisión textual vigente")
-    if project_mention_span_to_current(
-        session,
-        mention,
-        editable_object=editable,
-    ) is not None:
+    if (
+        project_mention_span_to_current(
+            session,
+            mention,
+            editable_object=editable,
+        )
+        is not None
+    ):
         raise ValueError(
             "La mención ya tiene una proyección verificable; volvé a evaluar la alerta"
         )
@@ -1903,9 +1886,7 @@ def repair_unresolved_relocation(
     ):
         raise ValueError("La ubicación seleccionada está fuera del texto vigente")
 
-    current_fragment = editable.current_text[
-        expected_start_offset:expected_end_offset
-    ]
+    current_fragment = editable.current_text[expected_start_offset:expected_end_offset]
     if current_fragment.casefold() != clean_fragment.casefold():
         raise ValueError(
             "El fragmento o su ubicación cambiaron desde la selección; volvé a evaluarlos"
@@ -1981,9 +1962,7 @@ def repair_missing_authority(
             f"La mención está en revisión {mention.revision}; se esperaba {expected_revision}"
         )
     if mention.status not in LINKED_MENTION_STATUSES or mention.authority_id is not None:
-        raise ValueError(
-            "La mención ya no está aceptada o modificada sin una entidad vinculada"
-        )
+        raise ValueError("La mención ya no está aceptada o modificada sin una entidad vinculada")
     if not _mention_snapshot_is_current(session, mention):
         raise ValueError(
             "La fila vigente no coincide con su último snapshot; revisá la divergencia antes de reparar"
@@ -2000,9 +1979,7 @@ def repair_missing_authority(
             raise ValueError(f"Autoridad inexistente: {authority_id}")
         if authority.lifecycle_status != "active":
             raise ValueError("La entidad seleccionada no está activa")
-        if authority.project_id != _project_id_for_object(
-            session, mention.editable_object_id
-        ):
+        if authority.project_id != _project_id_for_object(session, mention.editable_object_id):
             raise ValueError("La autoridad y la mención pertenecen a proyectos diferentes")
         mention.authority_id = authority.id
         operation = "repair_link_authority"
@@ -2012,9 +1989,7 @@ def repair_missing_authority(
         )
     else:
         if authority_id is not None:
-            raise ValueError(
-                "No indiques una entidad al devolver la mención a estado pendiente"
-            )
+            raise ValueError("No indiques una entidad al devolver la mención a estado pendiente")
         mention.status = "pending"
         mention.authority_id = None
         operation = "repair_return_pending"
@@ -2122,8 +2097,7 @@ def repair_duplicate_relocation(
         and projected != (expected_start_offset, expected_end_offset)
     ):
         raise ValueError(
-            "La ubicación proyectada cambió desde la revisión de la alerta; "
-            "volvé a evaluarla"
+            "La ubicación proyectada cambió desde la revisión de la alerta; volvé a evaluarla"
         )
     current_span = project_mention_span_to_current(
         session,
@@ -2156,8 +2130,7 @@ def repair_duplicate_relocation(
     def reject_loser(loser: EntityMention, *, winner: EntityMention) -> None:
         loser.status = "rejected"
         loser.note = clean_note or (
-            "Mención retirada como duplicada; se conserva la mención "
-            f"{winner.id}."
+            f"Mención retirada como duplicada; se conserva la mención {winner.id}."
         )
         loser.revision += 1
         loser.updated_by = actor
@@ -2182,8 +2155,7 @@ def repair_duplicate_relocation(
     historical.normalized_text = normalize_authority_text(historical.mention_text)
     historical.object_revision_number = editable.revision_number
     historical.note = clean_note or (
-        "Mención histórica conservada y reubicada después de retirar el duplicado "
-        f"{current.id}."
+        f"Mención histórica conservada y reubicada después de retirar el duplicado {current.id}."
     )
     historical.revision += 1
     historical.updated_by = actor
@@ -2197,7 +2169,6 @@ def repair_duplicate_relocation(
         note=historical.note,
     )
     return historical, current
-
 
 
 def repair_duplicate_group(
@@ -2220,15 +2191,11 @@ def repair_duplicate_group(
     """
     group_ids = tuple(sorted(set(mention_ids)))
     if len(group_ids) < 3:
-        raise ValueError(
-            "La revisión conjunta exige al menos tres menciones activas coincidentes"
-        )
+        raise ValueError("La revisión conjunta exige al menos tres menciones activas coincidentes")
     if winner_mention_id not in group_ids:
         raise ValueError("La mención elegida no pertenece al conjunto revisado")
     if set(expected_revisions) != set(group_ids):
-        raise ValueError(
-            "Las revisiones esperadas no describen exactamente el conjunto revisado"
-        )
+        raise ValueError("Las revisiones esperadas no describen exactamente el conjunto revisado")
 
     mentions: list[EntityMention] = []
     for mention_id in group_ids:
@@ -2241,9 +2208,7 @@ def repair_duplicate_group(
                 f"se esperaba {expected_revisions[mention_id]}"
             )
         if mention.status == "rejected":
-            raise ValueError(
-                "Una mención del conjunto ya fue retirada; volvé a evaluar la alerta"
-            )
+            raise ValueError("Una mención del conjunto ya fue retirada; volvé a evaluar la alerta")
         if not _mention_snapshot_is_current(session, mention):
             raise ValueError(
                 "Una mención del conjunto no coincide con su último snapshot; "
@@ -2264,9 +2229,7 @@ def repair_duplicate_group(
         )
 
     expected_span = (expected_start_offset, expected_end_offset)
-    if not (
-        0 <= expected_start_offset < expected_end_offset <= len(editable.current_text)
-    ):
+    if not (0 <= expected_start_offset < expected_end_offset <= len(editable.current_text)):
         raise ValueError("La ubicación esperada del conjunto no es válida")
     for mention in mentions:
         projected = project_mention_span_to_current(
@@ -2293,23 +2256,24 @@ def repair_duplicate_group(
     )
     if active_ids != group_ids:
         raise ValueError(
-            "El conjunto de menciones activas cambió desde la revisión; "
-            "volvé a evaluarlo completo"
+            "El conjunto de menciones activas cambió desde la revisión; volvé a evaluarlo completo"
         )
 
     actor = changed_by.strip() or "local_user"
-    clean_note = note.strip() if note and note.strip() else (
-        "Decisión conjunta sobre menciones coincidentes después de comparar "
-        "entidad, estado, procedencia e historial."
+    clean_note = (
+        note.strip()
+        if note and note.strip()
+        else (
+            "Decisión conjunta sobre menciones coincidentes después de comparar "
+            "entidad, estado, procedencia e historial."
+        )
     )
     winner = next(mention for mention in mentions if mention.id == winner_mention_id)
     losers = [mention for mention in mentions if mention.id != winner_mention_id]
 
     for loser in losers:
         loser.status = "rejected"
-        loser.note = (
-            f"{clean_note} Se conserva la mención {winner_mention_id}."
-        )
+        loser.note = f"{clean_note} Se conserva la mención {winner_mention_id}."
         loser.revision += 1
         loser.updated_by = actor
         loser.updated_at = utc_now()
@@ -2326,9 +2290,7 @@ def repair_duplicate_group(
     if winner.object_revision_number != editable.revision_number:
         winner.start_offset = expected_start_offset
         winner.end_offset = expected_end_offset
-        winner.mention_text = editable.current_text[
-            expected_start_offset:expected_end_offset
-        ]
+        winner.mention_text = editable.current_text[expected_start_offset:expected_end_offset]
         winner.normalized_text = normalize_authority_text(winner.mention_text)
         winner.object_revision_number = editable.revision_number
         winner_operation = "repair_group_duplicate_relocated"
@@ -2358,21 +2320,15 @@ def repair_safe_relocation_group(
     """Reubica atómicamente varias menciones seguras del mismo objeto textual."""
     cases = list(expected_cases)
     if len(cases) < 2:
-        raise ValueError(
-            "La operación agrupada exige al menos dos reubicaciones seguras"
-        )
+        raise ValueError("La operación agrupada exige al menos dos reubicaciones seguras")
     if any(not case.can_relocate for case in cases):
-        raise ValueError(
-            "El conjunto contiene una mención que no tiene reubicación segura"
-        )
+        raise ValueError("El conjunto contiene una mención que no tiene reubicación segura")
     mention_ids = [case.mention_id for case in cases]
     if len(set(mention_ids)) != len(mention_ids):
         raise ValueError("El conjunto contiene menciones repetidas")
     object_ids = {case.object_id for case in cases}
     if len(object_ids) != 1:
-        raise ValueError(
-            "Las reubicaciones agrupadas deben pertenecer al mismo objeto textual"
-        )
+        raise ValueError("Las reubicaciones agrupadas deben pertenecer al mismo objeto textual")
     object_id = next(iter(object_ids))
     editable = session.get(EditableObject, object_id)
     if editable is None:
@@ -2389,29 +2345,17 @@ def repair_safe_relocation_group(
         if mention is None:
             raise ValueError(f"Mención inexistente: {case.mention_id}")
         if mention.revision != case.mention_revision:
-            raise ValueError(
-                f"La mención {mention.id} cambió desde la revisión del conjunto"
-            )
+            raise ValueError(f"La mención {mention.id} cambió desde la revisión del conjunto")
         if mention.status == "rejected":
-            raise ValueError(
-                "Una mención del conjunto ya fue retirada; volvé a evaluarlo"
-            )
+            raise ValueError("Una mención del conjunto ya fue retirada; volvé a evaluarlo")
         if not _mention_snapshot_is_current(session, mention):
-            raise ValueError(
-                "Una mención del conjunto no coincide con su último snapshot"
-            )
+            raise ValueError("Una mención del conjunto no coincide con su último snapshot")
         if mention.object_revision_number == editable.revision_number:
-            raise ValueError(
-                "Una mención del conjunto ya pertenece al texto vigente"
-            )
-        projected = project_mention_span_to_current(
-            session, mention, editable_object=editable
-        )
+            raise ValueError("Una mención del conjunto ya pertenece al texto vigente")
+        projected = project_mention_span_to_current(session, mention, editable_object=editable)
         expected_span = (case.projected_start_offset, case.projected_end_offset)
         if projected != expected_span or None in expected_span:
-            raise ValueError(
-                "Una ubicación proyectada cambió desde la revisión del conjunto"
-            )
+            raise ValueError("Una ubicación proyectada cambió desde la revisión del conjunto")
         assert projected is not None
         collisions = _active_mentions_at_current_span(
             session,
@@ -2428,9 +2372,13 @@ def repair_safe_relocation_group(
         validated.append((mention, projected[0], projected[1]))
 
     actor = changed_by.strip() or "local_user"
-    clean_note = note.strip() if note and note.strip() else (
-        f"Reubicación agrupada de {len(validated)} menciones con proyección única "
-        "sobre el mismo texto vigente."
+    clean_note = (
+        note.strip()
+        if note and note.strip()
+        else (
+            f"Reubicación agrupada de {len(validated)} menciones con proyección única "
+            "sobre el mismo texto vigente."
+        )
     )
     repaired: list[EntityMention] = []
     for mention, start_offset, end_offset in validated:
@@ -2453,6 +2401,7 @@ def repair_safe_relocation_group(
         )
         repaired.append(mention)
     return repaired
+
 
 def suggest_dictionary_mentions(
     session: Session,
@@ -2516,9 +2465,13 @@ def suggest_dictionary_mentions(
         .order_by(AuthorityRecord.id)
     ).all()
     authority_ids = [row.id for row in authorities]
-    aliases = session.scalars(
-        select(AuthorityAlias).where(AuthorityAlias.authority_id.in_(authority_ids))
-    ).all() if authority_ids else []
+    aliases = (
+        session.scalars(
+            select(AuthorityAlias).where(AuthorityAlias.authority_id.in_(authority_ids))
+        ).all()
+        if authority_ids
+        else []
+    )
     surfaces: dict[str, list[tuple[str, str]]] = {}
     display: dict[tuple[str, str], str] = {}
     for authority in authorities:
@@ -2593,6 +2546,7 @@ def suggest_dictionary_mentions(
         candidates_scanned=len(surfaces),
     )
 
+
 def suggest_dictionary_mentions_all(
     session: Session,
     *,
@@ -2635,20 +2589,14 @@ def suggest_dictionary_mentions_all(
         )
     )
     if selected_page_statuses:
-        statement = statement.where(
-            EditablePage.review_status.in_(selected_page_statuses)
-        )
+        statement = statement.where(EditablePage.review_status.in_(selected_page_statuses))
     if selected_sources:
-        statement = (
-            statement
-            .join(
-                SourceRegistration,
-                SourceRegistration.digital_object_id == DigitalObject.id,
-            )
-            .where(
-                SourceRegistration.source_type.in_(PROCESSABLE_SOURCE_TYPES),
-                SourceRegistration.source_key.in_(selected_sources),
-            )
+        statement = statement.join(
+            SourceRegistration,
+            SourceRegistration.digital_object_id == DigitalObject.id,
+        ).where(
+            SourceRegistration.source_type.in_(PROCESSABLE_SOURCE_TYPES),
+            SourceRegistration.source_key.in_(selected_sources),
         )
     object_ids = list(dict.fromkeys(session.scalars(statement).all()))
     total = CorpusSuggestionSummary(
@@ -2673,11 +2621,8 @@ def suggest_dictionary_mentions_all(
         total.created += summary.created
         total.already_present += summary.already_present
         total.ambiguous += summary.ambiguous
-        total.candidates_scanned = max(
-            total.candidates_scanned, summary.candidates_scanned
-        )
+        total.candidates_scanned = max(total.candidates_scanned, summary.candidates_scanned)
     return total
-
 
 
 def _candidate_key(
@@ -2688,8 +2633,8 @@ def _candidate_key(
 
 
 def _candidate_context(text: str, start: int, end: int, radius: int = 90) -> tuple[str, str]:
-    before = text[max(0, start - radius):start]
-    after = text[end:min(len(text), end + radius)]
+    before = text[max(0, start - radius) : start]
+    after = text[end : min(len(text), end + radius)]
     return before, after
 
 
@@ -2710,12 +2655,8 @@ def authority_mention_candidates(
     if authority.lifecycle_status != "active":
         raise ValueError("Solo se pueden buscar menciones de entidades activas")
 
-    surfaces: list[tuple[str, str, str | None]] = [
-        (authority.preferred_name, "preferred", None)
-    ]
-    surfaces.extend(
-        (row.alias, "alias", row.alias_type) for row in _aliases(session, authority.id)
-    )
+    surfaces: list[tuple[str, str, str | None]] = [(authority.preferred_name, "preferred", None)]
+    surfaces.extend((row.alias, "alias", row.alias_type) for row in _aliases(session, authority.id))
     deduped: dict[str, tuple[str, str, str | None]] = {}
     for surface, kind, alias_type in surfaces:
         clean = surface.strip()
@@ -2750,19 +2691,14 @@ def authority_mention_candidates(
         )
     )
     if selected_page_statuses:
-        statement = statement.where(
-            EditablePage.review_status.in_(selected_page_statuses)
-        )
+        statement = statement.where(EditablePage.review_status.in_(selected_page_statuses))
     if selected_sources:
-        statement = (
-            statement.join(
-                SourceRegistration,
-                SourceRegistration.digital_object_id == DigitalObject.id,
-            )
-            .where(
-                SourceRegistration.source_type.in_(PROCESSABLE_SOURCE_TYPES),
-                SourceRegistration.source_key.in_(selected_sources),
-            )
+        statement = statement.join(
+            SourceRegistration,
+            SourceRegistration.digital_object_id == DigitalObject.id,
+        ).where(
+            SourceRegistration.source_type.in_(PROCESSABLE_SOURCE_TYPES),
+            SourceRegistration.source_key.in_(selected_sources),
         )
     object_pairs: list[tuple[EditableObject, DigitalObject]] = []
     seen_objects: set[str] = set()
@@ -2792,9 +2728,7 @@ def authority_mention_candidates(
 
     object_ids = [obj.id for obj, _ in object_pairs]
     object_map = {obj.id: obj for obj, _ in object_pairs}
-    existing_map: dict[
-        tuple[str, int, int, int], tuple[EntityMention, str | None]
-    ] = {}
+    existing_map: dict[tuple[str, int, int, int], tuple[EntityMention, str | None]] = {}
     if object_ids:
         existing_rows = session.execute(
             select(EntityMention, AuthorityRecord.preferred_name)
@@ -2811,16 +2745,12 @@ def authority_mention_candidates(
                 EntityMention.id,
             )
         ).all()
-        grouped: dict[
-            tuple[str, int, int, int], list[tuple[EntityMention, str | None]]
-        ] = {}
+        grouped: dict[tuple[str, int, int, int], list[tuple[EntityMention, str | None]]] = {}
         for mention, authority_name in existing_rows:
             obj = object_map.get(mention.editable_object_id)
             if obj is None:
                 continue
-            projected = project_mention_span_to_current(
-                session, mention, editable_object=obj
-            )
+            projected = project_mention_span_to_current(session, mention, editable_object=obj)
             if projected is None:
                 continue
             key = (
@@ -2832,11 +2762,7 @@ def authority_mention_candidates(
             grouped.setdefault(key, []).append((mention, authority_name))
         for key, rows in grouped.items():
             conflict = next(
-                (
-                    row
-                    for row in rows
-                    if row[0].authority_id not in (None, authority.id)
-                ),
+                (row for row in rows if row[0].authority_id not in (None, authority.id)),
                 None,
             )
             same_authority = next(
@@ -2858,9 +2784,7 @@ def authority_mention_candidates(
                     after_char and (after_char.isalnum() or after_char == "_")
                 ):
                     continue
-                local_matches.append(
-                    (match.start(), match.end(), surface, kind, alias_type)
-                )
+                local_matches.append((match.start(), match.end(), surface, kind, alias_type))
         local_matches.sort(key=lambda item: (item[0], -(item[1] - item[0]), item[2]))
         for start, end, surface, kind, alias_type in local_matches:
             if any(start < other_end and end > other_start for other_start, other_end in occupied):

@@ -154,14 +154,8 @@ def _solve_3x3(matrix: list[list[float]], vector: list[float]) -> tuple[float, f
 
 def _quadratic_fit(points: list[tuple[float, float, float]]) -> tuple[float, float, float]:
     # y = a*x^2 + b*x + c, weighted least squares.
-    sums = {
-        power: sum(weight * (x ** power) for x, _y, weight in points)
-        for power in range(5)
-    }
-    rhs = [
-        sum(weight * y * (x ** power) for x, y, weight in points)
-        for power in (2, 1, 0)
-    ]
+    sums = {power: sum(weight * (x**power) for x, _y, weight in points) for power in range(5)}
+    rhs = [sum(weight * y * (x**power) for x, y, weight in points) for power in (2, 1, 0)]
     matrix = [
         [sums[4], sums[3], sums[2]],
         [sums[3], sums[2], sums[1]],
@@ -216,8 +210,7 @@ def estimate_vertical_dewarp(
             strips=strips,
             reason="insufficient_ink",
             warning=(
-                "Dewarp omitido: la página no contiene tinta suficiente para "
-                "estimar curvatura."
+                "Dewarp omitido: la página no contiene tinta suficiente para estimar curvatura."
             ),
         )
 
@@ -314,8 +307,7 @@ def estimate_vertical_dewarp(
     observed = [offset for _x, offset, _weight in observations]
     observed_mean = sum(observed) / len(observed)
     sse = sum(
-        (actual - estimate) ** 2
-        for actual, estimate in zip(observed, predicted, strict=True)
+        (actual - estimate) ** 2 for actual, estimate in zip(observed, predicted, strict=True)
     )
     sst = sum((actual - observed_mean) ** 2 for actual in observed)
     fit_quality = max(0.0, min(1.0, 1.0 - sse / (sst + 1e-9))) if sst > 0 else 0.0

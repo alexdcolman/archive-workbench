@@ -166,9 +166,7 @@ def test_processing_inventory_follows_manual_canonical_flow(tmp_path: Path) -> N
         assert initial.status in {"pending_preparation", "file_available"}
 
         with session_scope(engine) as session:
-            prepared = prepare_derivatives(
-                session, project_root=root, decisions=decisions
-            )
+            prepared = prepare_derivatives(session, project_root=root, decisions=decisions)
         assert prepared.runs_created == 1
         with session_scope(engine) as session:
             row = processing_inventory_rows(
@@ -228,8 +226,6 @@ def test_processing_inventory_follows_manual_canonical_flow(tmp_path: Path) -> N
         engine.dispose()
 
 
-
-
 def test_processing_inventory_query_count_is_bounded_for_many_documents(tmp_path: Path) -> None:
     from sqlalchemy import event
 
@@ -240,7 +236,10 @@ def test_processing_inventory_query_count_is_bounded_for_many_documents(tmp_path
     try:
         with session_scope(engine) as session:
             from archive_workbench.catalog import ensure_project
-            from archive_workbench.catalog_management import create_archival_unit, register_local_file
+            from archive_workbench.catalog_management import (
+                create_archival_unit,
+                register_local_file,
+            )
 
             ensure_project(session, decisions)
             root_level = next(
@@ -305,9 +304,7 @@ def test_failed_page_retry_uses_missing_pages_from_latest_failed_run(tmp_path: P
                 corpus=_corpus(pages=2),
             )
             registration = session.scalar(
-                select(SourceRegistration).where(
-                    SourceRegistration.source_key == "doc_processing"
-                )
+                select(SourceRegistration).where(SourceRegistration.source_key == "doc_processing")
             )
             assert registration and registration.digital_object_id
             digital = session.get(DigitalObject, registration.digital_object_id)
@@ -490,10 +487,7 @@ def test_quality_panel_explains_indicators_without_presenting_accuracy_percentag
 
 def test_processing_ui_distinguishes_derivative_treatment_from_profile_variant() -> None:
     source = (
-        Path(__file__).parents[1]
-        / "src"
-        / "archive_workbench"
-        / "processing_app.py"
+        Path(__file__).parents[1] / "src" / "archive_workbench" / "processing_app.py"
     ).read_text(encoding="utf-8")
 
     assert '"Tratamiento"' in source

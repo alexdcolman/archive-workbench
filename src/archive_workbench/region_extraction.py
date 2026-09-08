@@ -1,8 +1,7 @@
 from __future__ import annotations
 
-import json
 import shutil
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from datetime import datetime, timezone
 from pathlib import Path
 from statistics import mean
@@ -103,8 +102,7 @@ def validate_region_template(
     invalid = sorted({item.object_type for item in template.regions} - allowed_types)
     if invalid:
         raise ValueError(
-            "Tipos de objeto regionales no definidos en decisions.yaml: "
-            + ", ".join(invalid)
+            "Tipos de objeto regionales no definidos en decisions.yaml: " + ", ".join(invalid)
         )
     return template
 
@@ -460,7 +458,9 @@ def extract_regions(
         all_objects: list[ExtractedObjectRecord] = []
         region_exports: list[RegionExportRecord] = []
         warnings: list[str] = []
-        page_objects: dict[int, list[ExtractedObjectRecord]] = {page: [] for page in requested_pages}
+        page_objects: dict[int, list[ExtractedObjectRecord]] = {
+            page: [] for page in requested_pages
+        }
         page_source_assets: dict[int, DerivativeAsset] = {}
         quality_scores: list[float] = []
         order_index = 0
@@ -521,9 +521,7 @@ def extract_regions(
                             timeout_seconds=template.timeout_seconds,
                         )
                         region_raw_dir = raw_dir / f"page_{page:04d}" / region.region_key
-                        json_path, tsv_path, text_path = write_tesseract_raw(
-                            result, region_raw_dir
-                        )
+                        json_path, tsv_path, text_path = write_tesseract_raw(result, region_raw_dir)
                         raw_json_path = _relative(json_path, root)
                         raw_tsv_path = _relative(tsv_path, root)
                         raw_text_path = _relative(text_path, root)
@@ -566,11 +564,7 @@ def extract_regions(
                         bbox_json=region.bbox.model_dump(mode="json"),
                         profile_json={
                             "semantic_role": region.semantic_role,
-                            "ocr": (
-                                region.ocr.model_dump(mode="json")
-                                if region.ocr
-                                else None
-                            ),
+                            "ocr": (region.ocr.model_dump(mode="json") if region.ocr else None),
                         },
                         crop_path=crop_relative,
                         raw_json_path=raw_json_path,
@@ -611,9 +605,7 @@ def extract_regions(
         for page in requested_pages:
             objects = page_objects[page]
             page_warnings = [
-                item.warning
-                for item in region_exports
-                if item.page == page and item.warning
+                item.warning for item in region_exports if item.page == page and item.warning
             ]
             session.add(
                 ExtractionPage(
@@ -651,9 +643,7 @@ def extract_regions(
 
         now = datetime.now(timezone.utc)
         status = (
-            ExtractionStatus.COMPLETED_WITH_WARNINGS
-            if warnings
-            else ExtractionStatus.COMPLETED
+            ExtractionStatus.COMPLETED_WITH_WARNINGS if warnings else ExtractionStatus.COMPLETED
         )
         engine_version = _tesseract_version(template.tesseract_command)
         character_count = sum(len(item.original_text) for item in all_objects)
@@ -736,9 +726,7 @@ def extract_regions(
         return summary
 
 
-def region_status_rows(
-    session: Session, *, source_key: str | None = None
-) -> list[RegionStatusRow]:
+def region_status_rows(session: Session, *, source_key: str | None = None) -> list[RegionStatusRow]:
     statement = (
         select(
             SourceRegistration.source_key,

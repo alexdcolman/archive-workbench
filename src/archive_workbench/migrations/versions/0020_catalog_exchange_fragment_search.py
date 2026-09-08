@@ -4,10 +4,10 @@ Revision ID: 0020_catalog_exchange_fragment_search
 Revises: 0019_catalog_management
 Create Date: 2026-07-24
 """
+
 from __future__ import annotations
 
 from alembic import op
-import sqlalchemy as sa
 
 revision = "0020_catalog_exchange_fragment_search"
 down_revision = "0019_catalog_management"
@@ -86,8 +86,7 @@ def _catalog_changed_fields_sql() -> str:
         )
         expression = f"json_patch({expression}, {patch})"
     return (
-        "CASE WHEN NEW.operation = 'create' "
-        f"THEN json_object({create_parts}) ELSE {expression} END"
+        f"CASE WHEN NEW.operation = 'create' THEN json_object({create_parts}) ELSE {expression} END"
     )
 
 
@@ -128,17 +127,19 @@ def upgrade() -> None:
         AFTER INSERT ON archival_unit_revisions
         WHEN NEW.operation <> 'baseline'
         BEGIN
-            {_event_insert_sql(
-                entity_type='archival_unit',
-                entity_id='NEW.archival_unit_id',
+            {
+            _event_insert_sql(
+                entity_type="archival_unit",
+                entity_id="NEW.archival_unit_id",
                 operation="CASE WHEN NEW.operation = 'create' THEN 'create' ELSE 'update' END",
-                actor='NEW.changed_by',
-                timestamp='NEW.changed_at',
+                actor="NEW.changed_by",
+                timestamp="NEW.changed_at",
                 project_id="json_extract(NEW.snapshot_json, '$.project_id')",
                 base_revision="CASE WHEN NEW.operation = 'create' THEN NULL ELSE NEW.revision_number - 1 END",
-                new_revision='NEW.revision_number',
+                new_revision="NEW.revision_number",
                 changed_fields=_catalog_changed_fields_sql(),
-            )}
+            )
+        }
         END
         """
     )
@@ -163,15 +164,17 @@ def upgrade() -> None:
         CREATE TRIGGER trg_exchange_digital_object_unit_link_ai
         AFTER INSERT ON digital_object_unit_links
         BEGIN
-            {_event_insert_sql(
-                entity_type='digital_object_unit_link',
-                entity_id='NEW.id',
+            {
+            _event_insert_sql(
+                entity_type="digital_object_unit_link",
+                entity_id="NEW.id",
                 operation="'create'",
                 actor="COALESCE((SELECT registered_by FROM source_registrations WHERE digital_object_id = NEW.digital_object_id AND archival_unit_id = NEW.archival_unit_id ORDER BY registered_at DESC, id DESC LIMIT 1), 'local_user')",
                 timestamp="COALESCE((SELECT registered_at FROM source_registrations WHERE digital_object_id = NEW.digital_object_id AND archival_unit_id = NEW.archival_unit_id ORDER BY registered_at DESC, id DESC LIMIT 1), CURRENT_TIMESTAMP)",
-                project_id='(SELECT project_id FROM digital_objects WHERE id = NEW.digital_object_id)',
+                project_id="(SELECT project_id FROM digital_objects WHERE id = NEW.digital_object_id)",
                 changed_fields=link_changed,
-            )}
+            )
+        }
         END
         """
     )

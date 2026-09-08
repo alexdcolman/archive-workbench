@@ -4,6 +4,7 @@ Revision ID: 0015_exchange_transactional_apply
 Revises: 0014_exchange_dry_run
 Create Date: 2026-07-23
 """
+
 from __future__ import annotations
 
 from alembic import op
@@ -23,9 +24,18 @@ def _uuid_sql() -> str:
     )
 
 
-def _event_insert_sql(*, entity_type: str, entity_id: str, operation: str, actor: str,
-                      timestamp: str, project_id: str, base_revision: str = "NULL",
-                      new_revision: str = "NULL", changed_fields: str = "'{}'") -> str:
+def _event_insert_sql(
+    *,
+    entity_type: str,
+    entity_id: str,
+    operation: str,
+    actor: str,
+    timestamp: str,
+    project_id: str,
+    base_revision: str = "NULL",
+    new_revision: str = "NULL",
+    changed_fields: str = "'{}'",
+) -> str:
     return f"""
         INSERT INTO exchange_change_events (
             id, workspace_id, project_id, sequence_number, transaction_id,
@@ -67,8 +77,12 @@ def upgrade() -> None:
         sa.Column("applied_at", sa.DateTime(timezone=True), nullable=False),
         sa.ForeignKeyConstraint(["workspace_id"], ["exchange_workspaces.id"], ondelete="CASCADE"),
         sa.ForeignKeyConstraint(["dry_run_id"], ["exchange_dry_runs.id"], ondelete="RESTRICT"),
-        sa.ForeignKeyConstraint(["bundle_record_id"], ["exchange_bundle_records.id"], ondelete="RESTRICT"),
-        sa.ForeignKeyConstraint(["checkpoint_id"], ["exchange_checkpoints.id"], ondelete="SET NULL"),
+        sa.ForeignKeyConstraint(
+            ["bundle_record_id"], ["exchange_bundle_records.id"], ondelete="RESTRICT"
+        ),
+        sa.ForeignKeyConstraint(
+            ["checkpoint_id"], ["exchange_checkpoints.id"], ondelete="SET NULL"
+        ),
         sa.UniqueConstraint("bundle_id", name="uq_exchange_application_bundle"),
     )
     op.create_index(
@@ -126,17 +140,19 @@ def upgrade() -> None:
         CREATE TRIGGER trg_exchange_editable_revision_ai
         AFTER INSERT ON editable_object_revisions
         BEGIN
-            {_event_insert_sql(
-                entity_type='editable_object',
-                entity_id='NEW.editable_object_id',
+            {
+            _event_insert_sql(
+                entity_type="editable_object",
+                entity_id="NEW.editable_object_id",
                 operation="CASE WHEN NEW.base_revision_number IS NULL THEN 'create' WHEN NEW.operation = 'delete' THEN 'delete' WHEN NEW.operation = 'restore' THEN 'restore' ELSE 'update' END",
-                actor='NEW.created_by',
-                timestamp='NEW.created_at',
+                actor="NEW.created_by",
+                timestamp="NEW.created_at",
                 project_id="(SELECT d.project_id FROM editable_objects o JOIN digital_objects d ON d.id = o.digital_object_id WHERE o.id = NEW.editable_object_id)",
-                base_revision='NEW.base_revision_number',
-                new_revision='NEW.revision_number',
+                base_revision="NEW.base_revision_number",
+                new_revision="NEW.revision_number",
                 changed_fields=changed,
-            )}
+            )
+        }
         END
         """
     )
@@ -148,5 +164,7 @@ def downgrade() -> None:
         batch.drop_constraint("fk_exchange_assessment_application", type_="foreignkey")
         batch.drop_column("applied_at")
         batch.drop_column("application_id")
-    op.drop_index("ix_exchange_applications_workspace_applied", table_name="exchange_bundle_applications")
+    op.drop_index(
+        "ix_exchange_applications_workspace_applied", table_name="exchange_bundle_applications"
+    )
     op.drop_table("exchange_bundle_applications")

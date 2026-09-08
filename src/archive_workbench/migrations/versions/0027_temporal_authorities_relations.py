@@ -4,6 +4,7 @@ Revision ID: 0027_temporal_authorities_relations
 Revises: 0026_team_workflow
 Create Date: 2026-07-24
 """
+
 from __future__ import annotations
 
 from alembic import op
@@ -23,9 +24,18 @@ def _uuid_sql() -> str:
     )
 
 
-def _event_insert_sql(*, entity_type: str, entity_id: str, operation: str, actor: str,
-                      timestamp: str, project_id: str, base_revision: str,
-                      new_revision: str, changed_fields: str) -> str:
+def _event_insert_sql(
+    *,
+    entity_type: str,
+    entity_id: str,
+    operation: str,
+    actor: str,
+    timestamp: str,
+    project_id: str,
+    base_revision: str,
+    new_revision: str,
+    changed_fields: str,
+) -> str:
     return f"""
         INSERT INTO exchange_change_events (
             id, workspace_id, project_id, sequence_number, transaction_id,
@@ -65,8 +75,7 @@ def _revision_changed_fields(*, table: str, id_field: str, fields: tuple[str, ..
         )
         expression = f"json_patch({expression}, {patch})"
     return (
-        f"CASE WHEN NEW.operation = 'create' THEN json_object({create_parts}) "
-        f"ELSE {expression} END"
+        f"CASE WHEN NEW.operation = 'create' THEN json_object({create_parts}) ELSE {expression} END"
     )
 
 
@@ -106,11 +115,13 @@ def upgrade() -> None:
         _add_temporal_columns(table)
 
     op.create_index(
-        "ix_authority_records_temporal", "authority_records",
+        "ix_authority_records_temporal",
+        "authority_records",
         ["project_id", "temporal_start", "temporal_end"],
     )
     op.create_index(
-        "ix_entity_relations_temporal", "entity_relations",
+        "ix_entity_relations_temporal",
+        "entity_relations",
         ["project_id", "temporal_start", "temporal_end"],
     )
 
@@ -134,55 +145,85 @@ def upgrade() -> None:
 
     op.execute("DROP TRIGGER IF EXISTS trg_exchange_authority_revision_ai")
     authority_fields = (
-        "entity_type", "preferred_name", "normalized_name", "description",
-        "temporal_expression", "temporal_start", "temporal_end",
-        "temporal_precision", "temporal_approximate", "temporal_note",
-        "lifecycle_status", "review_status", "aliases",
+        "entity_type",
+        "preferred_name",
+        "normalized_name",
+        "description",
+        "temporal_expression",
+        "temporal_start",
+        "temporal_end",
+        "temporal_precision",
+        "temporal_approximate",
+        "temporal_note",
+        "lifecycle_status",
+        "review_status",
+        "aliases",
     )
     op.execute(
         f"""
         CREATE TRIGGER trg_exchange_authority_revision_ai
         AFTER INSERT ON authority_revisions
         BEGIN
-            {_event_insert_sql(
-                entity_type='authority_record', entity_id='NEW.authority_id',
+            {
+            _event_insert_sql(
+                entity_type="authority_record",
+                entity_id="NEW.authority_id",
                 operation="CASE WHEN NEW.operation = 'create' THEN 'create' ELSE 'update' END",
-                actor='NEW.changed_by', timestamp='NEW.changed_at',
+                actor="NEW.changed_by",
+                timestamp="NEW.changed_at",
                 project_id="json_extract(NEW.snapshot_json, '$.project_id')",
                 base_revision="CASE WHEN NEW.operation = 'create' THEN NULL ELSE NEW.revision_number - 1 END",
-                new_revision='NEW.revision_number',
+                new_revision="NEW.revision_number",
                 changed_fields=_revision_changed_fields(
-                    table='authority_revisions', id_field='authority_id', fields=authority_fields,
+                    table="authority_revisions",
+                    id_field="authority_id",
+                    fields=authority_fields,
                 ),
-            )}
+            )
+        }
         END
         """
     )
 
     op.execute("DROP TRIGGER IF EXISTS trg_exchange_entity_relation_revision_ai")
     relation_fields = (
-        "source_authority_id", "relation_label", "target_authority_id",
-        "target_archival_unit_id", "target_document_part_id", "evidence_note",
-        "temporal_expression", "temporal_start", "temporal_end",
-        "temporal_precision", "temporal_approximate", "temporal_note",
-        "lifecycle_status", "review_status",
+        "source_authority_id",
+        "relation_label",
+        "target_authority_id",
+        "target_archival_unit_id",
+        "target_document_part_id",
+        "evidence_note",
+        "temporal_expression",
+        "temporal_start",
+        "temporal_end",
+        "temporal_precision",
+        "temporal_approximate",
+        "temporal_note",
+        "lifecycle_status",
+        "review_status",
     )
     op.execute(
         f"""
         CREATE TRIGGER trg_exchange_entity_relation_revision_ai
         AFTER INSERT ON entity_relation_revisions
         BEGIN
-            {_event_insert_sql(
-                entity_type='entity_relation', entity_id='NEW.relation_id',
+            {
+            _event_insert_sql(
+                entity_type="entity_relation",
+                entity_id="NEW.relation_id",
                 operation="CASE WHEN NEW.operation = 'create' THEN 'create' ELSE 'update' END",
-                actor='NEW.changed_by', timestamp='NEW.changed_at',
+                actor="NEW.changed_by",
+                timestamp="NEW.changed_at",
                 project_id="json_extract(NEW.snapshot_json, '$.project_id')",
                 base_revision="CASE WHEN NEW.operation = 'create' THEN NULL ELSE NEW.revision_number - 1 END",
-                new_revision='NEW.revision_number',
+                new_revision="NEW.revision_number",
                 changed_fields=_revision_changed_fields(
-                    table='entity_relation_revisions', id_field='relation_id', fields=relation_fields,
+                    table="entity_relation_revisions",
+                    id_field="relation_id",
+                    fields=relation_fields,
                 ),
-            )}
+            )
+        }
         END
         """
     )
@@ -203,49 +244,71 @@ def downgrade() -> None:
 
     # Restaura los triggers de 0.31 con el conjunto de campos anterior.
     authority_fields = (
-        "entity_type", "preferred_name", "normalized_name", "description",
-        "lifecycle_status", "review_status", "aliases",
+        "entity_type",
+        "preferred_name",
+        "normalized_name",
+        "description",
+        "lifecycle_status",
+        "review_status",
+        "aliases",
     )
     op.execute(
         f"""
         CREATE TRIGGER trg_exchange_authority_revision_ai
         AFTER INSERT ON authority_revisions
         BEGIN
-            {_event_insert_sql(
-                entity_type='authority_record', entity_id='NEW.authority_id',
+            {
+            _event_insert_sql(
+                entity_type="authority_record",
+                entity_id="NEW.authority_id",
                 operation="CASE WHEN NEW.operation = 'create' THEN 'create' ELSE 'update' END",
-                actor='NEW.changed_by', timestamp='NEW.changed_at',
+                actor="NEW.changed_by",
+                timestamp="NEW.changed_at",
                 project_id="json_extract(NEW.snapshot_json, '$.project_id')",
                 base_revision="CASE WHEN NEW.operation = 'create' THEN NULL ELSE NEW.revision_number - 1 END",
-                new_revision='NEW.revision_number',
+                new_revision="NEW.revision_number",
                 changed_fields=_revision_changed_fields(
-                    table='authority_revisions', id_field='authority_id', fields=authority_fields,
+                    table="authority_revisions",
+                    id_field="authority_id",
+                    fields=authority_fields,
                 ),
-            )}
+            )
+        }
         END
         """
     )
     relation_fields = (
-        "source_authority_id", "relation_label", "target_authority_id",
-        "target_archival_unit_id", "target_document_part_id", "evidence_note",
-        "lifecycle_status", "review_status",
+        "source_authority_id",
+        "relation_label",
+        "target_authority_id",
+        "target_archival_unit_id",
+        "target_document_part_id",
+        "evidence_note",
+        "lifecycle_status",
+        "review_status",
     )
     op.execute(
         f"""
         CREATE TRIGGER trg_exchange_entity_relation_revision_ai
         AFTER INSERT ON entity_relation_revisions
         BEGIN
-            {_event_insert_sql(
-                entity_type='entity_relation', entity_id='NEW.relation_id',
+            {
+            _event_insert_sql(
+                entity_type="entity_relation",
+                entity_id="NEW.relation_id",
                 operation="CASE WHEN NEW.operation = 'create' THEN 'create' ELSE 'update' END",
-                actor='NEW.changed_by', timestamp='NEW.changed_at',
+                actor="NEW.changed_by",
+                timestamp="NEW.changed_at",
                 project_id="json_extract(NEW.snapshot_json, '$.project_id')",
                 base_revision="CASE WHEN NEW.operation = 'create' THEN NULL ELSE NEW.revision_number - 1 END",
-                new_revision='NEW.revision_number',
+                new_revision="NEW.revision_number",
                 changed_fields=_revision_changed_fields(
-                    table='entity_relation_revisions', id_field='relation_id', fields=relation_fields,
+                    table="entity_relation_revisions",
+                    id_field="relation_id",
+                    fields=relation_fields,
                 ),
-            )}
+            )
+        }
         END
         """
     )

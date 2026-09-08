@@ -183,14 +183,17 @@ def execute_page_action(
         )
         .values(status="superseded")
     )
-    sequence = int(
-        session.scalar(
-            select(func.max(EditablePageAction.sequence_number)).where(
-                EditablePageAction.editable_page_id == editable_page_id
+    sequence = (
+        int(
+            session.scalar(
+                select(func.max(EditablePageAction.sequence_number)).where(
+                    EditablePageAction.editable_page_id == editable_page_id
+                )
             )
+            or 0
         )
-        or 0
-    ) + 1
+        + 1
+    )
     session.add(
         EditablePageAction(
             id=new_id(),

@@ -21,7 +21,9 @@ def test_completed_decisions_are_valid() -> None:
     assert any(field.key == "folio_number" for field in decisions.descriptive_fields)
 
 
-def test_catalog_semantics_are_explicit_for_new_projects_and_inferred_for_legacy_configs(tmp_path: Path) -> None:
+def test_catalog_semantics_are_explicit_for_new_projects_and_inferred_for_legacy_configs(
+    tmp_path: Path,
+) -> None:
     import yaml
 
     root = Path(__file__).parents[1]

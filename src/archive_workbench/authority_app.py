@@ -14,7 +14,14 @@ from archive_workbench.authority_dictionary import (
     export_authority_dictionary_bytes,
     validate_authority_dictionary,
 )
-from archive_workbench.ui_navigation import mount_choice_help, mount_heading_help, rerun_app, rerun_view, tracked_tabs, request_app_view
+from archive_workbench.ui_navigation import (
+    mount_choice_help,
+    mount_heading_help,
+    rerun_app,
+    rerun_view,
+    tracked_tabs,
+    request_app_view,
+)
 
 from archive_workbench.authorities import (
     ALIAS_TYPES,
@@ -128,6 +135,7 @@ def _display_profile_value(value: object) -> str:
     text = _profile_text(value).strip()
     return text or "Sin registrar"
 
+
 _AUTHORITY_TASK_LABELS = {
     "review": "Revisar fichas y menciones",
     "create": "Crear una ficha",
@@ -158,6 +166,7 @@ def _run(st, *, db_path: Path, callback, selection: str | None = None) -> None:
         st.session_state["authority_pending_selection"] = str(selected)
     rerun_view(st)
 
+
 def _render_authority_creation(
     st,
     *,
@@ -168,7 +177,9 @@ def _render_authority_creation(
     st.subheader("Crear una ficha de entidad")
     with st.form("authority_create", clear_on_submit=True, enter_to_submit=False):
         entity_type = st.selectbox(
-            "Tipo de entidad", options=list(AUTHORITY_TYPES), format_func=lambda value: _TYPE_LABELS[value]
+            "Tipo de entidad",
+            options=list(AUTHORITY_TYPES),
+            format_func=lambda value: _TYPE_LABELS[value],
         )
         preferred_name = st.text_input("Forma autorizada del nombre")
         description = st.text_area("Historia / nota biográfica (opcional)", height=100)
@@ -271,7 +282,9 @@ def _render_authority_workspace(
                 project_id=project_id,
                 query=query,
                 entity_types=selected_types,
-                lifecycle_statuses=("active", "inactive") if lifecycle_scope == "all" else ("active",),
+                lifecycle_statuses=("active", "inactive")
+                if lifecycle_scope == "all"
+                else ("active",),
                 temporal_start=temporal_start if filter_temporal else None,
                 temporal_end=temporal_end if filter_temporal else None,
                 include_undated=include_undated if filter_temporal else False,
@@ -300,7 +313,9 @@ def _render_authority_workspace(
     selected_id = st.selectbox(
         "Entidad",
         options=list(row_map),
-        format_func=lambda key: f"{row_map[key].preferred_name} · {_TYPE_LABELS[row_map[key].entity_type]}",
+        format_func=lambda key: (
+            f"{row_map[key].preferred_name} · {_TYPE_LABELS[row_map[key].entity_type]}"
+        ),
         key="authority_selected",
         label_visibility="collapsed",
     )
@@ -375,7 +390,9 @@ def _render_authority_workspace(
                 if selected.aliases:
                     st.divider()
                     for alias in selected.aliases:
-                        with st.container(horizontal=True, vertical_alignment="center", gap="small"):
+                        with st.container(
+                            horizontal=True, vertical_alignment="center", gap="small"
+                        ):
                             st.badge(alias.alias, color="gray", help=_alias_help(alias))
                             if st.button(
                                 "Quitar alias",
@@ -386,10 +403,12 @@ def _render_authority_workspace(
                                     st,
                                     db_path=db_path,
                                     selection=selected.authority_id,
-                                    callback=lambda session, alias_id=alias.alias_id: remove_authority_alias(
-                                        session,
-                                        alias_id=alias_id,
-                                        removed_by=actor or "local_user",
+                                    callback=lambda session, alias_id=alias.alias_id: (
+                                        remove_authority_alias(
+                                            session,
+                                            alias_id=alias_id,
+                                            removed_by=actor or "local_user",
+                                        )
                                     ),
                                 )
 
@@ -477,7 +496,9 @@ def _render_authority_workspace(
         optional_profile_key = st.selectbox(
             "Dato descriptivo opcional que querés revisar o agregar",
             options=[""] + [key for key, _label in _AUTHORITY_PROFILE_FIELDS],
-            format_func=lambda value: "Elegir un dato…" if not value else _AUTHORITY_PROFILE_LABELS[value],
+            format_func=lambda value: (
+                "Elegir un dato…" if not value else _AUTHORITY_PROFILE_LABELS[value]
+            ),
             key=f"authority_profile_choice_{selected.authority_id}_{selected.revision}",
         )
         if optional_profile_key:
@@ -491,7 +512,9 @@ def _render_authority_workspace(
                     height=110,
                 )
                 profile_note = st.text_input("Nota sobre este cambio (opcional)")
-                profile_submit = st.form_submit_button("Guardar este dato descriptivo", type="primary")
+                profile_submit = st.form_submit_button(
+                    "Guardar este dato descriptivo", type="primary"
+                )
             if profile_submit:
                 updated_profile = dict(selected.profile)
                 cleaned = profile_value.strip()
@@ -684,9 +707,11 @@ def _render_authority_workspace(
                     value=False,
                     key=f"authority_show_existing_{selected.authority_id}",
                 )
-            visible = candidates if show_existing else [
-                item for item in candidates if not item.already_included
-            ]
+            visible = (
+                candidates
+                if show_existing
+                else [item for item in candidates if not item.already_included]
+            )
             if not visible:
                 st.info(
                     "No hay coincidencias pendientes de incorporación."
@@ -697,7 +722,9 @@ def _render_authority_workspace(
                 status_to_create = st.selectbox(
                     "Estado de revisión que tendrán las menciones que incorpores",
                     options=["pending", "accepted"],
-                    format_func=lambda value: "Pendiente de revisión" if value == "pending" else "Aceptada",
+                    format_func=lambda value: (
+                        "Pendiente de revisión" if value == "pending" else "Aceptada"
+                    ),
                     key=f"authority_candidate_status_{selected.authority_id}",
                     help="Lo más seguro es incorporarlas como pendientes y revisarlas después.",
                 )
@@ -714,8 +741,7 @@ def _render_authority_workspace(
                             "Vincular esta coincidencia a la entidad",
                             label_visibility="collapsed",
                             disabled=(
-                                candidate.already_included
-                                or candidate.has_authority_conflict
+                                candidate.already_included or candidate.has_authority_conflict
                             ),
                             key=(
                                 f"authority_candidate_pick_{selected.authority_id}_"
@@ -773,15 +799,17 @@ def _render_authority_workspace(
                         st,
                         db_path=db_path,
                         selection=selected.authority_id,
-                        callback=lambda session, keys=tuple(selected_keys): include_authority_mention_candidates(
-                            session,
-                            authority_id=selected.authority_id,
-                            candidate_keys=keys,
-                            status=status_to_create,
-                            created_by=actor or "local_user",
-                            page_review_statuses=searched_page_statuses,
-                            broader_quality_scope_confirmed=searched_quality_confirmed,
-                            quality_scope_reason=searched_quality_reason,
+                        callback=lambda session, keys=tuple(selected_keys): (
+                            include_authority_mention_candidates(
+                                session,
+                                authority_id=selected.authority_id,
+                                candidate_keys=keys,
+                                status=status_to_create,
+                                created_by=actor or "local_user",
+                                page_review_statuses=searched_page_statuses,
+                                broader_quality_scope_confirmed=searched_quality_confirmed,
+                                quality_scope_reason=searched_quality_reason,
+                            )
                         ),
                     )
                 if action_right.button(
@@ -793,17 +821,17 @@ def _render_authority_workspace(
                         st,
                         db_path=db_path,
                         selection=selected.authority_id,
-                        callback=lambda session, keys=tuple(
-                            item.candidate_key for item in actionable_candidates
-                        ): include_authority_mention_candidates(
-                            session,
-                            authority_id=selected.authority_id,
-                            candidate_keys=keys,
-                            status=status_to_create,
-                            created_by=actor or "local_user",
-                            page_review_statuses=searched_page_statuses,
-                            broader_quality_scope_confirmed=searched_quality_confirmed,
-                            quality_scope_reason=searched_quality_reason,
+                        callback=lambda session, keys=tuple(item.candidate_key for item in actionable_candidates): (
+                            include_authority_mention_candidates(
+                                session,
+                                authority_id=selected.authority_id,
+                                candidate_keys=keys,
+                                status=status_to_create,
+                                created_by=actor or "local_user",
+                                page_review_statuses=searched_page_statuses,
+                                broader_quality_scope_confirmed=searched_quality_confirmed,
+                                quality_scope_reason=searched_quality_reason,
+                            )
                         ),
                     )
 
@@ -849,12 +877,16 @@ def _render_authority_workspace(
                     include_inactive=True,
                     temporal_start=relation_filter_start if relation_temporal_filter else None,
                     temporal_end=relation_filter_end if relation_temporal_filter else None,
-                    include_undated=(relation_include_undated if relation_temporal_filter else False),
+                    include_undated=(
+                        relation_include_undated if relation_temporal_filter else False
+                    ),
                 )
         finally:
             engine.dispose()
 
-        catalog_roles = [row for row in all_relations if row.relation_kind in {"producer", "manager"}]
+        catalog_roles = [
+            row for row in all_relations if row.relation_kind in {"producer", "manager"}
+        ]
         relations = [row for row in all_relations if row.relation_kind == "analytical"]
 
         st.subheader(
@@ -864,7 +896,11 @@ def _render_authority_workspace(
         if not catalog_roles:
             st.caption("Sin roles archivísticos registrados.")
         for relation in catalog_roles:
-            role_label = "Entidad productora" if relation.relation_kind == "producer" else "Entidad responsable de gestión"
+            role_label = (
+                "Entidad productora"
+                if relation.relation_kind == "producer"
+                else "Entidad responsable de gestión"
+            )
             with st.container(border=True):
                 st.write(f"**{role_label}** · {relation.target_label}")
                 if relation.target_context:
@@ -886,7 +922,9 @@ def _render_authority_workspace(
         for relation in relations:
             relation_profile = dict(relation.profile or {})
             category = str(relation_profile.get("archival_category") or "")
-            card_title = f"{relation.source_name} · {relation.relation_label} → {relation.target_label}"
+            card_title = (
+                f"{relation.source_name} · {relation.relation_label} → {relation.target_label}"
+            )
             relation_panel_open = st.toggle(
                 card_title,
                 value=False,
@@ -897,8 +935,14 @@ def _render_authority_workspace(
                     fields = (
                         ("Entidad de origen", relation.source_name),
                         ("Nombre de la relación", relation.relation_label),
-                        ("Categoría archivística", _RELATION_CATEGORY_LABELS.get(category, category)),
-                        ("Tipo de registro relacionado", _RELATION_TARGET_LABELS.get(relation.target_kind, relation.target_kind)),
+                        (
+                            "Categoría archivística",
+                            _RELATION_CATEGORY_LABELS.get(category, category),
+                        ),
+                        (
+                            "Tipo de registro relacionado",
+                            _RELATION_TARGET_LABELS.get(relation.target_kind, relation.target_kind),
+                        ),
                         ("Registro relacionado", relation.target_label),
                         ("Contexto del registro relacionado", relation.target_context),
                         ("Contexto de la relación", relation_profile.get("context")),
@@ -907,8 +951,16 @@ def _render_authority_workspace(
                         ("Nota sobre las fechas", relation.temporal_note),
                         ("Evidencia", relation.evidence_note),
                         ("Fuente / procedencia", relation.provenance_note),
-                        ("Estado de revisión", _REVIEW_LABELS.get(relation.review_status, relation.review_status)),
-                        ("Estado dentro del proyecto", _LIFECYCLE_LABELS.get(relation.lifecycle_status, relation.lifecycle_status)),
+                        (
+                            "Estado de revisión",
+                            _REVIEW_LABELS.get(relation.review_status, relation.review_status),
+                        ),
+                        (
+                            "Estado dentro del proyecto",
+                            _LIFECYCLE_LABELS.get(
+                                relation.lifecycle_status, relation.lifecycle_status
+                            ),
+                        ),
                         ("Versión", str(relation.revision)),
                     )
                     for field_label, field_value in fields:
@@ -959,12 +1011,16 @@ def _render_authority_workspace(
                                     )
                             finally:
                                 engine.dispose()
-                            relation_target_map = {target.target_id: target for target in relation_targets}
+                            relation_target_map = {
+                                target.target_id: target for target in relation_targets
+                            }
                             if not relation_target_map:
                                 st.warning("No hay destinos disponibles de ese tipo.")
 
                         category_options = [""] + list(RELATION_ARCHIVAL_CATEGORIES)
-                        category_index = category_options.index(category) if category in category_options else 0
+                        category_index = (
+                            category_options.index(category) if category in category_options else 0
+                        )
                         with st.form(
                             f"relation_edit_{relation.relation_id}_{relation.revision}",
                             enter_to_submit=False,
@@ -978,7 +1034,11 @@ def _render_authority_workspace(
                                 "Categoría archivística de la relación (opcional)",
                                 options=category_options,
                                 index=category_index,
-                                format_func=lambda value: "Sin clasificar" if not value else _RELATION_CATEGORY_LABELS[value],
+                                format_func=lambda value: (
+                                    "Sin clasificar"
+                                    if not value
+                                    else _RELATION_CATEGORY_LABELS[value]
+                                ),
                                 key=f"relation_category_{relation.relation_id}",
                             )
                             if change_target and relation_target_map:
@@ -1038,8 +1098,13 @@ def _render_authority_workspace(
                             relation_lifecycle_edit = st.selectbox(
                                 "Vigencia de esta relación en el proyecto",
                                 options=list(RELATION_EDITABLE_LIFECYCLE_STATUSES),
-                                index=list(RELATION_EDITABLE_LIFECYCLE_STATUSES).index(relation.lifecycle_status),
-                                format_func=lambda value: {"active": "Activa", "inactive": "Dada de baja"}[value],
+                                index=list(RELATION_EDITABLE_LIFECYCLE_STATUSES).index(
+                                    relation.lifecycle_status
+                                ),
+                                format_func=lambda value: {
+                                    "active": "Activa",
+                                    "inactive": "Dada de baja",
+                                }[value],
                                 help="La baja es lógica: conserva la relación y todo su historial.",
                                 key=f"relation_lifecycle_{relation.relation_id}",
                             )
@@ -1052,7 +1117,9 @@ def _render_authority_workspace(
                             )
                         if relation_update_submit:
                             if change_target and relation_target_id_edit is None:
-                                st.error("Elegí un nuevo destino o desactivá ‘Cambiar la entidad o unidad relacionada’.")
+                                st.error(
+                                    "Elegí un nuevo destino o desactivá ‘Cambiar la entidad o unidad relacionada’."
+                                )
                             else:
                                 updated_profile = dict(relation_profile)
                                 if relation_category_edit:
@@ -1071,29 +1138,37 @@ def _render_authority_workspace(
                                     st,
                                     db_path=db_path,
                                     selection=selected.authority_id,
-                                    callback=lambda session, relation=relation, updated_profile=updated_profile: update_entity_relation(
-                                        session,
-                                        relation_id=relation.relation_id,
-                                        expected_revision=relation.revision,
-                                        relation_label=relation_label_edit,
-                                        target_kind=(relation_target_kind_edit if change_target else None),
-                                        target_id=(relation_target_id_edit if change_target else None),
-                                        evidence_note=evidence_edit,
-                                        provenance_note=provenance_edit,
-                                        temporal_expression=relation_temporal_edit,
-                                        temporal_note=relation_temporal_note_edit,
-                                        review_status=relation_review_edit,
-                                        lifecycle_status=relation_lifecycle_edit,
-                                        profile_json=updated_profile,
-                                        note=relation_note,
-                                        changed_by=actor or "local_user",
+                                    callback=lambda session, relation=relation, updated_profile=updated_profile: (
+                                        update_entity_relation(
+                                            session,
+                                            relation_id=relation.relation_id,
+                                            expected_revision=relation.revision,
+                                            relation_label=relation_label_edit,
+                                            target_kind=(
+                                                relation_target_kind_edit if change_target else None
+                                            ),
+                                            target_id=(
+                                                relation_target_id_edit if change_target else None
+                                            ),
+                                            evidence_note=evidence_edit,
+                                            provenance_note=provenance_edit,
+                                            temporal_expression=relation_temporal_edit,
+                                            temporal_note=relation_temporal_note_edit,
+                                            review_status=relation_review_edit,
+                                            lifecycle_status=relation_lifecycle_edit,
+                                            profile_json=updated_profile,
+                                            note=relation_note,
+                                            changed_by=actor or "local_user",
+                                        )
                                     ),
                                 )
 
                     engine = create_sqlite_engine(db_path)
                     try:
                         with session_scope(engine) as session:
-                            relation_history = entity_relation_revision_rows(session, relation.relation_id)
+                            relation_history = entity_relation_revision_rows(
+                                session, relation.relation_id
+                            )
                     finally:
                         engine.dispose()
                     with st.expander("Historial de esta relación", expanded=False):
@@ -1152,13 +1227,19 @@ def _render_authority_workspace(
                             options=list(target_map),
                             format_func=lambda value: (
                                 f"{target_map[value].label}"
-                                + (f" · {target_map[value].context}" if target_map[value].context else "")
+                                + (
+                                    f" · {target_map[value].context}"
+                                    if target_map[value].context
+                                    else ""
+                                )
                             ),
                         )
                         relation_category = st.selectbox(
                             "Categoría archivística de la relación (opcional)",
                             options=[""] + list(RELATION_ARCHIVAL_CATEGORIES),
-                            format_func=lambda value: "Sin clasificar" if not value else _RELATION_CATEGORY_LABELS[value],
+                            format_func=lambda value: (
+                                "Sin clasificar" if not value else _RELATION_CATEGORY_LABELS[value]
+                            ),
                         )
                         relation_context = st.text_area("Contexto de la relación (opcional)")
                         relation_description = st.text_area("Descripción de la relación (opcional)")
@@ -1228,7 +1309,6 @@ def _render_authority_workspace(
                 st.json(revision.snapshot_json)
 
 
-
 def _render_dictionary_import(
     st,
     *,
@@ -1246,9 +1326,7 @@ def _render_dictionary_import(
     export_engine = create_sqlite_engine(db_path)
     try:
         with session_scope(export_engine) as session:
-            current_template = export_authority_dictionary_bytes(
-                session, project_id=project_id
-            )
+            current_template = export_authority_dictionary_bytes(session, project_id=project_id)
     finally:
         export_engine.dispose()
     download_current, download_example, download_schema = st.columns(3)
@@ -1293,9 +1371,7 @@ def _render_dictionary_import(
     engine = create_sqlite_engine(db_path)
     try:
         with session_scope(engine) as session:
-            report = validate_authority_dictionary(
-                session, project_id=project_id, source=content
-            )
+            report = validate_authority_dictionary(session, project_id=project_id, source=content)
     except (ValueError, RuntimeError, OSError) as exc:
         st.error(str(exc))
         return
@@ -1314,9 +1390,7 @@ def _render_dictionary_import(
 
     st.download_button(
         "Descargar informe de simulación",
-        data=(
-            json.dumps(report.as_dict(), ensure_ascii=False, indent=2) + "\n"
-        ).encode("utf-8"),
+        data=(json.dumps(report.as_dict(), ensure_ascii=False, indent=2) + "\n").encode("utf-8"),
         file_name=f"{report.dictionary_id}_simulation.json",
         mime="application/json",
     )
@@ -1466,4 +1540,3 @@ def render_authorities_view(
             project_id=project_id,
             actor=actor,
         )
-

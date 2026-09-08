@@ -4,6 +4,7 @@ Revision ID: 0003_extraction_objects
 Revises: 0002_preprocessing_derivatives
 Create Date: 2026-07-23
 """
+
 from __future__ import annotations
 
 from alembic import op
@@ -27,9 +28,7 @@ def upgrade() -> None:
         batch.add_column(sa.Column("paragraphs_path", sa.Text(), nullable=True))
         batch.add_column(sa.Column("images_path", sa.Text(), nullable=True))
         batch.add_column(sa.Column("created_by", sa.String(length=200), nullable=True))
-        batch.add_column(
-            sa.Column("total_pages", sa.Integer(), nullable=False, server_default="0")
-        )
+        batch.add_column(sa.Column("total_pages", sa.Integer(), nullable=False, server_default="0"))
         batch.add_column(
             sa.Column("total_objects", sa.Integer(), nullable=False, server_default="0")
         )
@@ -66,12 +65,8 @@ def upgrade() -> None:
         sa.Column("status", sa.String(length=64), nullable=False),
         sa.Column("warning_text", sa.Text(), nullable=True),
         sa.Column("created_at", sa.DateTime(timezone=True), nullable=False),
-        sa.ForeignKeyConstraint(
-            ["extraction_run_id"], ["extraction_runs.id"], ondelete="CASCADE"
-        ),
-        sa.ForeignKeyConstraint(
-            ["source_asset_id"], ["derivative_assets.id"], ondelete="SET NULL"
-        ),
+        sa.ForeignKeyConstraint(["extraction_run_id"], ["extraction_runs.id"], ondelete="CASCADE"),
+        sa.ForeignKeyConstraint(["source_asset_id"], ["derivative_assets.id"], ondelete="SET NULL"),
         sa.PrimaryKeyConstraint("id"),
         sa.UniqueConstraint("extraction_run_id", "page_number", name="uq_extraction_page"),
     )
@@ -95,12 +90,8 @@ def upgrade() -> None:
         sa.Column("hidden_by_default", sa.Boolean(), nullable=False),
         sa.Column("attributes_json", sa.JSON(), nullable=False),
         sa.Column("created_at", sa.DateTime(timezone=True), nullable=False),
-        sa.ForeignKeyConstraint(
-            ["digital_object_id"], ["digital_objects.id"], ondelete="CASCADE"
-        ),
-        sa.ForeignKeyConstraint(
-            ["extraction_run_id"], ["extraction_runs.id"], ondelete="CASCADE"
-        ),
+        sa.ForeignKeyConstraint(["digital_object_id"], ["digital_objects.id"], ondelete="CASCADE"),
+        sa.ForeignKeyConstraint(["extraction_run_id"], ["extraction_runs.id"], ondelete="CASCADE"),
         sa.PrimaryKeyConstraint("id"),
         sa.UniqueConstraint(
             "extraction_run_id", "origin_id", name="uq_extracted_object_run_origin"

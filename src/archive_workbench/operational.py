@@ -2,9 +2,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from datetime import datetime, timezone
-import json
 from pathlib import Path
-import shutil
 import sqlite3
 import tempfile
 from uuid import uuid4
@@ -13,7 +11,12 @@ import zipfile
 from sqlalchemy import func, select, text
 from sqlalchemy.orm import Session
 
-from archive_workbench.db import create_sqlite_engine, database_path, session_scope, upgrade_database
+from archive_workbench.db import (
+    create_sqlite_engine,
+    database_path,
+    session_scope,
+    upgrade_database,
+)
 from archive_workbench.db.migrations import current_revision
 from archive_workbench.db.models import (
     AuthorityRecord,
@@ -25,7 +28,6 @@ from archive_workbench.db.models import (
     EntityRelation,
     ExchangeCheckpoint,
     FileInstance,
-    ProcessingJob,
     Project,
     ProjectRecoveryCheck,
     SemanticSearchProfile,
@@ -116,36 +118,61 @@ def operational_readiness(
     modified_files = _count(session, FileInstance, FileInstance.presence == "modified")
     missing_files = _count(session, FileInstance, FileInstance.presence == "missing")
     if source_count == 0:
-        items.append(ReadinessItem(
-            "catalog", "Catálogo", "pending", "Todavía no hay archivos vinculados con unidades del catálogo.",
-            "Creá o importá unidades del catálogo y vinculá al menos un archivo digital para continuar.", "catalog",
-        ))
+        items.append(
+            ReadinessItem(
+                "catalog",
+                "Catálogo",
+                "pending",
+                "Todavía no hay archivos vinculados con unidades del catálogo.",
+                "Creá o importá unidades del catálogo y vinculá al menos un archivo digital para continuar.",
+                "catalog",
+            )
+        )
     elif file_count == 0:
-        items.append(ReadinessItem(
-            "catalog", "Catálogo", "attention",
-            f"Hay {source_count} documentos, pero ninguno tiene una instancia local registrada.",
-            "Asociá o recuperá los archivos antes de iniciar nuevos procesamientos.", "catalog",
-        ))
+        items.append(
+            ReadinessItem(
+                "catalog",
+                "Catálogo",
+                "attention",
+                f"Hay {source_count} documentos, pero ninguno tiene una instancia local registrada.",
+                "Asociá o recuperá los archivos antes de iniciar nuevos procesamientos.",
+                "catalog",
+            )
+        )
     elif modified_files:
-        items.append(ReadinessItem(
-            "catalog", "Catálogo", "attention",
-            f"Hay {source_count} documentos y {modified_files} archivos modificados.",
-            "Verificá los archivos cuyo tamaño o huella cambió antes de procesarlos.", "catalog",
-        ))
+        items.append(
+            ReadinessItem(
+                "catalog",
+                "Catálogo",
+                "attention",
+                f"Hay {source_count} documentos y {modified_files} archivos modificados.",
+                "Verificá los archivos cuyo tamaño o huella cambió antes de procesarlos.",
+                "catalog",
+            )
+        )
     elif missing_files:
-        items.append(ReadinessItem(
-            "catalog", "Catálogo", "attention",
-            f"Hay {source_count} documentos y {missing_files} archivos locales ausentes.",
-            f"Objetos digitales registrados: {digital_count}; archivos presentes: {present_files}.", "catalog",
-        ))
+        items.append(
+            ReadinessItem(
+                "catalog",
+                "Catálogo",
+                "attention",
+                f"Hay {source_count} documentos y {missing_files} archivos locales ausentes.",
+                f"Objetos digitales registrados: {digital_count}; archivos presentes: {present_files}.",
+                "catalog",
+            )
+        )
     else:
-        items.append(ReadinessItem(
-            "catalog", "Catálogo", "ready",
-            f"{source_count} documentos procesables; {present_files} archivos locales verificados.",
-            None, "catalog",
-        ))
+        items.append(
+            ReadinessItem(
+                "catalog",
+                "Catálogo",
+                "ready",
+                f"{source_count} documentos procesables; {present_files} archivos locales verificados.",
+                None,
+                "catalog",
+            )
+        )
 
-    processing_count = _count(session, ProcessingJob)
     editable_pages = _count(session, EditablePage)
     approved_pages = _count(session, EditablePage, EditablePage.review_status == "approved")
     stale_pages = _count(session, EditablePage, EditablePage.status == "stale")
@@ -161,14 +188,20 @@ def operational_readiness(
     else:
         processing_status = "ready"
         processing_summary = f"{editable_pages} páginas preparadas para revisión; {approved_pages} páginas aprobadas."
-    items.append(ReadinessItem(
-        "processing", "Procesar documentos", processing_status, processing_summary,
-        "En Procesar documentos podés preparar imágenes de página, extraer texto y elegir qué resultado de extracción usar como base para revisar cada página.",
-        "processing" if editable_pages == 0 or stale_pages else "review",
-    ))
+    items.append(
+        ReadinessItem(
+            "processing",
+            "Procesar documentos",
+            processing_status,
+            processing_summary,
+            "En Procesar documentos podés preparar imágenes de página, extraer texto y elegir qué resultado de extracción usar como base para revisar cada página.",
+            "processing" if editable_pages == 0 or stale_pages else "review",
+        )
+    )
 
     active_work = _count(
-        session, WorkAssignment,
+        session,
+        WorkAssignment,
         WorkAssignment.status.in_(("planned", "in_progress", "submitted", "blocked")),
     )
     blocked_work = _count(session, WorkAssignment, WorkAssignment.status == "blocked")
@@ -182,10 +215,16 @@ def operational_readiness(
     else:
         work_status = "optional" if editable_pages == 0 else "pending"
         work_summary = "No hay asignaciones activas."
-    items.append(ReadinessItem(
-        "work", "Organizar trabajo", work_status, work_summary,
-        "En Organizar trabajo podés asignar documentos o páginas a integrantes del equipo y registrar el avance de cada tarea.", "work",
-    ))
+    items.append(
+        ReadinessItem(
+            "work",
+            "Organizar trabajo",
+            work_status,
+            work_summary,
+            "En Organizar trabajo podés asignar documentos o páginas a integrantes del equipo y registrar el avance de cada tarea.",
+            "work",
+        )
+    )
 
     try:
         lexical = search_index_status(session)
@@ -199,30 +238,37 @@ def operational_readiness(
                 "Abrí Búsqueda textual y construí el índice antes de realizar la primera búsqueda."
             )
         else:
-            lexical_summary = (
-                "La búsqueda textual necesita actualizarse porque el contenido cambió desde la última indexación."
-            )
-            lexical_detail = (
-                "Abrí Búsqueda textual y reconstruí el índice para incluir los cambios más recientes."
-            )
+            lexical_summary = "La búsqueda textual necesita actualizarse porque el contenido cambió desde la última indexación."
+            lexical_detail = "Abrí Búsqueda textual y reconstruí el índice para incluir los cambios más recientes."
     except RuntimeError as exc:
         lexical_status = "attention"
         lexical_summary = "El índice literal no está disponible."
         lexical_detail = str(exc)
-    items.append(ReadinessItem(
-        "search", "Búsqueda textual", lexical_status, lexical_summary, lexical_detail, "search",
-    ))
+    items.append(
+        ReadinessItem(
+            "search",
+            "Búsqueda textual",
+            lexical_status,
+            lexical_summary,
+            lexical_detail,
+            "search",
+        )
+    )
 
     semantic_profiles = session.scalars(
         select(SemanticSearchProfile).order_by(SemanticSearchProfile.name)
     ).all()
     if not semantic_profiles or project is None:
-        items.append(ReadinessItem(
-            "semantic", "Búsqueda semántica", "optional",
-            "Todavía no se configuró una búsqueda por significado para este proyecto.",
-            "Podés configurarla cuando necesites encontrar fragmentos relacionados aunque no compartan las mismas palabras.",
-            "semantic",
-        ))
+        items.append(
+            ReadinessItem(
+                "semantic",
+                "Búsqueda semántica",
+                "optional",
+                "Todavía no se configuró una búsqueda por significado para este proyecto.",
+                "Podés configurarla cuando necesites encontrar fragmentos relacionados aunque no compartan las mismas palabras.",
+                "semantic",
+            )
+        )
     else:
         stale = []
         for profile in semantic_profiles:
@@ -231,39 +277,61 @@ def operational_readiness(
             )
             if not state.is_current:
                 stale.append(profile.name)
-        items.append(ReadinessItem(
-            "semantic", "Búsqueda semántica", "attention" if stale else "ready",
-            (
-                f"{len(stale)} configuraciones de búsqueda semántica necesitan reconstruir su índice."
-                if stale else f"{len(semantic_profiles)} configuraciones de búsqueda semántica tienen un índice vigente."
-            ),
-            ", ".join(stale) if stale else "Los índices de búsqueda semántica configurados están disponibles para buscar fragmentos por significado.",
-            "semantic",
-        ))
+        items.append(
+            ReadinessItem(
+                "semantic",
+                "Búsqueda semántica",
+                "attention" if stale else "ready",
+                (
+                    f"{len(stale)} configuraciones de búsqueda semántica necesitan reconstruir su índice."
+                    if stale
+                    else f"{len(semantic_profiles)} configuraciones de búsqueda semántica tienen un índice vigente."
+                ),
+                ", ".join(stale)
+                if stale
+                else "Los índices de búsqueda semántica configurados están disponibles para buscar fragmentos por significado.",
+                "semantic",
+            )
+        )
 
     entity_count = _count(session, AuthorityRecord, AuthorityRecord.lifecycle_status == "active")
     mention_count = _count(session, EntityMention, EntityMention.status != "rejected")
     relation_count = _count(session, EntityRelation, EntityRelation.lifecycle_status == "active")
-    items.append(ReadinessItem(
-        "entities", "Entidades y menciones", "ready" if entity_count else "optional",
-        f"{entity_count} entidades, {mention_count} menciones y {relation_count} relaciones activas.",
-        "Podés registrar personas, organizaciones, lugares u otras entidades cuando aparezcan durante la revisión.", "authorities",
-    ))
+    items.append(
+        ReadinessItem(
+            "entities",
+            "Entidades y menciones",
+            "ready" if entity_count else "optional",
+            f"{entity_count} entidades, {mention_count} menciones y {relation_count} relaciones activas.",
+            "Podés registrar personas, organizaciones, lugares u otras entidades cuando aparezcan durante la revisión.",
+            "authorities",
+        )
+    )
 
     export_profiles = _count(session, CorpusExportProfile)
     export_runs = _count(session, CorpusExportRun)
-    items.append(ReadinessItem(
-        "export", "Exportar corpus", "ready" if export_runs else ("pending" if editable_pages else "optional"),
-        f"{export_profiles} configuraciones de exportación guardadas y {export_runs} archivos de exportación creados.",
-        "En Exportar corpus podés elegir qué textos revisados y datos descriptivos incluir y crear un archivo reproducible para análisis u otros usos.", "export",
-    ))
+    items.append(
+        ReadinessItem(
+            "export",
+            "Exportar corpus",
+            "ready" if export_runs else ("pending" if editable_pages else "optional"),
+            f"{export_profiles} configuraciones de exportación guardadas y {export_runs} archivos de exportación creados.",
+            "En Exportar corpus podés elegir qué textos revisados y datos descriptivos incluir y crear un archivo reproducible para análisis u otros usos.",
+            "export",
+        )
+    )
 
     checkpoints = _count(session, ExchangeCheckpoint)
-    items.append(ReadinessItem(
-        "exchange", "Intercambiar cambios", "ready" if checkpoints else "pending",
-        f"{checkpoints} referencias de sincronización registradas entre copias del proyecto.",
-        "En Intercambiar cambios podés enviar y recibir modificaciones entre copias del mismo proyecto mediante paquetes verificables, sin compartir la base de datos activa.", "exchange",
-    ))
+    items.append(
+        ReadinessItem(
+            "exchange",
+            "Intercambiar cambios",
+            "ready" if checkpoints else "pending",
+            f"{checkpoints} referencias de sincronización registradas entre copias del proyecto.",
+            "En Intercambiar cambios podés enviar y recibir modificaciones entre copias del mismo proyecto mediante paquetes verificables, sin compartir la base de datos activa.",
+            "exchange",
+        )
+    )
 
     backups = list_project_backups(root)
     latest_check = session.scalars(
@@ -272,7 +340,9 @@ def operational_readiness(
     if not backups:
         recovery_status = "attention"
         recovery_summary = "No hay copias de seguridad verificables del proyecto."
-        recovery_detail = "Creá una copia de seguridad antes de continuar con cambios sustantivos en el proyecto."
+        recovery_detail = (
+            "Creá una copia de seguridad antes de continuar con cambios sustantivos en el proyecto."
+        )
     elif latest_check is None:
         recovery_status = "attention"
         recovery_summary = f"Hay {len(backups)} copias de seguridad, pero ninguna tiene una prueba de recuperación registrada."
@@ -284,14 +354,23 @@ def operational_readiness(
     elif latest_check.backup_sha256 != backups[0].backup_sha256:
         recovery_status = "attention"
         recovery_summary = "La copia de seguridad más reciente todavía no fue probada mediante una recuperación temporal."
-        recovery_detail = f"Última prueba exitosa: {latest_check.tested_at.isoformat(timespec='minutes')}"
+        recovery_detail = (
+            f"Última prueba exitosa: {latest_check.tested_at.isoformat(timespec='minutes')}"
+        )
     else:
         recovery_status = "ready"
         recovery_summary = "La copia de seguridad más reciente fue verificada y pudo abrirse en una recuperación temporal."
         recovery_detail = f"Prueba: {latest_check.tested_at.isoformat(timespec='minutes')}"
-    items.append(ReadinessItem(
-        "recovery", "Administrar y recuperar", recovery_status, recovery_summary, recovery_detail, "admin",
-    ))
+    items.append(
+        ReadinessItem(
+            "recovery",
+            "Administrar y recuperar",
+            recovery_status,
+            recovery_summary,
+            recovery_detail,
+            "admin",
+        )
+    )
 
     return OperationalReadinessReport(
         checked_at=datetime.now(timezone.utc).isoformat(),
@@ -335,8 +414,6 @@ def run_project_backup_recovery_test(
     backup_sha256 = ""
     source_revision: str | None = None
     upgraded_revision: str | None = None
-    error: Exception | None = None
-
     try:
         info = inspect_project_backup(backup_path)
         backup_sha256 = info.backup_sha256
@@ -392,10 +469,10 @@ def run_project_backup_recovery_test(
             }
             status = "completed"
     except Exception as exc:  # se persiste el resultado fallido para auditoría
-        error = exc
         details = {"error": str(exc), "active_project_unchanged": True}
         if backup_path.exists() and not backup_sha256:
             import hashlib
+
             digest = hashlib.sha256()
             with backup_path.open("rb") as handle:
                 for chunk in iter(lambda: handle.read(1024 * 1024), b""):

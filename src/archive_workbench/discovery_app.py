@@ -15,7 +15,7 @@ from archive_workbench.discovery_grouping import (
     discovery_group_rows,
     project_discovery_candidate,
     rebuild_discovery_groups,
-    remove_candidate_from_group,
+    remove_candidates_from_group,
 )
 from archive_workbench.discovery_review import (
     accept_discovery_candidates_as_new_authorities,
@@ -23,7 +23,6 @@ from archive_workbench.discovery_review import (
     allowed_acceptance_modes,
     allowed_authority_types,
     candidate_status_label,
-    decision_label,
     discovery_decision_rows,
     reject_discovery_candidates,
     restore_rejected_discovery_candidate,
@@ -186,7 +185,9 @@ def _render_profile_configuration(
     )
     if profile_panel_open:
         with st.container(border=True):
-            default_name = selected_profile.name if selected_profile else "Descubrimiento local inicial"
+            default_name = (
+                selected_profile.name if selected_profile else "Descubrimiento local inicial"
+            )
             with st.container(horizontal=True, vertical_alignment="bottom", gap="small"):
                 profile_name = st.text_input(
                     "Nombre de la configuración",
@@ -199,9 +200,7 @@ def _render_profile_configuration(
                     min_value=0.0,
                     max_value=1.0,
                     value=(
-                        float(selected_profile.minimum_confidence)
-                        if selected_profile
-                        else 0.75
+                        float(selected_profile.minimum_confidence) if selected_profile else 0.75
                     ),
                     step=0.01,
                     key=f"open_discovery_confidence_{profile_key}",
@@ -509,10 +508,11 @@ def _render_candidate_review(
             )
             if result is not None:
                 st.session_state["open_discovery_decision_success"] = (
-                    "Referencia aceptada." if decision_type == "accept" else "Referencia descartada. Podés restaurarla desde «Referencias descartadas»."
+                    "Referencia aceptada."
+                    if decision_type == "accept"
+                    else "Referencia descartada. Podés restaurarla desde «Referencias descartadas»."
                 )
                 rerun_view(st)
-
 
 
 def _render_grouping_and_continuity(
@@ -524,7 +524,10 @@ def _render_grouping_and_continuity(
 ) -> None:
     groups_tab, continuity_tab = tracked_tabs(
         st,
-        ["Revisar posibles referencias repetidas", "Actualizar referencias después de corregir el texto"],
+        [
+            "Revisar posibles referencias repetidas",
+            "Actualizar referencias después de corregir el texto",
+        ],
         key="open_discovery_grouping_tasks",
         help_by_label=TAB_HELP["open_discovery_grouping_tasks"],
         default="Revisar posibles referencias repetidas",
@@ -558,9 +561,7 @@ def _render_grouping_and_continuity(
         engine = create_sqlite_engine(db_path)
         try:
             with session_scope(engine) as session:
-                groups = discovery_group_rows(
-                    session, project_id=project_id, include_removed=True
-                )
+                groups = discovery_group_rows(session, project_id=project_id, include_removed=True)
                 all_candidates = discovery_candidate_rows(
                     session, project_id=project_id, limit=10_000
                 )
@@ -569,9 +570,7 @@ def _render_grouping_and_continuity(
 
         if groups:
             group_map = {row.group_id: row for row in groups}
-            pending_group_id = st.session_state.pop(
-                "open_discovery_group_pending_selection", None
-            )
+            pending_group_id = st.session_state.pop("open_discovery_group_pending_selection", None)
             if pending_group_id in group_map:
                 st.session_state["open_discovery_group_selected"] = pending_group_id
             elif st.session_state.get("open_discovery_group_selected") not in group_map:
@@ -582,24 +581,50 @@ def _render_grouping_and_continuity(
                 format_func=lambda value: (
                     f"{group_map[value].preferred_label} · "
                     f"{family_label(group_map[value].semantic_family)} · "
-                    f"{group_map[value].active_member_count} miembros"
+                    f"{group_map[value].current_location_count} ubicaciones vigentes"
                 ),
                 key="open_discovery_group_selected",
             )
             selected_group = group_map[selected_group_id]
-            st.caption(f"Referencias vigentes en este grupo: {selected_group.active_member_count} · referencias que necesitan volver a ubicarse: {selected_group.stale_member_count}")
-            for member in selected_group.members:
-                status = "separado" if member.membership_status != "active" else "activo"
-                stale = " · obsoleto" if member.is_stale else ""
-                st.write(f"- **{member.effective_text}** · {status}{stale} · {member.original_filename}, página {member.page_number}")
+            st.caption(
+                f"Ubicaciones vigentes únicas: {selected_group.current_location_count} · "
+                f"referencias que necesitan volver a ubicarse: {selected_group.stale_member_count}"
+            )
+            if not selected_group.current_locations:
+                st.info(
+                    "Este grupo no tiene ubicaciones vigentes para revisar. Las detecciones históricas se conservan y las referencias desactualizadas pueden revisarse en «Actualizar referencias después de corregir el texto»."
+                )
+            for location in selected_group.current_locations:
+                st.write(
+                    f"- **{location.effective_text}** · {location.original_filename}, "
+                    f"página {location.page_number}"
+                )
+                if location.run_count > 1:
+                    st.caption(
+                        f"Esta misma ubicación fue detectada en {location.run_count} corridas."
+                    )
 
-            active_members = [
-                row for row in selected_group.members if row.membership_status == "active"
-            ]
-            if len(active_members) > 1:
-                remove_map = {row.candidate_id: row for row in active_members}
-                remove_candidate_id = st.selectbox(
-                    "Referencia encontrada que no corresponde a este grupo",
+            with st.expander("Ver procedencia histórica de este grupo", expanded=False):
+                for member in selected_group.members:
+                    status = (
+                        "separada del grupo"
+                        if member.membership_status != "active"
+                        else "ubicación desactualizada"
+                        if member.is_stale
+                        else "vigente"
+                    )
+                    st.write(
+                        f"- **{member.effective_text}** · {member.original_filename}, "
+                        f"página {member.page_number} · {status} · "
+                        f"búsqueda {member.run_started_at.isoformat(timespec='minutes')} · "
+                        f"{member.run_profile_name}"
+                    )
+
+            current_locations = list(selected_group.current_locations)
+            if len(current_locations) > 1:
+                remove_map = {row.location_key: row for row in current_locations}
+                remove_location_key = st.selectbox(
+                    "Ubicación que no corresponde a este grupo",
                     options=list(remove_map),
                     format_func=lambda value: (
                         f"{remove_map[value].effective_text} · "
@@ -608,23 +633,24 @@ def _render_grouping_and_continuity(
                     key=f"open_discovery_group_remove_candidate_{selected_group_id}",
                 )
                 remove_reason = st.text_area(
-                    "Por qué esta referencia debe quedar fuera del grupo",
+                    "Por qué esta ubicación debe quedar fuera del grupo",
                     value="",
                     height=70,
                     key=f"open_discovery_group_remove_reason_{selected_group_id}",
                 )
                 if st.button(
-                    "Quitar esta referencia del grupo",
+                    "Quitar esta ubicación del grupo",
                     key=f"open_discovery_group_remove_submit_{selected_group_id}",
                 ):
+                    selected_location = remove_map[remove_location_key]
                     result = _run_action(
                         st,
                         db_path=db_path,
-                        callback=lambda session: remove_candidate_from_group(
+                        callback=lambda session: remove_candidates_from_group(
                             session,
                             project_id=project_id,
                             group_id=selected_group_id,
-                            candidate_id=remove_candidate_id,
+                            candidate_ids=selected_location.candidate_ids,
                             changed_by=actor or "local_user",
                             reason=remove_reason,
                             source="ui",
@@ -632,11 +658,13 @@ def _render_grouping_and_continuity(
                     )
                     if result is not None:
                         st.session_state["open_discovery_grouping_success"] = (
-                            "La referencia fue quitada del grupo. Su búsqueda de origen y las decisiones anteriores siguen registradas."
+                            "La ubicación fue quitada del grupo. Las detecciones de cada corrida y las decisiones anteriores siguen registradas."
                         )
                         rerun_view(st)
         else:
-            st.caption("Todavía no hay referencias agrupadas. Podés detectar agrupaciones posibles o crear un grupo de forma manual.")
+            st.caption(
+                "Todavía no hay referencias agrupadas. Podés detectar agrupaciones posibles o crear un grupo de forma manual."
+            )
 
         manual_open = st.toggle(
             "Crear un grupo de referencias de forma manual",
@@ -687,9 +715,7 @@ def _render_grouping_and_continuity(
                     ),
                 )
                 if group is not None:
-                    st.session_state[
-                        "open_discovery_group_pending_selection"
-                    ] = group.id
+                    st.session_state["open_discovery_group_pending_selection"] = group.id
                     st.session_state["open_discovery_grouping_success"] = (
                         "Grupo creado. Las referencias siguen siendo registros independientes y conservan su procedencia."
                     )
@@ -706,7 +732,9 @@ def _render_grouping_and_continuity(
             engine.dispose()
         stale = [row for row in all_candidates if row.is_stale]
         if not stale:
-            st.caption("No hay referencias encontradas que hayan quedado desactualizadas por cambios posteriores en el texto.")
+            st.caption(
+                "No hay referencias encontradas que hayan quedado desactualizadas por cambios posteriores en el texto."
+            )
         else:
             stale_map = {row.candidate_id: row for row in stale}
             source_candidate_id = st.selectbox(
@@ -750,11 +778,10 @@ def _render_grouping_and_continuity(
                         f"offsets {summary.target_start_offset}:{summary.target_end_offset}."
                     )
                     rerun_view(st)
-        continuity_success = st.session_state.pop(
-            "open_discovery_continuity_success", None
-        )
+        continuity_success = st.session_state.pop("open_discovery_continuity_success", None)
         if continuity_success:
             st.success(continuity_success)
+
 
 def _render_discovery_run_setup(
     st,
@@ -914,9 +941,7 @@ def _render_discovery_candidate_workspace(
                 run_id=selected_run_id,
                 limit=None,
             )
-            decisions = discovery_decision_rows(
-                session, project_id=project_id, limit=10_000
-            )
+            decisions = discovery_decision_rows(session, project_id=project_id, limit=10_000)
     finally:
         engine.dispose()
 
@@ -936,12 +961,8 @@ def _render_discovery_candidate_workspace(
     active_candidates_all = [
         row for row in matching_candidates if row.status not in {"accepted", "rejected"}
     ]
-    rejected_candidates_all = [
-        row for row in matching_candidates if row.status == "rejected"
-    ]
-    accepted_candidate_count = sum(
-        row.status == "accepted" for row in matching_candidates
-    )
+    rejected_candidates_all = [row for row in matching_candidates if row.status == "rejected"]
+    accepted_candidate_count = sum(row.status == "accepted" for row in matching_candidates)
 
     display_choice = st.selectbox(
         "Cuántas referencias mostrar",
@@ -955,9 +976,7 @@ def _render_discovery_candidate_workspace(
     )
     visible_limit = None if display_choice == "Todas" else int(display_choice)
     active_candidates = (
-        active_candidates_all
-        if visible_limit is None
-        else active_candidates_all[:visible_limit]
+        active_candidates_all if visible_limit is None else active_candidates_all[:visible_limit]
     )
     rejected_candidates = (
         rejected_candidates_all
@@ -992,7 +1011,9 @@ def _render_discovery_candidate_workspace(
 
     with pending_tab:
         st.badge(
-            f"Mostrando {len(active_candidates):,} de {len(active_candidates_all):,} referencias pendientes".replace(",", "."),
+            f"Mostrando {len(active_candidates):,} de {len(active_candidates_all):,} referencias pendientes".replace(
+                ",", "."
+            ),
             color="primary",
         )
         if not active_candidates:
@@ -1005,15 +1026,15 @@ def _render_discovery_candidate_workspace(
                         f"{row.effective_subtype} · **{candidate_status_label(row.status)}**"
                     )
                     st.badge(
-                        "Confianza —" if row.confidence is None else f"Confianza {row.confidence:.2f}",
+                        "Confianza —"
+                        if row.confidence is None
+                        else f"Confianza {row.confidence:.2f}",
                         color="gray",
                     )
                 st.caption(
                     f"{row.original_filename} · página {row.page_number} · versión del texto {row.object_revision_number}"
                 )
-                st.write(
-                    f"…{row.context_before}**{row.exact_text}**{row.context_after}…"
-                )
+                st.write(f"…{row.context_before}**{row.exact_text}**{row.context_after}…")
                 if (
                     row.effective_text != row.exact_text
                     or row.effective_family != row.semantic_family
@@ -1035,9 +1056,7 @@ def _render_discovery_candidate_workspace(
                     decisions=decisions_by.get(row.candidate_id, []),
                     authorities=authorities,
                 )
-                _render_decision_history(
-                    st, decisions_by.get(row.candidate_id, [])
-                )
+                _render_decision_history(st, decisions_by.get(row.candidate_id, []))
                 with st.expander("Trazabilidad técnica", expanded=False):
                     st.write(row.explanation)
                     st.code(
@@ -1058,9 +1077,7 @@ def _render_discovery_candidate_workspace(
 
     with bulk_tab:
         st.caption("Seleccioná referencias y elegí una acción para todo el conjunto.")
-        active_map = {
-            row.candidate_id: row for row in active_candidates if not row.is_stale
-        }
+        active_map = {row.candidate_id: row for row in active_candidates if not row.is_stale}
         if not active_map:
             st.info(
                 "No hay referencias pendientes disponibles para crear entidades o descartar en conjunto con los tipos seleccionados."
@@ -1109,12 +1126,14 @@ def _render_discovery_candidate_workspace(
                     result = _run_action(
                         st,
                         db_path=db_path,
-                        callback=lambda session, ids=tuple(selected_bulk_ids): accept_discovery_candidates_as_new_authorities(
-                            session,
-                            project_id=project_id,
-                            candidate_ids=ids,
-                            decided_by=actor or "local_user",
-                            source="ui",
+                        callback=lambda session, ids=tuple(selected_bulk_ids): (
+                            accept_discovery_candidates_as_new_authorities(
+                                session,
+                                project_id=project_id,
+                                candidate_ids=ids,
+                                decided_by=actor or "local_user",
+                                source="ui",
+                            )
                         ),
                     )
                     if result is not None:
@@ -1131,12 +1150,14 @@ def _render_discovery_candidate_workspace(
                     result = _run_action(
                         st,
                         db_path=db_path,
-                        callback=lambda session, ids=tuple(selected_bulk_ids): reject_discovery_candidates(
-                            session,
-                            project_id=project_id,
-                            candidate_ids=ids,
-                            decided_by=actor or "local_user",
-                            source="ui",
+                        callback=lambda session, ids=tuple(selected_bulk_ids): (
+                            reject_discovery_candidates(
+                                session,
+                                project_id=project_id,
+                                candidate_ids=ids,
+                                decided_by=actor or "local_user",
+                                source="ui",
+                            )
                         ),
                     )
                     if result is not None:
@@ -1152,7 +1173,9 @@ def _render_discovery_candidate_workspace(
 
     with discarded_tab:
         st.badge(
-            f"Mostrando {len(rejected_candidates):,} de {len(rejected_candidates_all):,} referencias descartadas".replace(",", "."),
+            f"Mostrando {len(rejected_candidates):,} de {len(rejected_candidates_all):,} referencias descartadas".replace(
+                ",", "."
+            ),
             color="gray",
         )
         if not rejected_candidates:
@@ -1163,9 +1186,7 @@ def _render_discovery_candidate_workspace(
                     f"**{row.effective_text}** · {family_label(row.effective_family)} · "
                     f"{row.original_filename}, página {row.page_number}"
                 )
-                _render_decision_history(
-                    st, decisions_by.get(row.candidate_id, [])
-                )
+                _render_decision_history(st, decisions_by.get(row.candidate_id, []))
                 if st.button(
                     "Restaurar esta referencia para revisarla",
                     key=f"open_discovery_restore_{row.candidate_id}",
@@ -1173,12 +1194,14 @@ def _render_discovery_candidate_workspace(
                     result = _run_action(
                         st,
                         db_path=db_path,
-                        callback=lambda session, candidate_id=row.candidate_id: restore_rejected_discovery_candidate(
-                            session,
-                            project_id=project_id,
-                            candidate_id=candidate_id,
-                            restored_by=actor or "local_user",
-                            source="ui",
+                        callback=lambda session, candidate_id=row.candidate_id: (
+                            restore_rejected_discovery_candidate(
+                                session,
+                                project_id=project_id,
+                                candidate_id=candidate_id,
+                                restored_by=actor or "local_user",
+                                source="ui",
+                            )
                         ),
                     )
                     if result is not None:

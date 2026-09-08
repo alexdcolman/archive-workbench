@@ -4,6 +4,7 @@ Revision ID: 0040_discovery_grouping_continuity
 Revises: 0039_discovery_decisions
 Create Date: 2026-08-03
 """
+
 from __future__ import annotations
 
 import sqlalchemy as sa
@@ -63,13 +64,9 @@ def upgrade() -> None:
         sa.ForeignKeyConstraint(
             ["group_id"], ["discovery_candidate_groups.id"], ondelete="CASCADE"
         ),
-        sa.ForeignKeyConstraint(
-            ["candidate_id"], ["discovery_candidates.id"], ondelete="CASCADE"
-        ),
+        sa.ForeignKeyConstraint(["candidate_id"], ["discovery_candidates.id"], ondelete="CASCADE"),
         sa.PrimaryKeyConstraint("id"),
-        sa.UniqueConstraint(
-            "group_id", "candidate_id", name="uq_discovery_group_membership"
-        ),
+        sa.UniqueConstraint("group_id", "candidate_id", name="uq_discovery_group_membership"),
     )
     op.create_index(
         "ix_discovery_group_memberships_group_status",
@@ -100,9 +97,7 @@ def upgrade() -> None:
         sa.ForeignKeyConstraint(
             ["group_id"], ["discovery_candidate_groups.id"], ondelete="CASCADE"
         ),
-        sa.ForeignKeyConstraint(
-            ["candidate_id"], ["discovery_candidates.id"], ondelete="SET NULL"
-        ),
+        sa.ForeignKeyConstraint(["candidate_id"], ["discovery_candidates.id"], ondelete="SET NULL"),
         sa.PrimaryKeyConstraint("id"),
     )
     op.create_index(
@@ -147,9 +142,7 @@ def upgrade() -> None:
             "target_object_revision_number",
             name="uq_discovery_candidate_continuity_revision",
         ),
-        sa.UniqueConstraint(
-            "target_candidate_id", name="uq_discovery_candidate_continuity_target"
-        ),
+        sa.UniqueConstraint("target_candidate_id", name="uq_discovery_candidate_continuity_target"),
     )
     op.create_index(
         "ix_discovery_candidate_continuities_source",

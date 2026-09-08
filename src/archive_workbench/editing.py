@@ -272,9 +272,7 @@ def bootstrap_editable_layer(
             .order_by(ExtractionPageSelection.page_number)
         )
         if pages:
-            selection_query = selection_query.where(
-                ExtractionPageSelection.page_number.in_(pages)
-            )
+            selection_query = selection_query.where(ExtractionPageSelection.page_number.in_(pages))
         selections = session.execute(selection_query).all()
         if not selections:
             summary.warnings.append(
@@ -466,9 +464,7 @@ def add_editable_object(
         )
     )
     if editable_page is None:
-        raise ValueError(
-            f"La página {page} de {source_key} no fue inicializada para edición"
-        )
+        raise ValueError(f"La página {page} de {source_key} no fue inicializada para edición")
     if document_part_id is not None:
         part = session.get(DocumentPart, document_part_id)
         if part is None:
@@ -477,9 +473,7 @@ def add_editable_object(
             raise ValueError("La parte interna pertenece a otro documento")
         sequence = list(part.page_sequence_json or range(part.page_start, part.page_end + 1))
         if page not in sequence:
-            raise ValueError(
-                f"La parte {part.part_key} no incluye la página física {page}"
-            )
+            raise ValueError(f"La parte {part.part_key} no incluye la página física {page}")
 
     active = session.scalars(
         select(EditableObject)
@@ -489,7 +483,7 @@ def add_editable_object(
         )
         .order_by(EditableObject.current_order_index, EditableObject.id)
     ).all()
-    position = (max((item.current_order_index for item in active), default=-1) + 1)
+    position = max((item.current_order_index for item in active), default=-1) + 1
     anchor_id = after_object_id or before_object_id
     if anchor_id:
         anchor = next((item for item in active if item.id == anchor_id), None)
@@ -547,7 +541,6 @@ def add_editable_object(
         base_revision_number=None,
     )
     return obj
-
 
 
 def _active_page_objects(session: Session, editable_page_id: str) -> list[EditableObject]:
@@ -640,7 +633,9 @@ def move_editable_object(
     old_order = obj.current_order_index
     neighbor_order = neighbor.current_order_index
     movement_note = note or (
-        "Movido una posición hacia arriba" if direction == "up" else "Movido una posición hacia abajo"
+        "Movido una posición hacia arriba"
+        if direction == "up"
+        else "Movido una posición hacia abajo"
     )
     _record_reorder(
         session, obj, new_order=neighbor_order, changed_by=changed_by, note=movement_note
@@ -784,15 +779,15 @@ def merge_editable_object(
         and adjacent.document_part_id is not None
         and obj.document_part_id != adjacent.document_part_id
     ):
-        raise ValueError(
-            "No se pueden combinar objetos asignados a partes internas diferentes"
-        )
+        raise ValueError("No se pueden combinar objetos asignados a partes internas diferentes")
     if obj.document_part_id is None and adjacent.document_part_id is not None:
         obj.document_part_id = adjacent.document_part_id
     first, second = (adjacent, obj) if direction == "previous" else (obj, adjacent)
     combined_text = first.current_text + separator + second.current_text
     combined_geometry: list[dict[str, Any]] = []
-    for geometry in list(first.current_geometry_json or []) + list(second.current_geometry_json or []):
+    for geometry in list(first.current_geometry_json or []) + list(
+        second.current_geometry_json or []
+    ):
         if geometry not in combined_geometry:
             combined_geometry.append(geometry)
 
@@ -860,6 +855,7 @@ def merge_editable_object(
                 note=f"Reindexado después de combinar {obj.id} y {adjacent.id}",
             )
     return obj
+
 
 def set_editable_object_lifecycle(
     session: Session,
@@ -976,7 +972,10 @@ def editing_status_rows(session: Session) -> list[EditingStatusRow]:
                     ExtractionPageSelection.page_number == page.page_number,
                 )
             )
-            if selected_page is None or selected_page.extraction_page_id != page.source_extraction_page_id:
+            if (
+                selected_page is None
+                or selected_page.extraction_page_id != page.source_extraction_page_id
+            ):
                 stale.append(page.page_number)
         active = int(
             session.scalar(
@@ -1004,7 +1003,9 @@ def editing_status_rows(session: Session) -> list[EditingStatusRow]:
             session.scalar(
                 select(func.count())
                 .select_from(EditableObjectRevision)
-                .join(EditableObject, EditableObjectRevision.editable_object_id == EditableObject.id)
+                .join(
+                    EditableObject, EditableObjectRevision.editable_object_id == EditableObject.id
+                )
                 .where(EditableObject.digital_object_id == digital.id)
             )
             or 0
@@ -1109,9 +1110,7 @@ def export_editable_layer(
     _registration, digital, _unit = _registration_for_source(session, source_key)
     root = Path(project_root)
     output_root = (
-        Path(destination)
-        if destination is not None
-        else root / "exports" / "editable" / source_key
+        Path(destination) if destination is not None else root / "exports" / "editable" / source_key
     )
     if not output_root.is_absolute():
         output_root = root / output_root
@@ -1140,9 +1139,7 @@ def export_editable_layer(
         else []
     )
 
-    part_ids = {
-        item.document_part_id for item in objects if item.document_part_id
-    } | {
+    part_ids = {item.document_part_id for item in objects if item.document_part_id} | {
         item.document_part_id for item in revisions if item.document_part_id
     }
     part_keys = {

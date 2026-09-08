@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import json
 import sqlite3
 import zipfile
 import tempfile
@@ -183,8 +182,7 @@ def _candidate_from_checkpoint(
 ) -> LineageRecoveryCandidate:
     return LineageRecoveryCandidate(
         fingerprint=(
-            f"{method}:{checkpoint.id}:{manifest.source_workspace_id}:"
-            f"{manifest.base_sequence}"
+            f"{method}:{checkpoint.id}:{manifest.source_workspace_id}:{manifest.base_sequence}"
         ),
         method=method,
         explanation=explanation,
@@ -567,8 +565,7 @@ def _chain_candidates(
             candidates.append(
                 LineageRecoveryCandidate(
                     fingerprint=(
-                        f"bundle_chain:{anchor_kind}:{checkpoint.id}:"
-                        + ":".join(bundle_ids)
+                        f"bundle_chain:{anchor_kind}:{checkpoint.id}:" + ":".join(bundle_ids)
                     ),
                     method="verified_bundle_chain",
                     explanation=explanation,

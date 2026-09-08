@@ -33,9 +33,7 @@ class _FixedDateTime(datetime):
         return value if tz is None else value.astimezone(tz)
 
 
-def test_backup_order_and_readiness_use_manifest_creation_time(
-    tmp_path: Path, monkeypatch
-) -> None:
+def test_backup_order_and_readiness_use_manifest_creation_time(tmp_path: Path, monkeypatch) -> None:
     root = tmp_path / "project"
     _seed_search_project(root)
     (root / "config").mkdir(parents=True, exist_ok=True)
@@ -78,7 +76,10 @@ def test_backup_order_and_readiness_use_manifest_creation_time(
             report = operational_readiness(session, project_root=root)
             recovery = next(item for item in report.items if item.key == "recovery")
             assert recovery.status == "attention"
-            assert recovery.summary == "La copia de seguridad más reciente todavía no fue probada mediante una recuperación temporal."
+            assert (
+                recovery.summary
+                == "La copia de seguridad más reciente todavía no fue probada mediante una recuperación temporal."
+            )
 
         with session_scope(engine) as session:
             result = run_project_backup_recovery_test(
@@ -134,12 +135,16 @@ def test_readiness_marks_recovery_until_latest_backup_is_tested(tmp_path: Path) 
         engine.dispose()
 
 
-def test_recovery_test_rejects_backup_from_another_project_without_touching_active(tmp_path: Path) -> None:
+def test_recovery_test_rejects_backup_from_another_project_without_touching_active(
+    tmp_path: Path,
+) -> None:
     first = tmp_path / "first"
     second = tmp_path / "second"
     _seed_search_project(first)
     (first / "config").mkdir(parents=True, exist_ok=True)
-    (first / "config" / "decisions.yaml").write_text("project_id: search_project\n", encoding="utf-8")
+    (first / "config" / "decisions.yaml").write_text(
+        "project_id: search_project\n", encoding="utf-8"
+    )
     backup = create_project_backup(project_root=first, created_by="tests")
 
     upgrade_database(second)

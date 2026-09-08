@@ -15,9 +15,7 @@ _TIFF_SIGNATURES = (b"II*\x00", b"MM\x00*", b"II+\x00", b"MM\x00+")
 _PDF_SIGNATURE = b"%PDF-"
 
 PROCESSABLE_RASTER_SUFFIXES = frozenset({".png", ".jpg", ".jpeg", ".webp"})
-PROCESSABLE_DOCUMENT_SUFFIXES = frozenset(
-    {".pdf", ".tif", ".tiff", *PROCESSABLE_RASTER_SUFFIXES}
-)
+PROCESSABLE_DOCUMENT_SUFFIXES = frozenset({".pdf", ".tif", ".tiff", *PROCESSABLE_RASTER_SUFFIXES})
 
 
 def is_processable_document_path(path: str | Path) -> bool:
@@ -147,7 +145,9 @@ def _inspect_image(source: Path, common: dict[str, object]) -> InputInspection:
         warnings_out.append("Hay al menos una página de más de 100 megapíxeles.")
         recommendations.append("Usar libvips/pyvips para generar derivados sin cargar todo en RAM.")
     if len(pages) > 1:
-        recommendations.append("Separar el TIFF multipágina en derivados por página para procesarlo.")
+        recommendations.append(
+            "Separar el TIFF multipágina en derivados por página para procesarlo."
+        )
     return InputInspection(
         **common,
         page_count=len(pages),

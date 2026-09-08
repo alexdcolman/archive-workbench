@@ -21,8 +21,13 @@ from archive_workbench.audiovisual import (
 from archive_workbench.catalog import ensure_project
 from archive_workbench.catalog_management import create_archival_unit, register_local_file
 from archive_workbench.contracts.audiovisual import TranscriptSegmentInput, TranscriptionRequest
-from archive_workbench.db import create_sqlite_engine, database_path, session_scope, upgrade_database
-from archive_workbench.db.models import AudiovisualMedia, TranscriptionRun
+from archive_workbench.db import (
+    create_sqlite_engine,
+    database_path,
+    session_scope,
+    upgrade_database,
+)
+from archive_workbench.db.models import AudiovisualMedia
 from archive_workbench.decisions import load_decisions
 from archive_workbench.project_init import initialize_project
 from archive_workbench.transcription_evaluation import (
@@ -85,7 +90,9 @@ def _project(tmp_path: Path):
     data = yaml.safe_load(decisions_path.read_text(encoding="utf-8"))
     data["project_id"] = "av03_test_project"
     data["project_name"] = "Proyecto AV-03"
-    decisions_path.write_text(yaml.safe_dump(data, allow_unicode=True, sort_keys=False), encoding="utf-8")
+    decisions_path.write_text(
+        yaml.safe_dump(data, allow_unicode=True, sort_keys=False), encoding="utf-8"
+    )
     upgrade_database(root)
     decisions = load_decisions(decisions_path)
     audio = root / "corpus" / "audiovisual" / "control.wav"
@@ -116,12 +123,13 @@ def _project(tmp_path: Path):
             registered_by="test",
         )
         media = session.scalar(
-            select(AudiovisualMedia).where(AudiovisualMedia.digital_object_id == result.digital_object_id)
+            select(AudiovisualMedia).where(
+                AudiovisualMedia.digital_object_id == result.digital_object_id
+            )
         )
         assert media is not None
         media_id = media.id
     return root, engine, media_id
-
 
 
 def test_gpu_memory_monitor_uses_direct_pid_when_visible(monkeypatch) -> None:
@@ -166,6 +174,7 @@ def test_gpu_memory_monitor_keeps_container_fallback_ambiguous(monkeypatch) -> N
     )
     assert audiovisual_module._gpu_memory_mib_for_pid(74) is None
 
+
 def test_transcription_run_records_runtime_metrics_without_schema_change(tmp_path: Path) -> None:
     root, engine, media_id = _project(tmp_path)
     register_transcription_backend(_EvaluationBackend())
@@ -195,7 +204,9 @@ def test_transcription_run_records_runtime_metrics_without_schema_change(tmp_pat
         engine.dispose()
 
 
-def test_evaluation_uses_deterministic_five_segment_sample_and_human_corrections(tmp_path: Path) -> None:
+def test_evaluation_uses_deterministic_five_segment_sample_and_human_corrections(
+    tmp_path: Path,
+) -> None:
     root, engine, media_id = _project(tmp_path)
     register_transcription_backend(_EvaluationBackend())
     try:
@@ -245,7 +256,6 @@ def test_evaluation_uses_deterministic_five_segment_sample_and_human_corrections
         engine.dispose()
 
 
-
 def test_continuous_transcript_edit_updates_only_changed_temporal_anchors(tmp_path: Path) -> None:
     root, engine, media_id = _project(tmp_path)
     register_transcription_backend(_EvaluationBackend())
@@ -289,7 +299,9 @@ def test_continuous_transcript_edit_updates_only_changed_temporal_anchors(tmp_pa
         engine.dispose()
 
 
-def test_continuous_transcript_edit_can_remove_hallucinated_text_without_losing_run(tmp_path: Path) -> None:
+def test_continuous_transcript_edit_can_remove_hallucinated_text_without_losing_run(
+    tmp_path: Path,
+) -> None:
     root, engine, media_id = _project(tmp_path)
     register_transcription_backend(_EvaluationBackend())
     try:
@@ -319,6 +331,7 @@ def test_continuous_transcript_edit_can_remove_hallucinated_text_without_losing_
             assert len(transcript_segment_rows(session, run_id=run.id)) == 6
     finally:
         engine.dispose()
+
 
 def test_original_transcript_text_ignores_human_corrections(tmp_path: Path) -> None:
     root, engine, media_id = _project(tmp_path)
@@ -350,13 +363,17 @@ def test_original_transcript_text_ignores_human_corrections(tmp_path: Path) -> N
             assert "La memoria conserva las voces" not in original_transcript_text(
                 session, run_id=run.id
             )
-            assert "La memoria conserva las voces" in transcript_document_text(session, run_id=run.id)
+            assert "La memoria conserva las voces" in transcript_document_text(
+                session, run_id=run.id
+            )
     finally:
         engine.dispose()
 
 
 def test_reference_comparison_uses_original_text_even_for_reference_run(tmp_path: Path) -> None:
-    from archive_workbench.transcription_evaluation import compare_transcription_to_reviewed_reference
+    from archive_workbench.transcription_evaluation import (
+        compare_transcription_to_reviewed_reference,
+    )
 
     root, engine, media_id = _project(tmp_path)
     register_transcription_backend(_EvaluationBackend())
@@ -403,7 +420,9 @@ def test_reference_comparison_uses_original_text_even_for_reference_run(tmp_path
 
 
 def test_reference_comparison_does_not_score_coarse_overlapping_segment(tmp_path: Path) -> None:
-    from archive_workbench.transcription_evaluation import compare_transcription_to_reviewed_reference
+    from archive_workbench.transcription_evaluation import (
+        compare_transcription_to_reviewed_reference,
+    )
 
     root, engine, media_id = _project(tmp_path)
     register_transcription_backend(_EvaluationBackend())
@@ -501,8 +520,8 @@ def test_audiovisual_ui_exposes_av03_evaluation_without_duplication() -> None:
     ):
         assert obsolete not in ui
     assert 'evaluation_key = f"av_evaluation_open_{selected_run_id}"' in ui
-    assert 'st.session_state[evaluation_key] = False' in ui
-    assert 'comparison_open = st.toggle(' in ui
+    assert "st.session_state[evaluation_key] = False" in ui
+    assert "comparison_open = st.toggle(" in ui
     assert '"Comparar esta versión con otra transcripción del mismo audio"' in ui
     assert "Corregilos con el bloque principal" not in ui
     assert "Corrección del segmento" not in ui

@@ -4,6 +4,7 @@ Revision ID: 0025_processing_dashboard
 Revises: 0024_semantic_search
 Create Date: 2026-07-24
 """
+
 from __future__ import annotations
 
 from alembic import op
@@ -40,9 +41,7 @@ def upgrade() -> None:
         "processing_jobs",
         ["project_id", "created_at"],
     )
-    op.create_index(
-        "ix_processing_jobs_status", "processing_jobs", ["project_id", "status"]
-    )
+    op.create_index("ix_processing_jobs_status", "processing_jobs", ["project_id", "status"])
     op.create_table(
         "processing_job_items",
         sa.Column("id", sa.String(length=36), nullable=False),
@@ -56,12 +55,8 @@ def upgrade() -> None:
         sa.Column("created_at", sa.DateTime(timezone=True), nullable=False),
         sa.Column("started_at", sa.DateTime(timezone=True), nullable=True),
         sa.Column("completed_at", sa.DateTime(timezone=True), nullable=True),
-        sa.ForeignKeyConstraint(
-            ["processing_job_id"], ["processing_jobs.id"], ondelete="CASCADE"
-        ),
-        sa.ForeignKeyConstraint(
-            ["digital_object_id"], ["digital_objects.id"], ondelete="SET NULL"
-        ),
+        sa.ForeignKeyConstraint(["processing_job_id"], ["processing_jobs.id"], ondelete="CASCADE"),
+        sa.ForeignKeyConstraint(["digital_object_id"], ["digital_objects.id"], ondelete="SET NULL"),
         sa.PrimaryKeyConstraint("id"),
         sa.UniqueConstraint(
             "processing_job_id", "source_key", name="uq_processing_job_item_source"

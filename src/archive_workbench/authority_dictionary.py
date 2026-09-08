@@ -12,9 +12,6 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from archive_workbench.authorities import (
-    ALIAS_TYPES,
-    AUTHORITY_REVIEW_STATUSES,
-    AUTHORITY_TYPES,
     add_authority_alias,
     create_authority,
     normalize_authority_text,
@@ -36,7 +33,16 @@ DICTIONARY_SCHEMA_ID = "https://archive-workbench.local/schema/authority-diction
 
 AuthorityType = Literal["person", "family", "organization", "place", "event", "work", "other"]
 AuthorityReviewStatus = Literal["unreviewed", "reviewed", "approved"]
-AliasType = Literal["parallel", "normalized_other_rules", "variant", "abbreviation", "acronym", "former_name", "title", "other"]
+AliasType = Literal[
+    "parallel",
+    "normalized_other_rules",
+    "variant",
+    "abbreviation",
+    "acronym",
+    "former_name",
+    "title",
+    "other",
+]
 AuthorityResolutionAction = Literal["auto", "use_existing", "update_existing", "create_new", "skip"]
 RelationResolutionAction = Literal["auto", "update_existing", "create_parallel", "skip"]
 RelationTargetKind = Literal["authority", "archival_unit", "document_part"]
@@ -440,9 +446,9 @@ def authority_dictionary_example() -> dict[str, Any]:
 
 
 def authority_dictionary_example_bytes() -> bytes:
-    return (
-        json.dumps(authority_dictionary_example(), ensure_ascii=False, indent=2) + "\n"
-    ).encode("utf-8")
+    return (json.dumps(authority_dictionary_example(), ensure_ascii=False, indent=2) + "\n").encode(
+        "utf-8"
+    )
 
 
 def _canonical_hash(dictionary: AuthorityDictionary) -> str:
@@ -498,7 +504,11 @@ def _format_characteristics(values: Mapping[str, CharacteristicValue]) -> str | 
 
 
 def _composed_description(authority: DictionaryAuthority) -> str | None:
-    blocks = [item for item in (authority.description, _format_characteristics(authority.characteristics)) if item]
+    blocks = [
+        item
+        for item in (authority.description, _format_characteristics(authority.characteristics))
+        if item
+    ]
     return "\n\n".join(blocks) if blocks else None
 
 
@@ -548,9 +558,11 @@ def _authority_indexes(
         .order_by(AuthorityRecord.id)
     ).all()
     by_id = {authority.id: authority for authority in authorities}
-    aliases = session.scalars(
-        select(AuthorityAlias).where(AuthorityAlias.authority_id.in_(by_id))
-    ).all() if by_id else []
+    aliases = (
+        session.scalars(select(AuthorityAlias).where(AuthorityAlias.authority_id.in_(by_id))).all()
+        if by_id
+        else []
+    )
     aliases_by_authority: dict[str, list[AuthorityAlias]] = {key: [] for key in by_id}
     preferred_index: dict[str, set[str]] = {}
     alias_index: dict[str, set[str]] = {}
@@ -587,7 +599,9 @@ def _validate_temporal(
     try:
         parse_temporal_expression(value)
     except ValueError as exc:
-        _issue(issues, "error", "invalid_temporal_expression", section, item_id, field_name, str(exc))
+        _issue(
+            issues, "error", "invalid_temporal_expression", section, item_id, field_name, str(exc)
+        )
 
 
 def _authority_action(
@@ -737,7 +751,9 @@ def _plan_aliases(
         if normalized in existing_on_target:
             unchanged.append(alias.value)
             continue
-        other_ids = set(preferred_index.get(normalized, set())) | set(alias_index.get(normalized, set()))
+        other_ids = set(preferred_index.get(normalized, set())) | set(
+            alias_index.get(normalized, set())
+        )
         if target_authority_id:
             other_ids.discard(target_authority_id)
         if other_ids and not alias.allow_ambiguous:
@@ -841,7 +857,10 @@ def validate_authority_dictionary(
             differences: list[str] = []
             if imported_description and imported_description != existing.description:
                 differences.append("descripción/características")
-            if authority.temporal_expression and authority.temporal_expression != existing.temporal_expression:
+            if (
+                authority.temporal_expression
+                and authority.temporal_expression != existing.temporal_expression
+            ):
                 differences.append("temporalidad")
             if differences:
                 _issue(
@@ -1220,7 +1239,9 @@ def apply_authority_dictionary(
     if not report.valid:
         first = next(issue for issue in report.issues if issue.severity == "error")
         item = f" {first.item_id}" if first.item_id else ""
-        raise ValueError(f"El diccionario contiene errores ({first.section}{item}): {first.message}")
+        raise ValueError(
+            f"El diccionario contiene errores ({first.section}{item}): {first.message}"
+        )
 
     actor = changed_by.strip() or "local_user"
     authority_input = {item.local_id: item for item in dictionary.authorities}
@@ -1448,7 +1469,10 @@ def export_authority_dictionary(
         target_id = row.target_authority_id
         if target_id is None:
             continue
-        if row.source_authority_id not in local_id_by_authority or target_id not in local_id_by_authority:
+        if (
+            row.source_authority_id not in local_id_by_authority
+            or target_id not in local_id_by_authority
+        ):
             continue
         payload = {
             "local_id": f"relation:{row.id}",

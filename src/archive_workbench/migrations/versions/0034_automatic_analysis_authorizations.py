@@ -4,6 +4,7 @@ Revision ID: 0034_automatic_analysis_authorizations
 Revises: 0033_export_exchange_lifecycle
 Create Date: 2026-08-03
 """
+
 from __future__ import annotations
 
 import sqlalchemy as sa

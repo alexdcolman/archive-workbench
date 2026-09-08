@@ -1,19 +1,21 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+from datetime import datetime
 from hashlib import sha256
 import json
 import re
 import unicodedata
 from typing import Iterable
 
-from sqlalchemy import func, select
+from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from archive_workbench.db.models import (
     DiscoveryCandidate,
     DiscoveryCandidateContinuity,
     DiscoveryCandidateGroup,
+    DiscoveryDecision,
     DiscoveryGroupAction,
     DiscoveryGroupMembership,
     DiscoveryRun,
@@ -52,6 +54,8 @@ class DiscoveryGroupMemberRow:
     exact_text: str
     effective_text: str
     run_id: str
+    run_profile_name: str
+    run_started_at: datetime
     original_filename: str
     page_number: int
     editable_object_id: str
@@ -64,6 +68,23 @@ class DiscoveryGroupMemberRow:
 
 
 @dataclass(frozen=True, slots=True)
+class DiscoveryGroupLocationRow:
+    location_key: str
+    representative_candidate_id: str
+    candidate_ids: tuple[str, ...]
+    run_ids: tuple[str, ...]
+    effective_text: str
+    original_filename: str
+    page_number: int
+    editable_object_id: str
+    object_revision_number: int
+    start_offset: int
+    end_offset: int
+    detection_count: int
+    run_count: int
+
+
+@dataclass(frozen=True, slots=True)
 class DiscoveryGroupRow:
     group_id: str
     preferred_label: str
@@ -73,8 +94,10 @@ class DiscoveryGroupRow:
     grouping_method: str
     lifecycle_status: str
     active_member_count: int
+    current_location_count: int
     run_count: int
     stale_member_count: int
+    current_locations: tuple[DiscoveryGroupLocationRow, ...]
     members: tuple[DiscoveryGroupMemberRow, ...]
 
 
@@ -388,6 +411,55 @@ def add_candidate_to_group(
     )
 
 
+def remove_candidates_from_group(
+    session: Session,
+    *,
+    project_id: str,
+    group_id: str,
+    candidate_ids: Iterable[str],
+    changed_by: str,
+    reason: str,
+    source: str = "api",
+) -> int:
+    actor = _clean_required(changed_by, field="La persona responsable", maximum=200)
+    clean_reason = _clean_required(reason, field="El fundamento")
+    ids = tuple(dict.fromkeys(candidate_ids))
+    if not ids:
+        raise ValueError("Seleccioná al menos una referencia del grupo")
+    group = session.get(DiscoveryCandidateGroup, group_id)
+    if group is None or group.project_id != project_id:
+        raise ValueError("El grupo no existe en este proyecto")
+    memberships = list(
+        session.scalars(
+            select(DiscoveryGroupMembership).where(
+                DiscoveryGroupMembership.group_id == group_id,
+                DiscoveryGroupMembership.candidate_id.in_(ids),
+                DiscoveryGroupMembership.membership_status == "active",
+            )
+        )
+    )
+    if len(memberships) != len(ids):
+        raise ValueError("Alguna referencia seleccionada ya no es miembro activo de este grupo")
+    now = utc_now()
+    for membership in memberships:
+        membership.membership_status = "removed"
+        membership.removed_by = actor
+        membership.removed_at = now
+        membership.removal_reason = clean_reason
+        membership.source = "manual"
+        _append_action(
+            session,
+            group=group,
+            action_type="member_removed",
+            actor=actor,
+            source=source,
+            candidate_id=membership.candidate_id,
+            reason=clean_reason,
+        )
+    session.flush()
+    return len(memberships)
+
+
 def remove_candidate_from_group(
     session: Session,
     *,
@@ -398,35 +470,67 @@ def remove_candidate_from_group(
     reason: str,
     source: str = "api",
 ) -> bool:
-    actor = _clean_required(changed_by, field="La persona responsable", maximum=200)
-    clean_reason = _clean_required(reason, field="El fundamento")
-    group = session.get(DiscoveryCandidateGroup, group_id)
-    if group is None or group.project_id != project_id:
-        raise ValueError("El grupo no existe en este proyecto")
-    membership = session.scalar(
-        select(DiscoveryGroupMembership).where(
-            DiscoveryGroupMembership.group_id == group_id,
-            DiscoveryGroupMembership.candidate_id == candidate_id,
+    return (
+        remove_candidates_from_group(
+            session,
+            project_id=project_id,
+            group_id=group_id,
+            candidate_ids=(candidate_id,),
+            changed_by=changed_by,
+            reason=reason,
+            source=source,
+        )
+        == 1
+    )
+
+
+def _current_group_locations(
+    members: Iterable[DiscoveryGroupMemberRow],
+) -> tuple[DiscoveryGroupLocationRow, ...]:
+    buckets: dict[tuple[str, int, int, int], list[DiscoveryGroupMemberRow]] = {}
+    for member in members:
+        if member.membership_status != "active" or member.is_stale:
+            continue
+        key = (
+            member.editable_object_id,
+            member.object_revision_number,
+            member.start_offset,
+            member.end_offset,
+        )
+        buckets.setdefault(key, []).append(member)
+
+    result: list[DiscoveryGroupLocationRow] = []
+    for key, rows in buckets.items():
+        ordered = sorted(rows, key=lambda item: (item.run_started_at, item.candidate_id))
+        representative = ordered[-1]
+        run_ids = tuple(dict.fromkeys(item.run_id for item in ordered))
+        result.append(
+            DiscoveryGroupLocationRow(
+                location_key="|".join(str(part) for part in key),
+                representative_candidate_id=representative.candidate_id,
+                candidate_ids=tuple(item.candidate_id for item in ordered),
+                run_ids=run_ids,
+                effective_text=representative.effective_text,
+                original_filename=representative.original_filename,
+                page_number=representative.page_number,
+                editable_object_id=representative.editable_object_id,
+                object_revision_number=representative.object_revision_number,
+                start_offset=representative.start_offset,
+                end_offset=representative.end_offset,
+                detection_count=len(ordered),
+                run_count=len(run_ids),
+            )
+        )
+    result.sort(
+        key=lambda item: (
+            item.original_filename.casefold(),
+            item.page_number,
+            item.start_offset,
+            item.end_offset,
+            item.location_key,
         )
     )
-    if membership is None or membership.membership_status != "active":
-        raise ValueError("El candidato no es miembro activo de este grupo")
-    membership.membership_status = "removed"
-    membership.removed_by = actor
-    membership.removed_at = utc_now()
-    membership.removal_reason = clean_reason
-    membership.source = "manual"
-    _append_action(
-        session,
-        group=group,
-        action_type="member_removed",
-        actor=actor,
-        source=source,
-        candidate_id=candidate_id,
-        reason=clean_reason,
-    )
-    session.flush()
-    return True
+    return tuple(result)
 
 
 def discovery_group_rows(
@@ -443,40 +547,107 @@ def discovery_group_rows(
             )
         )
     )
+    if not groups:
+        return []
+
+    # Cargar todas las pertenencias del proyecto de una vez. La implementación
+    # anterior consultaba pertenencias grupo por grupo y, además, resolvía la
+    # última decisión y el objeto editable candidato por candidato. En proyectos
+    # con varias corridas históricas eso convertía esta lectura derivada en un
+    # N+1 de cientos o miles de SELECT. La historia sigue íntegra; sólo cambia
+    # cómo se materializa la vista de lectura.
+    membership_query = (
+        select(DiscoveryGroupMembership, DiscoveryCandidate, DiscoveryRun)
+        .join(
+            DiscoveryCandidate,
+            DiscoveryCandidate.id == DiscoveryGroupMembership.candidate_id,
+        )
+        .join(DiscoveryRun, DiscoveryRun.id == DiscoveryCandidate.run_id)
+        .where(DiscoveryGroupMembership.project_id == project_id)
+    )
+    if not include_removed:
+        membership_query = membership_query.where(
+            DiscoveryGroupMembership.membership_status == "active"
+        )
+    membership_rows = list(
+        session.execute(
+            membership_query.order_by(
+                DiscoveryGroupMembership.group_id,
+                DiscoveryCandidate.created_at,
+                DiscoveryCandidate.id,
+            )
+        ).all()
+    )
+
+    candidate_ids = tuple(
+        dict.fromkeys(candidate.id for _membership, candidate, _run in membership_rows)
+    )
+    object_ids = tuple(
+        dict.fromkeys(
+            candidate.editable_object_id for _membership, candidate, _run in membership_rows
+        )
+    )
+
+    # Mantener lotes acotados evita depender del límite de parámetros IN de la
+    # versión de SQLite distribuida en cada plataforma soportada.
+    latest_decisions: dict[str, DiscoveryDecision] = {}
+    for offset in range(0, len(candidate_ids), 500):
+        batch = candidate_ids[offset : offset + 500]
+        decisions = session.scalars(
+            select(DiscoveryDecision)
+            .where(DiscoveryDecision.candidate_id.in_(batch))
+            .order_by(
+                DiscoveryDecision.candidate_id,
+                DiscoveryDecision.decision_number.desc(),
+            )
+        ).all()
+        for decision in decisions:
+            latest_decisions.setdefault(decision.candidate_id, decision)
+
+    editable_objects: dict[str, EditableObject] = {}
+    for offset in range(0, len(object_ids), 500):
+        batch = object_ids[offset : offset + 500]
+        for editable_object in session.scalars(
+            select(EditableObject).where(EditableObject.id.in_(batch))
+        ).all():
+            editable_objects[editable_object.id] = editable_object
+
+    members_by_group: dict[str, list[DiscoveryGroupMemberRow]] = {group.id: [] for group in groups}
+    for membership, candidate, run in membership_rows:
+        latest = latest_decisions.get(candidate.id)
+        current = editable_objects.get(candidate.editable_object_id)
+        is_stale = current is None or current.revision_number != candidate.object_revision_number
+        if current is not None and not is_stale:
+            is_stale = (
+                current.current_text[candidate.start_offset : candidate.end_offset]
+                != candidate.exact_text
+            )
+
+        members_by_group.setdefault(membership.group_id, []).append(
+            DiscoveryGroupMemberRow(
+                membership_id=membership.id,
+                candidate_id=candidate.id,
+                exact_text=candidate.exact_text,
+                effective_text=(latest.reviewed_text if latest else candidate.exact_text),
+                run_id=candidate.run_id,
+                run_profile_name=run.profile_name,
+                run_started_at=run.started_at,
+                original_filename=candidate.original_filename,
+                page_number=candidate.page_number,
+                editable_object_id=candidate.editable_object_id,
+                object_revision_number=candidate.object_revision_number,
+                start_offset=candidate.start_offset,
+                end_offset=candidate.end_offset,
+                membership_status=membership.membership_status,
+                source=membership.source,
+                is_stale=is_stale,
+            )
+        )
+
     result: list[DiscoveryGroupRow] = []
     for group in groups:
-        query = (
-            select(DiscoveryGroupMembership, DiscoveryCandidate)
-            .join(
-                DiscoveryCandidate,
-                DiscoveryCandidate.id == DiscoveryGroupMembership.candidate_id,
-            )
-            .where(DiscoveryGroupMembership.group_id == group.id)
-        )
-        if not include_removed:
-            query = query.where(DiscoveryGroupMembership.membership_status == "active")
-        rows = list(session.execute(query.order_by(DiscoveryCandidate.created_at)).all())
-        members: list[DiscoveryGroupMemberRow] = []
-        for membership, candidate in rows:
-            effective = effective_candidate_values(session, candidate)
-            members.append(
-                DiscoveryGroupMemberRow(
-                    membership_id=membership.id,
-                    candidate_id=candidate.id,
-                    exact_text=candidate.exact_text,
-                    effective_text=effective.text,
-                    run_id=candidate.run_id,
-                    original_filename=candidate.original_filename,
-                    page_number=candidate.page_number,
-                    editable_object_id=candidate.editable_object_id,
-                    object_revision_number=candidate.object_revision_number,
-                    start_offset=candidate.start_offset,
-                    end_offset=candidate.end_offset,
-                    membership_status=membership.membership_status,
-                    source=membership.source,
-                    is_stale=candidate_is_stale(session, candidate),
-                )
-            )
+        members = members_by_group.get(group.id, [])
+        current_locations = _current_group_locations(members)
         result.append(
             DiscoveryGroupRow(
                 group_id=group.id,
@@ -487,8 +658,12 @@ def discovery_group_rows(
                 grouping_method=group.grouping_method,
                 lifecycle_status=group.lifecycle_status,
                 active_member_count=sum(m.membership_status == "active" for m in members),
+                current_location_count=len(current_locations),
                 run_count=len({m.run_id for m in members if m.membership_status == "active"}),
-                stale_member_count=sum(m.is_stale for m in members if m.membership_status == "active"),
+                stale_member_count=sum(
+                    m.is_stale for m in members if m.membership_status == "active"
+                ),
+                current_locations=current_locations,
                 members=tuple(members),
             )
         )
@@ -570,8 +745,7 @@ def project_discovery_candidate(
     existing = session.scalar(
         select(DiscoveryCandidateContinuity).where(
             DiscoveryCandidateContinuity.source_candidate_id == source.id,
-            DiscoveryCandidateContinuity.target_object_revision_number
-            == current.revision_number,
+            DiscoveryCandidateContinuity.target_object_revision_number == current.revision_number,
         )
     )
     if existing is not None:
@@ -735,9 +909,7 @@ def project_discovery_candidate(
     )
 
 
-def discovery_continuity_rows(
-    session: Session, *, project_id: str
-) -> list[ContinuityRow]:
+def discovery_continuity_rows(session: Session, *, project_id: str) -> list[ContinuityRow]:
     rows = list(
         session.scalars(
             select(DiscoveryCandidateContinuity)

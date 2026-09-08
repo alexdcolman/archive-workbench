@@ -10,10 +10,19 @@ from sqlalchemy import select
 from archive_workbench.catalog import register_test_corpus
 from archive_workbench.contracts.extraction import ExtractionProfile
 from archive_workbench.contracts.test_corpus import TestCorpus as CorpusDefinition
-from archive_workbench.db import create_sqlite_engine, database_path, session_scope, upgrade_database
+from archive_workbench.db import (
+    create_sqlite_engine,
+    database_path,
+    session_scope,
+    upgrade_database,
+)
 from archive_workbench.db.models import ExtractedObject, ExtractionPage, ExtractionRun
 from archive_workbench.decisions import load_decisions
-from archive_workbench.extraction import extract_documents, extraction_status_rows, normalize_docling_page
+from archive_workbench.extraction import (
+    extract_documents,
+    extraction_status_rows,
+    normalize_docling_page,
+)
 from archive_workbench.preprocessing import prepare_derivatives
 
 
@@ -208,7 +217,9 @@ def test_extraction_is_versioned_persisted_and_reused(tmp_path: Path) -> None:
         with session_scope(engine) as session:
             runs = session.scalars(select(ExtractionRun)).all()
             pages = session.scalars(select(ExtractionPage)).all()
-            objects = session.scalars(select(ExtractedObject).order_by(ExtractedObject.order_index)).all()
+            objects = session.scalars(
+                select(ExtractedObject).order_by(ExtractedObject.order_index)
+            ).all()
             status = extraction_status_rows(session)
     finally:
         engine.dispose()
@@ -267,9 +278,7 @@ def test_docling_runner_retries_cpu_after_cudnn_error(tmp_path: Path, monkeypatc
             )
         output_dir = Path(command[command.index("--output") + 1])
         output_dir.mkdir(parents=True, exist_ok=True)
-        (output_dir / "page_0001.json").write_text(
-            json.dumps(_docling_payload()), encoding="utf-8"
-        )
+        (output_dir / "page_0001.json").write_text(json.dumps(_docling_payload()), encoding="utf-8")
         return subprocess.CompletedProcess(command, 0, stdout="converted", stderr="")
 
     monkeypatch.setattr(extraction_module.subprocess, "run", fake_run)

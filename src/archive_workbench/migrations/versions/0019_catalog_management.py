@@ -24,9 +24,7 @@ def upgrade() -> None:
         sa.Column("note", sa.Text(), nullable=True),
         sa.Column("changed_by", sa.String(length=200), nullable=False),
         sa.Column("changed_at", sa.DateTime(timezone=True), nullable=False),
-        sa.ForeignKeyConstraint(
-            ["archival_unit_id"], ["archival_units.id"], ondelete="CASCADE"
-        ),
+        sa.ForeignKeyConstraint(["archival_unit_id"], ["archival_units.id"], ondelete="CASCADE"),
         sa.PrimaryKeyConstraint("id"),
         sa.UniqueConstraint(
             "archival_unit_id",
@@ -42,7 +40,5 @@ def upgrade() -> None:
 
 
 def downgrade() -> None:
-    op.drop_index(
-        "ix_archival_unit_revisions_unit", table_name="archival_unit_revisions"
-    )
+    op.drop_index("ix_archival_unit_revisions_unit", table_name="archival_unit_revisions")
     op.drop_table("archival_unit_revisions")

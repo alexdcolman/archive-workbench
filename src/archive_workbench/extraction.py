@@ -272,9 +272,7 @@ def _surya_url_check(url: str) -> tuple[bool, str]:
 
 def _surya_local_backend_check(profile: ExtractionProfile) -> tuple[bool, str]:
     llama_binary = resolve_llama_cpp_binary()
-    managed_backend = str(
-        os.environ.get("ARCHIVE_WORKBENCH_SURYA_BACKEND", "")
-    ).strip().casefold()
+    managed_backend = str(os.environ.get("ARCHIVE_WORKBENCH_SURYA_BACKEND", "")).strip().casefold()
     runtime_variant = managed_runtime_variant()
 
     if managed_backend == "llamacpp" and runtime_variant in {"cpu", "gpu"}:
@@ -298,7 +296,7 @@ def _surya_local_backend_check(profile: ExtractionProfile) -> tuple[bool, str]:
     nvidia_ok, nvidia_detail = _run_probe(
         ["nvidia-smi", "--query-gpu=name,memory.total", "--format=csv,noheader"]
     )
-    docker_ok, docker_detail = _run_probe(["docker", "info", "--format", "{{json .Runtimes}}"] )
+    docker_ok, docker_detail = _run_probe(["docker", "info", "--format", "{{json .Runtimes}}"])
     nvidia_runtime = docker_ok and "nvidia" in docker_detail.lower()
     gpu_ready = nvidia_ok and docker_ok and nvidia_runtime
     if profile.device == "cuda":
@@ -806,7 +804,9 @@ def _run_docling_cli_attempt(
         else:
             page_outputs[page_number] = candidate
     if missing:
-        produced = ", ".join(item.relative_to(attempt_dir).as_posix() for item in candidates) or "ninguno"
+        produced = (
+            ", ".join(item.relative_to(attempt_dir).as_posix() for item in candidates) or "ninguno"
+        )
         raise DoclingExecutionError(
             "Docling no produjo JSON para las páginas: "
             + ", ".join(str(page) for page in missing)
@@ -871,6 +871,7 @@ def run_docling_cli_batch(
     )
     combined += f"\n\nARCHIVE_WORKBENCH_FALLBACK_DEVICE={fallback_device}"
     return outputs, _docling_version(profile.docling_command), combined
+
 
 def _resolve_ref(payload: dict[str, Any], ref: str) -> dict[str, Any] | None:
     if not ref.startswith("#/"):
@@ -1253,14 +1254,17 @@ def _append_selection_revision(
     previous_extraction_page_id: str | None,
     created_at: datetime | None = None,
 ) -> ExtractionPageSelectionRevision:
-    revision_number = int(
-        session.scalar(
-            select(func.max(ExtractionPageSelectionRevision.revision_number)).where(
-                ExtractionPageSelectionRevision.selection_id == selection.id
+    revision_number = (
+        int(
+            session.scalar(
+                select(func.max(ExtractionPageSelectionRevision.revision_number)).where(
+                    ExtractionPageSelectionRevision.selection_id == selection.id
+                )
             )
+            or 0
         )
-        or 0
-    ) + 1
+        + 1
+    )
     revision = ExtractionPageSelectionRevision(
         id=new_id(),
         selection_id=selection.id,
@@ -1563,9 +1567,7 @@ def selected_extraction_status_rows(session: Session) -> list[SelectedExtraction
                 ExtractionRun,
                 ExtractionPageSelection.extraction_run_id == ExtractionRun.id,
             )
-            .where(
-                ExtractionPageSelection.digital_object_id == registration.digital_object_id
-            )
+            .where(ExtractionPageSelection.digital_object_id == registration.digital_object_id)
             .order_by(ExtractionPageSelection.page_number)
         ).all()
         selected_pages = {row.page_number for row in selections}
@@ -1804,9 +1806,7 @@ def extract_documents(
                     blocks = payload.get("blocks")
                     if isinstance(blocks, list):
                         errors = sum(
-                            bool(block.get("error"))
-                            for block in blocks
-                            if isinstance(block, dict)
+                            bool(block.get("error")) for block in blocks if isinstance(block, dict)
                         )
                         if errors:
                             page_warnings.append(f"{errors} bloques informaron error")
@@ -1866,9 +1866,7 @@ def extract_documents(
                     characters = int(metrics["character_count"])
                     page_warnings: list[str] = []
                     if characters < profile.minimum_characters_per_page_warning:
-                        page_warnings.append(
-                            f"solo {characters} caracteres reconocidos"
-                        )
+                        page_warnings.append(f"solo {characters} caracteres reconocidos")
                     if float(metrics["heuristic_score"]) < 0.35:
                         page_warnings.append(
                             f"puntaje heurístico bajo ({float(metrics['heuristic_score']):.3f})"

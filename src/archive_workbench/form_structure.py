@@ -3,7 +3,7 @@ from __future__ import annotations
 from copy import deepcopy
 from dataclasses import dataclass
 from datetime import datetime
-from typing import Any, Iterable
+from typing import Any
 
 from sqlalchemy import select
 from sqlalchemy.orm import Session
@@ -129,8 +129,7 @@ def form_candidates(session: Session, *, editable_page_id: str) -> list[FormCand
             marker=(str(item.get("marker")) if item.get("marker") is not None else None),
             already_registered=(
                 _fingerprint(item) in registered
-                or (item.get("marker_object_id"), item.get("label_object_id"))
-                in registered_anchors
+                or (item.get("marker_object_id"), item.get("label_object_id")) in registered_anchors
             ),
         )
         for item in candidates
@@ -217,14 +216,12 @@ def register_control(
     _ensure_object_on_page(session, editable_page_id=editable_page_id, object_id=label_object_id)
     structure = _structure(page)
     if candidate_fingerprint and any(
-        item.candidate_fingerprint == candidate_fingerprint
-        and item.lifecycle_status == "active"
+        item.candidate_fingerprint == candidate_fingerprint and item.lifecycle_status == "active"
         for item in structure.controls
     ):
         raise ValueError("Este candidato ya fue registrado")
     if group_id is not None and not any(
-        item.group_id == group_id and item.lifecycle_status == "active"
-        for item in structure.groups
+        item.group_id == group_id and item.lifecycle_status == "active" for item in structure.groups
     ):
         raise ValueError("El grupo seleccionado no existe o está archivado")
     now = utc_now()
@@ -273,8 +270,7 @@ def update_control(
         raise ValueError(f"Página editable inexistente: {editable_page_id}")
     structure = _structure(page)
     if group_id is not None and not any(
-        item.group_id == group_id and item.lifecycle_status == "active"
-        for item in structure.groups
+        item.group_id == group_id and item.lifecycle_status == "active" for item in structure.groups
     ):
         raise ValueError("El grupo seleccionado no existe o está archivado")
     target = next((item for item in structure.controls if item.control_id == control_id), None)

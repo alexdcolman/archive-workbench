@@ -80,7 +80,9 @@ def _project(tmp_path: Path):
     data = yaml.safe_load(decisions_path.read_text(encoding="utf-8"))
     data["project_id"] = "av01_test_project"
     data["project_name"] = "Proyecto AV-01"
-    decisions_path.write_text(yaml.safe_dump(data, allow_unicode=True, sort_keys=False), encoding="utf-8")
+    decisions_path.write_text(
+        yaml.safe_dump(data, allow_unicode=True, sort_keys=False), encoding="utf-8"
+    )
     upgrade_database(root)
     decisions = load_decisions(decisions_path)
     audio = root / "corpus" / "audiovisual" / "control.wav"
@@ -125,8 +127,6 @@ def test_media_detection_supports_audio_and_video_extensions(tmp_path: Path) -> 
     assert inspection.page_count is None
 
 
-
-
 def test_audiovisual_workspace_tolerates_missing_original_file(tmp_path: Path) -> None:
     root, decisions, engine, result, audio = _project(tmp_path)
     try:
@@ -142,14 +142,18 @@ def test_audiovisual_workspace_tolerates_missing_original_file(tmp_path: Path) -
                 session, project_root=root, project_id=decisions.project_id
             )
             assert rows[0].local_path is None
-            assert resolve_playback_path(
-                session, project_root=root, media_id=media.id
-            ) is None
-        source = (Path(__file__).parents[1] / "src" / "archive_workbench" / "audiovisual_app.py").read_text(
-            encoding="utf-8"
+            assert resolve_playback_path(session, project_root=root, media_id=media.id) is None
+        source = (
+            Path(__file__).parents[1] / "src" / "archive_workbench" / "audiovisual_app.py"
+        ).read_text(encoding="utf-8")
+        assert (
+            "El archivo audiovisual original no está disponible en esta copia del proyecto"
+            in source
         )
-        assert "El archivo audiovisual original no está disponible en esta copia del proyecto" in source
-        assert "la reproducción y las operaciones que requieren el medio original quedan deshabilitadas" in source
+        assert (
+            "la reproducción y las operaciones que requieren el medio original quedan deshabilitadas"
+            in source
+        )
     finally:
         engine.dispose()
 
@@ -177,7 +181,9 @@ def test_audiovisual_migration_adds_temporal_tables(tmp_path: Path) -> None:
     } <= tables
 
 
-def test_audio_registration_transcription_review_search_export_and_ocr_exclusion(tmp_path: Path) -> None:
+def test_audio_registration_transcription_review_search_export_and_ocr_exclusion(
+    tmp_path: Path,
+) -> None:
     root, decisions, engine, result, audio = _project(tmp_path)
     original_hash = sha256_file(audio)
     register_transcription_backend(_FakeBackend())
@@ -192,9 +198,12 @@ def test_audio_registration_transcription_review_search_export_and_ocr_exclusion
             assert media is not None
             assert media.duration_seconds is not None
             assert media.audio_codec == "pcm_s16le"
-            assert processing_inventory_rows(
-                session, project_root=root, project_id=decisions.project_id
-            ) == []
+            assert (
+                processing_inventory_rows(
+                    session, project_root=root, project_id=decisions.project_id
+                )
+                == []
+            )
             run = transcribe_audiovisual(
                 session,
                 project_root=root,
@@ -259,9 +268,7 @@ def test_audio_registration_transcription_review_search_export_and_ocr_exclusion
             assert len(rows) == 1
             assert rows[0].segment_count == 2
 
-            ensure_exchange_workspace(
-                session, workspace_name="copia-av-origen", changed_by="test"
-            )
+            ensure_exchange_workspace(session, workspace_name="copia-av-origen", changed_by="test")
             package = create_state_adoption_package(
                 session,
                 project_root=root,
@@ -286,8 +293,9 @@ def test_audio_registration_transcription_review_search_export_and_ocr_exclusion
     assert sha256_file(audio) == original_hash
 
 
-
-def test_discarded_transcription_is_removed_from_normal_use_and_can_be_restored(tmp_path: Path) -> None:
+def test_discarded_transcription_is_removed_from_normal_use_and_can_be_restored(
+    tmp_path: Path,
+) -> None:
     root, decisions, engine, result, _audio = _project(tmp_path)
     register_transcription_backend(_FakeBackend())
     try:
@@ -311,11 +319,14 @@ def test_discarded_transcription_is_removed_from_normal_use_and_can_be_restored(
                 ),
                 actor="alex",
             )
-            assert len(
-                search_transcript_segments(
-                    session, project_id=decisions.project_id, query="Memoria"
+            assert (
+                len(
+                    search_transcript_segments(
+                        session, project_id=decisions.project_id, query="Memoria"
+                    )
                 )
-            ) == 1
+                == 1
+            )
 
             discarded = discard_transcription_run(
                 session, run_id=run.id, actor="alex", note="Versión duplicada"
@@ -324,9 +335,12 @@ def test_discarded_transcription_is_removed_from_normal_use_and_can_be_restored(
             history = discarded.options_json["_lifecycle_history"]
             assert history[-1]["action"] == "discard"
             assert history[-1]["note"] == "Versión duplicada"
-            assert search_transcript_segments(
-                session, project_id=decisions.project_id, query="Memoria"
-            ) == []
+            assert (
+                search_transcript_segments(
+                    session, project_id=decisions.project_id, query="Memoria"
+                )
+                == []
+            )
             _payload, count = export_transcript_segments_bytes(
                 session, project_id=decisions.project_id, output_format="jsonl"
             )
@@ -340,11 +354,14 @@ def test_discarded_transcription_is_removed_from_normal_use_and_can_be_restored(
             restored = restore_transcription_run(session, run_id=run.id, actor="alex")
             assert restored.status == "completed"
             assert restored.options_json["_lifecycle_history"][-1]["action"] == "restore"
-            assert len(
-                search_transcript_segments(
-                    session, project_id=decisions.project_id, query="Memoria"
+            assert (
+                len(
+                    search_transcript_segments(
+                        session, project_id=decisions.project_id, query="Memoria"
+                    )
                 )
-            ) == 1
+                == 1
+            )
             _payload, count = export_transcript_segments_bytes(
                 session, project_id=decisions.project_id, output_format="jsonl"
             )
@@ -352,7 +369,10 @@ def test_discarded_transcription_is_removed_from_normal_use_and_can_be_restored(
     finally:
         engine.dispose()
 
-def test_audiovisual_ui_separates_incorporation_from_transcription_and_keeps_secondary_tools_progressive() -> None:
+
+def test_audiovisual_ui_separates_incorporation_from_transcription_and_keeps_secondary_tools_progressive() -> (
+    None
+):
     root = Path(__file__).parents[1]
     audiovisual_ui = (root / "src" / "archive_workbench" / "audiovisual_app.py").read_text(
         encoding="utf-8"
@@ -364,14 +384,14 @@ def test_audiovisual_ui_separates_incorporation_from_transcription_and_keeps_sec
         'section_heading(st, "Audio y video")',
         '"Incorporar audio o video", "Transcribir y revisar"',
         'key="audiovisual_tabs"',
-        'rerun_on_change=False',
+        "rerun_on_change=False",
         '"Desde esta computadora"',
         '"Desde una plataforma web"',
         '"Formatos admitidos desde esta computadora. "',
         '"Elegir archivos de audio o video"',
         '"Incorporar los archivos seleccionados"',
-        'register_external_file(',
-        'import_platform_media(',
+        "register_external_file(",
+        "import_platform_media(",
         '"Abrir este audio o video para transcribirlo"',
         "Audio o video que querés transcribir o revisar",
         "Velocidad de reproducción",
@@ -389,17 +409,20 @@ def test_audiovisual_ui_separates_incorporation_from_transcription_and_keeps_sec
     ):
         assert literal in audiovisual_ui
 
-    assert 'with st.popover(\n        "Opciones avanzadas para crear otra transcripción"' in audiovisual_ui
+    assert (
+        'with st.popover(\n        "Opciones avanzadas para crear otra transcripción"'
+        in audiovisual_ui
+    )
     assert 'on_change="ignore"' in audiovisual_ui
-    assert 'technical_open = st.toggle(' not in audiovisual_ui
-    assert 'av_platform_import_open' not in audiovisual_ui
-    assert 'Incorporalo primero en Catálogo documental como archivo local' not in audiovisual_ui
+    assert "technical_open = st.toggle(" not in audiovisual_ui
+    assert "av_platform_import_open" not in audiovisual_ui
+    assert "Incorporalo primero en Catálogo documental como archivo local" not in audiovisual_ui
     assert 'with st.expander("Descartar esta versión de la transcripción"' not in audiovisual_ui
     assert 'with st.expander(\n            f"Transcripciones descartadas' not in audiovisual_ui
     assert 'with st.expander("Ver transcripciones automáticas completas"' not in audiovisual_ui
-    assert 'discard_run_open = st.toggle(' in audiovisual_ui
-    assert 'discarded_runs_open = st.toggle(' in audiovisual_ui
-    assert 'full_transcripts_open = st.toggle(' in audiovisual_ui
+    assert "discard_run_open = st.toggle(" in audiovisual_ui
+    assert "discarded_runs_open = st.toggle(" in audiovisual_ui
+    assert "full_transcripts_open = st.toggle(" in audiovisual_ui
     assert '"Audio y video"' in review_ui
     assert '"Transcripciones de audio y video"' in review_ui
     assert '"Segmentos de audio y video"' in export_ui
@@ -465,10 +488,10 @@ def test_faster_whisper_ui_uses_known_models_and_supported_compute_types() -> No
     source = (
         Path(__file__).parents[1] / "src" / "archive_workbench" / "audiovisual_app.py"
     ).read_text(encoding="utf-8")
-    assert 'model_name = st.selectbox(' in source
-    assert 'compute_type = st.selectbox(' in source
-    assert 'compute_type = st.text_input(' not in source
-    assert 'model_name = st.text_input(' not in source
+    assert "model_name = st.selectbox(" in source
+    assert "compute_type = st.selectbox(" in source
+    assert "compute_type = st.text_input(" not in source
+    assert "model_name = st.text_input(" not in source
     assert '"tipo_cálculo": run_options.get("compute_type")' in source
     assert '"beam_size": run_options.get("beam_size", 5)' in source
     assert '"detección_voz_vad": run_options.get("vad_filter", True)' in source
@@ -480,14 +503,19 @@ def test_faster_whisper_ui_uses_known_models_and_supported_compute_types() -> No
     assert '"vad_filter": bool(vad_filter)' in source
 
 
-def test_audiovisual_visible_copy_hides_internal_block_codes_and_supports_historical_dates() -> None:
+def test_audiovisual_visible_copy_hides_internal_block_codes_and_supports_historical_dates() -> (
+    None
+):
     source = (
         Path(__file__).parents[1] / "src" / "archive_workbench" / "audiovisual_app.py"
     ).read_text(encoding="utf-8")
     assert "circuito local de AV-01" not in source
     assert "AV-02 requiere" not in source
     assert "Descargar evaluación AV-03" not in source
-    assert "Estas opciones sólo son necesarias si querés generar otra versión de la transcripción" in source
+    assert (
+        "Estas opciones sólo son necesarias si querés generar otra versión de la transcripción"
+        in source
+    )
     assert "min_value=DATE_INPUT_MIN" in source
     assert "max_value=DATE_INPUT_MAX" in source
     assert 'format="DD/MM/YYYY"' in source
@@ -521,7 +549,9 @@ def test_current_user_facing_python_copy_does_not_use_humana_as_review_shorthand
     assert offenders == []
 
 
-def test_audiovisual_export_is_materialized_in_project_and_registered_in_history(tmp_path: Path) -> None:
+def test_audiovisual_export_is_materialized_in_project_and_registered_in_history(
+    tmp_path: Path,
+) -> None:
     root, decisions, engine, _result, _audio = _project(tmp_path)
     register_transcription_backend(_FakeBackend())
     try:
@@ -573,7 +603,9 @@ def test_audiovisual_export_is_materialized_in_project_and_registered_in_history
     finally:
         engine.dispose()
     assert result.output_path == root / "exports" / "transcripciones_control.jsonl"
-    rows = [json.loads(line) for line in result.output_path.read_text(encoding="utf-8").splitlines()]
+    rows = [
+        json.loads(line) for line in result.output_path.read_text(encoding="utf-8").splitlines()
+    ]
     assert len(rows) == 2
     assert rows[0]["export_schema_version"] == "1.1"
     assert rows[0]["record_type"] == "archive_workbench.audiovisual_transcript_segment"

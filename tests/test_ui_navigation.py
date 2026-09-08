@@ -71,15 +71,14 @@ class _FakeStreamlit:
 
 
 def test_catalog_document_inputs_follow_the_public_format_contract() -> None:
-    source = (
-        Path(__file__).parents[1] / "src" / "archive_workbench" / "catalog_app.py"
-    ).read_text(encoding="utf-8")
+    source = (Path(__file__).parents[1] / "src" / "archive_workbench" / "catalog_app.py").read_text(
+        encoding="utf-8"
+    )
 
     assert "_SUPPORTED_DOCUMENT_SUFFIXES = PROCESSABLE_DOCUMENT_SUFFIXES" in source
     assert 'type=["pdf", "tif", "tiff", "png", "jpg", "jpeg", "webp"]' in source
     assert 'type=["pdf", "tif", "tiff", "png", "jpg", "jpeg", "bmp", "webp"]' not in source
     assert "PDF, TIFF, PNG, JPEG o WebP" in source
-
 
 
 def test_catalog_relation_caption_distinguishes_custody_hierarchy_and_location() -> None:
@@ -115,6 +114,7 @@ def test_catalog_relation_caption_distinguishes_custody_hierarchy_and_location()
     assert location_caption.startswith("Ubicación física:")
     assert "puede expresar jerarquía documental o ubicación física" in undecided_caption
 
+
 def test_tracked_tabs_are_passive_by_default() -> None:
     st = _FakeStreamlit()
 
@@ -132,14 +132,16 @@ def test_tracked_tabs_are_passive_by_default() -> None:
 
 
 def test_passive_tracked_tabs_keep_visual_state_in_browser_without_python_trigger() -> None:
-    source = (Path(__file__).parents[1] / "src" / "archive_workbench" / "ui_navigation.py").read_text(encoding="utf-8")
+    source = (
+        Path(__file__).parents[1] / "src" / "archive_workbench" / "ui_navigation.py"
+    ).read_text(encoding="utf-8")
     start = source.index("def _tab_state_keeper_renderer")
     end = source.index("def tracked_tabs", start)
     keeper = source[start:end]
 
     assert "sessionStorage" in keeper
     assert "archive-workbench-tab:" in keeper
-    assert '[role=\"tab\"]' in keeper
+    assert '[role="tab"]' in keeper
     assert "aria-selected" in keeper
     assert "tab.click()" in keeper
     assert "setStateValue" not in keeper
@@ -153,7 +155,9 @@ def test_passive_tracked_tabs_keep_visual_state_in_browser_without_python_trigge
 
 
 def test_context_help_uses_discoverable_info_icons_without_question_badges() -> None:
-    source = (Path(__file__).parents[1] / "src" / "archive_workbench" / "ui_navigation.py").read_text(encoding="utf-8")
+    source = (
+        Path(__file__).parents[1] / "src" / "archive_workbench" / "ui_navigation.py"
+    ).read_text(encoding="utf-8")
 
     assert "data-aw-info-icon" in source
     assert "aw-info-icon" in source
@@ -162,8 +166,14 @@ def test_context_help_uses_discoverable_info_icons_without_question_badges() -> 
     assert "aria-description" in source
     assert "mouseenter" in source
     assert "focus" in source
-    assert "setStateValue" not in source[source.index("def _context_help_renderer"):source.index("def request_tab")]
-    assert "setTriggerValue" not in source[source.index("def _context_help_renderer"):source.index("def request_tab")]
+    assert (
+        "setStateValue"
+        not in source[source.index("def _context_help_renderer") : source.index("def request_tab")]
+    )
+    assert (
+        "setTriggerValue"
+        not in source[source.index("def _context_help_renderer") : source.index("def request_tab")]
+    )
     assert 'badge("?"' not in source
     assert "contextual_help" not in source
     assert "var(--st-secondary-background-color, Canvas)" in source
@@ -172,7 +182,7 @@ def test_context_help_uses_discoverable_info_icons_without_question_badges() -> 
     assert "pointerFocusIsRecent" in source
     assert "matches(':focus-visible')" in source
     assert "event.key === 'Escape'" in source
-    context = source[source.index("def _context_help_renderer"):source.index("def request_tab")]
+    context = source[source.index("def _context_help_renderer") : source.index("def request_tab")]
     assert "observer.observe(doc.body" not in context
     assert "doc.querySelectorAll('[class]')" not in context
     assert "doc.getElementsByClassName(className)" in context
@@ -200,8 +210,6 @@ def test_tracked_tabs_can_switch_without_forcing_rerun() -> None:
     assert "catalog_detail_tabs" not in st.session_state
 
 
-
-
 def test_passive_tracked_tabs_honor_programmatic_navigation_without_tab_rerun() -> None:
     st = _FakeStreamlit()
     request_tab(st, key="processing_tabs", label="Elegir texto")
@@ -221,9 +229,18 @@ def test_passive_tracked_tabs_honor_programmatic_navigation_without_tab_rerun() 
 
 
 def test_extraction_run_label_makes_the_actual_engine_visible() -> None:
-    assert _extraction_run_ui_label(SimpleNamespace(engine="surya_cli", profile_key="surya")) == "Surya"
-    assert _extraction_run_ui_label(SimpleNamespace(engine="docling_cli", profile_key="fallback")) == "Docling"
-    assert _extraction_run_ui_label(SimpleNamespace(engine="tesseract_tsv", profile_key="ocr")) == "Tesseract"
+    assert (
+        _extraction_run_ui_label(SimpleNamespace(engine="surya_cli", profile_key="surya"))
+        == "Surya"
+    )
+    assert (
+        _extraction_run_ui_label(SimpleNamespace(engine="docling_cli", profile_key="fallback"))
+        == "Docling"
+    )
+    assert (
+        _extraction_run_ui_label(SimpleNamespace(engine="tesseract_tsv", profile_key="ocr"))
+        == "Tesseract"
+    )
 
 
 def test_processing_document_labels_keep_homonymous_documents_distinct() -> None:
@@ -302,7 +319,9 @@ def test_processing_tabs_and_document_selectors_follow_streamlit_invariant() -> 
 
     assert "rerun_on_change=False" in tab_block
     assert 'key="processing_document_ids"' in execute
-    assert "eligible_by_id = {_processing_row_identity(row): row for row in eligible_rows}" in execute
+    assert (
+        "eligible_by_id = {_processing_row_identity(row): row for row in eligible_rows}" in execute
+    )
     assert 'key="processing_source_keys"' not in execute
 
 
@@ -310,7 +329,9 @@ def test_processing_forms_do_not_disable_submit_from_widgets_inside_same_form() 
     source = (
         Path(__file__).parents[1] / "src" / "archive_workbench" / "processing_app.py"
     ).read_text(encoding="utf-8")
-    block = source.split('f"processing_keep_edits_commit_', 1)[1].split('if manual_path == "rebase":', 1)[0]
+    block = source.split('f"processing_keep_edits_commit_', 1)[1].split(
+        'if manual_path == "rebase":', 1
+    )[0]
 
     assert "disabled=not keep_confirmed" not in block
     assert "if keep_submitted and not keep_confirmed" in block
@@ -397,11 +418,7 @@ def test_top_level_views_use_identified_containers_without_st_empty() -> None:
 
     assert isinstance(processing, _FakeSlot)
     assert isinstance(review, _FakeSlot)
-    assert {
-        call["container"]["key"]
-        for call in st.calls
-        if "container" in call
-    } == {
+    assert {call["container"]["key"] for call in st.calls if "container" in call} == {
         "archive_workbench_view_processing",
         "archive_workbench_view_review",
     }
@@ -409,14 +426,16 @@ def test_top_level_views_use_identified_containers_without_st_empty() -> None:
 
 
 def test_review_app_renders_active_mode_directly_and_mounts_scroll_keeper() -> None:
-    source = (
-        Path(__file__).parents[1] / "src" / "archive_workbench" / "review_app.py"
-    ).read_text(encoding="utf-8")
+    source = (Path(__file__).parents[1] / "src" / "archive_workbench" / "review_app.py").read_text(
+        encoding="utf-8"
+    )
 
     assert "def render_active_view() -> None:" in source
     assert "with isolated_view(st, mode=app_mode):" not in source
     assert "fragmented_view(st, render_active_view, mode=app_mode)" not in source
-    navigation = (Path(__file__).parents[1] / "src" / "archive_workbench" / "ui_navigation.py").read_text(encoding="utf-8")
+    navigation = (
+        Path(__file__).parents[1] / "src" / "archive_workbench" / "ui_navigation.py"
+    ).read_text(encoding="utf-8")
     assert "def fragmented_view(" not in navigation
     assert "st.fragment(" not in navigation
     assert "mount_view_scroll_keeper(st, view_key=app_mode)" in source
@@ -425,11 +444,12 @@ def test_review_app_renders_active_mode_directly_and_mounts_scroll_keeper() -> N
 
 
 def test_review_exposes_complete_object_attributes() -> None:
-    source = (Path(__file__).parents[1] / "src" / "archive_workbench" / "review_app.py").read_text(encoding="utf-8")
+    source = (Path(__file__).parents[1] / "src" / "archive_workbench" / "review_app.py").read_text(
+        encoding="utf-8"
+    )
     assert '"Datos adicionales"' in source
     assert "st.json(selected.attributes, expanded=True)" in source
     assert "información adicional asociada" in TAB_HELP["review_object_tabs"]["Datos adicionales"]
-
 
 
 def test_local_and_cross_view_reruns_have_explicit_scopes() -> None:
@@ -462,7 +482,10 @@ def test_processing_confirmation_controls_are_batched_in_forms() -> None:
     assert '"keep": "Mantener la edición actual"' in source
     assert '"rebase": "Trasladar la edición a la extracción comparada"' in source
     assert 'st.expander("Trasladar la edición existente a esta extracción"' not in source
-    assert "st.form_submit_button(\n                                        \"Aplicar el traslado y usar la extracción nueva" in source
+    assert (
+        'st.form_submit_button(\n                                        "Aplicar el traslado y usar la extracción nueva'
+        in source
+    )
 
 
 def test_every_streamlit_form_requires_an_explicit_button() -> None:
@@ -475,10 +498,7 @@ def test_every_streamlit_form_requires_an_explicit_button() -> None:
             if not isinstance(node, ast.Call):
                 continue
             func = node.func
-            if not (
-                isinstance(func, ast.Attribute)
-                and func.attr == "form"
-            ):
+            if not (isinstance(func, ast.Attribute) and func.attr == "form"):
                 continue
             form_count += 1
             keyword = next(
@@ -496,7 +516,6 @@ def test_every_streamlit_form_requires_an_explicit_button() -> None:
     assert offenders == []
 
 
-
 def test_form_confirmation_does_not_circularly_disable_submit_button() -> None:
     package = Path(__file__).parents[1] / "src" / "archive_workbench"
     offenders: list[str] = []
@@ -506,8 +525,7 @@ def test_form_confirmation_does_not_circularly_disable_submit_button() -> None:
             if not isinstance(node, ast.Call):
                 continue
             if not (
-                isinstance(node.func, ast.Attribute)
-                and node.func.attr == "form_submit_button"
+                isinstance(node.func, ast.Attribute) and node.func.attr == "form_submit_button"
             ):
                 continue
             disabled = next(
@@ -528,29 +546,40 @@ def test_form_confirmation_does_not_circularly_disable_submit_button() -> None:
 
     assert offenders == []
 
+
 def test_catalog_template_confirmation_is_checked_after_submit() -> None:
-    source = (Path(__file__).parents[1] / "src" / "archive_workbench" / "catalog_app.py").read_text(encoding="utf-8")
-    block = source.split('with st.form("catalog_template_apply_form"', 1)[1].split("level_defs = sorted", 1)[0]
+    source = (Path(__file__).parents[1] / "src" / "archive_workbench" / "catalog_app.py").read_text(
+        encoding="utf-8"
+    )
+    block = source.split('with st.form("catalog_template_apply_form"', 1)[1].split(
+        "level_defs = sorted", 1
+    )[0]
     assert 'disabled=confirmation.strip() != "IMPORTAR"' not in block
     assert 'if submitted and confirmation.strip() != "IMPORTAR":' in block
-    assert "Para guardar en el catálogo los cambios de la planilla, escribí exactamente IMPORTAR." in block
+    assert (
+        "Para guardar en el catálogo los cambios de la planilla, escribí exactamente IMPORTAR."
+        in block
+    )
     assert "Guardar en el catálogo los cambios de esta planilla" in block
 
 
-
-
 def test_authority_dictionary_confirmation_is_checked_after_submit() -> None:
-    source = (Path(__file__).parents[1] / "src" / "archive_workbench" / "authority_app.py").read_text(encoding="utf-8")
-    block = source.split('with st.form("authority_dictionary_apply"', 1)[1].split("def render_authorities_view", 1)[0]
+    source = (
+        Path(__file__).parents[1] / "src" / "archive_workbench" / "authority_app.py"
+    ).read_text(encoding="utf-8")
+    block = source.split('with st.form("authority_dictionary_apply"', 1)[1].split(
+        "def render_authorities_view", 1
+    )[0]
     assert 'disabled=confirmation.strip() != "IMPORTAR"' not in block
     assert 'if confirmation.strip() != "IMPORTAR":' in block
     assert "Guardar en el proyecto los datos de este diccionario" in block
     assert "El diccionario tiene errores y no puede aplicarse." in block
 
 
-
 def test_rebase_manual_inputs_require_explicit_form_submission() -> None:
-    source = (Path(__file__).parents[1] / "src" / "archive_workbench" / "processing_app.py").read_text(encoding="utf-8")
+    source = (
+        Path(__file__).parents[1] / "src" / "archive_workbench" / "processing_app.py"
+    ).read_text(encoding="utf-8")
     for label in (
         "Texto resultante exacto para este tramo",
         "Fragmento exacto dentro del texto",
@@ -563,15 +592,15 @@ def test_rebase_manual_inputs_require_explicit_form_submission() -> None:
     assert source.count("enter_to_submit=False") >= 3
 
 
-
 def test_global_input_policy_hides_streamlit_keyboard_instructions() -> None:
-    source = (
-        Path(__file__).parents[1] / "src" / "archive_workbench" / "review_app.py"
-    ).read_text(encoding="utf-8")
+    source = (Path(__file__).parents[1] / "src" / "archive_workbench" / "review_app.py").read_text(
+        encoding="utf-8"
+    )
 
     assert '[data-testid="InputInstructions"]' in source
     assert "display: none !important" in source
     assert "_render_global_input_policy(st)" in source
+
 
 def test_request_app_view_records_mode_and_review_target() -> None:
     st = _FakeStreamlit()
@@ -619,17 +648,19 @@ def test_rebase_submit_is_not_disabled_by_checkbox_state_inside_form() -> None:
 
 
 def test_processing_ui_exposes_specialized_attribute_resolution() -> None:
-    source = (Path(__file__).parents[1] / "src" / "archive_workbench" / "processing_app.py").read_text(encoding="utf-8")
+    source = (
+        Path(__file__).parents[1] / "src" / "archive_workbench" / "processing_app.py"
+    ).read_text(encoding="utf-8")
     assert "rebase_preview.attribute_conflicts" in source
     assert "manual_attribute_selection" in source
     assert "manual_attribute_json" in source
     assert "Valor técnico exacto que querés conservar (JSON)" in source
 
 
-
-
 def test_exchange_review_groups_multiple_events_and_explains_unmatched_lineage() -> None:
-    source = (Path(__file__).parents[1] / "src" / "archive_workbench" / "review_app.py").read_text(encoding="utf-8")
+    source = (Path(__file__).parents[1] / "src" / "archive_workbench" / "review_app.py").read_text(
+        encoding="utf-8"
+    )
     assert "by_event: dict[str, list] = {}" in source
     assert "No se pudo comprobar un punto de partida compartido" in source
     assert "Intentar reconstruir el historial compartido" in source
@@ -640,9 +671,9 @@ def test_exchange_review_groups_multiple_events_and_explains_unmatched_lineage()
 
 
 def test_sidebar_uses_task_oriented_sections_and_context_help() -> None:
-    source = (
-        Path(__file__).parents[1] / "src" / "archive_workbench" / "review_app.py"
-    ).read_text(encoding="utf-8")
+    source = (Path(__file__).parents[1] / "src" / "archive_workbench" / "review_app.py").read_text(
+        encoding="utf-8"
+    )
 
     assert '"Sección"' in source
     assert '"Procesar documentos"' in source
@@ -653,10 +684,15 @@ def test_sidebar_uses_task_oriented_sections_and_context_help() -> None:
     assert "_VIEW_DESCRIPTIONS" not in source
 
 
-
 def test_exchange_ui_uses_plain_spanish_for_main_workflow() -> None:
-    source = (Path(__file__).parents[1] / "src" / "archive_workbench" / "review_app.py").read_text(encoding="utf-8")
-    view = source[source.index("def _render_exchange_view"):source.index("def main()", source.index("def _render_exchange_view"))]
+    source = (Path(__file__).parents[1] / "src" / "archive_workbench" / "review_app.py").read_text(
+        encoding="utf-8"
+    )
+    view = source[
+        source.index("def _render_exchange_view") : source.index(
+            "def main()", source.index("def _render_exchange_view")
+        )
+    ]
     for phrase in (
         'section_heading(st, "Intercambiar cambios")',
         'key="exchange_main_task"',
@@ -683,11 +719,10 @@ def test_exchange_ui_uses_plain_spanish_for_main_workflow() -> None:
     assert "Google Drive se usa sólo para trasladar ZIP" not in source
 
 
-
 def test_exchange_ui_creates_incremental_package_inside_project() -> None:
-    source = (
-        Path(__file__).parents[1] / "src" / "archive_workbench" / "review_app.py"
-    ).read_text(encoding="utf-8")
+    source = (Path(__file__).parents[1] / "src" / "archive_workbench" / "review_app.py").read_text(
+        encoding="utf-8"
+    )
     view = source[
         source.index("def _render_exchange_view") : source.index(
             "def main()", source.index("def _render_exchange_view")
@@ -705,11 +740,10 @@ def test_exchange_ui_creates_incremental_package_inside_project() -> None:
     assert "Tamaño estimado" in source
 
 
-
 def test_google_drive_transport_is_integrated_into_normal_exchange_tasks() -> None:
-    source = (
-        Path(__file__).parents[1] / "src" / "archive_workbench" / "review_app.py"
-    ).read_text(encoding="utf-8")
+    source = (Path(__file__).parents[1] / "src" / "archive_workbench" / "review_app.py").read_text(
+        encoding="utf-8"
+    )
     upload = source[
         source.index("def _render_created_artifact_drive_action") : source.index(
             "def _render_google_drive_receive",
@@ -737,11 +771,10 @@ def test_google_drive_transport_is_integrated_into_normal_exchange_tasks() -> No
     assert "_render_google_drive_transport" not in source
 
 
-
 def test_exchange_advanced_zip_paths_offer_file_selectors() -> None:
-    source = (
-        Path(__file__).parents[1] / "src" / "archive_workbench" / "review_app.py"
-    ).read_text(encoding="utf-8")
+    source = (Path(__file__).parents[1] / "src" / "archive_workbench" / "review_app.py").read_text(
+        encoding="utf-8"
+    )
     for label in (
         "Elegir ZIP con el trabajo editable completo",
         "Elegir ZIP de propuesta recibido",
@@ -753,9 +786,9 @@ def test_exchange_advanced_zip_paths_offer_file_selectors() -> None:
 
 
 def test_receive_file_selector_distinguishes_team_copy_from_change_bundle() -> None:
-    source = (
-        Path(__file__).parents[1] / "src" / "archive_workbench" / "review_app.py"
-    ).read_text(encoding="utf-8")
+    source = (Path(__file__).parents[1] / "src" / "archive_workbench" / "review_app.py").read_text(
+        encoding="utf-8"
+    )
     helper = source[
         source.index("def _render_receive_zip_source") : source.index(
             "def _render_exchange_advanced_tools",
@@ -780,9 +813,9 @@ def test_receive_file_selector_distinguishes_team_copy_from_change_bundle() -> N
 
 
 def test_empty_project_can_adopt_received_team_copy_without_leaving_app() -> None:
-    source = (
-        Path(__file__).parents[1] / "src" / "archive_workbench" / "review_app.py"
-    ).read_text(encoding="utf-8")
+    source = (Path(__file__).parents[1] / "src" / "archive_workbench" / "review_app.py").read_text(
+        encoding="utf-8"
+    )
 
     assert "assess_team_copy_target(project_root)" in source
     assert "Este proyecto todavía está vacío" in source
@@ -796,9 +829,9 @@ def test_empty_project_can_adopt_received_team_copy_without_leaving_app() -> Non
 
 
 def test_managed_runtime_has_explicit_shutdown_control() -> None:
-    source = (
-        Path(__file__).parents[1] / "src" / "archive_workbench" / "review_app.py"
-    ).read_text(encoding="utf-8")
+    source = (Path(__file__).parents[1] / "src" / "archive_workbench" / "review_app.py").read_text(
+        encoding="utf-8"
+    )
     block = source[
         source.index("def _render_managed_shutdown") : source.index(
             "def _render_google_drive_receive", source.index("def _render_managed_shutdown")
@@ -811,16 +844,17 @@ def test_managed_runtime_has_explicit_shutdown_control() -> None:
 
 
 def test_received_team_copy_is_reidentified_automatically_on_first_open() -> None:
-    source = (
-        Path(__file__).parents[1] / "src" / "archive_workbench" / "review_app.py"
-    ).read_text(encoding="utf-8")
+    source = (Path(__file__).parents[1] / "src" / "archive_workbench" / "review_app.py").read_text(
+        encoding="utf-8"
+    )
     assert "activate_received_team_copy(" in source
     assert "Esta copia recibida ya tiene una identidad propia" in source
 
 
-
 def test_exchange_stale_entries_are_explained_archivable_and_cleanable() -> None:
-    source = (Path(__file__).parents[1] / "src" / "archive_workbench" / "review_app.py").read_text(encoding="utf-8")
+    source = (Path(__file__).parents[1] / "src" / "archive_workbench" / "review_app.py").read_text(
+        encoding="utf-8"
+    )
     assert "Detalles de la vista previa desactualizada" in source
     assert "Incluir paquetes archivados" in source
     assert "Archivar paquete" in source
@@ -832,15 +866,21 @@ def test_exchange_stale_entries_are_explained_archivable_and_cleanable() -> None
 
 
 def test_export_success_is_persistent_and_profiles_have_lifecycle_controls() -> None:
-    source = (Path(__file__).parents[1] / "src" / "archive_workbench" / "export_app.py").read_text(encoding="utf-8")
+    source = (Path(__file__).parents[1] / "src" / "archive_workbench" / "export_app.py").read_text(
+        encoding="utf-8"
+    )
     for phrase in (
-        'st.session_state["export_last_run"]', "Exportación creada correctamente", "Descargar esta exportación",
-        "Detalles técnicos de esta exportación", "Cerrar confirmación", "Archivadas",
-        "Archivar esta configuración de exportación", "Restaurar esta configuración de exportación",
+        'st.session_state["export_last_run"]',
+        "Exportación creada correctamente",
+        "Descargar esta exportación",
+        "Detalles técnicos de esta exportación",
+        "Cerrar confirmación",
+        "Archivadas",
+        "Archivar esta configuración de exportación",
+        "Restaurar esta configuración de exportación",
         "Eliminar definitivamente esta configuración de exportación",
     ):
         assert phrase in source
-
 
 
 def test_export_profile_lifecycle_rebuilds_selector_inside_current_fragment(monkeypatch) -> None:
@@ -866,9 +906,9 @@ def test_export_profile_lifecycle_rebuilds_selector_inside_current_fragment(monk
 
 
 def test_export_profile_selector_is_remounted_after_lifecycle_actions() -> None:
-    source = (
-        Path(__file__).parents[1] / "src" / "archive_workbench" / "export_app.py"
-    ).read_text(encoding="utf-8")
+    source = (Path(__file__).parents[1] / "src" / "archive_workbench" / "export_app.py").read_text(
+        encoding="utf-8"
+    )
 
     assert 'key=f"export_profile_selector_{selector_epoch}"' in source
     # Guardar sigue solicitando un rerun explícito; archivar, restaurar y eliminar
@@ -876,7 +916,9 @@ def test_export_profile_selector_is_remounted_after_lifecycle_actions() -> None:
     assert source.count("_request_profile_view_rebuild(st, selected_id=") == 1
     assert source.count("on_click=_queue_profile_lifecycle_action") == 3
     assert "_process_pending_profile_lifecycle(" in source
-    assert source.index("_process_pending_profile_lifecycle(", source.index("def render_export_view")) < source.index(
+    assert source.index(
+        "_process_pending_profile_lifecycle(", source.index("def render_export_view")
+    ) < source.index(
         'section_heading(st, "Exportar corpus")', source.index("def render_export_view")
     )
     assert "rerun_view(st)" in source
@@ -938,7 +980,10 @@ def test_export_profile_archive_is_applied_before_render_without_nested_rerun(mo
     )
 
     assert calls == [("db.sqlite3", "project-1", "profile-1", True, "alex")]
-    assert st.session_state["export_notice"] == "Configuración de exportación archivada: Perfil de prueba"
+    assert (
+        st.session_state["export_notice"]
+        == "Configuración de exportación archivada: Perfil de prueba"
+    )
     assert st.session_state[export_app._EXPORT_SELECTION_KEY] is None
     assert st.session_state[export_app._EXPORT_SELECTOR_EPOCH_KEY] == 1
     assert export_app._EXPORT_PENDING_LIFECYCLE_KEY not in st.session_state
@@ -947,20 +992,40 @@ def test_export_profile_archive_is_applied_before_render_without_nested_rerun(mo
 
 def test_export_profile_lifecycle_requires_confirmation_before_queueing() -> None:
     from archive_workbench import export_app
+
     class FakeStreamlit:
         def __init__(self) -> None:
             self.session_state: dict[str, object] = {}
-    st = FakeStreamlit()
-    export_app._queue_profile_lifecycle_action(st, action="archive", profile_id="profile-1", confirm_key="confirm-profile-1")
-    assert export_app._EXPORT_PENDING_LIFECYCLE_KEY not in st.session_state
-    assert st.session_state[export_app._EXPORT_LIFECYCLE_ERROR_KEY] == "Marcá la confirmación antes de archivar esta configuración de exportación."
 
+    st = FakeStreamlit()
+    export_app._queue_profile_lifecycle_action(
+        st, action="archive", profile_id="profile-1", confirm_key="confirm-profile-1"
+    )
+    assert export_app._EXPORT_PENDING_LIFECYCLE_KEY not in st.session_state
+    assert (
+        st.session_state[export_app._EXPORT_LIFECYCLE_ERROR_KEY]
+        == "Marcá la confirmación antes de archivar esta configuración de exportación."
+    )
 
 
 def test_guided_navigation_keeps_every_section_and_adds_contextual_steps() -> None:
-    source = (Path(__file__).parents[1] / "src" / "archive_workbench" / "review_app.py").read_text(encoding="utf-8")
+    source = (Path(__file__).parents[1] / "src" / "archive_workbench" / "review_app.py").read_text(
+        encoding="utf-8"
+    )
     assert "_WORKFLOW_STEPS = (" in source
-    for mode in ('"catalog"','"processing"','"work"','"review"','"search"','"semantic"','"authorities"','"graph"','"export"','"exchange"','"admin"'):
+    for mode in (
+        '"catalog"',
+        '"processing"',
+        '"work"',
+        '"review"',
+        '"search"',
+        '"semantic"',
+        '"authorities"',
+        '"graph"',
+        '"export"',
+        '"exchange"',
+        '"admin"',
+    ):
         assert mode in source
     assert "Guía de esta sección" in source
     assert "← Ir a la sección anterior del recorrido" not in source
@@ -968,14 +1033,19 @@ def test_guided_navigation_keeps_every_section_and_adds_contextual_steps() -> No
     assert "Objetivo de esta sección" in source
 
 
-
 def test_administration_uses_clear_spanish_and_hides_restore_command_by_default() -> None:
-    source = (
-        Path(__file__).parents[1] / "src" / "archive_workbench" / "admin_app.py"
-    ).read_text(encoding="utf-8")
+    source = (Path(__file__).parents[1] / "src" / "archive_workbench" / "admin_app.py").read_text(
+        encoding="utf-8"
+    )
 
     assert 'section_heading(st, "Administrar y recuperar")' in source
-    for label in ("Integridad", "Copias de seguridad", "Probar recuperación", "Restaurar", "Autorizaciones de análisis"):
+    for label in (
+        "Integridad",
+        "Copias de seguridad",
+        "Probar recuperación",
+        "Restaurar",
+        "Autorizaciones de análisis",
+    ):
         assert label in source
     assert "Crear copia de seguridad" in source
     assert "Copias de seguridad disponibles" in source
@@ -984,10 +1054,10 @@ def test_administration_uses_clear_spanish_and_hides_restore_command_by_default(
     assert 'st.expander("Ver comando técnico de restauración")' in source
     assert 'st.form_submit_button("Crear backup"' not in source
     assert 'st.subheader("Autorizaciones registradas para análisis automáticos")' not in source
-    assert 'cols = st.columns(3)' in source
-    assert 'Versión de la base de datos del proyecto' not in source
+    assert "cols = st.columns(3)" in source
+    assert "Versión de la base de datos del proyecto" not in source
     assert 'st.expander("Detalles técnicos de la comprobación", expanded=False)' in source
-    assert 'Revisión de la base de datos del proyecto' in source
+    assert "Revisión de la base de datos del proyecto" in source
     assert '"Abrir Productores y responsables"' in source
     assert '"Abrir Búsqueda textual"' in source
     assert '"Abrir Búsqueda semántica"' in source
@@ -1002,22 +1072,26 @@ def test_administration_uses_clear_spanish_and_hides_restore_command_by_default(
     assert '"Cantidad a mostrar"' in source
 
 
-
-
 def test_integrity_navigation_can_open_catalog_roles_without_losing_target_unit() -> None:
     root = Path(__file__).parents[1]
     admin_source = (root / "src/archive_workbench/admin_app.py").read_text(encoding="utf-8")
     catalog_source = (root / "src/archive_workbench/catalog_app.py").read_text(encoding="utf-8")
     assert 'st.session_state["catalog_pending_unit_id"] = issue.archival_unit_id' in admin_source
-    assert 'st.session_state["catalog_pending_detail_tab"] = "Productores y responsables"' in admin_source
-    assert 'pending_detail_tab = st.session_state.pop("catalog_pending_detail_tab", None)' in catalog_source
+    assert (
+        'st.session_state["catalog_pending_detail_tab"] = "Productores y responsables"'
+        in admin_source
+    )
+    assert (
+        'pending_detail_tab = st.session_state.pop("catalog_pending_detail_tab", None)'
+        in catalog_source
+    )
     assert '"Productores y responsables"' in catalog_source
 
 
 def test_export_formats_include_plain_language_explanations() -> None:
-    source = (
-        Path(__file__).parents[1] / "src" / "archive_workbench" / "export_app.py"
-    ).read_text(encoding="utf-8")
+    source = (Path(__file__).parents[1] / "src" / "archive_workbench" / "export_app.py").read_text(
+        encoding="utf-8"
+    )
 
     assert '"jsonl": "JSONL · un registro por línea"' in source
     assert '"csv": "CSV · tabla"' in source
@@ -1025,17 +1099,31 @@ def test_export_formats_include_plain_language_explanations() -> None:
 
 
 def test_literal_search_keeps_basic_decisions_visible_and_preserves_all_filters() -> None:
-    source = (Path(__file__).parents[1] / "src" / "archive_workbench" / "review_app.py").read_text(encoding="utf-8")
-    view = source[source.index("def _render_search_view"):source.index("def _format_exchange_value", source.index("def _render_search_view"))]
+    source = (Path(__file__).parents[1] / "src" / "archive_workbench" / "review_app.py").read_text(
+        encoding="utf-8"
+    )
+    view = source[
+        source.index("def _render_search_view") : source.index(
+            "def _format_exchange_value", source.index("def _render_search_view")
+        )
+    ]
     for label in (
-        'section_heading(st, "Búsqueda textual")', "Qué querés encontrar", "Cómo combinar las palabras",
-        'literal_filters_open = st.toggle(', '"Más filtros"',
+        'section_heading(st, "Búsqueda textual")',
+        "Qué querés encontrar",
+        "Cómo combinar las palabras",
+        "literal_filters_open = st.toggle(",
+        '"Más filtros"',
         'key="search_rebuild_open"',
         'st.expander("Detalles técnicos del índice", expanded=False)',
-        "Qué partes de los registros querés buscar", "Documentos en los que querés buscar",
-        "Tipos de bloques de texto", "Estado de revisión de los bloques de texto", "Estado de la página",
-        "Categorías de etiqueta presentes", "Incluir bloques de texto eliminados",
-        "Incluir partes de palabras", "Máximo de resultados",
+        "Qué partes de los registros querés buscar",
+        "Documentos en los que querés buscar",
+        "Tipos de bloques de texto",
+        "Estado de revisión de los bloques de texto",
+        "Estado de la página",
+        "Categorías de etiqueta presentes",
+        "Incluir bloques de texto eliminados",
+        "Incluir partes de palabras",
+        "Máximo de resultados",
         'label_visibility="collapsed"',
     ):
         assert label in view
@@ -1049,7 +1137,13 @@ def test_catalog_and_processing_use_progressive_task_oriented_hierarchy() -> Non
     root = Path(__file__).parents[1] / "src" / "archive_workbench"
     catalog = (root / "catalog_app.py").read_text(encoding="utf-8")
     processing = (root / "processing_app.py").read_text(encoding="utf-8")
-    for label in ("Estado del catálogo", "Unidades del catálogo", "Planilla del catálogo", "Crear una unidad", "Incorporar archivos"):
+    for label in (
+        "Estado del catálogo",
+        "Unidades del catálogo",
+        "Planilla del catálogo",
+        "Crear una unidad",
+        "Incorporar archivos",
+    ):
         assert label in catalog
     assert 'key="catalog_main_task"' in catalog
     assert 'placeholder="Buscar por título, código, descripción o archivo"' in catalog
@@ -1075,7 +1169,9 @@ def test_catalog_and_processing_use_progressive_task_oriented_hierarchy() -> Non
 
 
 def test_semantic_search_separates_plain_language_from_technical_configuration() -> None:
-    source = (Path(__file__).parents[1] / "src" / "archive_workbench" / "semantic_app.py").read_text(encoding="utf-8")
+    source = (
+        Path(__file__).parents[1] / "src" / "archive_workbench" / "semantic_app.py"
+    ).read_text(encoding="utf-8")
     assert 'section_heading(st, "Búsqueda semántica")' in source
     assert "Nombre de esta configuración de búsqueda" in source
     assert "Buscar por significado" in source
@@ -1098,7 +1194,7 @@ def test_semantic_search_supports_distribution_traversal_closure_and_similar_pas
 
     for label in (
         'st.expander("Distribución de los resultados", expanded=False)',
-        'similitud coseno **{row.score:.3f}**',
+        "similitud coseno **{row.score:.3f}**",
         '"Buscar pasajes similares a este resultado"',
         'st.session_state["semantic_search_params"]',
         '"semantic_pending_execute"',
@@ -1112,15 +1208,17 @@ def test_semantic_search_supports_distribution_traversal_closure_and_similar_pas
         '"← Resultado anterior"',
         '"Resultado siguiente →"',
         '"Buscar pasajes similares a este resultado"',
-        'queue_similar_semantic_search(',
+        "queue_similar_semantic_search(",
     ):
         assert label in review
 
 
-def test_review_search_navigation_is_compact_fragment_local_and_supports_selected_block_similarity() -> None:
-    source = (
-        Path(__file__).parents[1] / "src" / "archive_workbench" / "review_app.py"
-    ).read_text(encoding="utf-8")
+def test_review_search_navigation_is_compact_fragment_local_and_supports_selected_block_similarity() -> (
+    None
+):
+    source = (Path(__file__).parents[1] / "src" / "archive_workbench" / "review_app.py").read_text(
+        encoding="utf-8"
+    )
 
     close_start = source.index("def _close_search_result_navigation")
     close_end = source.index("def _render_search_result_navigation", close_start)
@@ -1147,15 +1245,24 @@ def test_review_search_navigation_is_compact_fragment_local_and_supports_selecte
 
 
 def test_review_uses_progressive_task_oriented_hierarchy() -> None:
-    source = (Path(__file__).parents[1] / "src" / "archive_workbench" / "review_app.py").read_text(encoding="utf-8")
-    view = source[source.index('section_heading(st, "Revisar documentos")'):]
+    source = (Path(__file__).parents[1] / "src" / "archive_workbench" / "review_app.py").read_text(
+        encoding="utf-8"
+    )
+    view = source[source.index('section_heading(st, "Revisar documentos")') :]
     for phrase in (
         "Opciones de visualización",
-        "Herramientas de edición de las páginas", "Estado de revisión de la página",
-        "Deshacer o rehacer cambios", "Revisar texto y estructura de la página",
-        "Datos del bloque de texto seleccionado", "Editar texto", "Orden y estructura",
-        "Casilleros y campos", "Estado y anotaciones", "Menciones de entidades",
-        "Datos adicionales", "Historial general",
+        "Herramientas de edición de las páginas",
+        "Estado de revisión de la página",
+        "Deshacer o rehacer cambios",
+        "Revisar texto y estructura de la página",
+        "Datos del bloque de texto seleccionado",
+        "Editar texto",
+        "Orden y estructura",
+        "Casilleros y campos",
+        "Estado y anotaciones",
+        "Menciones de entidades",
+        "Datos adicionales",
+        "Historial general",
     ):
         assert phrase in view
     assert "Cómo funciona la revisión" not in view
@@ -1165,18 +1272,22 @@ def test_review_uses_progressive_task_oriented_hierarchy() -> None:
 
 
 def test_review_tabs_switch_without_forcing_full_app_rerun() -> None:
-    source = (Path(__file__).parents[1] / "src" / "archive_workbench" / "review_app.py").read_text(encoding="utf-8")
+    source = (Path(__file__).parents[1] / "src" / "archive_workbench" / "review_app.py").read_text(
+        encoding="utf-8"
+    )
     marker = 'key="review_object_tabs"'
-    window = source[source.index(marker): source.index(marker) + 180]
+    window = source[source.index(marker) : source.index(marker) + 180]
     assert "rerun_on_change=False" in window
 
 
 def test_rc26_processing_keeps_archival_path_visible_and_compacts_regional_context() -> None:
-    source = (Path(__file__).parents[1] / "src" / "archive_workbench" / "processing_app.py").read_text(encoding="utf-8")
-    default_row = source[source.index('item = {'): source.index('if detailed_inventory:')]
+    source = (
+        Path(__file__).parents[1] / "src" / "archive_workbench" / "processing_app.py"
+    ).read_text(encoding="utf-8")
+    default_row = source[source.index("item = {") : source.index("if detailed_inventory:")]
     assert '"Ruta archivística": row.archival_path' in default_row
-    assert 'context_cols = st.columns([2.2, 0.7, 1.4])' in source
-    assert 'text_cols = st.columns([1.1, 1.4])' in source
+    assert "context_cols = st.columns([2.2, 0.7, 1.4])" in source
+    assert "text_cols = st.columns([1.1, 1.4])" in source
     assert 'help="Lectura parcial guardada para esa página.' in source
 
 
@@ -1218,7 +1329,10 @@ def test_all_navigation_surfaces_have_context_help_contracts() -> None:
         "admin_tabs",
     }
     assert expected_tab_sets <= set(TAB_HELP)
-    assert all(TAB_HELP[key] and all(text.strip() for text in TAB_HELP[key].values()) for key in expected_tab_sets)
+    assert all(
+        TAB_HELP[key] and all(text.strip() for text in TAB_HELP[key].values())
+        for key in expected_tab_sets
+    )
 
     expected_task_sets = {
         "catalog_main_task",
@@ -1263,7 +1377,9 @@ def test_every_tracked_tab_call_supplies_context_help() -> None:
             if not isinstance(node, ast.Call):
                 continue
             function = node.func
-            name = function.id if isinstance(function, ast.Name) else getattr(function, "attr", None)
+            name = (
+                function.id if isinstance(function, ast.Name) else getattr(function, "attr", None)
+            )
             if name != "tracked_tabs":
                 continue
             if not any(keyword.arg == "help_by_label" for keyword in node.keywords):
@@ -1272,7 +1388,9 @@ def test_every_tracked_tab_call_supplies_context_help() -> None:
 
 
 def test_authorities_use_ux04_compact_entity_workspace() -> None:
-    source = (Path(__file__).parents[1] / "src" / "archive_workbench" / "authority_app.py").read_text(encoding="utf-8")
+    source = (
+        Path(__file__).parents[1] / "src" / "archive_workbench" / "authority_app.py"
+    ).read_text(encoding="utf-8")
 
     for phrase in (
         "_AUTHORITY_TASK_LABELS",
@@ -1281,7 +1399,7 @@ def test_authorities_use_ux04_compact_entity_workspace() -> None:
         '"Tipo"',
         '"Estado de ficha"',
         '"Período"',
-        'st.subheader(selected.preferred_name)',
+        "st.subheader(selected.preferred_name)",
         'with st.popover("Agregar nombre alternativo"',
         '["Ficha", "Menciones", "Relaciones", "Historial"]',
         '"Buscar menciones"',
@@ -1291,7 +1409,7 @@ def test_authorities_use_ux04_compact_entity_workspace() -> None:
         'st.subheader("Menciones vinculadas")',
         '"Estado de las páginas"',
         'key=f"relation_create_panel_{selected.authority_id}"',
-        '_MENTION_STATUS_LABELS.get(mention.status, mention.status)',
+        "_MENTION_STATUS_LABELS.get(mention.status, mention.status)",
     ):
         assert phrase in source
 
@@ -1314,18 +1432,24 @@ def test_authorities_use_ux04_compact_entity_workspace() -> None:
     ):
         assert removed not in source
 
-    mentions = source[source.index('st.subheader("Menciones vinculadas")'):source.index('with relations_tab:')]
-    assert mentions.index('st.subheader("Menciones vinculadas")') < mentions.index('"Buscar menciones"')
-    relation_panel = source[source.index('with relations_tab:'):source.index('with history_tab:')]
-    assert 'st.toggle(' in relation_panel
-    assert 'value=False' in relation_panel
-
+    mentions = source[
+        source.index('st.subheader("Menciones vinculadas")') : source.index("with relations_tab:")
+    ]
+    assert mentions.index('st.subheader("Menciones vinculadas")') < mentions.index(
+        '"Buscar menciones"'
+    )
+    relation_panel = source[source.index("with relations_tab:") : source.index("with history_tab:")]
+    assert "st.toggle(" in relation_panel
+    assert "value=False" in relation_panel
 
 
 def test_graph_uses_plain_language_and_progressive_details() -> None:
-    source = (Path(__file__).parents[1] / "src" / "archive_workbench" / "graph_app.py").read_text(encoding="utf-8")
+    source = (Path(__file__).parents[1] / "src" / "archive_workbench" / "graph_app.py").read_text(
+        encoding="utf-8"
+    )
     for phrase in (
-        'section_heading(st, "Explorar relaciones")', 'st.toggle(\n        "Configurar mapa",',
+        'section_heading(st, "Explorar relaciones")',
+        'st.toggle(\n        "Configurar mapa",',
         "Menciones de entidades que necesitan una decisión",
         "Otros problemas detectados en las relaciones",
     ):
@@ -1342,57 +1466,72 @@ def test_graph_uses_plain_language_and_progressive_details() -> None:
 
 
 def test_review_object_details_wrap_long_status_values() -> None:
-    source = (Path(__file__).parents[1] / "src" / "archive_workbench" / "review_app.py").read_text(encoding="utf-8")
+    source = (Path(__file__).parents[1] / "src" / "archive_workbench" / "review_app.py").read_text(
+        encoding="utf-8"
+    )
     assert "Datos del bloque de texto seleccionado" in source
     assert "Estado de revisión" in source
     assert "st.caption" in source
-
 
 
 def test_work_and_export_finish_progressive_plain_language_hierarchy() -> None:
     root = Path(__file__).parents[1] / "src" / "archive_workbench"
     work = (root / "work_app.py").read_text(encoding="utf-8")
     export = (root / "export_app.py").read_text(encoding="utf-8")
-    for phrase in ('section_heading(st, "Organizar trabajo")', "Cantidad de tareas por responsable", "Avance de procesamiento y revisión por documento", 'st.popover("Filtrar asignaciones")'):
+    for phrase in (
+        'section_heading(st, "Organizar trabajo")',
+        "Cantidad de tareas por responsable",
+        "Avance de procesamiento y revisión por documento",
+        'st.popover("Filtrar asignaciones")',
+    ):
         assert phrase in work
     assert "Qué se puede organizar en esta sección" not in work
-    for phrase in ('section_heading(st, "Exportar corpus")', "Configuración de exportación", "Configurar qué exportar", "Revisar textos que se exportarán", "Crear archivo de exportación", "Historial de exportaciones"):
+    for phrase in (
+        'section_heading(st, "Exportar corpus")',
+        "Configuración de exportación",
+        "Configurar qué exportar",
+        "Revisar textos que se exportarán",
+        "Crear archivo de exportación",
+        "Historial de exportaciones",
+    ):
         assert phrase in export
     assert "Cómo preparar una exportación" not in export
     assert '"Archivadas"' in export
 
 
 def test_graph_exposes_only_auditable_mention_repairs() -> None:
-    source = (Path(__file__).parents[1] / "src" / "archive_workbench" / "graph_app.py").read_text(encoding="utf-8")
+    source = (Path(__file__).parents[1] / "src" / "archive_workbench" / "graph_app.py").read_text(
+        encoding="utf-8"
+    )
     assert "Menciones de entidades que necesitan una decisión" in source
     assert "Reubicar menciones seguras" in source
     assert "Fundamento de la decisión" in source
     assert "Marcá la confirmación" in source
 
 
-
 def test_group_duplicate_form_submit_is_not_circularly_disabled() -> None:
-    source = (
-        Path(__file__).parents[1] / "src" / "archive_workbench" / "graph_app.py"
-    ).read_text(encoding="utf-8")
+    source = (Path(__file__).parents[1] / "src" / "archive_workbench" / "graph_app.py").read_text(
+        encoding="utf-8"
+    )
 
     start = source.index('st.markdown("**Resolver el conjunto completo**")')
-    end = source.index('if case.can_resolve_duplicate:', start)
+    end = source.index("if case.can_resolve_duplicate:", start)
     section = source[start:end]
 
-    assert 'disabled=winner_id is None' not in section
-    assert 'if duplicate_group_submit and winner_id is None:' in section
+    assert "disabled=winner_id is None" not in section
+    assert "if duplicate_group_submit and winner_id is None:" in section
     assert '"Elegí la mención que se conservará antes de registrar la decisión."' in section
 
 
-
 def test_exchange_lineage_recovery_uses_explicit_non_circular_form() -> None:
-    source = (Path(__file__).parents[1] / "src" / "archive_workbench" / "review_app.py").read_text(encoding="utf-8")
+    source = (Path(__file__).parents[1] / "src" / "archive_workbench" / "review_app.py").read_text(
+        encoding="utf-8"
+    )
     start = source.index('lineage_panel_key = f"exchange_lineage_panel_{selected_bundle}"')
     end = source.index('if selected.status == "stale"', start)
     block = source[start:end]
     assert "Intentar reconstruir el historial compartido" in block
-    assert 'with st.form(' in block
+    assert "with st.form(" in block
     assert "Registrar el historial compartido reconstruido" in block
     assert "recovery_confirmed" in block
     assert 'with st.expander("Buscar evidencia del historial compartido' not in block
@@ -1400,7 +1539,9 @@ def test_exchange_lineage_recovery_uses_explicit_non_circular_form() -> None:
 
 
 def test_exchange_common_base_forms_are_explicit_and_not_circularly_disabled() -> None:
-    source = (Path(__file__).parents[1] / "src" / "archive_workbench" / "review_app.py").read_text(encoding="utf-8")
+    source = (Path(__file__).parents[1] / "src" / "archive_workbench" / "review_app.py").read_text(
+        encoding="utf-8"
+    )
     start = source.index('if exchange_task == "common_base":')
     end = source.index('if exchange_task == "receive":', start)
     block = source[start:end]
@@ -1416,9 +1557,10 @@ def test_exchange_common_base_forms_are_explicit_and_not_circularly_disabled() -
     assert "Registrar la base común en esta copia" in block
 
 
-
 def test_exchange_state_adoption_forms_are_explicit_and_not_circularly_disabled() -> None:
-    source = (Path(__file__).parents[1] / "src" / "archive_workbench" / "review_app.py").read_text(encoding="utf-8")
+    source = (Path(__file__).parents[1] / "src" / "archive_workbench" / "review_app.py").read_text(
+        encoding="utf-8"
+    )
     start = source.index('if exchange_task == "adoption":')
     end = source.index('if exchange_task == "common_base":', start)
     block = source[start:end]
@@ -1431,25 +1573,23 @@ def test_exchange_state_adoption_forms_are_explicit_and_not_circularly_disabled(
     assert "Reemplazar el trabajo editable con el contenido de este ZIP" in block
 
 
-
 def test_manual_discovery_group_defers_selectbox_selection_until_next_rerun() -> None:
     source = (
-        Path(__file__).parents[1]
-        / "src"
-        / "archive_workbench"
-        / "discovery_app.py"
+        Path(__file__).parents[1] / "src" / "archive_workbench" / "discovery_app.py"
     ).read_text(encoding="utf-8")
 
     assert '"open_discovery_group_pending_selection"' in source
-    assert '] = group.id' in source
+    assert "] = group.id" in source
     assert 'st.session_state["open_discovery_group_selected"] = group.id' not in source
-    assert 'pending_group_id = st.session_state.pop(' in source
-    assert 'if pending_group_id in group_map:' in source
+    assert "pending_group_id = st.session_state.pop(" in source
+    assert "if pending_group_id in group_map:" in source
     assert 'st.session_state["open_discovery_group_selected"] = pending_group_id' in source
 
 
 def test_review_layout_panel_exposes_compact_task_selector_and_confirmations() -> None:
-    source = (Path(__file__).parents[1] / "src" / "archive_workbench" / "review_app.py").read_text(encoding="utf-8")
+    source = (Path(__file__).parents[1] / "src" / "archive_workbench" / "review_app.py").read_text(
+        encoding="utf-8"
+    )
     for phrase in (
         'structure_task_key = f"review_structure_task_{view.editable_page_id}"',
         '"proposal": "Revisar orden y columnas"',
@@ -1473,7 +1613,6 @@ def test_review_layout_panel_exposes_compact_task_selector_and_confirmations() -
         "4. Historial de Orden y estructura",
     ):
         assert obsolete not in source
-
 
 
 def test_ux02_form_structure_uses_one_compact_task_at_a_time() -> None:
@@ -1502,15 +1641,17 @@ def test_ux02_form_structure_uses_one_compact_task_at_a_time() -> None:
 
 
 def test_ux02_layout_proposal_hides_long_order_table_in_details() -> None:
-    source = (
-        Path(__file__).parents[1] / "src" / "archive_workbench" / "review_app.py"
-    ).read_text(encoding="utf-8")
+    source = (Path(__file__).parents[1] / "src" / "archive_workbench" / "review_app.py").read_text(
+        encoding="utf-8"
+    )
     proposal_start = source.index('if mode == "proposal":')
     proposal_end = source.index('if mode == "columns":', proposal_start)
     block = source[proposal_start:proposal_end]
     assert 'with st.expander("Ver detalle del orden propuesto", expanded=False):' in block
-    assert block.index('render_layout_overlay(') < block.index('Ver detalle del orden propuesto')
-    assert block.index('Ver detalle del orden propuesto') < block.index('Confirmar columnas y aplicar orden')
+    assert block.index("render_layout_overlay(") < block.index("Ver detalle del orden propuesto")
+    assert block.index("Ver detalle del orden propuesto") < block.index(
+        "Confirmar columnas y aplicar orden"
+    )
 
 
 def test_ux02_regional_ocr_keeps_six_visible_steps_and_specific_options() -> None:
@@ -1533,9 +1674,9 @@ def test_ux02_regional_ocr_keeps_six_visible_steps_and_specific_options() -> Non
 
 
 def test_layout_overlay_uses_review_page_field() -> None:
-    source = (
-        Path(__file__).parents[1] / "src" / "archive_workbench" / "review_app.py"
-    ).read_text(encoding="utf-8")
+    source = (Path(__file__).parents[1] / "src" / "archive_workbench" / "review_app.py").read_text(
+        encoding="utf-8"
+    )
 
     assert "page_number=view.page," in source
     assert "view.page_number" not in source
@@ -1549,11 +1690,13 @@ def test_processing_regional_ocr_is_linear_visual_and_never_auto_selects() -> No
         '"Página"',
         '"Qué contiene"',
         '"Qué hacer"',
-        'Zonas marcadas:',
+        "Zonas marcadas:",
         '"Procesar las zonas marcadas"',
     ):
         assert label in source
-    region_canvas = (root / "src" / "archive_workbench" / "region_canvas.py").read_text(encoding="utf-8")
+    region_canvas = (root / "src" / "archive_workbench" / "region_canvas.py").read_text(
+        encoding="utf-8"
+    )
     assert "Dibujar zona" in region_canvas
     assert "Usar zona marcada" in region_canvas
     assert 'selection_policy="never"' in source
@@ -1563,7 +1706,6 @@ def test_processing_regional_ocr_is_linear_visual_and_never_auto_selects() -> No
     assert "Agregar texto faltante" in source
     assert "clickable_review_canvas" in source
     assert "review_canvas_with_drawing" in source
-
 
 
 def test_ocr01d_assistant_guidance_update_is_idempotent(tmp_path: Path) -> None:
@@ -1587,7 +1729,9 @@ def test_ocr01d_assistant_guidance_update_is_idempotent(tmp_path: Path) -> None:
     interface = (assistant / "05_CRITERIOS_INTERFAZ.md").read_text(encoding="utf-8")
     first_doc = (assistant / "00_LEER_PRIMERO.md").read_text(encoding="utf-8")
     public_policy = (assistant / "POLITICA_SITIO_PUBLICO.md").read_text(encoding="utf-8")
-    design_policy = (assistant / "LINEAMIENTOS_DE_DISENO_Y_ESCRITURA.md").read_text(encoding="utf-8")
+    design_policy = (assistant / "LINEAMIENTOS_DE_DISENO_Y_ESCRITURA.md").read_text(
+        encoding="utf-8"
+    )
     assert "ruta completa dentro de la interfaz" in interaction
     assert "declarar explícitamente si la imagen se muestra" in interaction
     assert "retomar desde la última acción no persistida" in interaction
@@ -1601,12 +1745,11 @@ def test_ocr01d_assistant_guidance_update_is_idempotent(tmp_path: Path) -> None:
     assert "instrumento de investigación" in design_policy
     assert "SaaS genérico" in design_policy
 
+
 def test_processing_single_selection_survives_widget_state_cleanup() -> None:
     st = _FakeStreamlit()
 
-    _remember_single_widget_state(
-        st, key="processing_geometry_mode", value="conservative_dewarp"
-    )
+    _remember_single_widget_state(st, key="processing_geometry_mode", value="conservative_dewarp")
     _restore_single_widget_state(
         st,
         key="processing_geometry_mode",
@@ -1620,12 +1763,8 @@ def test_processing_single_selection_survives_widget_state_cleanup() -> None:
 def test_processing_document_selection_survives_diagnostic_rerun() -> None:
     st = _FakeStreamlit()
 
-    _remember_multi_widget_state(
-        st, key="processing_source_keys", values=["curved", "flat"]
-    )
-    _restore_multi_widget_state(
-        st, key="processing_source_keys", options=["curved", "flat"]
-    )
+    _remember_multi_widget_state(st, key="processing_source_keys", values=["curved", "flat"])
+    _restore_multi_widget_state(st, key="processing_source_keys", options=["curved", "flat"])
 
     assert st.session_state["processing_source_keys"] == ["curved", "flat"]
 
@@ -1634,9 +1773,7 @@ def test_processing_document_restore_discards_missing_inventory_entries() -> Non
     st = _FakeStreamlit()
     st.session_state["processing_source_keys__remembered"] = ["curved", "missing"]
 
-    _restore_multi_widget_state(
-        st, key="processing_source_keys", options=["curved", "flat"]
-    )
+    _restore_multi_widget_state(st, key="processing_source_keys", options=["curved", "flat"])
 
     assert st.session_state["processing_source_keys"] == ["curved"]
 
@@ -1645,20 +1782,36 @@ def test_launcher_preferences_and_catalog_batch_flow_are_exposed_in_ui() -> None
     root = Path(__file__).parents[1] / "src" / "archive_workbench"
     review = (root / "review_app.py").read_text(encoding="utf-8")
     catalog = (root / "catalog_app.py").read_text(encoding="utf-8")
-    for phrase in ("Abrir o crear un proyecto", "Abrir un proyecto existente", "Crear un proyecto nuevo", "Tu nombre", "Paleta de colores de la interfaz", "Guía de esta sección"):
+    for phrase in (
+        "Abrir o crear un proyecto",
+        "Abrir un proyecto existente",
+        "Crear un proyecto nuevo",
+        "Tu nombre",
+        "Paleta de colores de la interfaz",
+        "Guía de esta sección",
+    ):
         assert phrase in review
-    for phrase in ("Incorporar archivos por lote", "Unidad del catálogo", "Asignar la misma unidad del catálogo a varios archivos de una subcarpeta", "Revisar la estructura permitida del catálogo", "Crear una persona u organización", "Continuar en Procesar documentos"):
+    for phrase in (
+        "Incorporar archivos por lote",
+        "Unidad del catálogo",
+        "Asignar la misma unidad del catálogo a varios archivos de una subcarpeta",
+        "Revisar la estructura permitida del catálogo",
+        "Crear una persona u organización",
+        "Continuar en Procesar documentos",
+    ):
         assert phrase in catalog
 
 
-
 def test_catalog_move_confirmation_is_not_reactively_disabled_inside_form() -> None:
-    source = (Path(__file__).parents[1] / "src" / "archive_workbench" / "catalog_app.py").read_text(encoding="utf-8")
-    block = source.split('with st.form(f"catalog_move_{unit.id}"', 1)[1].split('latest_revision = revisions[0]', 1)[0]
+    source = (Path(__file__).parents[1] / "src" / "archive_workbench" / "catalog_app.py").read_text(
+        encoding="utf-8"
+    )
+    block = source.split('with st.form(f"catalog_move_{unit.id}"', 1)[1].split(
+        "latest_revision = revisions[0]", 1
+    )[0]
     assert "Mover esta unidad a la ubicación elegida" in block
     assert "disabled=new_parent == current_parent" not in block
     assert "if move_submit and new_parent == current_parent" in block
-
 
 
 def test_user_visible_app_copy_does_not_hardcode_project_data() -> None:
@@ -1689,12 +1842,8 @@ def test_batch_unit_suggestion_accepts_filename_abbreviations_without_writing() 
             depth=3,
         ),
     ]
-    assert _batch_unit_suggestion(Path("adm_pub_asp_contr.pdf"), rows).endswith(
-        "Ejemplar 0619"
-    )
-    assert _batch_unit_suggestion(Path("carp_reg.pdf"), rows).endswith(
-        "Carpeta con reglamentos"
-    )
+    assert _batch_unit_suggestion(Path("adm_pub_asp_contr.pdf"), rows).endswith("Ejemplar 0619")
+    assert _batch_unit_suggestion(Path("carp_reg.pdf"), rows).endswith("Carpeta con reglamentos")
 
 
 def test_onboarding_rc3_uses_folder_picker_full_palette_and_safe_preferences() -> None:
@@ -1706,7 +1855,7 @@ def test_onboarding_rc3_uses_folder_picker_full_palette_and_safe_preferences() -
     assert '"Carpeta del proyecto"' in source
     assert "Elegir la carpeta del proyecto en la computadora" in source
     assert "Elegir en la computadora la carpeta donde se creará el proyecto" in source
-    assert 'st.session_state.setdefault(parent_key, str(Path.cwd().resolve()))' in source
+    assert "st.session_state.setdefault(parent_key, str(Path.cwd().resolve()))" in source
     assert '"Nombre de la carpeta del proyecto"' in source
     assert '"--file-selection"' in picker
     assert '"--directory"' in picker
@@ -1726,11 +1875,14 @@ def test_onboarding_rc3_uses_folder_picker_full_palette_and_safe_preferences() -
     assert 'st.session_state["review_actor"] =' not in save_block
     assert 'st.session_state["review_palette"] =' not in save_block
 
-    launcher_block = source.split("def _render_launcher", 1)[1].split(
-        "def _render_preferences", 1
-    )[0]
+    launcher_block = source.split("def _render_launcher", 1)[1].split("def _render_preferences", 1)[
+        0
+    ]
     assert launcher_block.count("_stage_review_preferences(") == 2
-    assert 'save_user_preferences(UserPreferences(actor=clean_actor, palette=palette))' in launcher_block
+    assert (
+        "save_user_preferences(UserPreferences(actor=clean_actor, palette=palette))"
+        in launcher_block
+    )
 
 
 def test_pilot_rc3_home_catalog_and_batch_regressions_are_explicit() -> None:
@@ -1748,17 +1900,16 @@ def test_pilot_rc3_home_catalog_and_batch_regressions_are_explicit() -> None:
     assert "choose_local_directory" in catalog and "choose_local_directory" in graph
 
 
-
-
 def test_catalog_allows_level_change_collection_enablement_and_safe_deletion() -> None:
-    source = (Path(__file__).parents[1] / "src" / "archive_workbench" / "catalog_app.py").read_text(encoding="utf-8")
+    source = (Path(__file__).parents[1] / "src" / "archive_workbench" / "catalog_app.py").read_text(
+        encoding="utf-8"
+    )
     assert '"Habilitar Colección en este proyecto"' in source
     assert '"Tipo de unidad"' in source
     assert '"Cambiar tipo de unidad"' in source
     assert '"Eliminar esta unidad del catálogo"' in source
     assert '"Escribí ELIMINAR para confirmar"' in source
     assert "archival_unit_delete_blockers" in source
-
 
 
 def test_global_scroll_persistence_uses_frameless_component_and_stmain() -> None:
@@ -1787,12 +1938,12 @@ def test_custom_palettes_use_streamlit_native_theme_at_launch() -> None:
     preferences = (
         Path(__file__).parents[1] / "src" / "archive_workbench" / "user_preferences.py"
     ).read_text(encoding="utf-8")
-    cli = (
-        Path(__file__).parents[1] / "src" / "archive_workbench" / "cli.py"
-    ).read_text(encoding="utf-8")
-    review = (
-        Path(__file__).parents[1] / "src" / "archive_workbench" / "review_app.py"
-    ).read_text(encoding="utf-8")
+    cli = (Path(__file__).parents[1] / "src" / "archive_workbench" / "cli.py").read_text(
+        encoding="utf-8"
+    )
+    review = (Path(__file__).parents[1] / "src" / "archive_workbench" / "review_app.py").read_text(
+        encoding="utf-8"
+    )
     assert "STREAMLIT_THEME_PRESETS" in preferences
     for option in (
         '"primaryColor"',
@@ -1810,15 +1961,16 @@ def test_custom_palettes_use_streamlit_native_theme_at_launch() -> None:
     assert "sistema nativo de temas" in review
 
 
-
 def test_project_views_require_an_explicit_user_name_before_navigation() -> None:
-    source = (
-        Path(__file__).parents[1] / "src" / "archive_workbench" / "review_app.py"
-    ).read_text(encoding="utf-8")
+    source = (Path(__file__).parents[1] / "src" / "archive_workbench" / "review_app.py").read_text(
+        encoding="utf-8"
+    )
     assert "def _require_reviewer_name" in source
     assert 'st.error("Antes de continuar, escribí tu nombre.' in source
     assert '"Guardar nombre y continuar"' in source
-    assert 'st.stop()' in source.split("def _require_reviewer_name", 1)[1].split("def _snippet", 1)[0]
+    assert (
+        "st.stop()" in source.split("def _require_reviewer_name", 1)[1].split("def _snippet", 1)[0]
+    )
     main_block = source.split("with st.sidebar:", 1)[1].split("app_mode = st.radio(", 1)[0]
     assert "_require_reviewer_name" in main_block
 
@@ -1844,16 +1996,45 @@ def test_rc12_visible_controls_do_not_use_generic_bare_referents() -> None:
     import ast
 
     forbidden = {
-        "Abrir", "Guardar", "Aplicar", "Confirmar", "Crear", "Eliminar",
-        "Mostrar", "Usar", "Actualizar", "Agregar", "Quitar", "Reintentar",
-        "Seleccionar", "Cambiar", "Registrar", "Editar", "Cerrar", "Estado",
-        "Resultado", "Selección", "Calidad", "Versión", "Candidato",
-        "Candidatos", "Sugerencias",
+        "Abrir",
+        "Guardar",
+        "Aplicar",
+        "Confirmar",
+        "Crear",
+        "Eliminar",
+        "Mostrar",
+        "Usar",
+        "Actualizar",
+        "Agregar",
+        "Quitar",
+        "Reintentar",
+        "Seleccionar",
+        "Cambiar",
+        "Registrar",
+        "Editar",
+        "Cerrar",
+        "Estado",
+        "Resultado",
+        "Selección",
+        "Calidad",
+        "Versión",
+        "Candidato",
+        "Candidatos",
+        "Sugerencias",
     }
     visible_calls = {
-        "button", "form_submit_button", "download_button", "selectbox", "radio",
-        "text_input", "text_area", "checkbox", "multiselect", "number_input",
-        "file_uploader", "toggle",
+        "button",
+        "form_submit_button",
+        "download_button",
+        "selectbox",
+        "radio",
+        "text_input",
+        "text_area",
+        "checkbox",
+        "multiselect",
+        "number_input",
+        "file_uploader",
+        "toggle",
     }
     violations: list[str] = []
     for path in _rc12_visible_ui_paths():
@@ -1871,7 +2052,9 @@ def test_rc12_visible_controls_do_not_use_generic_bare_referents() -> None:
 
 
 def test_rc12_removes_flagged_pilot01_interface_phrases() -> None:
-    visible_source = "\n".join(path.read_text(encoding="utf-8") for path in _rc12_visible_ui_paths())
+    visible_source = "\n".join(
+        path.read_text(encoding="utf-8") for path in _rc12_visible_ui_paths()
+    )
     for phrase in (
         "Cada tarjeta resume una parte del trabajo",
         "qué significa cada columna",
@@ -1902,36 +2085,37 @@ def test_rc12_rewrites_the_two_user_reported_implicit_referents() -> None:
     assert 'placeholder="Buscar por título, código, descripción o archivo"' in catalog
 
 
-def test_rc12_audit_document_is_historical_and_covers_helper_components() -> None:
-    audit = (
+def test_rc12_audit_document_is_not_reintroduced_into_public_docs() -> None:
+    public_audit = (
         Path(__file__).parents[1]
         / "docs"
         / "historico"
         / "actualizaciones"
         / "AUDITORIA_INTERFAZ_RC12_5_PASADAS.txt"
-    ).read_text(encoding="utf-8")
-    for token in (
-        "region_canvas.py",
-        "review_canvas.py",
-        "audiovisual_review_component.py",
-        "graph_canvas.py",
-        "local_picker.py",
-        "lectura semántica",
-        "referente",
-        "cinco pasadas",
-    ):
-        assert token in audit
+    )
+    assert not public_audit.exists()
 
 
 def test_review_tabs_and_processing_tasks_are_exposed_clearly() -> None:
     root = Path(__file__).parents[1]
     review = (root / "src" / "archive_workbench" / "review_app.py").read_text(encoding="utf-8")
-    processing = (root / "src" / "archive_workbench" / "processing_app.py").read_text(encoding="utf-8")
+    processing = (root / "src" / "archive_workbench" / "processing_app.py").read_text(
+        encoding="utf-8"
+    )
 
     assert review.index('"Datos adicionales"') < review.index('"Historial general"')
-    assert "páginas que funcionan como formularios" in TAB_HELP["review_object_tabs"]["Casilleros y campos"]
-    assert "vincular una parte del bloque de texto" in TAB_HELP["review_object_tabs"]["Menciones de entidades"]
-    assert "nombres detectados automáticamente" in TAB_HELP["review_object_tabs"]["Menciones de entidades"]
+    assert (
+        "páginas que funcionan como formularios"
+        in TAB_HELP["review_object_tabs"]["Casilleros y campos"]
+    )
+    assert (
+        "vincular una parte del bloque de texto"
+        in TAB_HELP["review_object_tabs"]["Menciones de entidades"]
+    )
+    assert (
+        "nombres detectados automáticamente"
+        in TAB_HELP["review_object_tabs"]["Menciones de entidades"]
+    )
     assert '"Elegir texto"' in processing
     assert '"Leer una zona"' in processing
     assert '"Corregir o agregar"' in processing
@@ -1951,8 +2135,6 @@ def test_rc13_processing_exposes_ordered_steps_and_removes_duplicate_preparation
     assert '"Preparar páginas"' not in processing
     assert "clickable_review_canvas" in processing
     assert "Agregar texto faltante" in processing
-
-
 
 
 def test_rc15_processing_separates_full_page_partial_text_and_bulk_review_tasks() -> None:
@@ -1979,6 +2161,7 @@ def test_rc15_processing_separates_full_page_partial_text_and_bulk_review_tasks(
     assert "archive-workbench-scroll-anchor:" not in navigation
     assert "setTriggerValue" not in navigation
 
+
 def test_rc40_review_bbox_selection_updates_object_inside_local_fragment() -> None:
     root = Path(__file__).parents[1] / "src" / "archive_workbench"
     review_canvas = (root / "review_canvas.py").read_text(encoding="utf-8")
@@ -1991,12 +2174,20 @@ def test_rc40_review_bbox_selection_updates_object_inside_local_fragment() -> No
     assert "on_selection_commit_change=on_selection_commit_change" in review_canvas
     assert "if (Boolean(data.commit_selection_on_click))" in review_canvas
     assert "setTriggerValue('selection_commit', state.selected)" in review_canvas
-    fragment = review_app[review_app.index("@st.fragment"):review_app.index("_render_review_object_fragment()", review_app.index("@st.fragment")) + len("_render_review_object_fragment()")]
+    fragment = review_app[
+        review_app.index("@st.fragment") : review_app.index(
+            "_render_review_object_fragment()", review_app.index("@st.fragment")
+        )
+        + len("_render_review_object_fragment()")
+    ]
     assert 'key="review_source_key"' not in fragment
     assert 'key="review_page_number"' not in fragment
 
+
 def test_rc17_review_has_no_second_manual_add_text_path() -> None:
-    review = (Path(__file__).parents[1] / "src" / "archive_workbench" / "review_app.py").read_text(encoding="utf-8")
+    review = (Path(__file__).parents[1] / "src" / "archive_workbench" / "review_app.py").read_text(
+        encoding="utf-8"
+    )
     assert '"Agregar un bloque de texto"' not in review
     assert "Agregar este bloque de texto" not in review
     assert "Procesar documentos > Corregir o agregar" in review
@@ -2024,7 +2215,9 @@ def test_rc15_bulk_document_identity_is_stable_when_source_keys_repeat() -> None
 
 
 def test_rc20_discovery_review_is_accept_or_discard_with_stable_bulk_and_discarded_tabs() -> None:
-    source = (Path(__file__).parents[1] / "src" / "archive_workbench" / "discovery_app.py").read_text(encoding="utf-8")
+    source = (
+        Path(__file__).parents[1] / "src" / "archive_workbench" / "discovery_app.py"
+    ).read_text(encoding="utf-8")
     assert 'options=("accept", "reject")' in source
     assert "Corregir el texto o el tipo antes de aceptar esta referencia" in source
     assert "Aplazar" not in source
@@ -2038,7 +2231,11 @@ def test_rc20_discovery_review_is_accept_or_discard_with_stable_bulk_and_discard
     assert "Descartar las referencias seleccionadas" in source
     assert "Restaurar esta referencia para revisarla" in source
     assert 'with st.expander(f"Referencias descartadas' not in source
-    bulk_form = source[source.index('with st.form(\n                f"open_discovery_bulk_form_'):source.index('if bulk_create_submit or bulk_reject_submit:')]
+    bulk_form = source[
+        source.index('with st.form(\n                f"open_discovery_bulk_form_') : source.index(
+            "if bulk_create_submit or bulk_reject_submit:"
+        )
+    ]
     assert "st.multiselect(" in bulk_form
     assert "st.checkbox(" in bulk_form
     assert bulk_form.count("st.form_submit_button(") == 2
@@ -2047,28 +2244,38 @@ def test_rc20_discovery_review_is_accept_or_discard_with_stable_bulk_and_discard
     assert "disabled=" not in bulk_form
     assert "Buscar referencias que podrían corresponder al mismo referente" in source
     assert "Actualizar referencias después de corregir el texto" in source
-    assert 'limit=None' in source
+    assert "limit=None" in source
     assert '"Cuántas referencias mostrar"' in source
     assert 'options=("100", "250", "500", "1000", "Todas")' in source
     assert "index=2" in source
-    assert 'f"Mostrando {len(active_candidates):,} de {len(active_candidates_all):,} referencias pendientes"' in source
-    assert 'f"Mostrando {len(rejected_candidates):,} de {len(rejected_candidates_all):,} referencias descartadas"' in source
+    assert (
+        'f"Mostrando {len(active_candidates):,} de {len(active_candidates_all):,} referencias pendientes"'
+        in source
+    )
+    assert (
+        'f"Mostrando {len(rejected_candidates):,} de {len(rejected_candidates_all):,} referencias descartadas"'
+        in source
+    )
     assert '"Obra / publicación"' in source
     assert "Actualizar esta configuración a {current_label}" in source
     assert "reglas históricas" in source
     assert "Las búsquedas históricas siguen disponibles" in source
-    assert "_discovery_rules_label(run_map[value].provider_key, run_map[value].provider_version)" in source
+    assert (
+        "_discovery_rules_label(run_map[value].provider_key, run_map[value].provider_version)"
+        in source
+    )
 
 
 def test_rc19_authority_relations_show_catalog_roles_read_only() -> None:
-    source = (Path(__file__).parents[1] / "src" / "archive_workbench" / "authority_app.py").read_text(encoding="utf-8")
+    source = (
+        Path(__file__).parents[1] / "src" / "archive_workbench" / "authority_app.py"
+    ).read_text(encoding="utf-8")
     assert 'relation_kinds=("analytical", "producer", "manager")' in source
     assert '"Roles archivísticos"' in source
     assert "Se registran y modifican desde Catálogo" in source
     assert "en Entidades y menciones son de solo lectura" in source
     assert "acá son de solo lectura" not in source
     assert "Crear una relación analítica" in source
-
 
 
 def test_rc60_final_pilot01e_audit_keeps_technical_identifiers_secondary() -> None:
@@ -2086,11 +2293,15 @@ def test_rc60_final_pilot01e_audit_keeps_technical_identifiers_secondary() -> No
     execute_batch = processing.split("def _execute_batch(", 1)[1].split("def _open_review", 1)[0]
     assert "Procesando **{source_key}**" not in execute_batch
     assert "source_labels" in execute_batch
-    label_helper = processing.split("def _processing_document_labels", 1)[1].split("def _bbox_geometry", 1)[0]
+    label_helper = processing.split("def _processing_document_labels", 1)[1].split(
+        "def _bbox_geometry", 1
+    )[0]
     assert "referencia {row.source_key}" not in label_helper
     assert "documento {row_id}" not in label_helper
 
-    result_block = export.split("def _render_export_result", 1)[1].split("def _render_profile_editor", 1)[0]
+    result_block = export.split("def _render_export_result", 1)[1].split(
+        "def _render_profile_editor", 1
+    )[0]
     assert "Detalles técnicos de esta exportación" in result_block
     assert "Descargar esta exportación" in result_block
     assert 'st.caption(f"SHA-256:' not in result_block
@@ -2117,9 +2328,9 @@ def test_catalog_unit_navigation_exposes_hierarchy_and_preserves_ancestors() -> 
     assert _catalog_descendant_ids(rows, "root") == {"series", "file", "other"}
     assert _catalog_descendant_ids(rows, "series") == {"file"}
 
-    source = (
-        Path(__file__).parents[1] / "src" / "archive_workbench" / "catalog_app.py"
-    ).read_text(encoding="utf-8")
+    source = (Path(__file__).parents[1] / "src" / "archive_workbench" / "catalog_app.py").read_text(
+        encoding="utf-8"
+    )
     assert "Catálogo y contexto de custodia" in source
     assert "Abrí las ramas y seleccioná la unidad directamente en el árbol" in source
     assert "Repositorio o contexto de custodia" in source
@@ -2130,9 +2341,9 @@ def test_catalog_unit_navigation_exposes_hierarchy_and_preserves_ancestors() -> 
 
 
 def test_rc34_catalog_uses_browser_local_explorer_tree_and_not_button_stack() -> None:
-    tree = (
-        Path(__file__).parents[1] / "src" / "archive_workbench" / "catalog_tree.py"
-    ).read_text(encoding="utf-8")
+    tree = (Path(__file__).parents[1] / "src" / "archive_workbench" / "catalog_tree.py").read_text(
+        encoding="utf-8"
+    )
     catalog = (
         Path(__file__).parents[1] / "src" / "archive_workbench" / "catalog_app.py"
     ).read_text(encoding="utf-8")
@@ -2142,7 +2353,7 @@ def test_rc34_catalog_uses_browser_local_explorer_tree_and_not_button_stack() ->
     assert "aw-toggle" in tree
     assert "setTriggerValue('selection_commit'" in tree
     # Abrir/cerrar ramas es estado local del navegador y no comunica triggers.
-    toggle_block = tree[tree.index("toggle.onclick"):tree.index("label.onclick")]
+    toggle_block = tree[tree.index("toggle.onclick") : tree.index("label.onclick")]
     assert "setTriggerValue" not in toggle_block
     assert "catalog_tree_select(" in catalog
     assert "_render_catalog_tree_selector" not in catalog
@@ -2164,35 +2375,44 @@ def test_rc34_all_streamlit_date_inputs_have_explicit_bounds() -> None:
             keywords = {item.arg for item in node.keywords if item.arg}
             calls.append((path.name, node.lineno, keywords))
     assert calls
-    missing = [f"{name}:{line}" for name, line, keys in calls if not {"min_value", "max_value"} <= keys]
+    missing = [
+        f"{name}:{line}" for name, line, keys in calls if not {"min_value", "max_value"} <= keys
+    ]
     assert missing == []
 
 
 def test_rc40_review_navigation_has_local_fragment_and_no_failed_generation_strategy() -> None:
     root = Path(__file__).parents[1]
-    review_source = (root / "src" / "archive_workbench" / "review_app.py").read_text(encoding="utf-8")
-    canvas_source = (root / "src" / "archive_workbench" / "review_canvas.py").read_text(encoding="utf-8")
-    authority_source = (root / "src" / "archive_workbench" / "authority_app.py").read_text(encoding="utf-8")
+    review_source = (root / "src" / "archive_workbench" / "review_app.py").read_text(
+        encoding="utf-8"
+    )
+    canvas_source = (root / "src" / "archive_workbench" / "review_canvas.py").read_text(
+        encoding="utf-8"
+    )
+    authority_source = (root / "src" / "archive_workbench" / "authority_app.py").read_text(
+        encoding="utf-8"
+    )
 
-    assert 'review_navigation_generation' not in review_source
-    assert 'review_context_source_key' not in review_source
-    assert 'review_context_page_number' not in review_source
+    assert "review_navigation_generation" not in review_source
+    assert "review_context_source_key" not in review_source
+    assert "review_context_page_number" not in review_source
     assert 'key="review_source_key"' in review_source
     assert 'key="review_page_number"' in review_source
-    assert 'review_page_source' in review_source
-    assert 'commit_on_click=True' in review_source
-    assert '@st.fragment' in review_source
-    assert 'if commit_on_click and selection_state_key:' in canvas_source
+    assert "review_page_source" in review_source
+    assert "commit_on_click=True" in review_source
+    assert "@st.fragment" in review_source
+    assert "if commit_on_click and selection_state_key:" in canvas_source
 
     candidate_start = authority_source.index('"Abrir este fragmento en Revisar documentos"')
-    candidate_block = authority_source[candidate_start:candidate_start + 850]
-    assert 'request_app_view(' in candidate_block
-    assert 'rerun_app(st)' in candidate_block
+    candidate_block = authority_source[candidate_start : candidate_start + 850]
+    assert "request_app_view(" in candidate_block
+    assert "rerun_app(st)" in candidate_block
+
 
 def test_rc34_catalog_roles_offer_explicit_confirmed_deletion() -> None:
-    source = (
-        Path(__file__).parents[1] / "src" / "archive_workbench" / "catalog_app.py"
-    ).read_text(encoding="utf-8")
+    source = (Path(__file__).parents[1] / "src" / "archive_workbench" / "catalog_app.py").read_text(
+        encoding="utf-8"
+    )
     assert '"Eliminar vínculo"' in source
     assert "Confirmo que este vínculo fue registrado por error" in source
     assert "delete_entity_relation(" in source
@@ -2200,9 +2420,9 @@ def test_rc34_catalog_roles_offer_explicit_confirmed_deletion() -> None:
 
 
 def test_literal_search_supports_kwic_distribution_and_result_traversal() -> None:
-    source = (
-        Path(__file__).parents[1] / "src" / "archive_workbench" / "review_app.py"
-    ).read_text(encoding="utf-8")
+    source = (Path(__file__).parents[1] / "src" / "archive_workbench" / "review_app.py").read_text(
+        encoding="utf-8"
+    )
 
     for label in (
         'st.expander("Distribución de los resultados", expanded=False)',
@@ -2214,7 +2434,7 @@ def test_literal_search_supports_kwic_distribution_and_result_traversal() -> Non
         'f"Volver a {search_name}"',
         '"Búsqueda textual"',
         'st.session_state["review_search_navigation"]',
-        "saved_params = st.session_state.get(\"review_search_params\")",
+        'saved_params = st.session_state.get("review_search_params")',
     ):
         assert label in source
 
@@ -2226,9 +2446,9 @@ def test_literal_search_supports_kwic_distribution_and_result_traversal() -> Non
 
 
 def test_audiovisual_export_uses_configure_preview_create_history_flow() -> None:
-    source = (
-        Path(__file__).parents[1] / "src" / "archive_workbench" / "export_app.py"
-    ).read_text(encoding="utf-8")
+    source = (Path(__file__).parents[1] / "src" / "archive_workbench" / "export_app.py").read_text(
+        encoding="utf-8"
+    )
     start = source.index("def _render_audiovisual_export_view")
     end = source.index("def render_export_view", start)
     view = source[start:end]
@@ -2249,14 +2469,12 @@ def test_audiovisual_export_uses_configure_preview_create_history_flow() -> None
     assert "Descargar las transcripciones de audio y video" not in view
 
 
-
-
 def test_exchange_view_keeps_reactive_controls_out_of_expanders() -> None:
     import ast
 
-    source = (
-        Path(__file__).parents[1] / "src" / "archive_workbench" / "review_app.py"
-    ).read_text(encoding="utf-8")
+    source = (Path(__file__).parents[1] / "src" / "archive_workbench" / "review_app.py").read_text(
+        encoding="utf-8"
+    )
     tree = ast.parse(source)
     target = next(
         node
@@ -2300,9 +2518,9 @@ def test_exchange_view_keeps_reactive_controls_out_of_expanders() -> None:
 
 
 def test_exchange_ui_rc56_integrates_transport_and_uses_progressive_disclosure() -> None:
-    source = (
-        Path(__file__).parents[1] / "src" / "archive_workbench" / "review_app.py"
-    ).read_text(encoding="utf-8")
+    source = (Path(__file__).parents[1] / "src" / "archive_workbench" / "review_app.py").read_text(
+        encoding="utf-8"
+    )
     exchange = source[
         source.index("def _render_exchange_view") : source.index(
             "def main()", source.index("def _render_exchange_view")
@@ -2334,16 +2552,16 @@ def test_exchange_ui_rc56_integrates_transport_and_uses_progressive_disclosure()
     archive_button = exchange.index('"Archivar paquete"')
     archive_note = exchange.index('"Nota sobre por qué archivás este paquete (opcional)"')
     assert archive_button < archive_note
-    assert 'st.session_state[archive_panel_key] = True' in exchange[archive_button:archive_note]
+    assert "st.session_state[archive_panel_key] = True" in exchange[archive_button:archive_note]
     assert '"Resolver un problema entre copias"' in exchange
     assert '"Reconectar dos copias con el mismo trabajo editable"' in source
     assert 'st.session_state["exchange_recovery_mode"] = True' in exchange
     assert '"Volver a Recibir cambios"' in exchange
 
 
-
-
-def test_local_file_picker_supports_multiple_files_and_deduplicates(monkeypatch, tmp_path: Path) -> None:
+def test_local_file_picker_supports_multiple_files_and_deduplicates(
+    monkeypatch, tmp_path: Path
+) -> None:
     from archive_workbench.local_picker import choose_local_files
     import archive_workbench.local_picker as picker
 
@@ -2417,9 +2635,7 @@ def test_all_streamlit_expanders_are_informational_only() -> None:
                 )
                 if isinstance(disabled, ast.Constant) and disabled.value is True:
                     continue
-                violations.append(
-                    (path.name, node.lineno, child.lineno, child.func.attr)
-                )
+                violations.append((path.name, node.lineno, child.lineno, child.func.attr))
 
     assert violations == []
 
@@ -2440,7 +2656,9 @@ def test_all_tracked_tabs_use_passive_navigation() -> None:
             if not isinstance(node, ast.Call):
                 continue
             function = node.func
-            name = function.id if isinstance(function, ast.Name) else getattr(function, "attr", None)
+            name = (
+                function.id if isinstance(function, ast.Name) else getattr(function, "attr", None)
+            )
             if name != "tracked_tabs":
                 continue
             keyword = next(
@@ -2510,14 +2728,11 @@ def test_forms_do_not_disable_submit_from_widgets_inside_the_same_form() -> None
                 )
                 if disabled is None:
                     continue
-                used_names = {
-                    item.id for item in ast.walk(disabled) if isinstance(item, ast.Name)
-                }
+                used_names = {item.id for item in ast.walk(disabled) if isinstance(item, ast.Name)}
                 for name in sorted(used_names & form_widget_names):
                     violations.append((path.name, child.lineno, name))
 
     assert violations == []
-
 
 
 def test_form_toggles_do_not_control_reactive_content_inside_the_same_form() -> None:
@@ -2550,9 +2765,7 @@ def test_form_toggles_do_not_control_reactive_content_inside_the_same_form() -> 
                 ):
                     continue
                 targets = child.targets if isinstance(child, ast.Assign) else [child.target]
-                toggle_names.update(
-                    target.id for target in targets if isinstance(target, ast.Name)
-                )
+                toggle_names.update(target.id for target in targets if isinstance(target, ast.Name))
             for child in ast.walk(node):
                 if not isinstance(child, ast.If):
                     continue
@@ -2574,13 +2787,13 @@ def test_rc64_streamlit_panels_keep_required_state_when_closed() -> None:
 
     assert 'st.session_state["graph_applied_filters"] = applied_graph_filters' in graph
     assert 'edge_types=tuple(applied_graph_filters["edge_types"])' in graph
-    assert 'edge_types=tuple(edge_types)' not in graph
+    assert "edge_types=tuple(edge_types)" not in graph
 
     assert 'key=f"review_display_options_open_{source_key}_{page}"' in review
     assert 'key=f"review_page_tools_open_{source_key}_{page}"' in review
     assert 'key=f"review_page_state_open_{source_key}_{page}"' in review
-    assert 'show_boxes = bool(' in review
-    assert 'include_deleted = bool(' in review
+    assert "show_boxes = bool(" in review
+    assert "include_deleted = bool(" in review
     search_view = review[
         review.index("def _render_search_view") : review.index(
             "def _format_exchange_value", review.index("def _render_search_view")
@@ -2589,7 +2802,7 @@ def test_rc64_streamlit_panels_keep_required_state_when_closed() -> None:
     assert search_view.index("fields = saved_fields") < search_view.index(
         'with st.form("search_corpus_form"'
     )
-    assert search_view.index('literal_filters_open = st.toggle(') < search_view.index(
+    assert search_view.index("literal_filters_open = st.toggle(") < search_view.index(
         'with st.form("search_corpus_form"'
     )
 
@@ -2597,9 +2810,7 @@ def test_rc64_streamlit_panels_keep_required_state_when_closed() -> None:
     assert export.index("temporal_enabled = default_temporal_enabled") < export.index(
         "with st.form(form_key"
     )
-    assert export.index("temporal_filter_open = st.toggle(") < export.index(
-        "with st.form(form_key"
-    )
+    assert export.index("temporal_filter_open = st.toggle(") < export.index("with st.form(form_key")
     assert export.index("separator_options_open = st.toggle(") < export.index(
         "with st.form(form_key"
     )
@@ -2610,21 +2821,26 @@ def test_rc64_streamlit_panels_keep_required_state_when_closed() -> None:
     assert semantic.index('key="semantic_profile_build_options_open"') < semantic.index(
         'with st.form("semantic_profile_form"'
     )
-    assert semantic.index('build_device = str(') < semantic.index(
-        'if technical_build_options_open:',
+    assert semantic.index("build_device = str(") < semantic.index(
+        "if technical_build_options_open:",
         semantic.index('key="semantic_index_build_options_open"'),
     )
 
+
 def test_audiovisual_annotation_requires_explicit_button() -> None:
     source = (
-        Path(__file__).parents[1]
-        / "src"
-        / "archive_workbench"
-        / "audiovisual_review_component.py"
+        Path(__file__).parents[1] / "src" / "archive_workbench" / "audiovisual_review_component.py"
     ).read_text(encoding="utf-8")
     assert "noteButton.onclick = addNote" in source
     assert "noteInput.onkeydown" not in source
-    assert "event.key === 'Enter'" not in source[source.index("const addNote"):source.index("return () =>", source.index("const addNote"))]
+    assert (
+        "event.key === 'Enter'"
+        not in source[
+            source.index("const addNote") : source.index(
+                "return () =>", source.index("const addNote")
+            )
+        ]
+    )
 
 
 def test_widget_keys_changed_after_render_use_pending_state() -> None:
@@ -2691,7 +2907,7 @@ def test_widget_keys_changed_after_render_use_pending_state() -> None:
 
     assert violations == []
     discovery = (package / "discovery_app.py").read_text(encoding="utf-8")
-    assert 'open_discovery_profile_selected__pending' in discovery
+    assert "open_discovery_profile_selected__pending" in discovery
     assert 'st.session_state["open_discovery_profile_selected"] = saved.id' not in discovery
 
 
@@ -2706,9 +2922,7 @@ def test_managed_distribution_uses_host_visible_workspace_instead_of_native_pick
     audiovisual_source = (root / "src" / "archive_workbench" / "audiovisual_app.py").read_text(
         encoding="utf-8"
     )
-    graph_source = (root / "src" / "archive_workbench" / "graph_app.py").read_text(
-        encoding="utf-8"
-    )
+    graph_source = (root / "src" / "archive_workbench" / "graph_app.py").read_text(encoding="utf-8")
 
     assert "workspace = managed_workspace()" in review_source
     assert "ArchiveWorkbenchData/Projects" in review_source

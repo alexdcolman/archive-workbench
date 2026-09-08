@@ -4,6 +4,7 @@ Revision ID: 0045_audiovisual_transcription
 Revises: 0044_layout_structure_review
 Create Date: 2026-08-07
 """
+
 from __future__ import annotations
 
 from alembic import op
@@ -161,9 +162,7 @@ def upgrade() -> None:
         sa.Column("note", sa.Text(), nullable=True),
         sa.Column("changed_by", sa.String(length=200), nullable=False),
         sa.Column("changed_at", sa.DateTime(timezone=True), nullable=False),
-        sa.UniqueConstraint(
-            "segment_id", "revision_number", name="uq_transcript_segment_revision"
-        ),
+        sa.UniqueConstraint("segment_id", "revision_number", name="uq_transcript_segment_revision"),
     )
     op.create_index(
         "ix_transcript_segment_revisions_segment",
@@ -200,7 +199,9 @@ def upgrade() -> None:
         sa.Column("updated_at", sa.DateTime(timezone=True), nullable=False),
     )
     op.create_index(
-        "ix_segment_entity_mentions_segment", "segment_entity_mentions", ["segment_id", "start_offset"]
+        "ix_segment_entity_mentions_segment",
+        "segment_entity_mentions",
+        ["segment_id", "start_offset"],
     )
     op.create_index(
         "ix_segment_entity_mentions_authority", "segment_entity_mentions", ["authority_id"]

@@ -52,6 +52,12 @@ __all__ = [
     "PreprocessingManifest",
     "ProjectDecisions",
     "RemoteLocationRecord",
+    "NormalizedRegionBox",
+    "RegionDefinition",
+    "RegionExportRecord",
+    "RegionExtractionManifest",
+    "RegionOcrOptions",
+    "RegionTemplate",
     "TestCorpus",
 ]
 

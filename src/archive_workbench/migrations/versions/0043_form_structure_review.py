@@ -4,6 +4,7 @@ Revision ID: 0043_form_structure_review
 Revises: 0042_preprocessing_geometry_trace
 Create Date: 2026-08-05
 """
+
 from __future__ import annotations
 
 from alembic import op

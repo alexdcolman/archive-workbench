@@ -157,9 +157,7 @@ def should_clean_surya_library_path(profile: ExtractionProfile) -> bool:
 
     if not profile.surya_clean_library_path:
         return False
-    managed_backend = str(
-        os.environ.get("ARCHIVE_WORKBENCH_SURYA_BACKEND", "")
-    ).strip().casefold()
+    managed_backend = str(os.environ.get("ARCHIVE_WORKBENCH_SURYA_BACKEND", "")).strip().casefold()
     return managed_backend != "llamacpp"
 
 
@@ -179,14 +177,10 @@ def apply_managed_llamacpp_limits(
     Workbench. Las variables ya definidas se respetan como override explícito.
     """
 
-    managed_backend = str(
-        os.environ.get("ARCHIVE_WORKBENCH_SURYA_BACKEND", "")
-    ).strip().casefold()
+    managed_backend = str(os.environ.get("ARCHIVE_WORKBENCH_SURYA_BACKEND", "")).strip().casefold()
     if backend != "llamacpp" or managed_backend != "llamacpp":
         return
-    env.setdefault(
-        "SURYA_INFERENCE_TIMEOUT_SECONDS", str(profile.document_timeout_seconds)
-    )
+    env.setdefault("SURYA_INFERENCE_TIMEOUT_SECONDS", str(profile.document_timeout_seconds))
     env.setdefault("SURYA_MAX_TOKENS_FULL_PAGE", "8192")
 
 
@@ -232,9 +226,7 @@ def surya_version(command: str) -> str | None:
 
 
 def _backend_from_profile(profile: ExtractionProfile) -> str | None:
-    managed_backend = str(
-        os.environ.get("ARCHIVE_WORKBENCH_SURYA_BACKEND", "")
-    ).strip().casefold()
+    managed_backend = str(os.environ.get("ARCHIVE_WORKBENCH_SURYA_BACKEND", "")).strip().casefold()
     if managed_backend in {"llamacpp", "vllm"}:
         return managed_backend
     if profile.device == "cuda":
@@ -467,8 +459,7 @@ def _run_surya_attempt(
                 f"SURYA_INFERENCE_BACKEND={backend or 'auto'}",
                 "SURYA_INFERENCE_TIMEOUT_SECONDS="
                 + env.get("SURYA_INFERENCE_TIMEOUT_SECONDS", "-"),
-                "SURYA_MAX_TOKENS_FULL_PAGE="
-                + env.get("SURYA_MAX_TOKENS_FULL_PAGE", "-"),
+                "SURYA_MAX_TOKENS_FULL_PAGE=" + env.get("SURYA_MAX_TOKENS_FULL_PAGE", "-"),
                 f"TORCH_DEVICE={env.get('TORCH_DEVICE', 'auto')}",
                 f"ARCHIVE_WORKBENCH_CLEAN_LD_LIBRARY_PATH={int(clean_library_path)}",
                 stdout.strip(),
@@ -561,9 +552,7 @@ def run_surya_cli_batch(
             and profile.fallback_device == "cpu"
             and first_backend != "llamacpp"
             and not (profile.surya_inference_url or os.environ.get("SURYA_INFERENCE_URL"))
-            and _accelerator_backend_failure(
-                f"{first_error}\n{first_error.log_text}"
-            )
+            and _accelerator_backend_failure(f"{first_error}\n{first_error.log_text}")
         )
         if not can_fallback:
             raise

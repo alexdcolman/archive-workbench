@@ -4,6 +4,7 @@ Revision ID: 0026_team_workflow
 Revises: 0025_processing_dashboard
 Create Date: 2026-07-24
 """
+
 from __future__ import annotations
 
 from alembic import op
@@ -44,8 +45,7 @@ def _revision_changed_fields(fields: tuple[str, ...]) -> str:
         )
         expression = f"json_patch({expression}, {patch})"
     return (
-        f"CASE WHEN NEW.operation = 'create' THEN json_object({create_parts}) "
-        f"ELSE {expression} END"
+        f"CASE WHEN NEW.operation = 'create' THEN json_object({create_parts}) ELSE {expression} END"
     )
 
 
@@ -98,9 +98,7 @@ def upgrade() -> None:
         "work_assignments",
         ["project_id", "source_type", "source_key"],
     )
-    op.create_index(
-        "ix_work_assignments_parent", "work_assignments", ["parent_assignment_id"]
-    )
+    op.create_index("ix_work_assignments_parent", "work_assignments", ["parent_assignment_id"])
 
     op.create_table(
         "work_assignment_revisions",
@@ -112,9 +110,7 @@ def upgrade() -> None:
         sa.Column("note", sa.Text(), nullable=True),
         sa.Column("changed_by", sa.String(length=200), nullable=False),
         sa.Column("changed_at", sa.DateTime(timezone=True), nullable=False),
-        sa.ForeignKeyConstraint(
-            ["assignment_id"], ["work_assignments.id"], ondelete="CASCADE"
-        ),
+        sa.ForeignKeyConstraint(["assignment_id"], ["work_assignments.id"], ondelete="CASCADE"),
         sa.PrimaryKeyConstraint("id"),
         sa.UniqueConstraint(
             "assignment_id", "revision_number", name="uq_work_assignment_revision_number"
@@ -175,9 +171,7 @@ def upgrade() -> None:
 
 def downgrade() -> None:
     op.execute("DROP TRIGGER IF EXISTS trg_exchange_work_assignment_revision_ai")
-    op.drop_index(
-        "ix_work_assignment_revisions_assignment", table_name="work_assignment_revisions"
-    )
+    op.drop_index("ix_work_assignment_revisions_assignment", table_name="work_assignment_revisions")
     op.drop_table("work_assignment_revisions")
     op.drop_index("ix_work_assignments_parent", table_name="work_assignments")
     op.drop_index("ix_work_assignments_source", table_name="work_assignments")

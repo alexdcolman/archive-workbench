@@ -3,7 +3,7 @@ from __future__ import annotations
 from pathlib import Path
 
 import pytest
-from sqlalchemy import func, select
+from sqlalchemy import event, func, select
 from typer.testing import CliRunner
 
 from archive_workbench.cli import app
@@ -11,7 +11,6 @@ from archive_workbench.db import create_sqlite_engine, database_path, session_sc
 from archive_workbench.db.models import (
     DiscoveryCandidate,
     DiscoveryCandidateContinuity,
-    DiscoveryCandidateGroup,
     DiscoveryGroupAction,
     DiscoveryGroupMembership,
     DiscoveryRun,
@@ -23,6 +22,7 @@ from archive_workbench.discovery_grouping import (
     project_discovery_candidate,
     rebuild_discovery_groups,
     remove_candidate_from_group,
+    remove_candidates_from_group,
 )
 from archive_workbench.discovery_review import review_discovery_candidate
 from archive_workbench.open_discovery import (
@@ -45,7 +45,7 @@ def _candidate(session, text: str, *, newest: bool = False) -> DiscoveryCandidat
 
 
 def _two_runs(root: Path) -> tuple[str, str]:
-    object_id = _seed_discovery_project(root)
+    _seed_discovery_project(root)
     engine = create_sqlite_engine(database_path(root))
     try:
         with session_scope(engine) as session:
@@ -108,10 +108,101 @@ def test_grouping_proposes_duplicates_across_runs_and_preserves_provenance(
             assert summary.duplicate_candidates == 14
             assert person.grouping_method == "normalized"
             assert person.active_member_count == 2
+            assert person.current_location_count == 1
             assert person.run_count == 2
+            assert len(person.current_locations) == 1
+            current_location = person.current_locations[0]
+            assert current_location.detection_count == 2
+            assert set(current_location.run_ids) == {first_run, second_run}
+            assert set(current_location.candidate_ids) == {
+                member.candidate_id for member in person.members
+            }
             assert {member.run_id for member in person.members} == {first_run, second_run}
             assert all(member.membership_status == "active" for member in person.members)
             assert session.scalar(select(func.count()).select_from(DiscoveryCandidate)) == 14
+    finally:
+        engine.dispose()
+
+
+def test_group_rows_batch_historical_lookup_queries(tmp_path: Path) -> None:
+    root = tmp_path / "group_query_shape"
+    _two_runs(root)
+    engine = create_sqlite_engine(database_path(root))
+    statements: list[str] = []
+
+    def _record_statement(_conn, _cursor, statement, _parameters, _context, _executemany) -> None:
+        if statement.lstrip().upper().startswith("SELECT"):
+            statements.append(statement)
+
+    event.listen(engine, "before_cursor_execute", _record_statement)
+    try:
+        with session_scope(engine) as session:
+            rebuild_discovery_groups(
+                session,
+                project_id="search_project",
+                created_by="tests",
+            )
+
+        statements.clear()
+        with session_scope(engine) as session:
+            rows = discovery_group_rows(session, project_id="search_project")
+
+        assert rows
+        # Una consulta para grupos, una para todas las pertenencias/candidatos/runs,
+        # una para decisiones y una para objetos editables. El número de grupos o
+        # detecciones históricas no debe volver a multiplicar SELECTs.
+        assert len(statements) == 4
+    finally:
+        event.remove(engine, "before_cursor_execute", _record_statement)
+        engine.dispose()
+
+
+def test_grouping_removes_one_current_location_without_deleting_historical_candidates(
+    tmp_path: Path,
+) -> None:
+    root = tmp_path / "location_removal"
+    _two_runs(root)
+    engine = create_sqlite_engine(database_path(root))
+    try:
+        with session_scope(engine) as session:
+            rebuild_discovery_groups(
+                session,
+                project_id="search_project",
+                created_by="tests",
+            )
+            rows = discovery_group_rows(session, project_id="search_project", include_removed=True)
+            person = next(row for row in rows if row.normalized_label == "dra valentina orbe")
+            location = person.current_locations[0]
+            historical_candidate_ids = set(location.candidate_ids)
+            removed = remove_candidates_from_group(
+                session,
+                project_id="search_project",
+                group_id=person.group_id,
+                candidate_ids=location.candidate_ids,
+                changed_by="tests",
+                reason="La ubicación no corresponde a este grupo.",
+                source="ui",
+            )
+            assert removed == 2
+            rows = discovery_group_rows(session, project_id="search_project", include_removed=True)
+            person = next(row for row in rows if row.normalized_label == "dra valentina orbe")
+            assert person.current_location_count == 0
+            assert person.active_member_count == 0
+            assert {member.membership_status for member in person.members} == {"removed"}
+            assert {member.candidate_id for member in person.members} == historical_candidate_ids
+            assert all(
+                session.get(DiscoveryCandidate, candidate_id) is not None
+                for candidate_id in historical_candidate_ids
+            )
+            actions = list(
+                session.scalars(
+                    select(DiscoveryGroupAction).where(
+                        DiscoveryGroupAction.group_id == person.group_id,
+                        DiscoveryGroupAction.action_type == "member_removed",
+                    )
+                )
+            )
+            assert {action.candidate_id for action in actions} == historical_candidate_ids
     finally:
         engine.dispose()
 
@@ -205,13 +296,13 @@ def test_continuity_projects_stale_candidate_and_keeps_old_candidate_visible(
                 created_by="tests",
             )
             target = session.get(DiscoveryCandidate, summary.target_candidate_id)
-            continuity = session.get(
-                DiscoveryCandidateContinuity, summary.continuity_id
-            )
+            continuity = session.get(DiscoveryCandidateContinuity, summary.continuity_id)
             assert target is not None
             assert continuity is not None
             assert target.object_revision_number == editable.revision_number
-            assert editable.current_text[target.start_offset : target.end_offset] == target.exact_text
+            assert (
+                editable.current_text[target.start_offset : target.end_offset] == target.exact_text
+            )
             assert target.exact_text == "Cuaderno del Delta"
             assert session.get(DiscoveryCandidate, source.id) is source
             group_rows = discovery_group_rows(session, project_id="search_project")
@@ -220,8 +311,16 @@ def test_continuity_projects_stale_candidate_and_keeps_old_candidate_visible(
                 source.id,
                 target.id,
             }
-            assert any(member.candidate_id == source.id and member.is_stale for member in work_group.members)
-            assert any(member.candidate_id == target.id and not member.is_stale for member in work_group.members)
+            assert any(
+                member.candidate_id == source.id and member.is_stale
+                for member in work_group.members
+            )
+            assert any(
+                member.candidate_id == target.id and not member.is_stale
+                for member in work_group.members
+            )
+            assert work_group.current_location_count == 1
+            assert work_group.current_locations[0].representative_candidate_id == target.id
             with pytest.raises(ValueError, match="ya fue proyectado"):
                 project_discovery_candidate(
                     session,
@@ -266,9 +365,9 @@ def test_continuity_rejects_ambiguous_exact_projection(tmp_path: Path) -> None:
                     method="exact_projection",
                     created_by="tests",
                 )
-            assert session.scalar(
-                select(func.count()).select_from(DiscoveryCandidateContinuity)
-            ) == 0
+            assert (
+                session.scalar(select(func.count()).select_from(DiscoveryCandidateContinuity)) == 0
+            )
     finally:
         engine.dispose()
 
@@ -318,16 +417,19 @@ def test_grouping_cli_rebuilds_lists_and_projects(tmp_path: Path) -> None:
 
 
 def test_grouping_ui_uses_persistent_secondary_navigation() -> None:
-    source = (
-        Path(__file__).parents[1] / "src/archive_workbench/discovery_app.py"
-    ).read_text(encoding="utf-8")
+    source = (Path(__file__).parents[1] / "src/archive_workbench/discovery_app.py").read_text(
+        encoding="utf-8"
+    )
     assert 'key="open_discovery_grouping_tasks"' in source
     assert 'key="open_discovery_manual_group_panel"' in source
     assert '"Revisar posibles referencias repetidas"' in source
     assert '"Actualizar referencias después de corregir el texto"' in source
     assert '"Buscar referencias que podrían corresponder al mismo referente"' in source
     assert '"Crear un grupo de referencias de forma manual"' in source
-    assert '"Quitar esta referencia del grupo"' in source
+    assert '"Quitar esta ubicación del grupo"' in source
+    assert '"Ver procedencia histórica de este grupo"' in source
+    assert "current_location_count" in source
+    assert "remove_candidates_from_group" in source
     assert '"Buscar esta referencia en el texto corregido"' in source
     assert 'with st.expander("Agrupar candidatos' not in source
     assert 'with st.expander("Continuidad' not in source
@@ -549,7 +651,7 @@ def test_local_redetection_uses_original_local_rule_version(tmp_path: Path) -> N
         with session_scope(engine) as session:
             editable = session.get(EditableObject, object_id)
             assert editable is not None
-            editable.current_text = 'El testigo dijo: “No vi nada esa noche”.'
+            editable.current_text = "El testigo dijo: “No vi nada esa noche”."
             editable.revision_number += 1
             session.flush()
             profile = save_discovery_profile(

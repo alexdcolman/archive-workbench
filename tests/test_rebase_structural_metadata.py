@@ -79,7 +79,9 @@ def test_structural_action_history_is_absorbed_from_current_snapshot(tmp_path) -
         engine.dispose()
 
 
-def test_metadata_conflicts_are_resolved_and_duplicate_tags_are_preserved_in_history(tmp_path) -> None:
+def test_metadata_conflicts_are_resolved_and_duplicate_tags_are_preserved_in_history(
+    tmp_path,
+) -> None:
     _root, decisions, engine, _old_run_id, new_run_id = _project(tmp_path)
     try:
         with session_scope(engine) as session:
@@ -365,8 +367,7 @@ def test_specialized_attributes_are_preserved_and_conflicts_are_resolved(tmp_pat
             human_a = next(
                 item
                 for item in conflict.options
-                if item.action == "set"
-                and item.value == {"origin": "human", "value": "A"}
+                if item.action == "set" and item.value == {"origin": "human", "value": "A"}
             )
             resolutions = {
                 conflict.conflict_id: {
@@ -405,9 +406,7 @@ def test_specialized_attributes_are_preserved_and_conflicts_are_resolved(tmp_pat
                 "origin": "human",
                 "value": "A",
             }
-            assert active.current_attributes_json["shared_review"] == {
-                "priority": "high"
-            }
+            assert active.current_attributes_json["shared_review"] == {"priority": "high"}
             assert active.current_attributes_json["layout_role"] == "body"
             assert "lineage_events" not in active.current_attributes_json
             revision = session.scalar(

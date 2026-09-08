@@ -22,7 +22,10 @@ from archive_workbench.user_preferences import (
 
 
 def test_suggested_project_id_is_stable_and_plain() -> None:
-    assert suggested_project_id("Corpus de archivos de la represión") == "corpus_de_archivos_de_la_represion"
+    assert (
+        suggested_project_id("Corpus de archivos de la represión")
+        == "corpus_de_archivos_de_la_represion"
+    )
 
 
 def test_create_ready_project_builds_config_and_current_database(tmp_path: Path) -> None:
@@ -48,7 +51,9 @@ def test_create_ready_project_builds_config_and_current_database(tmp_path: Path)
         engine.dispose()
 
 
-def test_update_archival_parent_keys_preserves_identity_and_changes_only_rules(tmp_path: Path) -> None:
+def test_update_archival_parent_keys_preserves_identity_and_changes_only_rules(
+    tmp_path: Path,
+) -> None:
     source = Path(__file__).parents[1] / "config" / "decisions.template.yaml"
     target = tmp_path / "decisions.yaml"
     target.write_text(source.read_text(encoding="utf-8"), encoding="utf-8")
@@ -80,13 +85,15 @@ def test_user_preferences_roundtrip_and_invalid_palette_falls_back(tmp_path: Pat
     assert load_user_preferences(path).palette == "system"
 
 
-
-def test_add_standard_collection_level_updates_existing_project_without_changing_identity(tmp_path: Path) -> None:
+def test_add_standard_collection_level_updates_existing_project_without_changing_identity(
+    tmp_path: Path,
+) -> None:
     source = Path(__file__).parents[1] / "config" / "decisions.template.yaml"
     target = tmp_path / "decisions.yaml"
     original = source.read_text(encoding="utf-8")
     # Simula un proyecto anterior a 0.89 RC4 quitando Colección del YAML actual.
     import yaml
+
     raw = yaml.safe_load(original)
     raw["archival_levels"] = [item for item in raw["archival_levels"] if item["key"] != "coleccion"]
     for index, item in enumerate(raw["archival_levels"]):

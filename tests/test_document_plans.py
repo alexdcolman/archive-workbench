@@ -9,7 +9,12 @@ import pytest
 from archive_workbench.catalog import register_test_corpus
 from archive_workbench.contracts.plans import DocumentProcessingPlan
 from archive_workbench.contracts.test_corpus import TestCorpus as CorpusDefinition
-from archive_workbench.db import create_sqlite_engine, database_path, session_scope, upgrade_database
+from archive_workbench.db import (
+    create_sqlite_engine,
+    database_path,
+    session_scope,
+    upgrade_database,
+)
 from archive_workbench.decisions import load_decisions
 from archive_workbench.document_plans import (
     create_document_plan_template,
@@ -309,9 +314,7 @@ def test_part_sequence_and_assignment_must_match_part_pages() -> None:
                         "page_sequence": [2],
                     }
                 ],
-                "assignments": [
-                    {"assignment_key": "all", "pages": [1, 2, 3], "mode": "manual"}
-                ],
+                "assignments": [{"assignment_key": "all", "pages": [1, 2, 3], "mode": "manual"}],
             }
         )
     with pytest.raises(ValueError, match="fuera de la parte"):

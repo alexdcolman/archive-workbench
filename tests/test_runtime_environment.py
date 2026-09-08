@@ -26,7 +26,9 @@ def test_managed_workspace_is_disabled_without_distribution_environment(monkeypa
     assert managed_workspace() is None
 
 
-def test_managed_workspace_uses_explicit_and_default_subdirectories(tmp_path: Path, monkeypatch) -> None:
+def test_managed_workspace_uses_explicit_and_default_subdirectories(
+    tmp_path: Path, monkeypatch
+) -> None:
     _clear_workspace_env(monkeypatch)
     root = tmp_path / "workspace"
     projects = tmp_path / "projects-override"
@@ -43,12 +45,16 @@ def test_managed_workspace_uses_explicit_and_default_subdirectories(tmp_path: Pa
     assert workspace.settings == (root / "Settings").resolve()
 
 
-def test_workspace_display_path_uses_host_visible_distribution_name(tmp_path: Path, monkeypatch) -> None:
+def test_workspace_display_path_uses_host_visible_distribution_name(
+    tmp_path: Path, monkeypatch
+) -> None:
     _clear_workspace_env(monkeypatch)
     root = tmp_path / "workspace"
     monkeypatch.setenv("ARCHIVE_WORKBENCH_WORKSPACE_ROOT", str(root))
 
-    assert workspace_display_path(root / "Projects" / "demo") == "ArchiveWorkbenchData/Projects/demo"
+    assert (
+        workspace_display_path(root / "Projects" / "demo") == "ArchiveWorkbenchData/Projects/demo"
+    )
     assert workspace_display_path(tmp_path / "outside") == str((tmp_path / "outside").resolve())
 
 

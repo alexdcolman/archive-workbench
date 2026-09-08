@@ -4,6 +4,7 @@ Revision ID: 0047_authority_relation_profiles
 Revises: 0046_audiovisual_timeline_annotations
 Create Date: 2026-08-21
 """
+
 from __future__ import annotations
 
 from alembic import op
@@ -74,8 +75,7 @@ def _revision_changed_fields(*, table: str, id_field: str, fields: tuple[str, ..
         )
         expression = f"json_patch({expression}, {patch})"
     return (
-        f"CASE WHEN NEW.operation = 'create' THEN json_object({create_parts}) "
-        f"ELSE {expression} END"
+        f"CASE WHEN NEW.operation = 'create' THEN json_object({create_parts}) ELSE {expression} END"
     )
 
 
@@ -94,7 +94,8 @@ def _create_exchange_trigger(
         CREATE TRIGGER {trigger_name}
         AFTER INSERT ON {revision_table}
         BEGIN
-            {_event_insert_sql(
+            {
+            _event_insert_sql(
                 entity_type=entity_type,
                 entity_id=entity_id,
                 operation="CASE WHEN NEW.operation = 'create' THEN 'create' ELSE 'update' END",
@@ -102,8 +103,7 @@ def _create_exchange_trigger(
                 timestamp="NEW.changed_at",
                 project_id="json_extract(NEW.snapshot_json, '$.project_id')",
                 base_revision=(
-                    "CASE WHEN NEW.operation = 'create' THEN NULL "
-                    "ELSE NEW.revision_number - 1 END"
+                    "CASE WHEN NEW.operation = 'create' THEN NULL ELSE NEW.revision_number - 1 END"
                 ),
                 new_revision="NEW.revision_number",
                 changed_fields=_revision_changed_fields(
@@ -111,7 +111,8 @@ def _create_exchange_trigger(
                     id_field=id_field,
                     fields=fields,
                 ),
-            )}
+            )
+        }
         END
         """
     )

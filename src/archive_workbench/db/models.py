@@ -35,7 +35,9 @@ class Project(Base):
     name: Mapped[str] = mapped_column(String(500), nullable=False)
     decisions_schema_version: Mapped[str] = mapped_column(String(32), nullable=False, default="1.0")
     decisions_json: Mapped[dict[str, Any]] = mapped_column(JSON, nullable=False)
-    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utc_now, nullable=False)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), default=utc_now, nullable=False
+    )
     updated_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), default=utc_now, onupdate=utc_now, nullable=False
     )
@@ -66,7 +68,9 @@ class ArchivalUnit(Base):
         DateTime(timezone=True), nullable=True
     )
     completion_confirmed_by: Mapped[str | None] = mapped_column(String(200), nullable=True)
-    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utc_now, nullable=False)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), default=utc_now, nullable=False
+    )
     created_by: Mapped[str] = mapped_column(String(200), nullable=False)
     updated_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), default=utc_now, onupdate=utc_now, nullable=False
@@ -98,7 +102,9 @@ class ArchivalFieldValue(Base):
     value_json: Mapped[Any | None] = mapped_column(JSON, nullable=True)
     sort_order: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
     source_note: Mapped[str | None] = mapped_column(Text, nullable=True)
-    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utc_now, nullable=False)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), default=utc_now, nullable=False
+    )
     updated_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), default=utc_now, onupdate=utc_now, nullable=False
     )
@@ -145,7 +151,9 @@ class DigitalObject(Base):
     sha256: Mapped[str] = mapped_column(String(64), nullable=False)
     byte_size: Mapped[int] = mapped_column(Integer, nullable=False)
     page_count: Mapped[int | None] = mapped_column(Integer, nullable=True)
-    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utc_now, nullable=False)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), default=utc_now, nullable=False
+    )
 
 
 class FileInstance(Base):
@@ -215,7 +223,9 @@ class SourceRegistration(Base):
         ForeignKey("archival_units.id", ondelete="SET NULL"), nullable=True
     )
     source_payload_json: Mapped[dict[str, Any]] = mapped_column(JSON, nullable=False)
-    registered_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utc_now, nullable=False)
+    registered_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), default=utc_now, nullable=False
+    )
     registered_by: Mapped[str] = mapped_column(String(200), nullable=False)
 
 
@@ -261,7 +271,9 @@ class AudiovisualDerivativeAsset(Base):
     __tablename__ = "audiovisual_derivative_assets"
     __table_args__ = (
         UniqueConstraint(
-            "audiovisual_media_id", "asset_kind", "sha256",
+            "audiovisual_media_id",
+            "asset_kind",
+            "sha256",
             name="uq_audiovisual_derivative_asset",
         ),
         Index("ix_audiovisual_derivative_media", "audiovisual_media_id", "asset_kind"),
@@ -282,7 +294,9 @@ class AudiovisualDerivativeAsset(Base):
     ffmpeg_version: Mapped[str | None] = mapped_column(Text, nullable=True)
     command_json: Mapped[list[str]] = mapped_column(JSON, nullable=False, default=list)
     created_by: Mapped[str] = mapped_column(String(200), nullable=False)
-    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utc_now, nullable=False)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), default=utc_now, nullable=False
+    )
 
 
 class TranscriptionRun(Base):
@@ -307,7 +321,9 @@ class TranscriptionRun(Base):
     status: Mapped[str] = mapped_column(String(32), nullable=False, default="registered")
     error_text: Mapped[str | None] = mapped_column(Text, nullable=True)
     created_by: Mapped[str] = mapped_column(String(200), nullable=False)
-    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utc_now, nullable=False)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), default=utc_now, nullable=False
+    )
     completed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
 
 
@@ -342,9 +358,7 @@ class TranscriptSegment(Base):
 class TranscriptSegmentRevision(Base):
     __tablename__ = "transcript_segment_revisions"
     __table_args__ = (
-        UniqueConstraint(
-            "segment_id", "revision_number", name="uq_transcript_segment_revision"
-        ),
+        UniqueConstraint("segment_id", "revision_number", name="uq_transcript_segment_revision"),
         Index("ix_transcript_segment_revisions_segment", "segment_id", "revision_number"),
     )
 
@@ -357,7 +371,9 @@ class TranscriptSegmentRevision(Base):
     snapshot_json: Mapped[dict[str, Any]] = mapped_column(JSON, nullable=False)
     note: Mapped[str | None] = mapped_column(Text, nullable=True)
     changed_by: Mapped[str] = mapped_column(String(200), nullable=False)
-    changed_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utc_now, nullable=False)
+    changed_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), default=utc_now, nullable=False
+    )
 
 
 class AudiovisualTimelineAnnotation(Base):
@@ -398,7 +414,9 @@ class AudiovisualTimelineAnnotation(Base):
     status: Mapped[str] = mapped_column(String(32), nullable=False, default="active")
     revision_number: Mapped[int] = mapped_column(Integer, nullable=False, default=1)
     created_by: Mapped[str] = mapped_column(String(200), nullable=False)
-    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utc_now, nullable=False)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), default=utc_now, nullable=False
+    )
     updated_by: Mapped[str] = mapped_column(String(200), nullable=False)
     updated_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), default=utc_now, onupdate=utc_now, nullable=False
@@ -426,7 +444,9 @@ class AudiovisualTimelineAnnotationRevision(Base):
     operation: Mapped[str] = mapped_column(String(32), nullable=False)
     snapshot_json: Mapped[dict[str, Any]] = mapped_column(JSON, nullable=False)
     changed_by: Mapped[str] = mapped_column(String(200), nullable=False)
-    changed_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utc_now, nullable=False)
+    changed_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), default=utc_now, nullable=False
+    )
 
 
 class SegmentEntityMention(Base):
@@ -452,7 +472,9 @@ class SegmentEntityMention(Base):
     source: Mapped[str] = mapped_column(String(32), nullable=False, default="manual")
     note: Mapped[str | None] = mapped_column(Text, nullable=True)
     created_by: Mapped[str] = mapped_column(String(200), nullable=False)
-    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utc_now, nullable=False)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), default=utc_now, nullable=False
+    )
     updated_by: Mapped[str] = mapped_column(String(200), nullable=False)
     updated_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), default=utc_now, onupdate=utc_now, nullable=False
@@ -501,7 +523,9 @@ class ExtractionRun(Base):
     total_characters: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
     warnings_json: Mapped[list[str]] = mapped_column(JSON, nullable=False, default=list)
     error_text: Mapped[str | None] = mapped_column(Text, nullable=True)
-    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utc_now, nullable=False)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), default=utc_now, nullable=False
+    )
     completed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     quality_status: Mapped[str] = mapped_column(String(32), nullable=False, default="unreviewed")
     quality_score: Mapped[float | None] = mapped_column(nullable=True)
@@ -530,7 +554,9 @@ class ExtractionPage(Base):
     character_count: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
     status: Mapped[str] = mapped_column(String(64), nullable=False, default="completed")
     warning_text: Mapped[str | None] = mapped_column(Text, nullable=True)
-    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utc_now, nullable=False)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), default=utc_now, nullable=False
+    )
 
 
 class ExtractionPageQualityAssessment(Base):
@@ -560,9 +586,7 @@ class ExtractionPageQualityAssessment(Base):
 class ExtractedObject(Base):
     __tablename__ = "extracted_objects"
     __table_args__ = (
-        UniqueConstraint(
-            "extraction_run_id", "origin_id", name="uq_extracted_object_run_origin"
-        ),
+        UniqueConstraint("extraction_run_id", "origin_id", name="uq_extracted_object_run_origin"),
         Index("ix_extracted_objects_run_order", "extraction_run_id", "order_index"),
         Index("ix_extracted_objects_page", "extraction_run_id", "page_number"),
         Index("ix_extracted_objects_type", "object_type"),
@@ -587,7 +611,9 @@ class ExtractedObject(Base):
     language: Mapped[str | None] = mapped_column(String(32), nullable=True)
     hidden_by_default: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
     attributes_json: Mapped[dict[str, Any]] = mapped_column(JSON, nullable=False, default=dict)
-    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utc_now, nullable=False)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), default=utc_now, nullable=False
+    )
 
 
 class ExtractionRegion(Base):
@@ -595,9 +621,7 @@ class ExtractionRegion(Base):
 
     __tablename__ = "extraction_regions"
     __table_args__ = (
-        UniqueConstraint(
-            "extraction_run_id", "region_key", name="uq_extraction_region_run_key"
-        ),
+        UniqueConstraint("extraction_run_id", "region_key", name="uq_extraction_region_run_key"),
         Index("ix_extraction_regions_run", "extraction_run_id"),
         Index("ix_extraction_regions_page", "extraction_run_id", "page_number"),
         Index("ix_extraction_regions_type", "object_type"),
@@ -633,7 +657,9 @@ class PreprocessingRun(Base):
     __table_args__ = (
         Index("ix_preprocessing_runs_digital_object", "digital_object_id"),
         Index("ix_preprocessing_runs_current", "digital_object_id", "is_current"),
-        Index("ix_preprocessing_runs_options", "digital_object_id", "source_sha256", "options_hash"),
+        Index(
+            "ix_preprocessing_runs_options", "digital_object_id", "source_sha256", "options_hash"
+        ),
     )
 
     id: Mapped[str] = mapped_column(String(36), primary_key=True)
@@ -651,7 +677,9 @@ class PreprocessingRun(Base):
     output_root: Mapped[str] = mapped_column(Text, nullable=False)
     manifest_path: Mapped[str | None] = mapped_column(Text, nullable=True)
     warnings_json: Mapped[list[str]] = mapped_column(JSON, nullable=False, default=list)
-    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utc_now, nullable=False)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), default=utc_now, nullable=False
+    )
     completed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
 
 
@@ -690,7 +718,9 @@ class DerivativeAsset(Base):
     analysis_json: Mapped[dict[str, Any]] = mapped_column(JSON, nullable=False, default=dict)
     transformations_json: Mapped[dict[str, Any]] = mapped_column(JSON, nullable=False, default=dict)
     backend: Mapped[str] = mapped_column(String(100), nullable=False)
-    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utc_now, nullable=False)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), default=utc_now, nullable=False
+    )
 
 
 class ExtractionPageSelection(Base):
@@ -884,9 +914,7 @@ class EditablePage(Base):
     revision_number: Mapped[int] = mapped_column(Integer, nullable=False, default=1)
     review_status: Mapped[str] = mapped_column(String(32), nullable=False, default="unreviewed")
     review_note: Mapped[str | None] = mapped_column(Text, nullable=True)
-    form_structure_json: Mapped[dict[str, Any]] = mapped_column(
-        JSON, nullable=False, default=dict
-    )
+    form_structure_json: Mapped[dict[str, Any]] = mapped_column(JSON, nullable=False, default=dict)
     layout_structure_json: Mapped[dict[str, Any]] = mapped_column(
         JSON, nullable=False, default=dict
     )
@@ -934,9 +962,7 @@ class EditablePageRevision(Base):
     status: Mapped[str] = mapped_column(String(32), nullable=False)
     review_status: Mapped[str] = mapped_column(String(32), nullable=False)
     review_note: Mapped[str | None] = mapped_column(Text, nullable=True)
-    form_structure_json: Mapped[dict[str, Any]] = mapped_column(
-        JSON, nullable=False, default=dict
-    )
+    form_structure_json: Mapped[dict[str, Any]] = mapped_column(JSON, nullable=False, default=dict)
     layout_structure_json: Mapped[dict[str, Any]] = mapped_column(
         JSON, nullable=False, default=dict
     )
@@ -1039,7 +1065,9 @@ class EditablePageAction(Base):
 
     __tablename__ = "editable_page_actions"
     __table_args__ = (
-        UniqueConstraint("editable_page_id", "sequence_number", name="uq_editable_page_action_sequence"),
+        UniqueConstraint(
+            "editable_page_id", "sequence_number", name="uq_editable_page_action_sequence"
+        ),
         Index("ix_editable_page_actions_page_status", "editable_page_id", "status"),
     )
 
@@ -1148,9 +1176,7 @@ class AuthorityRecord(Base):
 class AuthorityAlias(Base):
     __tablename__ = "authority_aliases"
     __table_args__ = (
-        UniqueConstraint(
-            "authority_id", "normalized_alias", name="uq_authority_alias_normalized"
-        ),
+        UniqueConstraint("authority_id", "normalized_alias", name="uq_authority_alias_normalized"),
         Index("ix_authority_aliases_authority", "authority_id"),
         Index("ix_authority_aliases_normalized", "normalized_alias"),
     )
@@ -1172,9 +1198,7 @@ class AuthorityAlias(Base):
 class AuthorityRevision(Base):
     __tablename__ = "authority_revisions"
     __table_args__ = (
-        UniqueConstraint(
-            "authority_id", "revision_number", name="uq_authority_revision_number"
-        ),
+        UniqueConstraint("authority_id", "revision_number", name="uq_authority_revision_number"),
         Index("ix_authority_revisions_authority", "authority_id", "revision_number"),
     )
 
@@ -1232,9 +1256,7 @@ class EntityMention(Base):
 class EntityMentionRevision(Base):
     __tablename__ = "entity_mention_revisions"
     __table_args__ = (
-        UniqueConstraint(
-            "mention_id", "revision_number", name="uq_entity_mention_revision_number"
-        ),
+        UniqueConstraint("mention_id", "revision_number", name="uq_entity_mention_revision_number"),
         Index("ix_entity_mention_revisions_mention", "mention_id", "revision_number"),
     )
 
@@ -1294,9 +1316,7 @@ class EntityRelation(Base):
     source_authority_id: Mapped[str] = mapped_column(
         ForeignKey("authority_records.id", ondelete="CASCADE"), nullable=False
     )
-    relation_kind: Mapped[str] = mapped_column(
-        String(32), nullable=False, default="analytical"
-    )
+    relation_kind: Mapped[str] = mapped_column(String(32), nullable=False, default="analytical")
     relation_label: Mapped[str] = mapped_column(Text, nullable=False)
     target_authority_id: Mapped[str | None] = mapped_column(
         ForeignKey("authority_records.id", ondelete="CASCADE"), nullable=True
@@ -1362,8 +1382,12 @@ class ExchangeWorkspace(Base):
     project_id: Mapped[str | None] = mapped_column(String(128), nullable=True)
     workspace_name: Mapped[str] = mapped_column(String(200), nullable=False)
     created_by: Mapped[str] = mapped_column(String(200), nullable=False)
-    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utc_now, nullable=False)
-    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utc_now, onupdate=utc_now, nullable=False)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), default=utc_now, nullable=False
+    )
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), default=utc_now, onupdate=utc_now, nullable=False
+    )
 
 
 class ExchangeChangeEvent(Base):
@@ -1378,7 +1402,9 @@ class ExchangeChangeEvent(Base):
     )
 
     id: Mapped[str] = mapped_column(String(36), primary_key=True)
-    workspace_id: Mapped[str] = mapped_column(ForeignKey("exchange_workspaces.id", ondelete="CASCADE"), nullable=False)
+    workspace_id: Mapped[str] = mapped_column(
+        ForeignKey("exchange_workspaces.id", ondelete="CASCADE"), nullable=False
+    )
     project_id: Mapped[str | None] = mapped_column(String(128), nullable=True)
     sequence_number: Mapped[int] = mapped_column(Integer, nullable=False)
     transaction_id: Mapped[str] = mapped_column(String(36), nullable=False)
@@ -1389,7 +1415,9 @@ class ExchangeChangeEvent(Base):
     new_revision: Mapped[int | None] = mapped_column(Integer, nullable=True)
     changed_fields_json: Mapped[dict[str, Any]] = mapped_column(JSON, nullable=False, default=dict)
     actor: Mapped[str] = mapped_column(String(200), nullable=False)
-    occurred_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utc_now, nullable=False)
+    occurred_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), default=utc_now, nullable=False
+    )
 
 
 class ExchangeCheckpoint(Base):
@@ -1400,14 +1428,18 @@ class ExchangeCheckpoint(Base):
     )
 
     id: Mapped[str] = mapped_column(String(36), primary_key=True)
-    workspace_id: Mapped[str] = mapped_column(ForeignKey("exchange_workspaces.id", ondelete="CASCADE"), nullable=False)
+    workspace_id: Mapped[str] = mapped_column(
+        ForeignKey("exchange_workspaces.id", ondelete="CASCADE"), nullable=False
+    )
     project_id: Mapped[str] = mapped_column(String(128), nullable=False)
     sequence_number: Mapped[int] = mapped_column(Integer, nullable=False)
     label: Mapped[str] = mapped_column(String(200), nullable=False)
     note: Mapped[str | None] = mapped_column(Text, nullable=True)
     state_sha256: Mapped[str] = mapped_column(String(64), nullable=False)
     created_by: Mapped[str] = mapped_column(String(200), nullable=False)
-    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utc_now, nullable=False)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), default=utc_now, nullable=False
+    )
 
 
 class ExchangeBundleRecord(Base):
@@ -1418,7 +1450,9 @@ class ExchangeBundleRecord(Base):
     )
 
     id: Mapped[str] = mapped_column(String(36), primary_key=True)
-    workspace_id: Mapped[str] = mapped_column(ForeignKey("exchange_workspaces.id", ondelete="CASCADE"), nullable=False)
+    workspace_id: Mapped[str] = mapped_column(
+        ForeignKey("exchange_workspaces.id", ondelete="CASCADE"), nullable=False
+    )
     bundle_id: Mapped[str] = mapped_column(String(36), nullable=False)
     direction: Mapped[str] = mapped_column(String(16), nullable=False)
     bundle_sha256: Mapped[str] = mapped_column(String(64), nullable=False)
@@ -1429,7 +1463,9 @@ class ExchangeBundleRecord(Base):
     status: Mapped[str] = mapped_column(String(32), nullable=False)
     counterpart_workspace_id: Mapped[str | None] = mapped_column(String(36), nullable=True)
     created_by: Mapped[str] = mapped_column(String(200), nullable=False)
-    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utc_now, nullable=False)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), default=utc_now, nullable=False
+    )
 
 
 class ExchangeDryRun(Base):
@@ -1457,9 +1493,7 @@ class ExchangeDryRun(Base):
     common_checkpoint_label: Mapped[str | None] = mapped_column(String(200), nullable=True)
     common_checkpoint_sequence: Mapped[int | None] = mapped_column(Integer, nullable=True)
     base_match_status: Mapped[str] = mapped_column(String(32), nullable=False)
-    base_match_method: Mapped[str] = mapped_column(
-        String(64), nullable=False, default="unknown"
-    )
+    base_match_method: Mapped[str] = mapped_column(String(64), nullable=False, default="unknown")
     overall_status: Mapped[str] = mapped_column(String(32), nullable=False)
     counts_json: Mapped[dict[str, Any]] = mapped_column(JSON, nullable=False, default=dict)
     warnings_json: Mapped[list[str]] = mapped_column(JSON, nullable=False, default=list)
@@ -1471,16 +1505,10 @@ class ExchangeDryRun(Base):
     assessed_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), default=utc_now, nullable=False
     )
-    lifecycle_status: Mapped[str] = mapped_column(
-        String(16), nullable=False, default="active"
-    )
+    lifecycle_status: Mapped[str] = mapped_column(String(16), nullable=False, default="active")
     archived_by: Mapped[str | None] = mapped_column(String(200), nullable=True)
-    archived_at: Mapped[datetime | None] = mapped_column(
-        DateTime(timezone=True), nullable=True
-    )
+    archived_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     archive_note: Mapped[str | None] = mapped_column(Text, nullable=True)
-
-
 
 
 class ExchangeConflictResolution(Base):
@@ -1489,7 +1517,9 @@ class ExchangeConflictResolution(Base):
     __tablename__ = "exchange_conflict_resolutions"
     __table_args__ = (
         UniqueConstraint(
-            "dry_run_id", "incoming_event_id", "field_name",
+            "dry_run_id",
+            "incoming_event_id",
+            "field_name",
             name="uq_exchange_resolution_event_field",
         ),
         Index("ix_exchange_resolutions_dry_run", "dry_run_id", "incoming_event_id"),
@@ -1622,13 +1652,9 @@ class ExchangeLineageEvidence(Base):
     observed_workspace_id: Mapped[str | None] = mapped_column(String(36), nullable=True)
     observed_sequence_number: Mapped[int | None] = mapped_column(Integer, nullable=True)
     observed_checkpoint_id: Mapped[str | None] = mapped_column(String(36), nullable=True)
-    observed_checkpoint_label: Mapped[str | None] = mapped_column(
-        String(200), nullable=True
-    )
+    observed_checkpoint_label: Mapped[str | None] = mapped_column(String(200), nullable=True)
     observed_state_sha256: Mapped[str | None] = mapped_column(String(64), nullable=True)
-    selected_for_decision: Mapped[bool] = mapped_column(
-        Boolean, nullable=False, default=False
-    )
+    selected_for_decision: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
     details_json: Mapped[dict[str, Any]] = mapped_column(JSON, nullable=False, default=dict)
     recorded_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), default=utc_now, nullable=False
@@ -1641,9 +1667,7 @@ class ExchangeLineageDecision(Base):
     __tablename__ = "exchange_lineage_decisions"
     __table_args__ = (
         UniqueConstraint("case_id", name="uq_exchange_lineage_decision_case"),
-        UniqueConstraint(
-            "target_bundle_id", name="uq_exchange_lineage_decision_bundle"
-        ),
+        UniqueConstraint("target_bundle_id", name="uq_exchange_lineage_decision_bundle"),
         Index(
             "ix_exchange_lineage_decisions_workspace_created",
             "workspace_id",
@@ -1683,18 +1707,12 @@ class ExchangeLineageDecision(Base):
     local_checkpoint_id: Mapped[str | None] = mapped_column(String(36), nullable=True)
     local_checkpoint_label: Mapped[str | None] = mapped_column(String(200), nullable=True)
     local_checkpoint_sequence: Mapped[int] = mapped_column(Integer, nullable=False)
-    local_checkpoint_state_sha256: Mapped[str | None] = mapped_column(
-        String(64), nullable=True
-    )
+    local_checkpoint_state_sha256: Mapped[str | None] = mapped_column(String(64), nullable=True)
     remote_workspace_id: Mapped[str] = mapped_column(String(36), nullable=False)
     remote_sequence: Mapped[int] = mapped_column(Integer, nullable=False)
     evidence_ids_json: Mapped[list[str]] = mapped_column(JSON, nullable=False, default=list)
-    chain_bundle_ids_json: Mapped[list[str]] = mapped_column(
-        JSON, nullable=False, default=list
-    )
-    recovery_confirmed: Mapped[bool] = mapped_column(
-        Boolean, nullable=False, default=False
-    )
+    chain_bundle_ids_json: Mapped[list[str]] = mapped_column(JSON, nullable=False, default=list)
+    recovery_confirmed: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
     confirmed_by: Mapped[str] = mapped_column(String(200), nullable=False)
     confirmation_reason: Mapped[str] = mapped_column(Text, nullable=False)
     parameters_sha256: Mapped[str] = mapped_column(String(64), nullable=False)
@@ -1819,9 +1837,7 @@ class ExchangeStateAdoptionRollback(Base):
 
     __tablename__ = "exchange_state_adoption_rollbacks"
     __table_args__ = (
-        UniqueConstraint(
-            "adoption_record_id", name="uq_exchange_state_adoption_rollback"
-        ),
+        UniqueConstraint("adoption_record_id", name="uq_exchange_state_adoption_rollback"),
         Index("ix_exchange_state_adoption_rollbacks_time", "rolled_back_at"),
     )
 
@@ -1912,13 +1928,9 @@ class AutomaticAnalysisAuthorization(Base):
     )
     policy_version: Mapped[str] = mapped_column(String(64), nullable=False)
     analysis_kind: Mapped[str] = mapped_column(String(64), nullable=False)
-    page_review_statuses_json: Mapped[list[str]] = mapped_column(
-        JSON, nullable=False, default=list
-    )
+    page_review_statuses_json: Mapped[list[str]] = mapped_column(JSON, nullable=False, default=list)
     scope_key: Mapped[str] = mapped_column(String(32), nullable=False)
-    broader_scope_confirmed: Mapped[bool] = mapped_column(
-        Boolean, nullable=False, default=False
-    )
+    broader_scope_confirmed: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
     confirmed_by: Mapped[str] = mapped_column(String(200), nullable=False)
     confirmation_reason: Mapped[str | None] = mapped_column(Text, nullable=True)
     source: Mapped[str] = mapped_column(String(32), nullable=False)
@@ -1948,9 +1960,7 @@ class DiscoveryProfile(Base):
     provider_key: Mapped[str] = mapped_column(String(100), nullable=False)
     provider_version: Mapped[str] = mapped_column(String(100), nullable=False)
     families_json: Mapped[list[str]] = mapped_column(JSON, nullable=False, default=list)
-    include_object_types_json: Mapped[list[str]] = mapped_column(
-        JSON, nullable=False, default=list
-    )
+    include_object_types_json: Mapped[list[str]] = mapped_column(JSON, nullable=False, default=list)
     include_object_review_statuses_json: Mapped[list[str]] = mapped_column(
         JSON, nullable=False, default=list
     )
@@ -1958,9 +1968,7 @@ class DiscoveryProfile(Base):
         JSON, nullable=False, default=list
     )
     minimum_confidence: Mapped[float] = mapped_column(Float, nullable=False, default=0.75)
-    lifecycle_status: Mapped[str] = mapped_column(
-        String(16), nullable=False, default="active"
-    )
+    lifecycle_status: Mapped[str] = mapped_column(String(16), nullable=False, default="active")
     created_by: Mapped[str] = mapped_column(String(200), nullable=False)
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), default=utc_now, nullable=False
@@ -1999,22 +2007,16 @@ class DiscoveryRun(Base):
     method: Mapped[str] = mapped_column(String(100), nullable=False)
     parameters_sha256: Mapped[str] = mapped_column(String(64), nullable=False)
     corpus_state_sha256: Mapped[str] = mapped_column(String(64), nullable=False)
-    page_review_statuses_json: Mapped[list[str]] = mapped_column(
-        JSON, nullable=False, default=list
-    )
+    page_review_statuses_json: Mapped[list[str]] = mapped_column(JSON, nullable=False, default=list)
     status: Mapped[str] = mapped_column(String(32), nullable=False)
     object_count: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
     candidate_count: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
-    family_counts_json: Mapped[dict[str, int]] = mapped_column(
-        JSON, nullable=False, default=dict
-    )
+    family_counts_json: Mapped[dict[str, int]] = mapped_column(JSON, nullable=False, default=dict)
     created_by: Mapped[str] = mapped_column(String(200), nullable=False)
     started_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), default=utc_now, nullable=False
     )
-    finished_at: Mapped[datetime | None] = mapped_column(
-        DateTime(timezone=True), nullable=True
-    )
+    finished_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     error_message: Mapped[str | None] = mapped_column(Text, nullable=True)
 
 
@@ -2176,9 +2178,7 @@ class DiscoveryContextRecord(Base):
     temporal_start: Mapped[date | None] = mapped_column(Date, nullable=True)
     temporal_end: Mapped[date | None] = mapped_column(Date, nullable=True)
     temporal_precision: Mapped[str | None] = mapped_column(String(32), nullable=True)
-    temporal_approximate: Mapped[bool] = mapped_column(
-        Boolean, nullable=False, default=False
-    )
+    temporal_approximate: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
     editable_object_id: Mapped[str] = mapped_column(
         ForeignKey("editable_objects.id", ondelete="RESTRICT"), nullable=False
     )
@@ -2198,9 +2198,7 @@ class DiscoveryContextRecord(Base):
         ForeignKey("authority_records.id", ondelete="SET NULL"), nullable=True
     )
     data_json: Mapped[dict[str, Any]] = mapped_column(JSON, nullable=False, default=dict)
-    lifecycle_status: Mapped[str] = mapped_column(
-        String(16), nullable=False, default="active"
-    )
+    lifecycle_status: Mapped[str] = mapped_column(String(16), nullable=False, default="active")
     created_by: Mapped[str] = mapped_column(String(200), nullable=False)
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), default=utc_now, nullable=False
@@ -2235,9 +2233,7 @@ class DiscoveryCandidateGroup(Base):
     semantic_family: Mapped[str] = mapped_column(String(32), nullable=False)
     suggested_subtype: Mapped[str | None] = mapped_column(String(100), nullable=True)
     grouping_method: Mapped[str] = mapped_column(String(32), nullable=False)
-    lifecycle_status: Mapped[str] = mapped_column(
-        String(16), nullable=False, default="active"
-    )
+    lifecycle_status: Mapped[str] = mapped_column(String(16), nullable=False, default="active")
     created_by: Mapped[str] = mapped_column(String(200), nullable=False)
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), default=utc_now, nullable=False
@@ -2253,9 +2249,7 @@ class DiscoveryGroupMembership(Base):
 
     __tablename__ = "discovery_group_memberships"
     __table_args__ = (
-        UniqueConstraint(
-            "group_id", "candidate_id", name="uq_discovery_group_membership"
-        ),
+        UniqueConstraint("group_id", "candidate_id", name="uq_discovery_group_membership"),
         Index(
             "ix_discovery_group_memberships_group_status",
             "group_id",
@@ -2278,18 +2272,14 @@ class DiscoveryGroupMembership(Base):
     candidate_id: Mapped[str] = mapped_column(
         ForeignKey("discovery_candidates.id", ondelete="CASCADE"), nullable=False
     )
-    membership_status: Mapped[str] = mapped_column(
-        String(16), nullable=False, default="active"
-    )
+    membership_status: Mapped[str] = mapped_column(String(16), nullable=False, default="active")
     source: Mapped[str] = mapped_column(String(32), nullable=False)
     added_by: Mapped[str] = mapped_column(String(200), nullable=False)
     added_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), default=utc_now, nullable=False
     )
     removed_by: Mapped[str | None] = mapped_column(String(200), nullable=True)
-    removed_at: Mapped[datetime | None] = mapped_column(
-        DateTime(timezone=True), nullable=True
-    )
+    removed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     removal_reason: Mapped[str | None] = mapped_column(Text, nullable=True)
 
 
@@ -2340,9 +2330,7 @@ class DiscoveryCandidateContinuity(Base):
             "target_object_revision_number",
             name="uq_discovery_candidate_continuity_revision",
         ),
-        UniqueConstraint(
-            "target_candidate_id", name="uq_discovery_candidate_continuity_target"
-        ),
+        UniqueConstraint("target_candidate_id", name="uq_discovery_candidate_continuity_target"),
         Index(
             "ix_discovery_candidate_continuities_source",
             "source_candidate_id",
@@ -2398,21 +2386,21 @@ class CorpusExportProfile(Base):
     text_policy: Mapped[str] = mapped_column(String(32), nullable=False)
     output_format: Mapped[str] = mapped_column(String(16), nullable=False, default="jsonl")
     include_object_types_json: Mapped[list[str]] = mapped_column(JSON, nullable=False, default=list)
-    include_review_statuses_json: Mapped[list[str]] = mapped_column(JSON, nullable=False, default=list)
-    include_page_review_statuses_json: Mapped[list[str]] = mapped_column(JSON, nullable=False, default=list)
+    include_review_statuses_json: Mapped[list[str]] = mapped_column(
+        JSON, nullable=False, default=list
+    )
+    include_page_review_statuses_json: Mapped[list[str]] = mapped_column(
+        JSON, nullable=False, default=list
+    )
     temporal_start: Mapped[date | None] = mapped_column(Date, nullable=True)
     temporal_end: Mapped[date | None] = mapped_column(Date, nullable=True)
     temporal_include_undated: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
     object_separator: Mapped[str] = mapped_column(Text, nullable=False, default="\n\n")
     page_separator: Mapped[str] = mapped_column(Text, nullable=False, default="\n\n")
     include_page_markers: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
-    lifecycle_status: Mapped[str] = mapped_column(
-        String(16), nullable=False, default="active"
-    )
+    lifecycle_status: Mapped[str] = mapped_column(String(16), nullable=False, default="active")
     archived_by: Mapped[str | None] = mapped_column(String(200), nullable=True)
-    archived_at: Mapped[datetime | None] = mapped_column(
-        DateTime(timezone=True), nullable=True
-    )
+    archived_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     created_by: Mapped[str] = mapped_column(String(200), nullable=False)
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), default=utc_now, nullable=False
@@ -2489,9 +2477,7 @@ class ProcessingJobItem(Base):
 
     __tablename__ = "processing_job_items"
     __table_args__ = (
-        UniqueConstraint(
-            "processing_job_id", "source_key", name="uq_processing_job_item_source"
-        ),
+        UniqueConstraint("processing_job_id", "source_key", name="uq_processing_job_item_source"),
         Index("ix_processing_job_items_job", "processing_job_id", "status"),
         Index("ix_processing_job_items_source", "source_key", "created_at"),
     )
@@ -2599,8 +2585,12 @@ class SemanticSearchProfile(Base):
     model_revision: Mapped[str | None] = mapped_column(String(100), nullable=True)
     aggregation_level: Mapped[str] = mapped_column(String(32), nullable=False, default="object")
     include_object_types_json: Mapped[list[str]] = mapped_column(JSON, nullable=False, default=list)
-    include_review_statuses_json: Mapped[list[str]] = mapped_column(JSON, nullable=False, default=list)
-    include_page_review_statuses_json: Mapped[list[str]] = mapped_column(JSON, nullable=False, default=list)
+    include_review_statuses_json: Mapped[list[str]] = mapped_column(
+        JSON, nullable=False, default=list
+    )
+    include_page_review_statuses_json: Mapped[list[str]] = mapped_column(
+        JSON, nullable=False, default=list
+    )
     chunk_size: Mapped[int] = mapped_column(Integer, nullable=False, default=1800)
     chunk_overlap: Mapped[int] = mapped_column(Integer, nullable=False, default=200)
     query_prefix: Mapped[str] = mapped_column(Text, nullable=False, default="query: ")

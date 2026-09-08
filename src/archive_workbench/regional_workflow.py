@@ -137,8 +137,7 @@ def template_from_drafts(
     if not drafts:
         raise ValueError("Debe definir al menos una zona regional.")
     regions = [
-        region_from_draft(item, fallback_index=index)
-        for index, item in enumerate(drafts, start=1)
+        region_from_draft(item, fallback_index=index) for index, item in enumerate(drafts, start=1)
     ]
     used_by_page: dict[int, set[int]] = {}
     normalized: list[RegionDefinition] = []

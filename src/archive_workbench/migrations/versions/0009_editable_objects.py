@@ -4,6 +4,7 @@ Revision ID: 0009_editable_objects
 Revises: 0008_document_part_logical_order
 Create Date: 2026-07-23
 """
+
 from __future__ import annotations
 
 from alembic import op
@@ -53,9 +54,7 @@ def upgrade() -> None:
         ),
     )
     op.create_index("ix_editable_pages_object", "editable_pages", ["digital_object_id"])
-    op.create_index(
-        "ix_editable_pages_source_run", "editable_pages", ["source_extraction_run_id"]
-    )
+    op.create_index("ix_editable_pages_source_run", "editable_pages", ["source_extraction_run_id"])
 
     op.create_table(
         "editable_objects",
@@ -107,9 +106,7 @@ def upgrade() -> None:
         "editable_objects",
         ["digital_object_id", "page_number"],
     )
-    op.create_index(
-        "ix_editable_objects_status", "editable_objects", ["lifecycle_status"]
-    )
+    op.create_index("ix_editable_objects_status", "editable_objects", ["lifecycle_status"])
 
     op.create_table(
         "editable_object_revisions",
@@ -153,12 +150,8 @@ def upgrade() -> None:
 
 
 def downgrade() -> None:
-    op.drop_index(
-        "ix_editable_object_revisions_created", table_name="editable_object_revisions"
-    )
-    op.drop_index(
-        "ix_editable_object_revisions_object", table_name="editable_object_revisions"
-    )
+    op.drop_index("ix_editable_object_revisions_created", table_name="editable_object_revisions")
+    op.drop_index("ix_editable_object_revisions_object", table_name="editable_object_revisions")
     op.drop_table("editable_object_revisions")
     op.drop_index("ix_editable_objects_status", table_name="editable_objects")
     op.drop_index("ix_editable_objects_digital_page", table_name="editable_objects")

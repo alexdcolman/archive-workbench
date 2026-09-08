@@ -60,6 +60,12 @@ class ExtractionProfile(ContractModel):
     layout_hint: Literal["automatic", "newspaper_columns", "single_block", "sparse"] = "automatic"
 
 
+def _default_ocr_benchmark_image_variants() -> list[
+    Literal["original", "grayscale_autocontrast", "otsu"]
+]:
+    return ["original", "grayscale_autocontrast", "otsu"]
+
+
 class OcrBenchmarkProfile(ContractModel):
     """Matriz pequeña y reproducible para comparar OCR sin declarar un ganador automático."""
 
@@ -69,7 +75,7 @@ class OcrBenchmarkProfile(ContractModel):
     languages: list[str] = Field(default_factory=lambda: ["spa"], min_length=1)
     psm_modes: list[int] = Field(default_factory=lambda: [3, 4, 6, 11], min_length=1)
     image_variants: list[Literal["original", "grayscale_autocontrast", "otsu"]] = Field(
-        default_factory=lambda: ["original", "grayscale_autocontrast", "otsu"],
+        default_factory=_default_ocr_benchmark_image_variants,
         min_length=1,
     )
     timeout_seconds: int = Field(default=900, ge=30, le=86400)

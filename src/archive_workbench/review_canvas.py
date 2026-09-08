@@ -518,7 +518,9 @@ def clickable_review_canvas(
                 valid_object_ids=valid_object_ids,
             )
     else:
-        on_selection_commit_change = lambda: None
+
+        def on_selection_commit_change() -> None:
+            return None
 
     result = renderer(
         data=payload,

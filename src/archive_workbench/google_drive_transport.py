@@ -331,7 +331,9 @@ def complete_google_drive_authorization(
 ) -> OAuthResult:
     pending = _read_json_object(pending_path or default_oauth_pending_path())
     if not pending:
-        raise RuntimeError("No encontré una autorización de Google Drive pendiente en esta instalación.")
+        raise RuntimeError(
+            "No encontré una autorización de Google Drive pendiente en esta instalación."
+        )
     if time.time() - float(pending.get("created_at") or 0) >= OAUTH_PENDING_MAX_AGE_SECONDS:
         raise RuntimeError("La autorización de Google Drive venció. Iniciá la conexión nuevamente.")
     if not state or state != str(pending.get("state") or ""):
@@ -370,7 +372,9 @@ def complete_google_drive_authorization(
     return OAuthResult(token=token, picked_file_ids=picked)
 
 
-def load_picker_result(path: Path | None = None, *, max_age_seconds: float = 3600) -> tuple[str, ...]:
+def load_picker_result(
+    path: Path | None = None, *, max_age_seconds: float = 3600
+) -> tuple[str, ...]:
     payload = _read_json_object(path or default_picker_result_path())
     if not payload:
         return ()
@@ -429,7 +433,9 @@ class _OAuthCallbackHandler(BaseHTTPRequestHandler):
             body = "Google Drive no fue conectado. Podés cerrar esta pestaña."
         else:
             title = "Archive Workbench"
-            body = "La autorización terminó. Podés cerrar esta pestaña y volver a Archive Workbench."
+            body = (
+                "La autorización terminó. Podés cerrar esta pestaña y volver a Archive Workbench."
+            )
         payload = (
             "<!doctype html><html><head><meta charset='utf-8'><title>"
             + title
@@ -583,7 +589,9 @@ def refresh_google_drive_token(
     if not current.expired:
         return current
     if not current.refresh_token:
-        raise RuntimeError("La autorización guardada no contiene refresh_token; conectá Google Drive nuevamente.")
+        raise RuntimeError(
+            "La autorización guardada no contiene refresh_token; conectá Google Drive nuevamente."
+        )
     data = {
         "client_id": client.client_id,
         "refresh_token": current.refresh_token,
@@ -691,7 +699,9 @@ def _resumable_session_url(
     except urllib.error.URLError as exc:
         raise RuntimeError(f"No pude iniciar la subida a Google Drive: {exc.reason}") from exc
     if not session_url:
-        raise RuntimeError("Google Drive no devolvió la sesión necesaria para una subida reanudable.")
+        raise RuntimeError(
+            "Google Drive no devolvió la sesión necesaria para una subida reanudable."
+        )
     return session_url
 
 
@@ -772,7 +782,9 @@ def _upload_resumable_file(
                         body = response.read()
                         decoded = json.loads(body.decode("utf-8")) if body else {}
                         if not isinstance(decoded, dict):
-                            raise RuntimeError("Google devolvió una respuesta inesperada al completar la subida.")
+                            raise RuntimeError(
+                                "Google devolvió una respuesta inesperada al completar la subida."
+                            )
                         return decoded
                 except urllib.error.HTTPError as exc:
                     if exc.code == 308:
@@ -781,10 +793,14 @@ def _upload_resumable_file(
                         break
                     if exc.code < 500 or retries >= max_retries:
                         detail = exc.read().decode("utf-8", errors="replace")
-                        raise RuntimeError(f"Google devolvió HTTP {exc.code}: {detail[:600]}") from exc
+                        raise RuntimeError(
+                            f"Google devolvió HTTP {exc.code}: {detail[:600]}"
+                        ) from exc
                 except urllib.error.URLError as exc:
                     if retries >= max_retries:
-                        raise RuntimeError(f"La subida a Google Drive se interrumpió: {exc.reason}") from exc
+                        raise RuntimeError(
+                            f"La subida a Google Drive se interrumpió: {exc.reason}"
+                        ) from exc
                 retries += 1
                 time.sleep(min(2**retries, 8))
                 known_offset, completed = _query_resumable_upload(
@@ -847,10 +863,13 @@ def upload_exchange_bundle_to_drive(
     source = bundle_path.expanduser().resolve()
     inspection = inspect_drive_artifact(source)
     if inspection.kind != "exchange_bundle":
-        raise ValueError("El archivo elegido es una copia para trabajar en equipo, no un paquete de cambios.")
+        raise ValueError(
+            "El archivo elegido es una copia para trabajar en equipo, no un paquete de cambios."
+        )
     return upload_archive_workbench_zip_to_drive(
         source, client_secret_path=client_secret_path, token_path=token_path
     )
+
 
 def _safe_download_name(name: str, file_id: str) -> str:
     base = Path(name).name.strip() or "paquete.zip"
@@ -873,7 +892,9 @@ def download_archive_workbench_zip_from_drive(
         client_secret_path=client_secret_path,
         token_path=token_path,
     )
-    if metadata.mime_type not in DRIVE_ZIP_MIME_TYPES and not metadata.name.lower().endswith(".zip"):
+    if metadata.mime_type not in DRIVE_ZIP_MIME_TYPES and not metadata.name.lower().endswith(
+        ".zip"
+    ):
         raise ValueError("El archivo elegido en Google Drive no parece ser un ZIP.")
     token = refresh_google_drive_token(client_secret_path, token_path=token_path)
     url = f"{DRIVE_FILES_URL}/{urllib.parse.quote(file_id.strip())}?" + urllib.parse.urlencode(
@@ -914,11 +935,15 @@ def download_archive_workbench_zip_from_drive(
     declared_sha = metadata.app_properties.get("archive_workbench_sha256")
     if declared_sha and declared_sha != local_sha:
         destination.unlink(missing_ok=True)
-        raise ValueError("El SHA-256 descargado no coincide con el registrado por Archive Workbench en Drive.")
+        raise ValueError(
+            "El SHA-256 descargado no coincide con el registrado por Archive Workbench en Drive."
+        )
     declared_kind = metadata.app_properties.get("archive_workbench_kind")
     if declared_kind and declared_kind != inspection.kind:
         destination.unlink(missing_ok=True)
-        raise ValueError("El tipo de archivo descargado no coincide con el registrado por Archive Workbench en Drive.")
+        raise ValueError(
+            "El tipo de archivo descargado no coincide con el registrado por Archive Workbench en Drive."
+        )
     return DriveDownloadSummary(
         metadata=metadata,
         destination=destination,
@@ -947,8 +972,11 @@ def download_exchange_bundle_from_drive(
     )
     if result.artifact_kind != "exchange_bundle":
         result.destination.unlink(missing_ok=True)
-        raise ValueError("El archivo elegido es una copia para trabajar en equipo, no un paquete de cambios.")
+        raise ValueError(
+            "El archivo elegido es una copia para trabajar en equipo, no un paquete de cambios."
+        )
     return result
+
 
 def pick_drive_exchange_bundle(
     client_secret_path: Path | None = None,

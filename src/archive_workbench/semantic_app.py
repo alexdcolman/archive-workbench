@@ -10,7 +10,13 @@ from archive_workbench.analysis_quality import (
     analysis_quality_scope,
     quality_scope_caption,
 )
-from archive_workbench.ui_navigation import rerun_app, rerun_view, request_app_view, section_heading, tracked_tabs
+from archive_workbench.ui_navigation import (
+    rerun_app,
+    rerun_view,
+    request_app_view,
+    section_heading,
+    tracked_tabs,
+)
 
 from archive_workbench.db import create_sqlite_engine, session_scope
 from archive_workbench.semantic_search import (
@@ -93,7 +99,9 @@ def queue_similar_semantic_search(
 
 def _open_result(st, row, *, results, query: str, profile_id: str) -> None:
     if not row.source_key or not row.object_ids:
-        st.warning("Este resultado no está vinculado con un bloque de texto que pueda abrirse en Revisar documentos.")
+        st.warning(
+            "Este resultado no está vinculado con un bloque de texto que pueda abrirse en Revisar documentos."
+        )
         return
     entries = _semantic_navigation_entries(results)
     index = next(
@@ -122,9 +130,7 @@ def _open_result(st, row, *, results, query: str, profile_id: str) -> None:
 def _render_semantic_distribution(st, results) -> None:
     document_counts = Counter(row.title for row in results)
     part_counts = Counter(
-        (row.title, row.document_part_key)
-        for row in results
-        if row.document_part_key
+        (row.title, row.document_part_key) for row in results if row.document_part_key
     )
     pages = {
         (row.source_key, page)
@@ -242,7 +248,10 @@ def render_semantic_search_view(
         st.warning(status.reason)
     with st.expander("Datos técnicos del índice de búsqueda por significado", expanded=False):
         cols = st.columns(4)
-        cols[0].metric("Estado del índice de búsqueda semántica", "Actualizado" if status.is_current else "Pendiente")
+        cols[0].metric(
+            "Estado del índice de búsqueda semántica",
+            "Actualizado" if status.is_current else "Pendiente",
+        )
         cols[1].metric("Fragmentos de texto indexados", status.vector_count)
         cols[2].metric("Dimensiones técnicas del índice", status.dimensions or "-")
         cols[3].metric("Versión de esta configuración", status.profile_revision)
@@ -313,7 +322,9 @@ def render_semantic_search_view(
                     device = st.selectbox(
                         "Equipo que realizará esta búsqueda",
                         ["auto", "cpu", "cuda"],
-                        index=["auto", "cpu", "cuda"].index(device) if device in {"auto", "cpu", "cuda"} else 0,
+                        index=["auto", "cpu", "cuda"].index(device)
+                        if device in {"auto", "cpu", "cuda"}
+                        else 0,
                         format_func=lambda value: _DEVICE_LABELS[value],
                     )
                 temporal_enabled = st.checkbox(
@@ -322,13 +333,23 @@ def render_semantic_search_view(
                 )
                 temporal_cols = st.columns(3)
                 temporal_from = temporal_cols[0].date_input(
-                    "Desde", value=temporal_from, min_value=DATE_INPUT_MIN, max_value=DATE_INPUT_MAX, key="semantic_temporal_from"
+                    "Desde",
+                    value=temporal_from,
+                    min_value=DATE_INPUT_MIN,
+                    max_value=DATE_INPUT_MAX,
+                    key="semantic_temporal_from",
                 )
                 temporal_to = temporal_cols[1].date_input(
-                    "Hasta", value=temporal_to, min_value=DATE_INPUT_MIN, max_value=DATE_INPUT_MAX, key="semantic_temporal_to"
+                    "Hasta",
+                    value=temporal_to,
+                    min_value=DATE_INPUT_MIN,
+                    max_value=DATE_INPUT_MAX,
+                    key="semantic_temporal_to",
                 )
                 temporal_include_undated = temporal_cols[2].checkbox(
-                    "Incluir resultados sin fecha vinculada", value=temporal_include_undated, key="semantic_temporal_undated"
+                    "Incluir resultados sin fecha vinculada",
+                    value=temporal_include_undated,
+                    key="semantic_temporal_undated",
                 )
             submit = st.form_submit_button(
                 "Buscar por significado",
@@ -398,7 +419,9 @@ def render_semantic_search_view(
                 if st.session_state.get("semantic_results_seed_chunk_id") or st.session_state.get(
                     "semantic_results_seed_object_id"
                 ):
-                    st.caption("El pasaje usado como punto de partida se excluyó de estos resultados.")
+                    st.caption(
+                        "El pasaje usado como punto de partida se excluyó de estos resultados."
+                    )
                 _render_semantic_distribution(st, results)
             results_query = str(
                 st.session_state.get("semantic_results_query")
@@ -414,7 +437,9 @@ def render_semantic_search_view(
                             if row.page_start == row.page_end
                             else f"páginas {row.page_start}–{row.page_end}"
                         )
-                        st.markdown(f"**{row.title}** · {pages} · similitud coseno **{row.score:.3f}**")
+                        st.markdown(
+                            f"**{row.title}** · {pages} · similitud coseno **{row.score:.3f}**"
+                        )
                         details = []
                         if row.document_part_key:
                             details.append(f"parte {row.document_part_key}")
@@ -470,7 +495,11 @@ def render_semantic_search_view(
         normalize = values.normalize_embeddings
         with st.form("semantic_profile_form", enter_to_submit=False):
             name = st.text_input("Nombre de esta configuración de búsqueda", value=values.name)
-            description = st.text_area("Descripción de esta configuración de búsqueda", value=values.description or "", height=70)
+            description = st.text_area(
+                "Descripción de esta configuración de búsqueda",
+                value=values.description or "",
+                height=70,
+            )
             aggregation = st.selectbox(
                 "Nivel del corpus en el que querés agrupar los resultados",
                 options=list(SEMANTIC_AGGREGATION_LEVELS),
@@ -528,7 +557,10 @@ def render_semantic_search_view(
             )
             if technical_build_options_open:
                 with st.container(border=True):
-                    model_name = st.text_input("Modelo técnico para representar el significado de los textos", value=values.model_name)
+                    model_name = st.text_input(
+                        "Modelo técnico para representar el significado de los textos",
+                        value=values.model_name,
+                    )
                     model_revision = st.text_input(
                         "Versión del modelo técnico",
                         value=values.model_revision or "",
@@ -548,9 +580,17 @@ def render_semantic_search_view(
                         min(values.chunk_overlap, int(chunk_size) - 1),
                         25,
                     )
-                    query_prefix = st.text_input("Prefijo técnico agregado a las consultas", value=values.query_prefix)
-                    document_prefix = st.text_input("Prefijo técnico agregado a los textos del corpus", value=values.document_prefix)
-                    normalize = st.checkbox("Normalizar las representaciones numéricas de los textos", value=values.normalize_embeddings)
+                    query_prefix = st.text_input(
+                        "Prefijo técnico agregado a las consultas", value=values.query_prefix
+                    )
+                    document_prefix = st.text_input(
+                        "Prefijo técnico agregado a los textos del corpus",
+                        value=values.document_prefix,
+                    )
+                    normalize = st.checkbox(
+                        "Normalizar las representaciones numéricas de los textos",
+                        value=values.normalize_embeddings,
+                    )
             save = st.form_submit_button("Guardar configuración de búsqueda semántica")
         if save:
             engine = create_sqlite_engine(db_path)
@@ -583,7 +623,9 @@ def render_semantic_search_view(
             except (ValueError, RuntimeError, OSError) as exc:
                 st.error(str(exc))
             else:
-                st.success("Configuración de búsqueda semántica guardada. El índice anterior queda desactualizado hasta que lo reconstruyas.")
+                st.success(
+                    "Configuración de búsqueda semántica guardada. El índice anterior queda desactualizado hasta que lo reconstruyas."
+                )
                 st.session_state.pop("semantic_results", None)
                 rerun_view(st)
             finally:
@@ -596,14 +638,10 @@ def render_semantic_search_view(
             value=False,
             key="semantic_index_build_options_open",
         )
-        build_device = str(
-            st.session_state.get("semantic_build_device__remembered", "auto")
-        )
+        build_device = str(st.session_state.get("semantic_build_device__remembered", "auto"))
         if build_device not in {"auto", "cpu", "cuda"}:
             build_device = "auto"
-        batch_size = int(
-            st.session_state.get("semantic_build_batch__remembered", 32)
-        )
+        batch_size = int(st.session_state.get("semantic_build_batch__remembered", 32))
         batch_size = max(1, min(512, batch_size))
         if technical_build_options_open:
             with st.container(border=True):

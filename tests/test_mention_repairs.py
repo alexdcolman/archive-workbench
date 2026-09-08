@@ -248,9 +248,7 @@ def test_unresolved_relocation_can_select_one_exact_occurrence(
     object_id, _authority_id, mention_id = _seed_stale_mention(root)
     engine = create_sqlite_engine(database_path(root))
     try:
-        current_text = (
-            "Primera actividad teatral. Segunda actividad teatral elegida."
-        )
+        current_text = "Primera actividad teatral. Segunda actividad teatral elegida."
         with session_scope(engine) as session:
             editable = session.get(EditableObject, object_id)
             mention = session.get(EntityMention, mention_id)
@@ -409,9 +407,7 @@ def test_unresolved_relocation_rejects_absence_when_fragment_still_occurs(
                 "mention_text": mention.mention_text,
                 "normalized_text": mention.normalized_text,
             }
-            editable.current_text = (
-                "Una actividad teatral y otra actividad teatral"
-            )
+            editable.current_text = "Una actividad teatral y otra actividad teatral"
             editable.revision_number = 3
 
         with session_scope(engine) as session:
@@ -474,8 +470,7 @@ def test_duplicate_projection_requires_human_decision(tmp_path: Path) -> None:
             case = next(
                 case
                 for case in mention_repair_cases(session, project_id="search_project")
-                if case.mention_id == old_mention_id
-                and case.code == "duplicate_relocation"
+                if case.mention_id == old_mention_id and case.code == "duplicate_relocation"
             )
             assert case.duplicate_mention_ids == (current_id,)
             with pytest.raises(ValueError, match="otra mención activa"):
@@ -680,9 +675,7 @@ def test_duplicate_group_can_keep_current_and_reject_all_others(
         with session_scope(engine) as session:
             group_cases = [
                 case
-                for case in mention_repair_cases(
-                    session, project_id="search_project"
-                )
+                for case in mention_repair_cases(session, project_id="search_project")
                 if case.code == "duplicate_group"
             ]
             assert len(group_cases) == 1
@@ -694,19 +687,14 @@ def test_duplicate_group_can_keep_current_and_reject_all_others(
                 other_current_id,
             }
             assert case.can_resolve_duplicate_group
-            rows = {
-                mention_id: session.get(EntityMention, mention_id)
-                for mention_id in group_ids
-            }
+            rows = {mention_id: session.get(EntityMention, mention_id) for mention_id in group_ids}
             assert all(row is not None for row in rows.values())
 
             winner, losers = repair_duplicate_group(
                 session,
                 mention_ids=group_ids,
                 expected_revisions={
-                    mention_id: row.revision
-                    for mention_id, row in rows.items()
-                    if row is not None
+                    mention_id: row.revision for mention_id, row in rows.items() if row is not None
                 },
                 winner_mention_id=winner_id,
                 expected_object_revision=case.current_object_revision,
@@ -720,15 +708,15 @@ def test_duplicate_group_can_keep_current_and_reject_all_others(
             assert winner.revision == 2
             assert {row.id for row in losers} == {historical_id, other_current_id}
             assert all(row.status == "rejected" for row in losers)
-            assert [
-                row.operation
-                for row in mention_revision_rows(session, winner_id)
-            ] == ["create", "repair_group_duplicate_kept"]
+            assert [row.operation for row in mention_revision_rows(session, winner_id)] == [
+                "create",
+                "repair_group_duplicate_kept",
+            ]
             for loser_id in (historical_id, other_current_id):
-                assert [
-                    row.operation
-                    for row in mention_revision_rows(session, loser_id)
-                ] == ["create", "repair_group_duplicate_rejected"]
+                assert [row.operation for row in mention_revision_rows(session, loser_id)] == [
+                    "create",
+                    "repair_group_duplicate_rejected",
+                ]
             events = session.scalars(
                 select(ExchangeChangeEvent)
                 .where(
@@ -742,12 +730,8 @@ def test_duplicate_group_can_keep_current_and_reject_all_others(
         with session_scope(engine) as session:
             assert [
                 case
-                for case in mention_repair_cases(
-                    session, project_id="search_project"
-                )
-                if case.mention_id in {
-                    historical_id, winner_id, other_current_id
-                }
+                for case in mention_repair_cases(session, project_id="search_project")
+                if case.mention_id in {historical_id, winner_id, other_current_id}
             ] == []
     finally:
         engine.dispose()
@@ -777,23 +761,16 @@ def test_duplicate_group_can_keep_historical_and_relocate_it(
         with session_scope(engine) as session:
             case = next(
                 case
-                for case in mention_repair_cases(
-                    session, project_id="search_project"
-                )
+                for case in mention_repair_cases(session, project_id="search_project")
                 if case.code == "duplicate_group"
             )
             group_ids = (case.mention_id, *case.duplicate_mention_ids)
-            rows = {
-                mention_id: session.get(EntityMention, mention_id)
-                for mention_id in group_ids
-            }
+            rows = {mention_id: session.get(EntityMention, mention_id) for mention_id in group_ids}
             winner, losers = repair_duplicate_group(
                 session,
                 mention_ids=group_ids,
                 expected_revisions={
-                    mention_id: row.revision
-                    for mention_id, row in rows.items()
-                    if row is not None
+                    mention_id: row.revision for mention_id, row in rows.items() if row is not None
                 },
                 winner_mention_id=historical_id,
                 expected_object_revision=case.current_object_revision,
@@ -805,17 +782,17 @@ def test_duplicate_group_can_keep_historical_and_relocate_it(
             assert winner.id == historical_id
             assert winner.object_revision_number == 2
             assert (winner.start_offset, winner.end_offset) == (16, 33)
-            assert [
-                row.operation
-                for row in mention_revision_rows(session, historical_id)
-            ] == ["create", "repair_group_duplicate_relocated"]
+            assert [row.operation for row in mention_revision_rows(session, historical_id)] == [
+                "create",
+                "repair_group_duplicate_relocated",
+            ]
             assert {row.id for row in losers} == {current_a_id, current_b_id}
             for loser in losers:
                 assert loser.status == "rejected"
-                assert [
-                    row.operation
-                    for row in mention_revision_rows(session, loser.id)
-                ] == ["create", "repair_group_duplicate_rejected"]
+                assert [row.operation for row in mention_revision_rows(session, loser.id)] == [
+                    "create",
+                    "repair_group_duplicate_rejected",
+                ]
     finally:
         engine.dispose()
 
@@ -840,9 +817,7 @@ def test_duplicate_group_rejects_a_stale_comparison(tmp_path: Path) -> None:
         with session_scope(engine) as session:
             case = next(
                 case
-                for case in mention_repair_cases(
-                    session, project_id="search_project"
-                )
+                for case in mention_repair_cases(session, project_id="search_project")
                 if case.code == "duplicate_group"
             )
             group_ids = (case.mention_id, *case.duplicate_mention_ids)
@@ -924,9 +899,7 @@ def test_safe_relocations_can_be_applied_as_one_atomic_group(
         with session_scope(engine) as session:
             cases = [
                 case
-                for case in mention_repair_cases(
-                    session, project_id="search_project"
-                )
+                for case in mention_repair_cases(session, project_id="search_project")
                 if case.mention_id in mention_ids
             ]
             assert len(cases) == 3
@@ -940,10 +913,10 @@ def test_safe_relocations_can_be_applied_as_one_atomic_group(
             assert {row.id for row in repaired} == set(mention_ids)
             assert all(row.object_revision_number == 2 for row in repaired)
             for mention_id in mention_ids:
-                assert [
-                    row.operation
-                    for row in mention_revision_rows(session, mention_id)
-                ] == ["create", "repair_group_relocation"]
+                assert [row.operation for row in mention_revision_rows(session, mention_id)] == [
+                    "create",
+                    "repair_group_relocation",
+                ]
             events = session.scalars(
                 select(ExchangeChangeEvent)
                 .where(
@@ -957,13 +930,12 @@ def test_safe_relocations_can_be_applied_as_one_atomic_group(
         with session_scope(engine) as session:
             assert [
                 case
-                for case in mention_repair_cases(
-                    session, project_id="search_project"
-                )
+                for case in mention_repair_cases(session, project_id="search_project")
                 if case.mention_id in mention_ids
             ] == []
     finally:
         engine.dispose()
+
 
 def test_snapshot_divergence_blocks_automatic_repair(tmp_path: Path) -> None:
     root = tmp_path / "snapshot_divergence"
@@ -1041,9 +1013,7 @@ def test_snapshot_divergence_can_adopt_current_row_as_new_revision(
                 "repair_adopt_current_row",
             ]
             assert revisions[-1].snapshot_json["note"] == "Nota vigente sin snapshot"
-            assert revisions[-1].note == (
-                "La fila vigente fue verificada contra el historial."
-            )
+            assert revisions[-1].note == ("La fila vigente fue verificada contra el historial.")
 
         with session_scope(engine) as session:
             assert [
@@ -1114,9 +1084,7 @@ def test_snapshot_divergence_can_restore_latest_snapshot_as_new_revision(
             ]
             assert revisions[1].snapshot_json["authority_id"] is None
             assert revisions[1].snapshot_json["status"] == "pending"
-            assert revisions[1].snapshot_json["note"] == (
-                "Fila accidental que debe descartarse"
-            )
+            assert revisions[1].snapshot_json["note"] == ("Fila accidental que debe descartarse")
             assert revisions[-1].snapshot_json == revisions[0].snapshot_json
             assert revisions[-1].note == "Se restaura el estado documentado."
 
@@ -1437,12 +1405,8 @@ def test_missing_authority_validation_script_creates_two_decision_paths(
                 result["link_mention_id"],
                 result["pending_mention_id"],
             }
-            assert cases[result["link_mention_id"]].mention_text.endswith(
-                "para vincular"
-            )
-            assert cases[result["pending_mention_id"]].mention_text.endswith(
-                "a pendiente"
-            )
+            assert cases[result["link_mention_id"]].mention_text.endswith("para vincular")
+            assert cases[result["pending_mention_id"]].mention_text.endswith("a pendiente")
     finally:
         engine.dispose()
 
@@ -1530,16 +1494,22 @@ def test_unresolved_validation_script_creates_ambiguous_and_absent_cases(
             assert ambiguous is not None and absent is not None
             editable = session.get(EditableObject, result["object_id"])
             assert editable is not None
-            assert len(
+            assert (
+                len(
+                    exact_mention_occurrences(
+                        editable.current_text,
+                        ambiguous.mention_text,
+                    )
+                )
+                == 2
+            )
+            assert (
                 exact_mention_occurrences(
                     editable.current_text,
-                    ambiguous.mention_text,
+                    absent.mention_text,
                 )
-            ) == 2
-            assert exact_mention_occurrences(
-                editable.current_text,
-                absent.mention_text,
-            ) == []
+                == []
+            )
     finally:
         engine.dispose()
 
@@ -1577,12 +1547,12 @@ def test_snapshot_divergence_validation_script_creates_two_decision_paths(
             assert result["restore_mention_id"] in cases
             assert cases[result["adopt_mention_id"]].can_resolve_snapshot_divergence
             assert cases[result["restore_mention_id"]].can_resolve_snapshot_divergence
-            assert cases[result["adopt_mention_id"]].snapshot_difference_fields == (
+            assert cases[result["adopt_mention_id"]].snapshot_difference_fields == ("note",)
+            assert set(cases[result["restore_mention_id"]].snapshot_difference_fields) == {
+                "authority_id",
+                "status",
                 "note",
-            )
-            assert set(
-                cases[result["restore_mention_id"]].snapshot_difference_fields
-            ) == {"authority_id", "status", "note"}
+            }
     finally:
         engine.dispose()
 
@@ -1613,8 +1583,7 @@ def test_grouped_validation_script_creates_joint_and_safe_cases(
             safe_cases = [
                 case
                 for case in cases
-                if case.code == "safe_relocation"
-                and case.mention_id in set(result["safe_ids"])
+                if case.code == "safe_relocation" and case.mention_id in set(result["safe_ids"])
             ]
             assert len(group_cases) == 1
             group_case = group_cases[0]

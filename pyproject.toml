@@ -52,6 +52,7 @@ tiff = [
 dev = [
   "pytest>=8,<10",
   "ruff>=0.9,<1",
+  "mypy>=1.20,<2",
 ]
 
 [project.scripts]
@@ -63,10 +64,31 @@ where = ["src"]
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 addopts = "-q"
+markers = [
+  "fast: pruebas unitarias, contratos puros y verificaciones estáticas sin integración persistente",
+  "integration: integración local entre componentes, SQLite, archivos, CLI o scripts sin servicios externos en vivo",
+  "slow: recorridos materialmente pesados, evaluaciones, intercambio o límites de motores opcionales",
+]
 
 [tool.ruff]
 line-length = 100
 target-version = "py311"
+
+[tool.mypy]
+python_version = "3.11"
+files = [
+  "src/archive_workbench/contracts",
+  "src/archive_workbench/domain",
+  "src/archive_workbench/io",
+  "src/archive_workbench/temporal.py",
+  "src/archive_workbench/version.py",
+]
+check_untyped_defs = true
+warn_redundant_casts = true
+warn_unused_configs = true
+warn_unused_ignores = true
+show_error_codes = true
+pretty = true
 
 [tool.setuptools.package-data]
 archive_workbench = ["migrations/*", "migrations/versions/*.py", "default_config/*.yaml"]

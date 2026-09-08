@@ -6,7 +6,13 @@ from typing import Any, Iterable
 
 LOCAL_PROVIDER_KEY = "local_deterministic"
 LOCAL_PROVIDER_VERSION = "local_rules_v5"
-LOCAL_PROVIDER_VERSIONS = ("local_rules_v1", "local_rules_v2", "local_rules_v3", "local_rules_v4", "local_rules_v5")
+LOCAL_PROVIDER_VERSIONS = (
+    "local_rules_v1",
+    "local_rules_v2",
+    "local_rules_v3",
+    "local_rules_v4",
+    "local_rules_v5",
+)
 SPACY_PROVIDER_KEY = "spacy_ner"
 
 
@@ -61,9 +67,7 @@ def _spacy_reference(version: str) -> tuple[str, str]:
         )
     model_name, model_version = clean.rsplit("@", 1)
     if not model_name or not model_version:
-        raise ValueError(
-            "La versión de spacy_ner debe usar el formato modelo@versión"
-        )
+        raise ValueError("La versión de spacy_ner debe usar el formato modelo@versión")
     return model_name, model_version
 
 
@@ -75,9 +79,7 @@ def provider_contract(
 ) -> DiscoveryProviderContract:
     if key == LOCAL_PROVIDER_KEY:
         if version not in LOCAL_PROVIDER_VERSIONS:
-            raise ValueError(
-                f"Versión no admitida para {LOCAL_PROVIDER_KEY}: {version}"
-            )
+            raise ValueError(f"Versión no admitida para {LOCAL_PROVIDER_KEY}: {version}")
         return DiscoveryProviderContract(
             key=key,
             version=version,
@@ -148,8 +150,7 @@ def _load_spacy_pipeline(model_name: str) -> Any:
         import spacy
     except ImportError as exc:
         raise RuntimeError(
-            "El adaptador spacy_ner requiere instalar el extra "
-            "archive-workbench[discovery]."
+            "El adaptador spacy_ner requiere instalar el extra archive-workbench[discovery]."
         ) from exc
     try:
         return spacy.load(model_name)
@@ -257,9 +258,7 @@ def detect_with_provider(
             f"{contract.key}@{contract.version} no admite las familias: "
             + ", ".join(sorted(unsupported))
         )
-    selected = tuple(
-        family for family in selected if family in set(contract.supported_families)
-    )
+    selected = tuple(family for family in selected if family in set(contract.supported_families))
 
     if provider_key == LOCAL_PROVIDER_KEY:
         from archive_workbench.open_discovery import detect_local_candidates

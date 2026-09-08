@@ -142,22 +142,23 @@ def test_resolve_surya_command_keeps_bare_command_and_resolves_runtime_path(
 
 
 def test_surya_torch_device_follows_requested_backend_when_auto() -> None:
-    assert resolve_surya_torch_device(
-        ExtractionProfile(backend="surya_cli", device="cpu")
-    ) == "cpu"
-    assert resolve_surya_torch_device(
-        ExtractionProfile(backend="surya_cli", device="cuda")
-    ) == "cuda"
-    assert resolve_surya_torch_device(
-        ExtractionProfile(backend="surya_cli", device="auto")
-    ) == "auto"
-    assert resolve_surya_torch_device(
-        ExtractionProfile(
-            backend="surya_cli",
-            device="cuda",
-            surya_torch_device="cpu",
+    assert resolve_surya_torch_device(ExtractionProfile(backend="surya_cli", device="cpu")) == "cpu"
+    assert (
+        resolve_surya_torch_device(ExtractionProfile(backend="surya_cli", device="cuda")) == "cuda"
+    )
+    assert (
+        resolve_surya_torch_device(ExtractionProfile(backend="surya_cli", device="auto")) == "auto"
+    )
+    assert (
+        resolve_surya_torch_device(
+            ExtractionProfile(
+                backend="surya_cli",
+                device="cuda",
+                surya_torch_device="cpu",
+            )
         )
-    ) == "cpu"
+        == "cpu"
+    )
 
 
 def test_html_to_text_keeps_visible_structure() -> None:
@@ -220,9 +221,7 @@ def test_surya_runner_uses_vllm_for_cuda_and_maps_pages(tmp_path: Path, monkeypa
         fallback_device="cpu",
     )
 
-    outputs, version, log = run_surya_cli_batch(
-        [(1, source)], tmp_path / "work", profile
-    )
+    outputs, version, log = run_surya_cli_batch([(1, source)], tmp_path / "work", profile)
 
     assert version == "0.22.0"
     assert json.loads(outputs[1].read_text(encoding="utf-8"))["blocks"]
@@ -236,9 +235,7 @@ def test_surya_runner_uses_vllm_for_cuda_and_maps_pages(tmp_path: Path, monkeypa
     assert "SURYA_INFERENCE_KEEP_ALIVE=1" in log
 
 
-def test_managed_container_forces_bundled_llamacpp_backend(
-    tmp_path: Path, monkeypatch
-) -> None:
+def test_managed_container_forces_bundled_llamacpp_backend(tmp_path: Path, monkeypatch) -> None:
     import archive_workbench.surya_engine as module
 
     source = tmp_path / "source.png"
@@ -283,9 +280,7 @@ def test_managed_container_forces_bundled_llamacpp_backend(
     assert "ARCHIVE_WORKBENCH_CLEAN_LD_LIBRARY_PATH=0" in log
 
 
-def test_managed_llamacpp_respects_explicit_surya_limits(
-    tmp_path: Path, monkeypatch
-) -> None:
+def test_managed_llamacpp_respects_explicit_surya_limits(tmp_path: Path, monkeypatch) -> None:
     import archive_workbench.surya_engine as module
 
     source = tmp_path / "source.png"
@@ -320,9 +315,7 @@ def test_managed_llamacpp_respects_explicit_surya_limits(
     assert "SURYA_MAX_TOKENS_FULL_PAGE=6144" in log
 
 
-def test_surya_runner_cpu_profile_sets_auxiliary_cpu_when_auto(
-    tmp_path: Path, monkeypatch
-) -> None:
+def test_surya_runner_cpu_profile_sets_auxiliary_cpu_when_auto(tmp_path: Path, monkeypatch) -> None:
     import archive_workbench.surya_engine as module
 
     source = tmp_path / "source.png"
@@ -388,9 +381,7 @@ def test_surya_runner_falls_back_once_to_cpu(tmp_path: Path, monkeypatch) -> Non
         retry_on_accelerator_error=True,
     )
 
-    outputs, _version, log = run_surya_cli_batch(
-        [(1, source)], tmp_path / "work", profile
-    )
+    outputs, _version, log = run_surya_cli_batch([(1, source)], tmp_path / "work", profile)
 
     assert outputs[1].is_file()
     assert backends == ["vllm", "llamacpp"]
@@ -609,9 +600,7 @@ def test_preferred_profile_resolves_to_docling_fallback(tmp_path: Path, monkeypa
     fallback_path = tmp_path / "config/extraction_docling_es.yaml"
     fallback_path.parent.mkdir(parents=True)
     fallback_path.write_text(
-        "schema_version: '1.0'\n"
-        "profile_key: docling_fallback\n"
-        "backend: docling_cli\n",
+        "schema_version: '1.0'\nprofile_key: docling_fallback\nbackend: docling_cli\n",
         encoding="utf-8",
     )
     primary = ExtractionProfile(

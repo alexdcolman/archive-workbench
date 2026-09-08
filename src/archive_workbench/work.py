@@ -4,7 +4,7 @@ from dataclasses import dataclass
 from datetime import datetime, timezone
 from typing import Iterable
 
-from sqlalchemy import func, or_, select
+from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
 from archive_workbench.db.models import (
@@ -17,7 +17,6 @@ from archive_workbench.db.models import (
     utc_now,
 )
 from archive_workbench.identity import new_id
-from archive_workbench.sources import PROCESSABLE_SOURCE_TYPES
 
 ASSIGNMENT_KINDS = ("processing", "primary_review", "cross_review")
 ASSIGNMENT_STATUSES = (
@@ -124,9 +123,7 @@ def _iso_datetime(value: datetime | None) -> str | None:
 
 
 def _archival_paths(session: Session, project_id: str) -> dict[str, str]:
-    units = session.scalars(
-        select(ArchivalUnit).where(ArchivalUnit.project_id == project_id)
-    ).all()
+    units = session.scalars(select(ArchivalUnit).where(ArchivalUnit.project_id == project_id)).all()
     by_id = {unit.id: unit for unit in units}
     cache: dict[str, str] = {}
 
@@ -177,9 +174,7 @@ def _validate_scope(
     if registration.digital_object_id:
         digital = session.get(DigitalObject, registration.digital_object_id)
         if digital and digital.page_count is not None and page_end > digital.page_count:
-            raise ValueError(
-                f"El rango excede las {digital.page_count} páginas registradas"
-            )
+            raise ValueError(f"El rango excede las {digital.page_count} páginas registradas")
 
 
 def _same_scope(left: WorkAssignment, right: WorkAssignment) -> bool:
@@ -430,8 +425,7 @@ def update_work_assignment(
         raise ValueError(f"Asignación inexistente: {assignment_id}")
     if assignment.revision != expected_revision:
         raise ValueError(
-            f"La asignación está en revisión {assignment.revision}; "
-            f"se esperaba {expected_revision}"
+            f"La asignación está en revisión {assignment.revision}; se esperaba {expected_revision}"
         )
     if assignee is not None:
         clean = assignee.strip()
@@ -638,8 +632,7 @@ def cross_review_candidate_rows(
                 for child in by_parent.get(row.assignment_id, [])
             ),
             completed_cross_reviews=sum(
-                child.status == "completed"
-                for child in by_parent.get(row.assignment_id, [])
+                child.status == "completed" for child in by_parent.get(row.assignment_id, [])
             ),
         )
         for row in parents

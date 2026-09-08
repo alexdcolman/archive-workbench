@@ -137,10 +137,13 @@ def test_dewarp_corrects_synthetic_curve_and_skips_flat_page() -> None:
     flat_estimate = estimate_vertical_dewarp(flat)
     assert flat_estimate.detected is False
     assert flat_estimate.applied is False
-    assert ImageChops.difference(
-        flat,
-        apply_estimated_dewarp(flat, flat_estimate),
-    ).getbbox() is None
+    assert (
+        ImageChops.difference(
+            flat,
+            apply_estimated_dewarp(flat, flat_estimate),
+        ).getbbox()
+        is None
+    )
 
 
 def test_dewarp_is_traced_and_creates_separate_diagnostic(tmp_path: Path) -> None:

@@ -4,6 +4,7 @@ Revision ID: 0031_page_action_exchange
 Revises: 0030_source_replaced_exchange
 Create Date: 2026-07-29
 """
+
 from __future__ import annotations
 
 from alembic import op
@@ -91,10 +92,10 @@ def _backfill_existing_actions() -> None:
             changed_fields_json, actor, occurred_at
         )
         SELECT
-            {_uuid_sql()}, {wid}, {_project_id('a')},
+            {_uuid_sql()}, {wid}, {_project_id("a")},
             {base} + ROW_NUMBER() OVER (ORDER BY a.created_at, a.editable_page_id, a.sequence_number, a.id),
             {_uuid_sql()}, 'editable_page_action', a.id, 'create', NULL, 1,
-            {_create_changed('a')}, a.created_by, a.created_at
+            {_create_changed("a")}, a.created_by, a.created_at
         FROM editable_page_actions a
         WHERE {wid} IS NOT NULL
           AND NOT EXISTS (
@@ -122,9 +123,9 @@ def _install_triggers() -> None:
                 entity_type, entity_id, operation, base_revision, new_revision,
                 changed_fields_json, actor, occurred_at
             ) VALUES (
-                {_uuid_sql()}, {wid}, {_project_id('NEW')}, {_next_sequence()}, {_uuid_sql()},
+                {_uuid_sql()}, {wid}, {_project_id("NEW")}, {_next_sequence()}, {_uuid_sql()},
                 'editable_page_action', NEW.id, 'create', NULL, 1,
-                {_create_changed('NEW')}, NEW.created_by, NEW.created_at
+                {_create_changed("NEW")}, NEW.created_by, NEW.created_at
             );
         END
         """
@@ -148,7 +149,7 @@ def _install_triggers() -> None:
                 entity_type, entity_id, operation, base_revision, new_revision,
                 changed_fields_json, actor, occurred_at
             ) VALUES (
-                {_uuid_sql()}, {wid}, {_project_id('NEW')}, {_next_sequence()}, {_uuid_sql()},
+                {_uuid_sql()}, {wid}, {_project_id("NEW")}, {_next_sequence()}, {_uuid_sql()},
                 'editable_page_action', NEW.id, 'update', NULL, NULL,
                 {changed}, COALESCE(NEW.redone_by, NEW.undone_by, NEW.created_by), CURRENT_TIMESTAMP
             );

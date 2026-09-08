@@ -4,6 +4,7 @@ Revision ID: 0006_region_extraction
 Revises: 0005_page_extraction_selection
 Create Date: 2026-07-23
 """
+
 from __future__ import annotations
 
 from alembic import op
@@ -45,9 +46,7 @@ def upgrade() -> None:
         sa.Column("status", sa.String(length=64), nullable=False),
         sa.Column("warning_text", sa.Text(), nullable=True),
         sa.Column("created_at", sa.DateTime(timezone=True), nullable=False),
-        sa.UniqueConstraint(
-            "extraction_run_id", "region_key", name="uq_extraction_region_run_key"
-        ),
+        sa.UniqueConstraint("extraction_run_id", "region_key", name="uq_extraction_region_run_key"),
     )
     op.create_index("ix_extraction_regions_run", "extraction_regions", ["extraction_run_id"])
     op.create_index(

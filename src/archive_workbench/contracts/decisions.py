@@ -65,31 +65,158 @@ class DescriptiveFieldDefinition(ContractModel):
     applies_to_levels: list[str] = Field(default_factory=lambda: ["all"])
     required: bool = False
     repeatable: bool = False
-    data_type: Literal["text", "date", "date_range", "integer", "number", "boolean", "list"] = "text"
+    data_type: Literal["text", "date", "date_range", "integer", "number", "boolean", "list"] = (
+        "text"
+    )
     supports_list: bool = False
     examples: list[str] = Field(default_factory=list)
     enabled: bool = True
 
 
 BASE_OPTIONAL_DESCRIPTIVE_FIELDS: tuple[dict[str, object], ...] = (
-    {"key": "arrangement", "label": "Organización y orden", "applies_to_levels": ["all"], "required": False, "repeatable": False, "data_type": "text"},
-    {"key": "access_conditions", "label": "Condiciones de acceso", "applies_to_levels": ["all"], "required": False, "repeatable": False, "data_type": "text"},
-    {"key": "physical_access_conditions", "label": "Condiciones físicas de acceso", "applies_to_levels": ["all"], "required": False, "repeatable": False, "data_type": "text"},
-    {"key": "technical_access_requirements", "label": "Requisitos técnicos de acceso", "applies_to_levels": ["all"], "required": False, "repeatable": False, "data_type": "text"},
-    {"key": "reproduction_use_conditions", "label": "Condiciones de reproducción y uso", "applies_to_levels": ["all"], "required": False, "repeatable": False, "data_type": "text"},
-    {"key": "languages_scripts", "label": "Lenguas y escrituras de los documentos", "applies_to_levels": ["all"], "required": False, "repeatable": True, "data_type": "text"},
-    {"key": "finding_aids", "label": "Instrumentos de descripción", "applies_to_levels": ["all"], "required": False, "repeatable": True, "data_type": "text"},
-    {"key": "custodial_history", "label": "Historia de la custodia", "applies_to_levels": ["all"], "required": False, "repeatable": False, "data_type": "text"},
-    {"key": "acquisition_method", "label": "Forma de ingreso", "applies_to_levels": ["all"], "required": False, "repeatable": False, "data_type": "text"},
-    {"key": "appraisal_selection_destruction", "label": "Valoración, selección y eliminación", "applies_to_levels": ["all"], "required": False, "repeatable": False, "data_type": "text"},
-    {"key": "accruals", "label": "Nuevos ingresos previstos", "applies_to_levels": ["all"], "required": False, "repeatable": False, "data_type": "text"},
-    {"key": "originals_location", "label": "Existencia y localización de originales", "applies_to_levels": ["all"], "required": False, "repeatable": False, "data_type": "text"},
-    {"key": "copies_location", "label": "Existencia y localización de copias", "applies_to_levels": ["all"], "required": False, "repeatable": False, "data_type": "text"},
-    {"key": "related_material", "label": "Documentación relacionada", "applies_to_levels": ["all"], "required": False, "repeatable": True, "data_type": "text"},
-    {"key": "related_publications", "label": "Publicaciones relacionadas", "applies_to_levels": ["all"], "required": False, "repeatable": True, "data_type": "text"},
-    {"key": "description_rules", "label": "Reglas y convenciones de descripción", "applies_to_levels": ["all"], "required": False, "repeatable": True, "data_type": "text"},
-    {"key": "description_sources", "label": "Fuentes de la descripción", "applies_to_levels": ["all"], "required": False, "repeatable": True, "data_type": "text"},
+    {
+        "key": "arrangement",
+        "label": "Organización y orden",
+        "applies_to_levels": ["all"],
+        "required": False,
+        "repeatable": False,
+        "data_type": "text",
+    },
+    {
+        "key": "access_conditions",
+        "label": "Condiciones de acceso",
+        "applies_to_levels": ["all"],
+        "required": False,
+        "repeatable": False,
+        "data_type": "text",
+    },
+    {
+        "key": "physical_access_conditions",
+        "label": "Condiciones físicas de acceso",
+        "applies_to_levels": ["all"],
+        "required": False,
+        "repeatable": False,
+        "data_type": "text",
+    },
+    {
+        "key": "technical_access_requirements",
+        "label": "Requisitos técnicos de acceso",
+        "applies_to_levels": ["all"],
+        "required": False,
+        "repeatable": False,
+        "data_type": "text",
+    },
+    {
+        "key": "reproduction_use_conditions",
+        "label": "Condiciones de reproducción y uso",
+        "applies_to_levels": ["all"],
+        "required": False,
+        "repeatable": False,
+        "data_type": "text",
+    },
+    {
+        "key": "languages_scripts",
+        "label": "Lenguas y escrituras de los documentos",
+        "applies_to_levels": ["all"],
+        "required": False,
+        "repeatable": True,
+        "data_type": "text",
+    },
+    {
+        "key": "finding_aids",
+        "label": "Instrumentos de descripción",
+        "applies_to_levels": ["all"],
+        "required": False,
+        "repeatable": True,
+        "data_type": "text",
+    },
+    {
+        "key": "custodial_history",
+        "label": "Historia de la custodia",
+        "applies_to_levels": ["all"],
+        "required": False,
+        "repeatable": False,
+        "data_type": "text",
+    },
+    {
+        "key": "acquisition_method",
+        "label": "Forma de ingreso",
+        "applies_to_levels": ["all"],
+        "required": False,
+        "repeatable": False,
+        "data_type": "text",
+    },
+    {
+        "key": "appraisal_selection_destruction",
+        "label": "Valoración, selección y eliminación",
+        "applies_to_levels": ["all"],
+        "required": False,
+        "repeatable": False,
+        "data_type": "text",
+    },
+    {
+        "key": "accruals",
+        "label": "Nuevos ingresos previstos",
+        "applies_to_levels": ["all"],
+        "required": False,
+        "repeatable": False,
+        "data_type": "text",
+    },
+    {
+        "key": "originals_location",
+        "label": "Existencia y localización de originales",
+        "applies_to_levels": ["all"],
+        "required": False,
+        "repeatable": False,
+        "data_type": "text",
+    },
+    {
+        "key": "copies_location",
+        "label": "Existencia y localización de copias",
+        "applies_to_levels": ["all"],
+        "required": False,
+        "repeatable": False,
+        "data_type": "text",
+    },
+    {
+        "key": "related_material",
+        "label": "Documentación relacionada",
+        "applies_to_levels": ["all"],
+        "required": False,
+        "repeatable": True,
+        "data_type": "text",
+    },
+    {
+        "key": "related_publications",
+        "label": "Publicaciones relacionadas",
+        "applies_to_levels": ["all"],
+        "required": False,
+        "repeatable": True,
+        "data_type": "text",
+    },
+    {
+        "key": "description_rules",
+        "label": "Reglas y convenciones de descripción",
+        "applies_to_levels": ["all"],
+        "required": False,
+        "repeatable": True,
+        "data_type": "text",
+    },
+    {
+        "key": "description_sources",
+        "label": "Fuentes de la descripción",
+        "applies_to_levels": ["all"],
+        "required": False,
+        "repeatable": True,
+        "data_type": "text",
+    },
 )
+
+
+def _default_catalog_field_value_states() -> list[
+    Literal["provided", "no_information", "not_applicable", "pending"]
+]:
+    return ["provided", "no_information", "not_applicable", "pending"]
 
 
 class CatalogDecisions(ContractModel):
@@ -99,7 +226,7 @@ class CatalogDecisions(ContractModel):
     required_root_levels: list[str] = Field(default_factory=lambda: ["archivo", "fondo"])
     completion_any_of_levels: list[list[str]] = Field(default_factory=list)
     field_value_states: list[Literal["provided", "no_information", "not_applicable", "pending"]] = (
-        Field(default_factory=lambda: ["provided", "no_information", "not_applicable", "pending"])
+        Field(default_factory=_default_catalog_field_value_states)
     )
     manual_completion_confirmation: bool = True
     separate_incomplete_inventory: bool = True
@@ -139,7 +266,9 @@ class IdentityDecisions(ContractModel):
     extraction_identity_fields: list[str] = Field(
         default_factory=lambda: ["digital_object_id", "source_sha256", "engine", "options_hash"]
     )
-    reextraction_policy: Literal["preserve_versions_mark_current"] = "preserve_versions_mark_current"
+    reextraction_policy: Literal["preserve_versions_mark_current"] = (
+        "preserve_versions_mark_current"
+    )
     better_scan_policy: Literal["new_linked_representation"] = "new_linked_representation"
     text_object_ids_survive_reordering: bool = True
     split_merge_use_lineage: bool = True
@@ -231,7 +360,9 @@ class ProjectDecisions(ContractModel):
         for group in self.catalog.completion_any_of_levels:
             unknown = sorted(set(group) - known)
             if unknown:
-                raise ValueError(f"completion_any_of_levels contiene niveles desconocidos: {unknown}")
+                raise ValueError(
+                    f"completion_any_of_levels contiene niveles desconocidos: {unknown}"
+                )
 
         graph: dict[str, list[str]] = defaultdict(list)
         for level in self.archival_levels:

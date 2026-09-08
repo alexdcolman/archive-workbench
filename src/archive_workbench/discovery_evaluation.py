@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from dataclasses import asdict, dataclass
+from dataclasses import dataclass
 from datetime import datetime, timezone
 from hashlib import sha256
 import json
@@ -111,9 +111,7 @@ def load_evaluation_corpus(path: Path) -> EvaluationCorpus:
             if start < 0 or end <= start or end > len(text):
                 raise ValueError(f"{prefix}: offsets fuera del texto")
             if not isinstance(exact, str) or text[start:end] != exact:
-                raise ValueError(
-                    f"{prefix}: el texto exacto no coincide con text[start:end]"
-                )
+                raise ValueError(f"{prefix}: el texto exacto no coincide con text[start:end]")
             if family not in DISCOVERY_FAMILIES:
                 raise ValueError(f"{prefix}: familia inválida: {family}")
             parsed.append(
@@ -146,11 +144,7 @@ def load_evaluation_corpus(path: Path) -> EvaluationCorpus:
 def _metric(tp: int, fp: int, fn: int) -> dict[str, int | float]:
     precision = tp / (tp + fp) if tp + fp else 0.0
     recall = tp / (tp + fn) if tp + fn else 0.0
-    f1 = (
-        2 * precision * recall / (precision + recall)
-        if precision + recall
-        else 0.0
-    )
+    f1 = 2 * precision * recall / (precision + recall) if precision + recall else 0.0
     return {
         "true_positive": tp,
         "false_positive": fp,
@@ -180,9 +174,7 @@ def evaluate_discovery_provider(
     families: Iterable[str] = DISCOVERY_FAMILIES,
     minimum_confidence: float = 0.0,
 ) -> EvaluationResult:
-    selected_families = tuple(
-        family for family in DISCOVERY_FAMILIES if family in set(families)
-    )
+    selected_families = tuple(family for family in DISCOVERY_FAMILIES if family in set(families))
     invalid = set(families) - set(DISCOVERY_FAMILIES)
     if invalid:
         raise ValueError("Familias inválidas: " + ", ".join(sorted(invalid)))
@@ -220,9 +212,8 @@ def evaluate_discovery_provider(
         )
         contract = runtime_contract
         for detection in detections:
-            if (
-                detection.confidence is not None
-                and detection.confidence < float(minimum_confidence)
+            if detection.confidence is not None and detection.confidence < float(
+                minimum_confidence
             ):
                 continue
             prediction_rows.append(
@@ -240,12 +231,10 @@ def evaluate_discovery_provider(
             )
 
     expected_keys = {
-        (row["record_id"], row["start"], row["end"], row["family"])
-        for row in expected_rows
+        (row["record_id"], row["start"], row["end"], row["family"]) for row in expected_rows
     }
     prediction_keys = {
-        (row["record_id"], row["start"], row["end"], row["family"])
-        for row in prediction_rows
+        (row["record_id"], row["start"], row["end"], row["family"]) for row in prediction_rows
     }
     matched = expected_keys & prediction_keys
 
@@ -268,9 +257,7 @@ def evaluate_discovery_provider(
     macro_families = [
         family
         for family in selected_families
-        if by_family[family]["support"] or any(
-            key[3] == family for key in prediction_keys
-        )
+        if by_family[family]["support"] or any(key[3] == family for key in prediction_keys)
     ]
     macro = {
         metric: round(
@@ -284,12 +271,9 @@ def evaluate_discovery_provider(
     }
     macro["family_count"] = len(macro_families)
 
-    expected_by_span = {
-        (row["record_id"], row["start"], row["end"]): row for row in expected_rows
-    }
+    expected_by_span = {(row["record_id"], row["start"], row["end"]): row for row in expected_rows}
     predicted_by_span = {
-        (row["record_id"], row["start"], row["end"]): row
-        for row in prediction_rows
+        (row["record_id"], row["start"], row["end"]): row for row in prediction_rows
     }
     errors: list[dict[str, Any]] = []
     for row in prediction_rows:

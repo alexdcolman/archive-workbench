@@ -11,7 +11,14 @@ from archive_workbench.authorities import authority_rows, create_authority
 from archive_workbench.local_picker import choose_local_directory
 from archive_workbench.runtime_environment import managed_workspace, workspace_display_path
 from archive_workbench.catalog_tree import catalog_tree_select
-from archive_workbench.ui_navigation import mount_choice_help, rerun_app, rerun_view, request_app_view, section_heading, tracked_tabs
+from archive_workbench.ui_navigation import (
+    mount_choice_help,
+    rerun_app,
+    rerun_view,
+    request_app_view,
+    section_heading,
+    tracked_tabs,
+)
 
 from archive_workbench.catalog import ensure_project, scan_file_instances
 from archive_workbench.catalog_management import (
@@ -46,7 +53,10 @@ from archive_workbench.catalog_templates import (
 from archive_workbench.db import create_sqlite_engine, session_scope
 from archive_workbench.db.models import ArchivalUnit
 from archive_workbench.inspection import PROCESSABLE_DOCUMENT_SUFFIXES, inspect_input
-from archive_workbench.project_setup import add_standard_collection_level, update_archival_parent_keys
+from archive_workbench.project_setup import (
+    add_standard_collection_level,
+    update_archival_parent_keys,
+)
 from archive_workbench.relations import (
     ARCHIVAL_ROLE_KINDS,
     RELATION_KIND_LABELS,
@@ -163,6 +173,8 @@ def _catalog_parent_relation_caption(*, parent_level, parent_path: str, child_le
             "expresar jerarquía documental o ubicación física."
         )
     return f"Nivel superior del catálogo: {parent_path}."
+
+
 _PROCESSING_STATUS_LABELS = {
     "not_started": "No iniciado",
     "queued": "En cola",
@@ -200,7 +212,9 @@ def _directory_input_with_picker(
                 selected_value = str(selected)
                 if relative_to is not None:
                     try:
-                        selected_value = selected.resolve().relative_to(relative_to.resolve()).as_posix()
+                        selected_value = (
+                            selected.resolve().relative_to(relative_to.resolve()).as_posix()
+                        )
                     except ValueError:
                         st.error("Elegí una carpeta ubicada dentro de la carpeta del proyecto.")
                         return value
@@ -209,10 +223,14 @@ def _directory_input_with_picker(
                 st.session_state[pending_key] = selected_value
                 rerun_view(st)
     return value
+
+
 _SUPPORTED_DOCUMENT_SUFFIXES = PROCESSABLE_DOCUMENT_SUFFIXES
 
 
-def _run_catalog_action(st, *, db_path: Path, callback: Callable, unit_id: str | None = None) -> None:
+def _run_catalog_action(
+    st, *, db_path: Path, callback: Callable, unit_id: str | None = None
+) -> None:
     engine = create_sqlite_engine(db_path)
     try:
         with session_scope(engine) as session:
@@ -242,7 +260,9 @@ def _unit_label(row, level_labels: dict[str, str]) -> str:
         if row.digital_object_count
         else ""
     )
-    return f"{indent}{level_labels.get(row.level_key, row.level_key)} · {row.title} · {status}{files}"
+    return (
+        f"{indent}{level_labels.get(row.level_key, row.level_key)} · {row.title} · {status}{files}"
+    )
 
 
 def _catalog_tree_include_ids(rows, matching_ids: set[str]) -> set[str]:
@@ -330,7 +350,9 @@ def _default_page_range(path: Path) -> tuple[int, int]:
 
 
 def _relation_help_text(relation_type: str) -> str:
-    return _RELATION_HELP.get(relation_type, "Elegí cómo se relaciona este archivo con la unidad seleccionada.")
+    return _RELATION_HELP.get(
+        relation_type, "Elegí cómo se relaciona este archivo con la unidad seleccionada."
+    )
 
 
 def _render_catalog_structure_editor(st, *, decisions, project_root: Path) -> None:
@@ -376,7 +398,9 @@ def _batch_unit_suggestion(path: Path, unit_rows) -> str:
 
     file_tokens = [token for token in slugify(path.stem).split("_") if len(token) >= 3]
     if len(file_tokens) <= 1:
-        file_tokens = [token for token in slugify(path.stem).replace("_", "-").split("-") if len(token) >= 3]
+        file_tokens = [
+            token for token in slugify(path.stem).replace("_", "-").split("-") if len(token) >= 3
+        ]
     if not file_tokens:
         return ""
 
@@ -406,7 +430,9 @@ def _batch_unit_suggestion(path: Path, unit_rows) -> str:
     return best_path if best_score >= 2 and not ambiguous else ""
 
 
-def _render_batch_import(st, *, project_root: Path, db_path: Path, decisions, actor: str, all_rows) -> None:
+def _render_batch_import(
+    st, *, project_root: Path, db_path: Path, decisions, actor: str, all_rows
+) -> None:
     st.subheader("Incorporar archivos por lote")
     st.write(
         "Podés revisar muchos archivos antes de registrarlos. Para cada archivo elegís la unidad "
@@ -467,9 +493,7 @@ def _render_batch_import(st, *, project_root: Path, db_path: Path, decisions, ac
                 ),
             )
         destination_key = "catalog_batch_destination"
-        destination_current = str(
-            st.session_state.get(destination_key, "corpus/importados")
-        )
+        destination_current = str(st.session_state.get(destination_key, "corpus/importados"))
         destination_dir = _directory_input_with_picker(
             st,
             label="Carpeta del proyecto donde se copiarán los archivos",
@@ -485,7 +509,9 @@ def _render_batch_import(st, *, project_root: Path, db_path: Path, decisions, ac
         )
         if external_path.strip():
             source_root = Path(external_path).expanduser().resolve()
-            source_description = workspace_display_path(source_root) if workspace is not None else str(source_root)
+            source_description = (
+                workspace_display_path(source_root) if workspace is not None else str(source_root)
+            )
 
     scan_signature = (mode, source_description, destination_dir)
     if st.button(
@@ -549,9 +575,7 @@ def _render_batch_import(st, *, project_root: Path, db_path: Path, decisions, ac
                             "__sha256": digest,
                         }
                     )
-                hash_counts = Counter(
-                    row["__sha256"] for row in rows if row["__sha256"]
-                )
+                hash_counts = Counter(row["__sha256"] for row in rows if row["__sha256"])
                 for row in rows:
                     digest = row["__sha256"]
                     notices = []
@@ -612,21 +636,13 @@ def _render_batch_import(st, *, project_root: Path, db_path: Path, decisions, ac
             "Relación": st.column_config.SelectboxColumn(
                 "Relación", options=relation_labels, required=True
             ),
-            "Página inicial": st.column_config.NumberColumn(
-                "Página inicial", min_value=1, step=1
-            ),
-            "Página final": st.column_config.NumberColumn(
-                "Página final", min_value=1, step=1
-            ),
+            "Página inicial": st.column_config.NumberColumn("Página inicial", min_value=1, step=1),
+            "Página final": st.column_config.NumberColumn("Página final", min_value=1, step=1),
         },
     )
 
     folders = sorted(
-        {
-            str(Path(value).parent)
-            for value in edited["Archivo"]
-            if str(Path(value).parent) != "."
-        }
+        {str(Path(value).parent) for value in edited["Archivo"] if str(Path(value).parent) != "."}
     )
     folder_rule_open = st.toggle(
         "Asignar la misma unidad del catálogo a varios archivos de una subcarpeta",
@@ -641,7 +657,9 @@ def _render_batch_import(st, *, project_root: Path, db_path: Path, decisions, ac
             )
             if folders:
                 folder = st.selectbox(
-                    "Subcarpeta cuyos archivos querés asignar juntos", options=folders, key="catalog_batch_rule_folder"
+                    "Subcarpeta cuyos archivos querés asignar juntos",
+                    options=folders,
+                    key="catalog_batch_rule_folder",
                 )
                 folder_unit = st.selectbox(
                     "Unidad del catálogo para esa carpeta",
@@ -654,7 +672,10 @@ def _render_batch_import(st, *, project_root: Path, db_path: Path, decisions, ac
                     options=relation_labels,
                     key="catalog_batch_rule_relation",
                 )
-                if st.button("Aplicar esta asignación a los archivos de la subcarpeta", key="catalog_batch_apply_folder_rule"):
+                if st.button(
+                    "Aplicar esta asignación a los archivos de la subcarpeta",
+                    key="catalog_batch_apply_folder_rule",
+                ):
                     updated = edited.copy()
                     mask = updated["Archivo"].map(
                         lambda value: str(Path(str(value)).parent) == folder
@@ -724,14 +745,10 @@ def _render_batch_import(st, *, project_root: Path, db_path: Path, decisions, ac
                     st.session_state["catalog_batch_exception_files__clear"] = True
                     rerun_view(st)
 
-    selected_mask = edited["Importar"] == True
+    selected_mask = edited["Importar"]
     selected_count = int(selected_mask.sum())
-    missing_units = int(
-        (selected_mask & (edited["Unidad del catálogo"].fillna("") == "")).sum()
-    )
-    errors = int(
-        (selected_mask & (edited["Problema detectado"].fillna("") != "")).sum()
-    )
+    missing_units = int((selected_mask & (edited["Unidad del catálogo"].fillna("") == "")).sum())
+    errors = int((selected_mask & (edited["Problema detectado"].fillna("") != "")).sum())
     invalid_ranges = int(
         (selected_mask & (edited["Página final"] < edited["Página inicial"])).sum()
     )
@@ -998,8 +1015,11 @@ def render_catalog_view(st, *, project_root: Path, db_path: Path, decisions, act
                         type="primary",
                     )
                 if submitted and confirmation.strip() != "IMPORTAR":
-                    st.error("Para guardar en el catálogo los cambios de la planilla, escribí exactamente IMPORTAR.")
+                    st.error(
+                        "Para guardar en el catálogo los cambios de la planilla, escribí exactamente IMPORTAR."
+                    )
                 elif submitted:
+
                     def import_callback(session):
                         result = apply_catalog_template(
                             session,
@@ -1043,7 +1063,9 @@ def render_catalog_view(st, *, project_root: Path, db_path: Path, decisions, act
             )
             if st.button("Habilitar Colección en este proyecto", key="catalog_enable_collection"):
                 try:
-                    changed = add_standard_collection_level(project_root / "config" / "decisions.yaml")
+                    changed = add_standard_collection_level(
+                        project_root / "config" / "decisions.yaml"
+                    )
                 except (OSError, ValueError) as exc:
                     st.error(str(exc))
                 else:
@@ -1064,9 +1086,14 @@ def render_catalog_view(st, *, project_root: Path, db_path: Path, decisions, act
                 )
                 title = st.text_input("Título de la unidad del catálogo")
                 reference_code = st.text_input("Código de referencia de la unidad (opcional)")
-                note = st.text_input("Nota sobre la creación de esta unidad (opcional)", placeholder="Opcional")
-                submit_create = st.form_submit_button("Crear esta unidad en la raíz del catálogo", type="primary")
+                note = st.text_input(
+                    "Nota sobre la creación de esta unidad (opcional)", placeholder="Opcional"
+                )
+                submit_create = st.form_submit_button(
+                    "Crear esta unidad en la raíz del catálogo", type="primary"
+                )
             if submit_create:
+
                 def callback(session):
                     unit = create_archival_unit(
                         session,
@@ -1114,7 +1141,9 @@ def render_catalog_view(st, *, project_root: Path, db_path: Path, decisions, act
             status_filter = st.selectbox(
                 "Estado de la descripción de la unidad",
                 options=[""] + list(REGISTRATION_STATUSES),
-                format_func=lambda value: "Todos los estados" if not value else _STATUS_LABELS[value],
+                format_func=lambda value: (
+                    "Todos los estados" if not value else _STATUS_LABELS[value]
+                ),
                 key="catalog_status_filter",
                 label_visibility="collapsed",
             )
@@ -1197,17 +1226,29 @@ def render_catalog_view(st, *, project_root: Path, db_path: Path, decisions, act
                                 parent_path=selected_row.path,
                             )
                         )
-                        with st.form(f"catalog_create_child_{selected_row.id}", clear_on_submit=True, enter_to_submit=False):
+                        with st.form(
+                            f"catalog_create_child_{selected_row.id}",
+                            clear_on_submit=True,
+                            enter_to_submit=False,
+                        ):
                             child_level = st.selectbox(
                                 "Tipo de unidad que querés agregar",
                                 options=child_levels,
                                 format_func=lambda key: level_labels[key],
                             )
                             child_title = st.text_input("Título de la nueva unidad del catálogo")
-                            child_reference = st.text_input("Código de referencia de la unidad (opcional)")
-                            child_note = st.text_input("Nota sobre la creación de esta unidad (opcional)", placeholder="Opcional")
-                            child_submit = st.form_submit_button("Crear esta unidad en el catálogo", type="primary")
+                            child_reference = st.text_input(
+                                "Código de referencia de la unidad (opcional)"
+                            )
+                            child_note = st.text_input(
+                                "Nota sobre la creación de esta unidad (opcional)",
+                                placeholder="Opcional",
+                            )
+                            child_submit = st.form_submit_button(
+                                "Crear esta unidad en el catálogo", type="primary"
+                            )
                         if child_submit:
+
                             def create_child_callback(session):
                                 child = create_archival_unit(
                                     session,
@@ -1224,7 +1265,9 @@ def render_catalog_view(st, *, project_root: Path, db_path: Path, decisions, act
 
                             _run_catalog_action(st, db_path=db_path, callback=create_child_callback)
             else:
-                st.caption("Este nivel no admite unidades hijas según la configuración del proyecto.")
+                st.caption(
+                    "Este nivel no admite unidades hijas según la configuración del proyecto."
+                )
 
         engine = create_sqlite_engine(db_path)
         try:
@@ -1300,14 +1343,18 @@ def render_catalog_view(st, *, project_root: Path, db_path: Path, decisions, act
                     for item in decisions.descriptive_fields
                     if item.enabled
                     and item.key != "reference_code"
-                    and ("all" in item.applies_to_levels or unit.level_key in item.applies_to_levels)
+                    and (
+                        "all" in item.applies_to_levels or unit.level_key in item.applies_to_levels
+                    )
                 ]
                 required_fields = [item for item in applicable_fields if item.required]
                 optional_fields = [item for item in applicable_fields if not item.required]
                 definition_by_key = {item.key: item for item in applicable_fields}
 
                 title = st.text_input(
-                    "Título de la unidad del catálogo", value=unit.title, key=f"catalog_title_{unit.id}"
+                    "Título de la unidad del catálogo",
+                    value=unit.title,
+                    key=f"catalog_title_{unit.id}",
                 )
                 reference_code = st.text_input(
                     "Código de referencia de la unidad (opcional)",
@@ -1351,7 +1398,9 @@ def render_catalog_view(st, *, project_root: Path, db_path: Path, decisions, act
                             state = st.selectbox(
                                 "Estado de revisión de este campo descriptivo",
                                 options=list(decisions.catalog.field_value_states),
-                                index=list(decisions.catalog.field_value_states).index(current_state),
+                                index=list(decisions.catalog.field_value_states).index(
+                                    current_state
+                                ),
                                 format_func=lambda value: _FIELD_STATE_LABELS.get(value, value),
                                 key=f"catalog_required_state_{unit.id}_{definition.key}",
                             )
@@ -1415,7 +1464,8 @@ def render_catalog_view(st, *, project_root: Path, db_path: Path, decisions, act
                         )
                     with value_col:
                         optional_value = st.text_area(
-                            definition.label + (" · uno por línea" if definition.repeatable else ""),
+                            definition.label
+                            + (" · uno por línea" if definition.repeatable else ""),
                             value=values,
                             height=80,
                             key=f"catalog_optional_value_{unit.id}_{optional_field_key}",
@@ -1442,7 +1492,11 @@ def render_catalog_view(st, *, project_root: Path, db_path: Path, decisions, act
                         payload[definition.key] = _field_payload(
                             existing_by_key, definition, value, state
                         )
-                    if optional_field_key and optional_state is not None and optional_value is not None:
+                    if (
+                        optional_field_key
+                        and optional_state is not None
+                        and optional_value is not None
+                    ):
                         definition = definition_by_key[optional_field_key]
                         payload[optional_field_key] = _field_payload(
                             existing_by_key, definition, optional_value, optional_state
@@ -1461,7 +1515,9 @@ def render_catalog_view(st, *, project_root: Path, db_path: Path, decisions, act
                                 reference_code=reference_code,
                                 registration_status=registration_status,
                                 completion_confirmed=(
-                                    completion_confirmed if registration_status == "complete" else False
+                                    completion_confirmed
+                                    if registration_status == "complete"
+                                    else False
                                 ),
                                 field_values=payload,
                                 note=note,
@@ -1480,7 +1536,9 @@ def render_catalog_view(st, *, project_root: Path, db_path: Path, decisions, act
                     "y tienen prioridad visual sobre las acciones para crear información nueva."
                 )
                 if not archival_roles:
-                    st.info("Esta unidad todavía no tiene productores ni responsables de gestión registrados.")
+                    st.info(
+                        "Esta unidad todavía no tiene productores ni responsables de gestión registrados."
+                    )
                 for role in archival_roles:
                     temporal_label = format_temporal_range(
                         role.temporal_expression,
@@ -1560,8 +1618,11 @@ def render_catalog_view(st, *, project_root: Path, db_path: Path, decisions, act
                                 delete_submit = st.form_submit_button("Eliminar este vínculo")
                             if delete_submit:
                                 if not delete_confirm:
-                                    st.error("Confirmá explícitamente la eliminación antes de continuar.")
+                                    st.error(
+                                        "Confirmá explícitamente la eliminación antes de continuar."
+                                    )
                                 else:
+
                                     def delete_role_callback(session, current=role):
                                         delete_entity_relation(
                                             session,
@@ -1583,7 +1644,9 @@ def render_catalog_view(st, *, project_root: Path, db_path: Path, decisions, act
                             edit_authority_options = list(authority_options)
                             if role.source_authority_id not in edit_authority_options:
                                 edit_authority_options.insert(0, role.source_authority_id)
-                            with st.form(f"catalog_role_edit_{role.relation_id}", enter_to_submit=False):
+                            with st.form(
+                                f"catalog_role_edit_{role.relation_id}", enter_to_submit=False
+                            ):
                                 edit_cols = st.columns(2)
                                 with edit_cols[0]:
                                     edit_role_kind = st.selectbox(
@@ -1596,7 +1659,9 @@ def render_catalog_view(st, *, project_root: Path, db_path: Path, decisions, act
                                     edit_role_authority = st.selectbox(
                                         "Persona u organización que querés vincular",
                                         options=edit_authority_options,
-                                        index=edit_authority_options.index(role.source_authority_id),
+                                        index=edit_authority_options.index(
+                                            role.source_authority_id
+                                        ),
                                         format_func=lambda value: (
                                             authority_map[value].preferred_name
                                             if value in authority_map
@@ -1613,14 +1678,18 @@ def render_catalog_view(st, *, project_root: Path, db_path: Path, decisions, act
                                     edit_role_review = st.selectbox(
                                         "Estado de revisión de este vínculo",
                                         options=list(RELATION_REVIEW_STATUSES),
-                                        index=list(RELATION_REVIEW_STATUSES).index(role.review_status),
+                                        index=list(RELATION_REVIEW_STATUSES).index(
+                                            role.review_status
+                                        ),
                                         format_func=lambda value: _ROLE_REVIEW_LABELS[value],
                                         key=f"catalog_role_edit_review_{role.relation_id}",
                                     )
                                     edit_role_lifecycle = st.selectbox(
                                         "Vigencia de este vínculo en el catálogo",
                                         options=list(RELATION_EDITABLE_LIFECYCLE_STATUSES),
-                                        index=list(RELATION_EDITABLE_LIFECYCLE_STATUSES).index(role.lifecycle_status),
+                                        index=list(RELATION_EDITABLE_LIFECYCLE_STATUSES).index(
+                                            role.lifecycle_status
+                                        ),
                                         format_func=lambda value: _ROLE_STATUS_LABELS[value],
                                         key=f"catalog_role_edit_lifecycle_{role.relation_id}",
                                     )
@@ -1644,6 +1713,7 @@ def render_catalog_view(st, *, project_root: Path, db_path: Path, decisions, act
                                     "Guardar los cambios en este vínculo"
                                 )
                             if edit_role_submit:
+
                                 def update_role_callback(session, current=role):
                                     update_entity_relation(
                                         session,
@@ -1705,11 +1775,14 @@ def render_catalog_view(st, *, project_root: Path, db_path: Path, decisions, act
                         new_authority_type = st.selectbox(
                             "Tipo de persona u organización",
                             options=["person", "organization"],
-                            format_func=lambda value: "Persona" if value == "person" else "Organización",
+                            format_func=lambda value: (
+                                "Persona" if value == "person" else "Organización"
+                            ),
                             key=f"catalog_inline_authority_type_{unit.id}",
                         )
                         new_authority_name = st.text_input(
-                            "Forma autorizada del nombre", key=f"catalog_inline_authority_name_{unit.id}"
+                            "Forma autorizada del nombre",
+                            key=f"catalog_inline_authority_name_{unit.id}",
                         )
                         new_authority_description = st.text_area(
                             "Historia / nota biográfica (opcional)",
@@ -1720,6 +1793,7 @@ def render_catalog_view(st, *, project_root: Path, db_path: Path, decisions, act
                             "Crear esta persona u organización", type="primary"
                         )
                     if create_authority_submit:
+
                         def inline_authority_callback(session):
                             authority = create_authority(
                                 session,
@@ -1788,6 +1862,7 @@ def render_catalog_view(st, *, project_root: Path, db_path: Path, decisions, act
                                 "Vincular esta persona u organización con la unidad", type="primary"
                             )
                         if create_role_submit:
+
                             def create_role_callback(session):
                                 relation = create_entity_relation(
                                     session,
@@ -1813,10 +1888,15 @@ def render_catalog_view(st, *, project_root: Path, db_path: Path, decisions, act
                             )
 
             with files_tab:
-                st.caption("Consultá qué archivos digitales están vinculados con esta unidad del catálogo, comprobá que sigan disponibles y agregá o quitá vínculos cuando corresponda.")
+                st.caption(
+                    "Consultá qué archivos digitales están vinculados con esta unidad del catálogo, comprobá que sigan disponibles y agregá o quitá vínculos cuando corresponda."
+                )
                 scan_col, info_col = st.columns([1, 3])
                 with scan_col:
-                    if st.button("Comprobar si los archivos vinculados siguen disponibles e intactos", use_container_width=True):
+                    if st.button(
+                        "Comprobar si los archivos vinculados siguen disponibles e intactos",
+                        use_container_width=True,
+                    ):
                         _run_catalog_action(
                             st,
                             db_path=db_path,
@@ -1834,12 +1914,12 @@ def render_catalog_view(st, *, project_root: Path, db_path: Path, decisions, act
                     )
 
                 if not digital_objects:
-                    st.info("Esta unidad todavía no tiene archivos o contenidos digitales asociados.")
+                    st.info(
+                        "Esta unidad todavía no tiene archivos o contenidos digitales asociados."
+                    )
                 for item in digital_objects:
                     digital_object_panel_key = f"catalog_digital_object_panel_{item.link_id}"
-                    st.session_state.setdefault(
-                        digital_object_panel_key, len(digital_objects) == 1
-                    )
+                    st.session_state.setdefault(digital_object_panel_key, len(digital_objects) == 1)
                     digital_object_panel_open = st.toggle(
                         f"{item.original_filename} · {item.media_type} · {item.page_count or '?'} pág.",
                         key=digital_object_panel_key,
@@ -1853,7 +1933,9 @@ def render_catalog_view(st, *, project_root: Path, db_path: Path, decisions, act
                             with st.expander("Detalles técnicos del archivo", expanded=False):
                                 st.write(f"Huella SHA-256: `{item.sha256}`")
                                 if item.source_key:
-                                    st.write(f"Identificador interno de procesamiento: `{item.source_key}`")
+                                    st.write(
+                                        f"Identificador interno de procesamiento: `{item.source_key}`"
+                                    )
                             pcols = st.columns(4)
                             pcols[0].metric(
                                 "Preparación de páginas",
@@ -1873,9 +1955,13 @@ def render_catalog_view(st, *, project_root: Path, db_path: Path, decisions, act
                                 f"{item.reviewed_pages}/{item.editable_pages}",
                             )
                             if item.page_start or item.page_end:
-                                st.caption(f"Páginas vinculadas: {item.page_start or '?'}–{item.page_end or '?'}")
+                                st.caption(
+                                    f"Páginas vinculadas: {item.page_start or '?'}–{item.page_end or '?'}"
+                                )
                             if not item.files:
-                                st.warning("Este documento digital no tiene un archivo local disponible en el proyecto.")
+                                st.warning(
+                                    "Este documento digital no tiene un archivo local disponible en el proyecto."
+                                )
                             for local in item.files:
                                 file_left, file_action = st.columns([5, 2])
                                 file_left.write(
@@ -1891,7 +1977,9 @@ def render_catalog_view(st, *, project_root: Path, db_path: Path, decisions, act
                                         key=f"catalog_delete_physical_{local.id}",
                                     )
                                     confirmation = st.text_input(
-                                        "Escribí ELIMINAR para confirmar" if delete_physical else "Escribí RETIRAR para confirmar",
+                                        "Escribí ELIMINAR para confirmar"
+                                        if delete_physical
+                                        else "Escribí RETIRAR para confirmar",
                                         key=f"catalog_remove_file_confirm_{local.id}",
                                     )
                                     expected = "ELIMINAR" if delete_physical else "RETIRAR"
@@ -1900,7 +1988,10 @@ def render_catalog_view(st, *, project_root: Path, db_path: Path, decisions, act
                                         disabled=confirmation.strip() != expected,
                                         key=f"catalog_remove_file_{local.id}",
                                     ):
-                                        def remove_file_callback(session, file_id=local.id, physical=delete_physical):
+
+                                        def remove_file_callback(
+                                            session, file_id=local.id, physical=delete_physical
+                                        ):
                                             result = remove_file_instance(
                                                 session,
                                                 project_root=project_root,
@@ -1908,11 +1999,18 @@ def render_catalog_view(st, *, project_root: Path, db_path: Path, decisions, act
                                                 delete_physical=physical,
                                                 removed_by=actor or "local_user",
                                             )
-                                            action = "Archivo físico eliminado y copia local retirada" if result.physical_deleted else "Copia local retirada del catálogo"
+                                            action = (
+                                                "Archivo físico eliminado y copia local retirada"
+                                                if result.physical_deleted
+                                                else "Copia local retirada del catálogo"
+                                            )
                                             return f"{action}: {result.relative_path}"
 
                                         _run_catalog_action(
-                                            st, db_path=db_path, unit_id=unit.id, callback=remove_file_callback
+                                            st,
+                                            db_path=db_path,
+                                            unit_id=unit.id,
+                                            callback=remove_file_callback,
                                         )
 
                             st.divider()
@@ -1971,11 +2069,16 @@ def render_catalog_view(st, *, project_root: Path, db_path: Path, decisions, act
                                         "Quitar este vínculo entre el documento y la unidad"
                                     )
                                 if unlink_submitted and not unlink_confirm:
-                                    st.warning("Marcá la confirmación antes de quitar esta asociación.")
+                                    st.warning(
+                                        "Marcá la confirmación antes de quitar esta asociación."
+                                    )
                                 elif unlink_submitted:
+
                                     def unlink_callback(session, link_id=item.link_id):
                                         result = unlink_digital_object_from_unit(
-                                            session, link_id=link_id, removed_by=actor or "local_user"
+                                            session,
+                                            link_id=link_id,
+                                            removed_by=actor or "local_user",
                                         )
                                         return (
                                             f"Asociación quitada: {result.original_filename}. "
@@ -1983,7 +2086,10 @@ def render_catalog_view(st, *, project_root: Path, db_path: Path, decisions, act
                                         )
 
                                     _run_catalog_action(
-                                        st, db_path=db_path, unit_id=unit.id, callback=unlink_callback
+                                        st,
+                                        db_path=db_path,
+                                        unit_id=unit.id,
+                                        callback=unlink_callback,
                                     )
 
                 file_input_tasks = {
@@ -2075,6 +2181,7 @@ def render_catalog_view(st, *, project_root: Path, db_path: Path, decisions, act
                         elif int(upload_page_end) < int(upload_page_start):
                             st.error("La página final no puede ser anterior a la página inicial.")
                         else:
+
                             def upload_callback(session):
                                 result = register_uploaded_file(
                                     session,
@@ -2151,7 +2258,9 @@ def render_catalog_view(st, *, project_root: Path, db_path: Path, decisions, act
                             key=f"catalog_attach_submit_{unit.id}",
                         ):
                             if int(page_end) < int(page_start):
-                                st.error("La página final no puede ser anterior a la página inicial.")
+                                st.error(
+                                    "La página final no puede ser anterior a la página inicial."
+                                )
                             else:
                                 relative_path = selected_path.relative_to(project_root).as_posix()
                                 _run_catalog_action(
@@ -2206,7 +2315,10 @@ def render_catalog_view(st, *, project_root: Path, db_path: Path, decisions, act
                                 key=f"catalog_existing_relation_{unit.id}",
                             )
                             st.caption(_RELATION_HELP[existing_relation])
-                            if st.button("Vincular este archivo digital con la unidad", key=f"catalog_link_existing_{unit.id}"):
+                            if st.button(
+                                "Vincular este archivo digital con la unidad",
+                                key=f"catalog_link_existing_{unit.id}",
+                            ):
                                 _run_catalog_action(
                                     st,
                                     db_path=db_path,
@@ -2225,7 +2337,9 @@ def render_catalog_view(st, *, project_root: Path, db_path: Path, decisions, act
                                 )
 
             with structure_tab:
-                st.caption("Revisá el tipo de unidad y su relación con el nivel superior; los cambios crean una nueva revisión y conservan el historial anterior.")
+                st.caption(
+                    "Revisá el tipo de unidad y su relación con el nivel superior; los cambios crean una nueva revisión y conservan el historial anterior."
+                )
                 st.write("**Tipo de unidad**")
                 st.caption(
                     "Podés corregir el tipo de esta unidad sin crear otra. Antes de guardar, Archive "
@@ -2305,7 +2419,9 @@ def render_catalog_view(st, *, project_root: Path, db_path: Path, decisions, act
                         st.session_state[target_key] = current_parent
                     current_target = st.session_state.get(target_key)
                     if current_target is not None and current_target not in valid_parent_ids:
-                        current_target = current_parent if current_parent in valid_parent_ids else None
+                        current_target = (
+                            current_parent if current_parent in valid_parent_ids else None
+                        )
                         st.session_state[target_key] = current_target
                     include_ids = {row.id for row in all_rows if row.id not in blocked_parent_ids}
                     selected_parent = catalog_tree_select(
@@ -2325,9 +2441,7 @@ def render_catalog_view(st, *, project_root: Path, db_path: Path, decisions, act
                         st.session_state[target_key] = current_target
                     new_parent = current_target
                     chosen_label = (
-                        "Raíz del catálogo"
-                        if new_parent is None
-                        else by_id[new_parent].path
+                        "Raíz del catálogo" if new_parent is None else by_id[new_parent].path
                     )
                     st.caption(f"Nueva ubicación seleccionada: {chosen_label}")
                     with st.form(f"catalog_move_{unit.id}", enter_to_submit=False):
@@ -2361,7 +2475,10 @@ def render_catalog_view(st, *, project_root: Path, db_path: Path, decisions, act
                         st.caption(
                             "El último cambio de esta unidad fue un movimiento. Deshacer crea una nueva revisión; no borra el historial."
                         )
-                        if st.button("Deshacer el último movimiento de esta unidad", key=f"catalog_undo_move_{unit.id}_{unit.revision}"):
+                        if st.button(
+                            "Deshacer el último movimiento de esta unidad",
+                            key=f"catalog_undo_move_{unit.id}_{unit.revision}",
+                        ):
                             _run_catalog_action(
                                 st,
                                 db_path=db_path,
@@ -2423,7 +2540,9 @@ def render_catalog_view(st, *, project_root: Path, db_path: Path, decisions, act
                         )
 
             with history_tab:
-                st.caption("Consultá las revisiones registradas para la descripción y la ubicación de la unidad seleccionada.")
+                st.caption(
+                    "Consultá las revisiones registradas para la descripción y la ubicación de la unidad seleccionada."
+                )
                 if not revisions:
                     st.info("La unidad todavía no tiene revisiones registradas desde esta etapa.")
                 for revision in revisions:

@@ -4,6 +4,7 @@ Revision ID: 0032_page_quality_assessments
 Revises: 0031_page_action_exchange
 Create Date: 2026-07-29
 """
+
 from __future__ import annotations
 
 import sqlalchemy as sa

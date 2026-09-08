@@ -15,8 +15,18 @@ from archive_workbench.catalog_templates import (
     export_catalog_template_bytes,
     validate_catalog_template,
 )
-from archive_workbench.db import create_sqlite_engine, database_path, session_scope, upgrade_database
-from archive_workbench.db.models import ArchivalFieldValue, ArchivalUnit, ArchivalUnitRevision, Project
+from archive_workbench.db import (
+    create_sqlite_engine,
+    database_path,
+    session_scope,
+    upgrade_database,
+)
+from archive_workbench.db.models import (
+    ArchivalFieldValue,
+    ArchivalUnit,
+    ArchivalUnitRevision,
+    Project,
+)
 from archive_workbench.decisions import load_decisions
 
 
@@ -39,7 +49,9 @@ def _header_map(sheet) -> dict[str, int]:
     return result
 
 
-def test_export_template_contains_required_sheets_and_configurable_structure(tmp_path: Path) -> None:
+def test_export_template_contains_required_sheets_and_configurable_structure(
+    tmp_path: Path,
+) -> None:
     _, decisions, engine = _setup(tmp_path)
     try:
         with session_scope(engine) as session:
@@ -73,8 +85,9 @@ def test_export_template_contains_required_sheets_and_configurable_structure(tmp
         if workbook["INSTRUCCIONES"].cell(row=row, column=3).value == "title"
     )
     metadata = {
-        workbook["INSTRUCCIONES"].cell(row=row, column=1).value:
-        workbook["INSTRUCCIONES"].cell(row=row, column=2).value
+        workbook["INSTRUCCIONES"].cell(row=row, column=1).value: workbook["INSTRUCCIONES"]
+        .cell(row=row, column=2)
+        .value
         for row in range(1, 15)
     }
     assert metadata["schema_version"] == TEMPLATE_SCHEMA_VERSION
@@ -85,15 +98,18 @@ def test_export_template_contains_required_sheets_and_configurable_structure(tmp
         for row in range(2, structure.max_row + 1)
         if structure.cell(row=row, column=headers["level_key"]).value == "documento"
     )
-    assert structure.cell(
-        row=document_row, column=headers["template_parent_keys"]
-    ).value == "caja, legajo, tomo"
+    assert (
+        structure.cell(row=document_row, column=headers["template_parent_keys"]).value
+        == "caja, legajo, tomo"
+    )
     catalog_headers = _header_map(workbook["CATALOGO"])
     assert {"local_id", "parent_local_id", "level_key", "title"}.issubset(catalog_headers)
     assert "field:scope_content" in catalog_headers
 
 
-def test_validation_rejects_duplicate_ids_cycles_and_invalid_template_parent(tmp_path: Path) -> None:
+def test_validation_rejects_duplicate_ids_cycles_and_invalid_template_parent(
+    tmp_path: Path,
+) -> None:
     _, decisions, engine = _setup(tmp_path)
     try:
         seed = [
@@ -223,7 +239,6 @@ def test_apply_template_creates_hierarchy_and_preserves_field_provenance(tmp_pat
             assert "Fuente: https://example.org/cuadro" in (revision.note or "")
     finally:
         engine.dispose()
-
 
 
 def test_apply_template_registers_project_in_fresh_database(tmp_path: Path) -> None:
@@ -362,6 +377,7 @@ def test_apply_template_resolves_existing_omitted_parent_local_id(tmp_path: Path
             assert refreshed_fondo.parent_id == archivo.id
     finally:
         engine.dispose()
+
 
 def test_exported_existing_catalog_roundtrip_is_valid_and_unchanged(tmp_path: Path) -> None:
     _, decisions, engine = _setup(tmp_path)

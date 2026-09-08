@@ -171,9 +171,7 @@ def test_semantic_evaluation_calibrates_thresholds_and_preserves_scope(tmp_path:
         "recall": 1.0,
         "f1": 0.8,
     }
-    at_08 = next(
-        row for row in payload["metrics_by_threshold"] if row["threshold"] == 0.8
-    )
+    at_08 = next(row for row in payload["metrics_by_threshold"] if row["threshold"] == 0.8)
     assert at_08["micro"]["false_positive"] == 0
     assert at_08["micro"]["false_negative"] == 2
     assert at_08["by_query_kind"]["ambiguous"]["case_count"] == 1

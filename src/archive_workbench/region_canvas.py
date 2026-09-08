@@ -162,25 +162,29 @@ def build_region_canvas_payload(
         if isinstance(item, RegionDefinition):
             if item.page != page:
                 continue
-            boxes.append({
-                "region_key": item.region_key,
-                "label": item.label,
-                "reading_order": item.reading_order,
-                "mode": item.mode,
-                "bbox": item.bbox.model_dump(mode="json"),
-                "draft": False,
-            })
+            boxes.append(
+                {
+                    "region_key": item.region_key,
+                    "label": item.label,
+                    "reading_order": item.reading_order,
+                    "mode": item.mode,
+                    "bbox": item.bbox.model_dump(mode="json"),
+                    "draft": False,
+                }
+            )
         else:
             if int(item.get("page", page)) != page:
                 continue
-            boxes.append({
-                "region_key": str(item.get("region_key") or "draft"),
-                "label": str(item.get("label") or "Parte marcada"),
-                "reading_order": int(item.get("reading_order", len(boxes) + 1)),
-                "mode": str(item.get("mode") or "manual"),
-                "bbox": dict(item["bbox"]),
-                "draft": bool(item.get("draft", False)),
-            })
+            boxes.append(
+                {
+                    "region_key": str(item.get("region_key") or "draft"),
+                    "label": str(item.get("label") or "Parte marcada"),
+                    "reading_order": int(item.get("reading_order", len(boxes) + 1)),
+                    "mode": str(item.get("mode") or "manual"),
+                    "bbox": dict(item["bbox"]),
+                    "draft": bool(item.get("draft", False)),
+                }
+            )
     return {
         "image_data_url": _image_data_url(image_path),
         "page": page,
@@ -192,6 +196,7 @@ def build_region_canvas_payload(
 @lru_cache(maxsize=1)
 def _renderer():
     import streamlit as st
+
     if not hasattr(st.components, "v2"):
         return None
     return st.components.v2.component(
@@ -214,9 +219,7 @@ def regional_region_canvas(
     renderer = _renderer()
     if renderer is None:
         return None
-    payload = build_region_canvas_payload(
-        image_path, regions, page=page, pending_box=pending_box
-    )
+    payload = build_region_canvas_payload(image_path, regions, page=page, pending_box=pending_box)
     payload["browser_state_key"] = key
     result = renderer(
         data=payload,

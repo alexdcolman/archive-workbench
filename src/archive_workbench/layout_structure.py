@@ -117,9 +117,7 @@ class LayoutStructureHistoryRow:
 def _view(item: Any) -> LayoutObjectView:
     return LayoutObjectView(
         object_id=str(getattr(item, "id", getattr(item, "object_id", ""))),
-        order_index=int(
-            getattr(item, "current_order_index", getattr(item, "order_index", 0))
-        ),
+        order_index=int(getattr(item, "current_order_index", getattr(item, "order_index", 0))),
         object_type=str(
             getattr(
                 item,
@@ -374,9 +372,7 @@ def propose_layout(objects: Iterable[Any], *, page_number: int) -> LayoutProposa
     payload = {
         "algorithm": _LAYOUT_ALGORITHM,
         "page": page_number,
-        "columns": [
-            {"order": item.order_index, "objects": item.object_ids} for item in columns
-        ],
+        "columns": [{"order": item.order_index, "objects": item.object_ids} for item in columns],
         "unassigned": unassigned_ids,
     }
     return LayoutProposal(
@@ -397,9 +393,7 @@ def layout_proposal(session: Session, *, editable_page_id: str) -> LayoutProposa
     page = session.get(EditablePage, editable_page_id)
     if page is None:
         raise ValueError(f"Página editable inexistente: {editable_page_id}")
-    return propose_layout(
-        _active_objects(session, editable_page_id), page_number=page.page_number
-    )
+    return propose_layout(_active_objects(session, editable_page_id), page_number=page.page_number)
 
 
 def _structure(page: EditablePage) -> LayoutStructure:
@@ -520,10 +514,15 @@ def ensure_layout_column(
         raise ValueError("Indicá el nombre de la columna")
     structure = _structure(page)
     for column in structure.columns:
-        if column.lifecycle_status == "active" and column.label.casefold() == clean_label.casefold():
+        if (
+            column.lifecycle_status == "active"
+            and column.label.casefold() == clean_label.casefold()
+        ):
             return column.column_id
     now = utc_now()
-    active_orders = [item.order_index for item in structure.columns if item.lifecycle_status == "active"]
+    active_orders = [
+        item.order_index for item in structure.columns if item.lifecycle_status == "active"
+    ]
     column = LayoutColumn(
         column_id=new_id(),
         label=clean_label,
@@ -571,23 +570,18 @@ def create_layout_column_for_object(
 
     structure = _structure(page)
     if any(
-        column.lifecycle_status == "active"
-        and column.label.casefold() == clean_label.casefold()
+        column.lifecycle_status == "active" and column.label.casefold() == clean_label.casefold()
         for column in structure.columns
     ):
         raise ValueError("Ya existe una columna activa con ese nombre")
 
     now = utc_now()
     active_orders = [
-        item.order_index
-        for item in structure.columns
-        if item.lifecycle_status == "active"
+        item.order_index for item in structure.columns if item.lifecycle_status == "active"
     ]
     for column in structure.columns:
         if object_id in column.object_ids:
-            column.object_ids = [
-                value for value in column.object_ids if value != object_id
-            ]
+            column.object_ids = [value for value in column.object_ids if value != object_id]
             column.updated_by = changed_by
             column.updated_at = now
 
@@ -739,7 +733,6 @@ def archive_layout_column(
     return target
 
 
-
 def _replace_layout_object_ids(
     structure: LayoutStructure, *, removed_ids: set[str], replacement_id: str | None
 ) -> bool:
@@ -779,9 +772,7 @@ def merge_fragment_candidate(
     if any(index is None for index in indexes) or indexes != list(
         range(min(indexes), min(indexes) + len(indexes))
     ):
-        raise ValueError(
-            "Aplicá primero la propuesta de orden para combinar esta secuencia"
-        )
+        raise ValueError("Aplicá primero la propuesta de orden para combinar esta secuencia")
     survivor = next(item for item in active if item.id == candidate.object_ids[0])
     removed_ids: set[str] = set()
     for adjacent_id in candidate.object_ids[1:]:
@@ -849,9 +840,7 @@ def archive_duplicate_candidate(
     page = session.get(EditablePage, editable_page_id)
     if page is not None and (page.layout_structure_json or {}).get("columns"):
         structure = _structure(page)
-        if _replace_layout_object_ids(
-            structure, removed_ids={duplicate.id}, replacement_id=None
-        ):
+        if _replace_layout_object_ids(structure, removed_ids={duplicate.id}, replacement_id=None):
             _persist_structure(
                 session,
                 page=page,
@@ -866,6 +855,7 @@ def archive_duplicate_candidate(
                 },
             )
     return result
+
 
 def layout_structure_history(
     session: Session, *, editable_page_id: str

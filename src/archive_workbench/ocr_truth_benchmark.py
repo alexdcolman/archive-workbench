@@ -10,7 +10,7 @@ import unicodedata
 from dataclasses import dataclass, field
 from importlib import metadata
 from pathlib import Path
-from typing import Callable, Iterable, Sequence, TypeVar
+from typing import Iterable, Sequence, TypeVar
 from uuid import uuid4
 
 import yaml
@@ -23,7 +23,6 @@ from archive_workbench.contracts.ocr_truth import (
     OcrTruthBenchmarkProfile,
     OcrTruthCandidateMetrics,
     OcrTruthEngineAggregate,
-    OcrTruthEngineSpec,
     OcrTruthReference,
 )
 from archive_workbench.db.models import (
@@ -99,7 +98,9 @@ def _ground_truth_path(
 
 
 def normalize_ocr_text(text: str, profile: OcrTruthBenchmarkProfile) -> str:
-    normalized = unicodedata.normalize(profile.unicode_form, text.replace("\r\n", "\n").replace("\r", "\n"))
+    normalized = unicodedata.normalize(
+        profile.unicode_form, text.replace("\r\n", "\n").replace("\r", "\n")
+    )
     if profile.collapse_whitespace:
         normalized = " ".join(normalized.split())
     else:
@@ -328,7 +329,9 @@ def _run_tesseract(
     text_path.write_text(result.full_text, encoding="utf-8")
     tsv_path.write_text(result.tsv_text, encoding="utf-8")
     log_path = output_dir / "engine.log"
-    log_path.write_text("$ " + " ".join(result.command) + "\n" + (result.stderr or ""), encoding="utf-8")
+    log_path.write_text(
+        "$ " + " ".join(result.command) + "\n" + (result.stderr or ""), encoding="utf-8"
+    )
     return result.full_text, [tsv_path], log_path
 
 

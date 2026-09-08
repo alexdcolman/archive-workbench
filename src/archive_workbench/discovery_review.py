@@ -142,7 +142,9 @@ def candidate_is_stale(session: Session, candidate: DiscoveryCandidate) -> bool:
     current = session.get(EditableObject, candidate.editable_object_id)
     if current is None or current.revision_number != candidate.object_revision_number:
         return True
-    return current.current_text[candidate.start_offset : candidate.end_offset] != candidate.exact_text
+    return (
+        current.current_text[candidate.start_offset : candidate.end_offset] != candidate.exact_text
+    )
 
 
 def _clean_required(value: str, *, field: str, maximum: int = 2000) -> str:
@@ -220,9 +222,7 @@ def allowed_authority_types(semantic_family: str, subtype: str) -> tuple[str, ..
 def inferred_authority_type(semantic_family: str, subtype: str) -> str:
     allowed = allowed_authority_types(semantic_family, subtype)
     if not allowed:
-        raise ValueError(
-            f"La familia {family_label(semantic_family)} no se convierte en autoridad"
-        )
+        raise ValueError(f"La familia {family_label(semantic_family)} no se convierte en autoridad")
     if len(allowed) == 1:
         return allowed[0]
     return "other"
@@ -431,9 +431,7 @@ def review_discovery_candidate(
             )
         elif acceptance_mode == "new_authority":
             if not confirm_new_authority:
-                raise ValueError(
-                    "Confirmá explícitamente la creación de una autoridad sin revisar"
-                )
+                raise ValueError("Confirmá explícitamente la creación de una autoridad sin revisar")
             preferred_name = _clean_required(
                 new_authority_name or next_text,
                 field="El nombre preferido de la nueva autoridad",
@@ -449,9 +447,7 @@ def review_discovery_candidate(
                 preferred_name=preferred_name,
                 description=clean_description,
                 temporal_expression=(
-                    _clean_optional(temporal_expression)
-                    if next_family == "event"
-                    else None
+                    _clean_optional(temporal_expression) if next_family == "event" else None
                 ),
                 review_status="unreviewed",
                 created_by=actor,
@@ -576,7 +572,6 @@ def review_discovery_candidate(
         created_mention_id=decision.created_mention_id,
         context_record_id=context_record.id if context_record else None,
     )
-
 
 
 def accept_discovery_candidates_as_new_authorities(
@@ -708,6 +703,7 @@ def restore_rejected_discovery_candidate(
         context_record_id=None,
     )
 
+
 def discovery_decision_rows(
     session: Session,
     *,
@@ -715,9 +711,7 @@ def discovery_decision_rows(
     candidate_id: str | None = None,
     limit: int = 1000,
 ) -> list[DiscoveryDecisionRow]:
-    statement = select(DiscoveryDecision).where(
-        DiscoveryDecision.project_id == project_id
-    )
+    statement = select(DiscoveryDecision).where(DiscoveryDecision.project_id == project_id)
     if candidate_id is not None:
         statement = statement.where(DiscoveryDecision.candidate_id == candidate_id)
     rows = session.scalars(
@@ -728,12 +722,16 @@ def discovery_decision_rows(
         ).limit(max(1, int(limit)))
     ).all()
     authority_ids = {row.target_authority_id for row in rows if row.target_authority_id}
-    authorities = {
-        row.id: row
-        for row in session.scalars(
-            select(AuthorityRecord).where(AuthorityRecord.id.in_(authority_ids))
-        ).all()
-    } if authority_ids else {}
+    authorities = (
+        {
+            row.id: row
+            for row in session.scalars(
+                select(AuthorityRecord).where(AuthorityRecord.id.in_(authority_ids))
+            ).all()
+        }
+        if authority_ids
+        else {}
+    )
     return [
         DiscoveryDecisionRow(
             decision_id=row.id,

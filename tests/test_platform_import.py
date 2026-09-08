@@ -17,7 +17,12 @@ from archive_workbench.catalog import ensure_project
 from archive_workbench.catalog_management import create_archival_unit, register_external_file
 from archive_workbench.contracts.audiovisual import TranscriptSegmentInput, TranscriptionRequest
 from archive_workbench.contracts.platform import PlatformImportRequest
-from archive_workbench.db import create_sqlite_engine, database_path, session_scope, upgrade_database
+from archive_workbench.db import (
+    create_sqlite_engine,
+    database_path,
+    session_scope,
+    upgrade_database,
+)
 from archive_workbench.db.models import AudiovisualMedia, DigitalObject, SourceRegistration
 from archive_workbench.decisions import load_decisions
 from archive_workbench.identity import sha256_file
@@ -100,10 +105,11 @@ def _metadata() -> dict:
     }
 
 
-
 def test_local_file_import_uses_the_same_catalog_and_audiovisual_circuit(tmp_path: Path) -> None:
     root, decisions, engine, unit = _project(tmp_path)
-    fixture = Path(__file__).parents[1] / "examples" / "av01_validation" / "testimonio_controlado.mp4"
+    fixture = (
+        Path(__file__).parents[1] / "examples" / "av01_validation" / "testimonio_controlado.mp4"
+    )
     try:
         with session_scope(engine) as session:
             result = register_external_file(
@@ -125,6 +131,7 @@ def test_local_file_import_uses_the_same_catalog_and_audiovisual_circuit(tmp_pat
             assert media.title == "testimonio_controlado"
     finally:
         engine.dispose()
+
 
 def test_legacy_youtube_watch_url_recovers_playlist_context_without_reimport() -> None:
     grouping = _legacy_platform_grouping(
@@ -160,7 +167,9 @@ def test_platform_playlist_is_preserved_as_external_grouping_not_catalog_unit(mo
     )
     monkeypatch.setattr("archive_workbench.platform_import._load_yt_dlp", lambda: fake_yt_dlp)
 
-    with pytest.raises(ValueError, match="no la convierte automáticamente en una Colección o Serie"):
+    with pytest.raises(
+        ValueError, match="no la convierte automáticamente en una Colección o Serie"
+    ):
         _extract_info(
             url="https://www.youtube.com/playlist?list=PL-rememorarte",
             download=False,
@@ -178,13 +187,19 @@ def test_platform_request_requires_explicit_authorization() -> None:
         )
 
 
-def test_platform_import_enters_av01_and_preserves_remote_provenance(tmp_path: Path, monkeypatch) -> None:
+def test_platform_import_enters_av01_and_preserves_remote_provenance(
+    tmp_path: Path, monkeypatch
+) -> None:
     root, decisions, engine, unit = _project(tmp_path)
-    fixture = Path(__file__).parents[1] / "examples" / "av01_validation" / "testimonio_controlado.mp4"
+    fixture = (
+        Path(__file__).parents[1] / "examples" / "av01_validation" / "testimonio_controlado.mp4"
+    )
     metadata = _metadata()
     fake_yt_dlp = SimpleNamespace(version=SimpleNamespace(__version__="2026.7.4"))
 
-    def fake_extract_info(*, url: str, download: bool, outtmpl: str | None = None, media_kind: str = "video"):
+    def fake_extract_info(
+        *, url: str, download: bool, outtmpl: str | None = None, media_kind: str = "video"
+    ):
         assert url == "https://www.youtube.com/watch?v=videoAV02"
         assert media_kind == "video"
         if download:
@@ -262,11 +277,14 @@ def test_platform_import_enters_av01_and_preserves_remote_provenance(tmp_path: P
             assert media.channel == "Canal de prueba"
             assert media.provenance == metadata["webpage_url"]
             assert media.rights.startswith("Material autorizado")
-            assert platform_origin_for_digital_object(
-                session,
-                project_id=decisions.project_id,
-                digital_object_id=digital.id,
-            )["platform_id"] == "videoAV02"
+            assert (
+                platform_origin_for_digital_object(
+                    session,
+                    project_id=decisions.project_id,
+                    digital_object_id=digital.id,
+                )["platform_id"]
+                == "videoAV02"
+            )
 
             run = transcribe_audiovisual(
                 session,
@@ -300,9 +318,7 @@ def test_platform_import_enters_av01_and_preserves_remote_provenance(tmp_path: P
 
 def test_platform_ui_is_one_incorporation_method_and_does_not_auto_transcribe() -> None:
     root = Path(__file__).parents[1]
-    source = (root / "src" / "archive_workbench" / "audiovisual_app.py").read_text(
-        encoding="utf-8"
-    )
+    source = (root / "src" / "archive_workbench" / "audiovisual_app.py").read_text(encoding="utf-8")
     for literal in (
         "Incorporar audio o video",
         "Cómo querés incorporar el audio o video",
@@ -320,13 +336,19 @@ def test_platform_ui_is_one_incorporation_method_and_does_not_auto_transcribe() 
         "no se transforma automáticamente",
     ):
         assert literal in source
-    assert 'av_platform_import_open' not in source
-    assert 'import_platform_media(' in source
-    platform_block = source[source.index('with st.form("av_platform_import_form"'):source.index('def _render_transcription_workspace')]
-    assert 'transcribe_audiovisual(' not in platform_block
+    assert "av_platform_import_open" not in source
+    assert "import_platform_media(" in source
+    platform_block = source[
+        source.index('with st.form("av_platform_import_form"') : source.index(
+            "def _render_transcription_workspace"
+        )
+    ]
+    assert "transcribe_audiovisual(" not in platform_block
 
 
-def test_av02_validation_scripts_accept_one_authorized_youtube_import(tmp_path: Path, monkeypatch) -> None:
+def test_av02_validation_scripts_accept_one_authorized_youtube_import(
+    tmp_path: Path, monkeypatch
+) -> None:
     import importlib.util
 
     root_dir = Path(__file__).parents[1]
@@ -350,7 +372,9 @@ def test_av02_validation_scripts_accept_one_authorized_youtube_import(tmp_path: 
     metadata["channel_id"] = "UCsZG_7l0cYIEtJNhajrFPYg"
     fake_yt_dlp = SimpleNamespace(version=SimpleNamespace(__version__="2026.7.4"))
 
-    def fake_extract_info(*, url: str, download: bool, outtmpl: str | None = None, media_kind: str = "video"):
+    def fake_extract_info(
+        *, url: str, download: bool, outtmpl: str | None = None, media_kind: str = "video"
+    ):
         if download:
             assert outtmpl is not None
             destination = Path(outtmpl).parent
@@ -391,11 +415,14 @@ def test_av02_validation_scripts_accept_one_authorized_youtube_import(tmp_path: 
 def test_platform_import_form_errors_are_human_readable() -> None:
     from archive_workbench.audiovisual_app import _platform_import_form_error
 
-    assert _platform_import_form_error(
-        url="",
-        access_conditions="Material autorizado",
-        authorization_confirmed=True,
-    ) == "Pegá la dirección (URL) del audio o video que querés incorporar."
+    assert (
+        _platform_import_form_error(
+            url="",
+            access_conditions="Material autorizado",
+            authorization_confirmed=True,
+        )
+        == "Pegá la dirección (URL) del audio o video que querés incorporar."
+    )
 
     assert _platform_import_form_error(
         url="youtube.com/watch?v=abc",
@@ -406,11 +433,14 @@ def test_platform_import_form_errors_are_human_readable() -> None:
         "por ejemplo https://www.youtube.com/watch?v=…"
     )
 
-    assert _platform_import_form_error(
-        url="https://www.youtube.com/watch?v=abc",
-        access_conditions="",
-        authorization_confirmed=True,
-    ) == "Completá las condiciones de acceso o autorización antes de incorporar el material."
+    assert (
+        _platform_import_form_error(
+            url="https://www.youtube.com/watch?v=abc",
+            access_conditions="",
+            authorization_confirmed=True,
+        )
+        == "Completá las condiciones de acceso o autorización antes de incorporar el material."
+    )
 
     assert _platform_import_form_error(
         url="https://www.youtube.com/watch?v=abc",
@@ -421,11 +451,14 @@ def test_platform_import_form_errors_are_human_readable() -> None:
         "a incorporar este material."
     )
 
-    assert _platform_import_form_error(
-        url="https://www.youtube.com/watch?v=abc",
-        access_conditions="Material autorizado",
-        authorization_confirmed=True,
-    ) is None
+    assert (
+        _platform_import_form_error(
+            url="https://www.youtube.com/watch?v=abc",
+            access_conditions="Material autorizado",
+            authorization_confirmed=True,
+        )
+        is None
+    )
 
 
 def test_platform_request_validation_error_never_exposes_pydantic_details() -> None:
@@ -442,7 +475,10 @@ def test_platform_request_validation_error_never_exposes_pydantic_details() -> N
         )
 
     message = _platform_request_validation_message(captured.value)
-    assert message == "Completá las condiciones de acceso o autorización antes de incorporar el material."
+    assert (
+        message
+        == "Completá las condiciones de acceso o autorización antes de incorporar el material."
+    )
     assert "validation error" not in message.lower()
     assert "string_too_short" not in message
     assert "pydantic" not in message.lower()

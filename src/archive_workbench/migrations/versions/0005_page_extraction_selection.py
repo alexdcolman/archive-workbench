@@ -4,6 +4,7 @@ Revision ID: 0005_page_extraction_selection
 Revises: 0004_extraction_quality
 Create Date: 2026-07-23
 """
+
 from __future__ import annotations
 
 from alembic import op

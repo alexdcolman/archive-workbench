@@ -4,6 +4,7 @@ Revision ID: 0001_initial_catalog
 Revises: None
 Create Date: 2026-07-23
 """
+
 from __future__ import annotations
 
 from alembic import op
@@ -107,9 +108,7 @@ def upgrade() -> None:
         sa.PrimaryKeyConstraint("id"),
         sa.UniqueConstraint("storage_root", "relative_path", name="uq_file_instance_path"),
     )
-    op.create_index(
-        "ix_file_instances_digital_object", "file_instances", ["digital_object_id"]
-    )
+    op.create_index("ix_file_instances_digital_object", "file_instances", ["digital_object_id"])
     op.create_index("ix_file_instances_presence", "file_instances", ["presence"])
     op.create_table(
         "digital_object_unit_links",
@@ -149,7 +148,9 @@ def upgrade() -> None:
         sa.ForeignKeyConstraint(["digital_object_id"], ["digital_objects.id"], ondelete="SET NULL"),
         sa.ForeignKeyConstraint(["project_id"], ["projects.id"], ondelete="CASCADE"),
         sa.PrimaryKeyConstraint("id"),
-        sa.UniqueConstraint("project_id", "source_type", "source_key", name="uq_source_registration"),
+        sa.UniqueConstraint(
+            "project_id", "source_type", "source_key", name="uq_source_registration"
+        ),
     )
     op.create_index(
         "ix_source_registrations_digital_object", "source_registrations", ["digital_object_id"]
@@ -173,9 +174,7 @@ def upgrade() -> None:
     op.create_index(
         "ix_extraction_runs_current", "extraction_runs", ["digital_object_id", "is_current"]
     )
-    op.create_index(
-        "ix_extraction_runs_digital_object", "extraction_runs", ["digital_object_id"]
-    )
+    op.create_index("ix_extraction_runs_digital_object", "extraction_runs", ["digital_object_id"])
 
 
 def downgrade() -> None:

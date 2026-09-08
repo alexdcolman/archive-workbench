@@ -255,8 +255,7 @@ def _validate_parent(
     if parent_id is None:
         if level.parent_keys:
             raise ValueError(
-                f"{level.label} necesita una unidad padre de tipo: "
-                + ", ".join(level.parent_keys)
+                f"{level.label} necesita una unidad padre de tipo: " + ", ".join(level.parent_keys)
             )
         return None
     parent = session.get(ArchivalUnit, parent_id)
@@ -266,7 +265,9 @@ def _validate_parent(
         cursor: ArchivalUnit | None = parent
         while cursor is not None:
             if cursor.id == moving_unit_id:
-                raise ValueError("No se puede mover una unidad dentro de sí misma o de un descendiente")
+                raise ValueError(
+                    "No se puede mover una unidad dentro de sí misma o de un descendiente"
+                )
             cursor = session.get(ArchivalUnit, cursor.parent_id) if cursor.parent_id else None
     if parent.level_key not in level.parent_keys:
         raise ValueError(
@@ -304,7 +305,9 @@ def create_archival_unit(
         project_id=project_id,
         parent_id=parent_id,
         level_key=level_key,
-        reference_code=reference_code.strip() if reference_code and reference_code.strip() else None,
+        reference_code=reference_code.strip()
+        if reference_code and reference_code.strip()
+        else None,
         title=clean_title,
         registration_status="incomplete",
         completion_confirmed=False,
@@ -318,7 +321,9 @@ def create_archival_unit(
     return unit
 
 
-def _normalize_field_values(definition, payload: dict[str, Any]) -> list[tuple[str, Any | None, str | None]]:
+def _normalize_field_values(
+    definition, payload: dict[str, Any]
+) -> list[tuple[str, Any | None, str | None]]:
     state = str(payload.get("state", "pending"))
     if state not in {"provided", "no_information", "not_applicable", "pending"}:
         raise ValueError(f"Estado de campo inválido para {definition.label}: {state}")
@@ -363,7 +368,9 @@ def update_archival_unit(
     actor = changed_by.strip() or "local_user"
     _ensure_baseline(session, unit)
     unit.title = clean_title
-    unit.reference_code = reference_code.strip() if reference_code and reference_code.strip() else None
+    unit.reference_code = (
+        reference_code.strip() if reference_code and reference_code.strip() else None
+    )
     if registration_status == "complete" and not completion_confirmed:
         raise ValueError("Un registro completo requiere confirmación manual")
     unit.completion_confirmed = bool(completion_confirmed)
@@ -380,7 +387,8 @@ def update_archival_unit(
         applicable = {
             key: definition
             for key, definition in definitions.items()
-            if "all" in definition.applies_to_levels or unit.level_key in definition.applies_to_levels
+            if "all" in definition.applies_to_levels
+            or unit.level_key in definition.applies_to_levels
         }
         unknown = sorted(set(field_values) - set(applicable))
         if unknown:
@@ -410,7 +418,6 @@ def update_archival_unit(
     session.flush()
     _append_revision(session, unit, operation="update", changed_by=actor, note=note)
     return unit
-
 
 
 def change_archival_unit_level(
@@ -458,7 +465,9 @@ def change_archival_unit_level(
             f"{levels.get(child.level_key).label if child.level_key in levels else child.level_key}: {child.title}"
             for child in incompatible_children[:5]
         )
-        suffix = "" if len(incompatible_children) <= 5 else f" y {len(incompatible_children) - 5} más"
+        suffix = (
+            "" if len(incompatible_children) <= 5 else f" y {len(incompatible_children) - 5} más"
+        )
         raise ValueError(
             "No se puede cambiar el tipo porque quedarían unidades hijas en una ubicación no permitida: "
             + details
@@ -469,7 +478,9 @@ def change_archival_unit_level(
     field_definitions = _field_map(decisions)
     existing_field_keys = set(
         session.scalars(
-            select(ArchivalFieldValue.field_key).where(ArchivalFieldValue.archival_unit_id == unit.id)
+            select(ArchivalFieldValue.field_key).where(
+                ArchivalFieldValue.archival_unit_id == unit.id
+            )
         ).all()
     )
     incompatible_fields = sorted(
@@ -521,9 +532,9 @@ def archival_unit_delete_blockers(session: Session, unit_id: str) -> list[str]:
 
     link_count = int(
         session.scalar(
-            select(func.count()).select_from(DigitalObjectUnitLink).where(
-                DigitalObjectUnitLink.archival_unit_id == unit.id
-            )
+            select(func.count())
+            .select_from(DigitalObjectUnitLink)
+            .where(DigitalObjectUnitLink.archival_unit_id == unit.id)
         )
         or 0
     )
@@ -532,9 +543,9 @@ def archival_unit_delete_blockers(session: Session, unit_id: str) -> list[str]:
 
     registration_count = int(
         session.scalar(
-            select(func.count()).select_from(SourceRegistration).where(
-                SourceRegistration.archival_unit_id == unit.id
-            )
+            select(func.count())
+            .select_from(SourceRegistration)
+            .where(SourceRegistration.archival_unit_id == unit.id)
         )
         or 0
     )
@@ -543,9 +554,9 @@ def archival_unit_delete_blockers(session: Session, unit_id: str) -> list[str]:
 
     relation_count = int(
         session.scalar(
-            select(func.count()).select_from(EntityRelation).where(
-                EntityRelation.target_archival_unit_id == unit.id
-            )
+            select(func.count())
+            .select_from(EntityRelation)
+            .where(EntityRelation.target_archival_unit_id == unit.id)
         )
         or 0
     )
@@ -574,6 +585,7 @@ def delete_archival_unit(
     session.delete(unit)
     session.flush()
     return title
+
 
 def move_archival_unit(
     session: Session,
@@ -705,13 +717,17 @@ def archival_revision_rows(session: Session, unit_id: str) -> list[CatalogRevisi
 def catalog_summary(session: Session, project_id: str) -> CatalogSummary:
     units = int(
         session.scalar(
-            select(func.count()).select_from(ArchivalUnit).where(ArchivalUnit.project_id == project_id)
+            select(func.count())
+            .select_from(ArchivalUnit)
+            .where(ArchivalUnit.project_id == project_id)
         )
         or 0
     )
     incomplete = int(
         session.scalar(
-            select(func.count()).select_from(ArchivalUnit).where(
+            select(func.count())
+            .select_from(ArchivalUnit)
+            .where(
                 ArchivalUnit.project_id == project_id,
                 ArchivalUnit.registration_status != "complete",
             )
@@ -720,7 +736,9 @@ def catalog_summary(session: Session, project_id: str) -> CatalogSummary:
     )
     digital = int(
         session.scalar(
-            select(func.count()).select_from(DigitalObject).where(DigitalObject.project_id == project_id)
+            select(func.count())
+            .select_from(DigitalObject)
+            .where(DigitalObject.project_id == project_id)
         )
         or 0
     )
@@ -741,9 +759,7 @@ def catalog_summary(session: Session, project_id: str) -> CatalogSummary:
 
 
 def catalog_unit_rows(session: Session, project_id: str) -> list[CatalogUnitRow]:
-    units = session.scalars(
-        select(ArchivalUnit).where(ArchivalUnit.project_id == project_id)
-    ).all()
+    units = session.scalars(select(ArchivalUnit).where(ArchivalUnit.project_id == project_id)).all()
     project = session.get(Project, project_id)
     level_order: dict[str, int] = {}
     if project is not None:
@@ -767,8 +783,7 @@ def catalog_unit_rows(session: Session, project_id: str) -> list[CatalogUnitRow]
             select(
                 DigitalObjectUnitLink.archival_unit_id,
                 func.count(func.distinct(DigitalObjectUnitLink.digital_object_id)),
-            )
-            .group_by(DigitalObjectUnitLink.archival_unit_id)
+            ).group_by(DigitalObjectUnitLink.archival_unit_id)
         ).all()
     )
     result: list[CatalogUnitRow] = []
@@ -833,9 +848,7 @@ def search_catalog_units(
         .join(DigitalObject, DigitalObject.id == DigitalObjectUnitLink.digital_object_id)
         .outerjoin(FileInstance, FileInstance.digital_object_id == DigitalObject.id)
     ):
-        files_by_unit.setdefault(unit_id, []).extend(
-            item for item in (filename, path) if item
-        )
+        files_by_unit.setdefault(unit_id, []).extend(item for item in (filename, path) if item)
     needle = query.strip().casefold()
     result: list[CatalogUnitRow] = []
     for row in rows:
@@ -881,23 +894,25 @@ def unit_digital_objects(session: Session, unit_id: str) -> list[CatalogDigitalO
         )
         selected_pages = int(
             session.scalar(
-                select(func.count()).select_from(ExtractionPageSelection).where(
-                    ExtractionPageSelection.digital_object_id == digital.id
-                )
+                select(func.count())
+                .select_from(ExtractionPageSelection)
+                .where(ExtractionPageSelection.digital_object_id == digital.id)
             )
             or 0
         )
         editable_pages = int(
             session.scalar(
-                select(func.count()).select_from(EditablePage).where(
-                    EditablePage.digital_object_id == digital.id
-                )
+                select(func.count())
+                .select_from(EditablePage)
+                .where(EditablePage.digital_object_id == digital.id)
             )
             or 0
         )
         reviewed_pages = int(
             session.scalar(
-                select(func.count()).select_from(EditablePage).where(
+                select(func.count())
+                .select_from(EditablePage)
+                .where(
                     EditablePage.digital_object_id == digital.id,
                     EditablePage.review_status.in_(["reviewed", "approved"]),
                 )
@@ -915,9 +930,9 @@ def unit_digital_objects(session: Session, unit_id: str) -> list[CatalogDigitalO
         )
         linked_unit_count = int(
             session.scalar(
-                select(func.count()).select_from(DigitalObjectUnitLink).where(
-                    DigitalObjectUnitLink.digital_object_id == digital.id
-                )
+                select(func.count())
+                .select_from(DigitalObjectUnitLink)
+                .where(DigitalObjectUnitLink.digital_object_id == digital.id)
             )
             or 0
         )
@@ -992,8 +1007,7 @@ def _ensure_catalog_source_registration(
             existing.registered_by = registered_by
         return existing
     source_key = (
-        f"catalog_{slugify(Path(digital.original_filename).stem, max_length=40)}_"
-        f"{digital.id}"
+        f"catalog_{slugify(Path(digital.original_filename).stem, max_length=40)}_{digital.id}"
     )
     registration = SourceRegistration(
         id=stable_id(_CATALOG_NAMESPACE, "source_registration", project_id, digital.id),
@@ -1014,7 +1028,6 @@ def _ensure_catalog_source_registration(
     session.add(registration)
     session.flush()
     return registration
-
 
 
 def _safe_upload_filename(value: str) -> str:
@@ -1117,6 +1130,7 @@ def register_uploaded_file(
         reused_existing_path=reused,
         registration=registration,
     )
+
 
 def register_external_file(
     session: Session,
@@ -1293,8 +1307,12 @@ def register_local_file(
             DigitalObjectUnitLink.digital_object_id == digital.id,
             DigitalObjectUnitLink.archival_unit_id == unit.id,
             DigitalObjectUnitLink.relation_type == relation_type,
-            DigitalObjectUnitLink.page_start.is_(page_start) if page_start is None else DigitalObjectUnitLink.page_start == page_start,
-            DigitalObjectUnitLink.page_end.is_(page_end) if page_end is None else DigitalObjectUnitLink.page_end == page_end,
+            DigitalObjectUnitLink.page_start.is_(page_start)
+            if page_start is None
+            else DigitalObjectUnitLink.page_start == page_start,
+            DigitalObjectUnitLink.page_end.is_(page_end)
+            if page_end is None
+            else DigitalObjectUnitLink.page_end == page_end,
         )
     )
     link_created = False
@@ -1391,6 +1409,7 @@ def link_existing_digital_object(
     session.flush()
     return row
 
+
 def unlink_digital_object_from_unit(
     session: Session,
     *,
@@ -1432,7 +1451,9 @@ def unlink_digital_object_from_unit(
             payload["catalog_unit_id"] = replacement.archival_unit_id if replacement else None
             if replacement:
                 replacement_unit = session.get(ArchivalUnit, replacement.archival_unit_id)
-                payload["catalog_level_key"] = replacement_unit.level_key if replacement_unit else None
+                payload["catalog_level_key"] = (
+                    replacement_unit.level_key if replacement_unit else None
+                )
                 if replacement_unit:
                     payload["short_description"] = replacement_unit.title
             else:

@@ -27,10 +27,21 @@ from archive_workbench.catalog_management import (
     unit_digital_objects,
     update_archival_unit,
 )
-from archive_workbench.db import create_sqlite_engine, database_path, session_scope, upgrade_database
+from archive_workbench.db import (
+    create_sqlite_engine,
+    database_path,
+    session_scope,
+    upgrade_database,
+)
 from archive_workbench.decisions import load_decisions
 from archive_workbench.extraction import _selected_registrations
-from archive_workbench.db.models import ArchivalUnit, DigitalObject, DigitalObjectUnitLink, FileInstance, SourceRegistration
+from archive_workbench.db.models import (
+    ArchivalUnit,
+    DigitalObject,
+    DigitalObjectUnitLink,
+    FileInstance,
+    SourceRegistration,
+)
 
 
 def _write_pdf(path: Path, text: str = "prueba") -> None:
@@ -426,38 +437,71 @@ def test_uploaded_file_is_copied_under_project_and_registered(tmp_path: Path) ->
         engine.dispose()
 
 
-def test_document_can_be_created_as_child_of_selected_box_and_move_can_be_undone(tmp_path: Path) -> None:
+def test_document_can_be_created_as_child_of_selected_box_and_move_can_be_undone(
+    tmp_path: Path,
+) -> None:
     _root, decisions, engine = _setup(tmp_path)
     try:
         with session_scope(engine) as session:
             archivo = create_archival_unit(
-                session, decisions=decisions, project_id=decisions.project_id,
-                parent_id=None, level_key="archivo", title="Archivo", created_by="Alex",
+                session,
+                decisions=decisions,
+                project_id=decisions.project_id,
+                parent_id=None,
+                level_key="archivo",
+                title="Archivo",
+                created_by="Alex",
             )
             fondo = create_archival_unit(
-                session, decisions=decisions, project_id=decisions.project_id,
-                parent_id=archivo.id, level_key="fondo", title="Fondo", created_by="Alex",
+                session,
+                decisions=decisions,
+                project_id=decisions.project_id,
+                parent_id=archivo.id,
+                level_key="fondo",
+                title="Fondo",
+                created_by="Alex",
             )
             caja_1 = create_archival_unit(
-                session, decisions=decisions, project_id=decisions.project_id,
-                parent_id=fondo.id, level_key="caja", title="Caja 1", created_by="Alex",
+                session,
+                decisions=decisions,
+                project_id=decisions.project_id,
+                parent_id=fondo.id,
+                level_key="caja",
+                title="Caja 1",
+                created_by="Alex",
             )
             caja_2 = create_archival_unit(
-                session, decisions=decisions, project_id=decisions.project_id,
-                parent_id=fondo.id, level_key="caja", title="Caja 2", created_by="Alex",
+                session,
+                decisions=decisions,
+                project_id=decisions.project_id,
+                parent_id=fondo.id,
+                level_key="caja",
+                title="Caja 2",
+                created_by="Alex",
             )
             documento = create_archival_unit(
-                session, decisions=decisions, project_id=decisions.project_id,
-                parent_id=caja_1.id, level_key="documento", title="Informe", created_by="Alex",
+                session,
+                decisions=decisions,
+                project_id=decisions.project_id,
+                parent_id=caja_1.id,
+                level_key="documento",
+                title="Informe",
+                created_by="Alex",
             )
             assert documento.parent_id == caja_1.id
             move_archival_unit(
-                session, decisions=decisions, unit_id=documento.id,
-                new_parent_id=caja_2.id, changed_by="Alex",
+                session,
+                decisions=decisions,
+                unit_id=documento.id,
+                new_parent_id=caja_2.id,
+                changed_by="Alex",
             )
             assert documento.parent_id == caja_2.id
             undo_last_archival_move(
-                session, decisions=decisions, unit_id=documento.id, changed_by="Alex",
+                session,
+                decisions=decisions,
+                unit_id=documento.id,
+                changed_by="Alex",
             )
             assert documento.parent_id == caja_1.id
             assert archival_revision_rows(session, documento.id)[0].operation == "undo_move"
@@ -472,12 +516,20 @@ def test_unlink_and_remove_local_file_are_separate_operations(tmp_path: Path) ->
     try:
         with session_scope(engine) as session:
             archivo = create_archival_unit(
-                session, decisions=decisions, project_id=decisions.project_id,
-                parent_id=None, level_key="archivo", title="Archivo", created_by="Alex",
+                session,
+                decisions=decisions,
+                project_id=decisions.project_id,
+                parent_id=None,
+                level_key="archivo",
+                title="Archivo",
+                created_by="Alex",
             )
             result = register_local_file(
-                session, project_root=root, project_id=decisions.project_id,
-                archival_unit_id=archivo.id, relative_path="corpus/retirable.pdf",
+                session,
+                project_root=root,
+                project_id=decisions.project_id,
+                archival_unit_id=archivo.id,
+                relative_path="corpus/retirable.pdf",
             )
             unlink = unlink_digital_object_from_unit(
                 session, link_id=result.link_id, removed_by="Alex"
@@ -487,8 +539,11 @@ def test_unlink_and_remove_local_file_are_separate_operations(tmp_path: Path) ->
             assert session.get(DigitalObjectUnitLink, result.link_id) is None
             assert pdf_path.exists()
             removal = remove_file_instance(
-                session, project_root=root, file_instance_id=result.file_instance_id,
-                delete_physical=False, removed_by="Alex",
+                session,
+                project_root=root,
+                file_instance_id=result.file_instance_id,
+                delete_physical=False,
+                removed_by="Alex",
             )
             assert removal.physical_deleted is False
             assert session.get(FileInstance, result.file_instance_id) is None
@@ -504,16 +559,27 @@ def test_remove_file_instance_can_delete_physical_file_with_explicit_flag(tmp_pa
     try:
         with session_scope(engine) as session:
             archivo = create_archival_unit(
-                session, decisions=decisions, project_id=decisions.project_id,
-                parent_id=None, level_key="archivo", title="Archivo", created_by="Alex",
+                session,
+                decisions=decisions,
+                project_id=decisions.project_id,
+                parent_id=None,
+                level_key="archivo",
+                title="Archivo",
+                created_by="Alex",
             )
             result = register_local_file(
-                session, project_root=root, project_id=decisions.project_id,
-                archival_unit_id=archivo.id, relative_path="corpus/eliminar.pdf",
+                session,
+                project_root=root,
+                project_id=decisions.project_id,
+                archival_unit_id=archivo.id,
+                relative_path="corpus/eliminar.pdf",
             )
             removal = remove_file_instance(
-                session, project_root=root, file_instance_id=result.file_instance_id,
-                delete_physical=True, removed_by="Alex",
+                session,
+                project_root=root,
+                file_instance_id=result.file_instance_id,
+                delete_physical=True,
+                removed_by="Alex",
             )
             assert removal.physical_deleted is True
             assert not pdf_path.exists()
@@ -521,7 +587,9 @@ def test_remove_file_instance_can_delete_physical_file_with_explicit_flag(tmp_pa
         engine.dispose()
 
 
-def test_register_external_file_copies_and_registers_without_modifying_source(tmp_path: Path) -> None:
+def test_register_external_file_copies_and_registers_without_modifying_source(
+    tmp_path: Path,
+) -> None:
     root, decisions, engine = _setup(tmp_path)
     source = tmp_path / "outside" / "documento.pdf"
     _write_pdf(source, "contenido externo")
@@ -553,10 +621,12 @@ def test_register_external_file_copies_and_registers_without_modifying_source(tm
         assert (root / relative).read_bytes() == source_before
         assert source.read_bytes() == source_before
         with session_scope(engine) as session:
-            assert session.scalar(select(FileInstance).where(FileInstance.relative_path == relative)) is not None
+            assert (
+                session.scalar(select(FileInstance).where(FileInstance.relative_path == relative))
+                is not None
+            )
     finally:
         engine.dispose()
-
 
 
 def test_change_level_is_validated_and_audited(tmp_path: Path) -> None:
@@ -564,16 +634,29 @@ def test_change_level_is_validated_and_audited(tmp_path: Path) -> None:
     try:
         with session_scope(engine) as session:
             archivo = create_archival_unit(
-                session, decisions=decisions, project_id=decisions.project_id,
-                parent_id=None, level_key="archivo", title="Archivo", created_by="Alex",
+                session,
+                decisions=decisions,
+                project_id=decisions.project_id,
+                parent_id=None,
+                level_key="archivo",
+                title="Archivo",
+                created_by="Alex",
             )
             fondo = create_archival_unit(
-                session, decisions=decisions, project_id=decisions.project_id,
-                parent_id=archivo.id, level_key="fondo", title="rememorARTE", created_by="Alex",
+                session,
+                decisions=decisions,
+                project_id=decisions.project_id,
+                parent_id=archivo.id,
+                level_key="fondo",
+                title="rememorARTE",
+                created_by="Alex",
             )
             changed = change_archival_unit_level(
-                session, decisions=decisions, unit_id=fondo.id,
-                new_level_key="coleccion", changed_by="Alex",
+                session,
+                decisions=decisions,
+                unit_id=fondo.id,
+                new_level_key="coleccion",
+                changed_by="Alex",
             )
             assert changed.level_key == "coleccion"
             assert changed.id == fondo.id
@@ -587,21 +670,39 @@ def test_change_level_rejects_incompatible_children(tmp_path: Path) -> None:
     try:
         with session_scope(engine) as session:
             archivo = create_archival_unit(
-                session, decisions=decisions, project_id=decisions.project_id,
-                parent_id=None, level_key="archivo", title="Archivo", created_by="Alex",
+                session,
+                decisions=decisions,
+                project_id=decisions.project_id,
+                parent_id=None,
+                level_key="archivo",
+                title="Archivo",
+                created_by="Alex",
             )
             fondo = create_archival_unit(
-                session, decisions=decisions, project_id=decisions.project_id,
-                parent_id=archivo.id, level_key="fondo", title="Fondo", created_by="Alex",
+                session,
+                decisions=decisions,
+                project_id=decisions.project_id,
+                parent_id=archivo.id,
+                level_key="fondo",
+                title="Fondo",
+                created_by="Alex",
             )
             create_archival_unit(
-                session, decisions=decisions, project_id=decisions.project_id,
-                parent_id=fondo.id, level_key="caja", title="Caja", created_by="Alex",
+                session,
+                decisions=decisions,
+                project_id=decisions.project_id,
+                parent_id=fondo.id,
+                level_key="caja",
+                title="Caja",
+                created_by="Alex",
             )
             with pytest.raises(ValueError, match="unidades hijas"):
                 change_archival_unit_level(
-                    session, decisions=decisions, unit_id=fondo.id,
-                    new_level_key="coleccion", changed_by="Alex",
+                    session,
+                    decisions=decisions,
+                    unit_id=fondo.id,
+                    new_level_key="coleccion",
+                    changed_by="Alex",
                 )
     finally:
         engine.dispose()
@@ -612,12 +713,22 @@ def test_delete_archival_unit_only_when_empty(tmp_path: Path) -> None:
     try:
         with session_scope(engine) as session:
             archivo = create_archival_unit(
-                session, decisions=decisions, project_id=decisions.project_id,
-                parent_id=None, level_key="archivo", title="Archivo", created_by="Alex",
+                session,
+                decisions=decisions,
+                project_id=decisions.project_id,
+                parent_id=None,
+                level_key="archivo",
+                title="Archivo",
+                created_by="Alex",
             )
             fondo = create_archival_unit(
-                session, decisions=decisions, project_id=decisions.project_id,
-                parent_id=archivo.id, level_key="fondo", title="Vacío", created_by="Alex",
+                session,
+                decisions=decisions,
+                project_id=decisions.project_id,
+                parent_id=archivo.id,
+                level_key="fondo",
+                title="Vacío",
+                created_by="Alex",
             )
             assert archival_unit_delete_blockers(session, fondo.id) == []
             assert delete_archival_unit(session, unit_id=fondo.id, deleted_by="Alex") == "Vacío"
@@ -633,20 +744,38 @@ def test_delete_archival_unit_rejects_children_and_digital_links(tmp_path: Path)
     try:
         with session_scope(engine) as session:
             archivo = create_archival_unit(
-                session, decisions=decisions, project_id=decisions.project_id,
-                parent_id=None, level_key="archivo", title="Archivo", created_by="Alex",
+                session,
+                decisions=decisions,
+                project_id=decisions.project_id,
+                parent_id=None,
+                level_key="archivo",
+                title="Archivo",
+                created_by="Alex",
             )
             fondo = create_archival_unit(
-                session, decisions=decisions, project_id=decisions.project_id,
-                parent_id=archivo.id, level_key="fondo", title="Fondo", created_by="Alex",
+                session,
+                decisions=decisions,
+                project_id=decisions.project_id,
+                parent_id=archivo.id,
+                level_key="fondo",
+                title="Fondo",
+                created_by="Alex",
             )
             create_archival_unit(
-                session, decisions=decisions, project_id=decisions.project_id,
-                parent_id=fondo.id, level_key="documento", title="Hijo", created_by="Alex",
+                session,
+                decisions=decisions,
+                project_id=decisions.project_id,
+                parent_id=fondo.id,
+                level_key="documento",
+                title="Hijo",
+                created_by="Alex",
             )
             register_local_file(
-                session, project_root=root, project_id=decisions.project_id,
-                archival_unit_id=fondo.id, relative_path="corpus/vinculado.pdf",
+                session,
+                project_root=root,
+                project_id=decisions.project_id,
+                archival_unit_id=fondo.id,
+                relative_path="corpus/vinculado.pdf",
             )
             blockers = archival_unit_delete_blockers(session, fondo.id)
             assert any("hija" in item for item in blockers)

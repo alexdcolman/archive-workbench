@@ -266,8 +266,7 @@ def _write_zip(path: Path, entries: dict[str, bytes]) -> None:
 
 def _checksum_bytes(entries: dict[str, bytes]) -> bytes:
     return "".join(
-        f"{hashlib.sha256(entries[name]).hexdigest()}  {name}\n"
-        for name in sorted(entries)
+        f"{hashlib.sha256(entries[name]).hexdigest()}  {name}\n" for name in sorted(entries)
     ).encode("utf-8")
 
 
@@ -282,9 +281,7 @@ def _read_verified_package(
         with zipfile.ZipFile(artifact, "r") as archive:
             names = set(archive.namelist())
             unsafe = [
-                name
-                for name in names
-                if Path(name).is_absolute() or ".." in Path(name).parts
+                name for name in names if Path(name).is_absolute() or ".." in Path(name).parts
             ]
             if unsafe:
                 raise ValueError("El ZIP contiene rutas inseguras")
@@ -428,9 +425,7 @@ def _foundation_payload(session: Session, state: dict[str, Any]) -> dict[str, An
         session, DigitalObject, refs["digital_objects"], label="objetos digitales"
     )
     runs = _require_rows(session, ExtractionRun, refs["extraction_runs"], label="corridas OCR")
-    pages = _require_rows(
-        session, ExtractionPage, refs["extraction_pages"], label="páginas OCR"
-    )
+    pages = _require_rows(session, ExtractionPage, refs["extraction_pages"], label="páginas OCR")
     extracted = _require_rows(
         session, ExtractedObject, refs["extracted_objects"], label="objetos OCR"
     )
@@ -607,7 +602,9 @@ def _section_map(rows: list[dict[str, Any]]) -> dict[str, dict[str, Any]]:
     return {str(row["id"]): row for row in rows}
 
 
-def _impact(local_state: dict[str, Any], incoming_state: dict[str, Any]) -> list[StateSectionImpact]:
+def _impact(
+    local_state: dict[str, Any], incoming_state: dict[str, Any]
+) -> list[StateSectionImpact]:
     result: list[StateSectionImpact] = []
     for section in _sections_for_state(incoming_state):
         local = _section_map(local_state.get(section, []))
@@ -813,12 +810,8 @@ def _synchronize_editable_state(
                 "title": item["title"],
                 "registration_status": item["registration_status"],
                 "completion_confirmed": bool(item["completion_confirmed"]),
-                "completion_confirmed_at": (
-                    now if item["completion_confirmed"] else None
-                ),
-                "completion_confirmed_by": (
-                    actor if item["completion_confirmed"] else None
-                ),
+                "completion_confirmed_at": (now if item["completion_confirmed"] else None),
+                "completion_confirmed_by": (actor if item["completion_confirmed"] else None),
                 "created_at": existing.created_at if existing else now,
                 "created_by": existing.created_by if existing else actor,
                 "updated_at": now,
@@ -830,12 +823,8 @@ def _synchronize_editable_state(
     for item in state["catalog_units"]:
         session.get(ArchivalUnit, item["id"]).parent_id = item.get("parent_id")
 
-    has_audiovisual_state = all(
-        section in state for section in AUDIOVISUAL_STATE_SECTIONS
-    )
-    has_timeline_state = all(
-        section in state for section in TIMELINE_STATE_SECTIONS
-    )
+    has_audiovisual_state = all(section in state for section in AUDIOVISUAL_STATE_SECTIONS)
+    has_timeline_state = all(section in state for section in TIMELINE_STATE_SECTIONS)
     audiovisual_media_ids: set[str] = set()
     transcription_run_ids: set[str] = set()
     transcript_segment_ids: set[str] = set()
@@ -995,9 +984,7 @@ def _synchronize_editable_state(
     timeline_annotation_ids: set[str] = set()
     timeline_annotation_revision_ids: set[str] = set()
     if has_timeline_state:
-        timeline_annotation_ids = {
-            row["id"] for row in state["audiovisual_timeline_annotations"]
-        }
+        timeline_annotation_ids = {row["id"] for row in state["audiovisual_timeline_annotations"]}
         for item in state["audiovisual_timeline_annotations"]:
             existing = session.get(AudiovisualTimelineAnnotation, item["id"])
             _upsert(
@@ -1021,8 +1008,7 @@ def _synchronize_editable_state(
             )
 
         timeline_annotation_revision_ids = {
-            row["id"]
-            for row in state["audiovisual_timeline_annotation_revisions"]
+            row["id"] for row in state["audiovisual_timeline_annotation_revisions"]
         }
         for item in state["audiovisual_timeline_annotation_revisions"]:
             _upsert(
@@ -1234,11 +1220,15 @@ def _synchronize_editable_state(
         select(ArchivalUnit).where(ArchivalUnit.project_id == project_id)
     ).all()
     existing_unit_ids = {row.id for row in existing_units}
-    for field in session.scalars(
-        select(ArchivalFieldValue).where(
-            ArchivalFieldValue.archival_unit_id.in_(existing_unit_ids)
-        )
-    ).all() if existing_unit_ids else []:
+    for field in (
+        session.scalars(
+            select(ArchivalFieldValue).where(
+                ArchivalFieldValue.archival_unit_id.in_(existing_unit_ids)
+            )
+        ).all()
+        if existing_unit_ids
+        else []
+    ):
         session.delete(field)
     session.flush()
     for unit in state["catalog_units"]:
@@ -1283,30 +1273,44 @@ def _synchronize_editable_state(
     }
 
     if has_audiovisual_state:
-        project_av_media = session.scalars(
-            select(AudiovisualMedia).where(
-                AudiovisualMedia.digital_object_id.in_(project_digital_ids)
-            )
-        ).all() if project_digital_ids else []
+        project_av_media = (
+            session.scalars(
+                select(AudiovisualMedia).where(
+                    AudiovisualMedia.digital_object_id.in_(project_digital_ids)
+                )
+            ).all()
+            if project_digital_ids
+            else []
+        )
         project_av_media_ids = {row.id for row in project_av_media}
-        project_runs = session.scalars(
-            select(TranscriptionRun).where(
-                TranscriptionRun.audiovisual_media_id.in_(project_av_media_ids)
-            )
-        ).all() if project_av_media_ids else []
+        project_runs = (
+            session.scalars(
+                select(TranscriptionRun).where(
+                    TranscriptionRun.audiovisual_media_id.in_(project_av_media_ids)
+                )
+            ).all()
+            if project_av_media_ids
+            else []
+        )
         project_run_ids = {row.id for row in project_runs}
-        project_segments = session.scalars(
-            select(TranscriptSegment).where(
-                TranscriptSegment.transcription_run_id.in_(project_run_ids)
-            )
-        ).all() if project_run_ids else []
+        project_segments = (
+            session.scalars(
+                select(TranscriptSegment).where(
+                    TranscriptSegment.transcription_run_id.in_(project_run_ids)
+                )
+            ).all()
+            if project_run_ids
+            else []
+        )
         project_segment_ids = {row.id for row in project_segments}
         _delete_missing(
             session.scalars(
                 select(SegmentEntityMention).where(
                     SegmentEntityMention.segment_id.in_(project_segment_ids)
                 )
-            ).all() if project_segment_ids else [],
+            ).all()
+            if project_segment_ids
+            else [],
             segment_mention_ids,
         )
         _delete_missing(
@@ -1314,17 +1318,23 @@ def _synchronize_editable_state(
                 select(TranscriptSegmentRevision).where(
                     TranscriptSegmentRevision.segment_id.in_(project_segment_ids)
                 )
-            ).all() if project_segment_ids else [],
+            ).all()
+            if project_segment_ids
+            else [],
             transcript_segment_revision_ids,
         )
         _delete_missing(project_segments, transcript_segment_ids)
         session.flush()
         if has_timeline_state:
-            project_timeline_annotations = session.scalars(
-                select(AudiovisualTimelineAnnotation).where(
-                    AudiovisualTimelineAnnotation.audiovisual_media_id.in_(project_av_media_ids)
-                )
-            ).all() if project_av_media_ids else []
+            project_timeline_annotations = (
+                session.scalars(
+                    select(AudiovisualTimelineAnnotation).where(
+                        AudiovisualTimelineAnnotation.audiovisual_media_id.in_(project_av_media_ids)
+                    )
+                ).all()
+                if project_av_media_ids
+                else []
+            )
             project_timeline_annotation_ids = {row.id for row in project_timeline_annotations}
             _delete_missing(
                 session.scalars(
@@ -1333,7 +1343,9 @@ def _synchronize_editable_state(
                             project_timeline_annotation_ids
                         )
                     )
-                ).all() if project_timeline_annotation_ids else [],
+                ).all()
+                if project_timeline_annotation_ids
+                else [],
                 timeline_annotation_revision_ids,
             )
             _delete_missing(project_timeline_annotations, timeline_annotation_ids)
@@ -1352,13 +1364,17 @@ def _synchronize_editable_state(
     _delete_missing(
         session.scalars(
             select(EntityMention).where(EntityMention.editable_object_id.in_(project_object_ids))
-        ).all() if project_object_ids else [],
+        ).all()
+        if project_object_ids
+        else [],
         mention_ids,
     )
     _delete_missing(
         session.scalars(
             select(AuthorityAlias).where(AuthorityAlias.authority_id.in_(authority_ids))
-        ).all() if authority_ids else [],
+        ).all()
+        if authority_ids
+        else [],
         alias_ids,
     )
     _delete_missing(
@@ -1366,7 +1382,9 @@ def _synchronize_editable_state(
             select(EditableObjectComment).where(
                 EditableObjectComment.editable_object_id.in_(project_object_ids)
             )
-        ).all() if project_object_ids else [],
+        ).all()
+        if project_object_ids
+        else [],
         comment_ids,
     )
     _delete_missing(
@@ -1374,7 +1392,9 @@ def _synchronize_editable_state(
             select(EditableObjectTag).where(
                 EditableObjectTag.editable_object_id.in_(project_object_ids)
             )
-        ).all() if project_object_ids else [],
+        ).all()
+        if project_object_ids
+        else [],
         tag_ids,
     )
     _delete_missing(
@@ -1382,7 +1402,9 @@ def _synchronize_editable_state(
             select(EditablePageAction).where(
                 EditablePageAction.editable_page_id.in_(project_page_ids)
             )
-        ).all() if project_page_ids else [],
+        ).all()
+        if project_page_ids
+        else [],
         action_ids,
     )
     _delete_missing(
@@ -1390,7 +1412,9 @@ def _synchronize_editable_state(
             select(DigitalObjectUnitLink).where(
                 DigitalObjectUnitLink.digital_object_id.in_(project_digital_ids)
             )
-        ).all() if project_digital_ids else [],
+        ).all()
+        if project_digital_ids
+        else [],
         link_ids,
     )
     session.flush()
@@ -1442,13 +1466,13 @@ def _synchronize_editable_state(
             select(ExtractionPageSelection).where(
                 ExtractionPageSelection.digital_object_id.in_(project_digital_ids)
             )
-        ).all() if project_digital_ids else [],
+        ).all()
+        if project_digital_ids
+        else [],
         selection_ids,
     )
     _delete_missing(
-        session.scalars(
-            select(ArchivalUnit).where(ArchivalUnit.project_id == project_id)
-        ).all(),
+        session.scalars(select(ArchivalUnit).where(ArchivalUnit.project_id == project_id)).all(),
         unit_ids,
     )
     session.flush()
@@ -1506,11 +1530,14 @@ def apply_state_adoption(
         raise ValueError(
             "Las copias ya tienen un estado editable idéntico; corresponde establecer la base común sin adopción"
         )
-    if session.scalar(
-        select(ExchangeStateAdoption).where(
-            ExchangeStateAdoption.package_sha256 == preview.package_sha256
+    if (
+        session.scalar(
+            select(ExchangeStateAdoption).where(
+                ExchangeStateAdoption.package_sha256 == preview.package_sha256
+            )
         )
-    ) is not None:
+        is not None
+    ):
         raise ValueError("Este paquete de estado ya fue adoptado en la copia local")
 
     manifest, state, manifest_sha, package_sha = _read_verified_package(package_path)
@@ -1681,18 +1708,23 @@ def rollback_state_adoption(
             if len(candidates) != 1:
                 raise ValueError("No se encontró una adopción única con esa referencia")
             adoption = candidates[0]
-            if session.scalar(
-                select(ExchangeStateAdoptionRollback).where(
-                    ExchangeStateAdoptionRollback.adoption_record_id == adoption.id
+            if (
+                session.scalar(
+                    select(ExchangeStateAdoptionRollback).where(
+                        ExchangeStateAdoptionRollback.adoption_record_id == adoption.id
+                    )
                 )
-            ) is not None:
+                is not None
+            ):
                 raise ValueError("Esta adopción ya fue revertida")
-            if session.scalar(
-                select(ExchangeCommonBaseAgreement.id).where(
-                    ExchangeCommonBaseAgreement.state_sha256
-                    == adoption.adopted_state_sha256
+            if (
+                session.scalar(
+                    select(ExchangeCommonBaseAgreement.id).where(
+                        ExchangeCommonBaseAgreement.state_sha256 == adoption.adopted_state_sha256
+                    )
                 )
-            ) is not None:
+                is not None
+            ):
                 raise ValueError(
                     "La adopción ya fue usada para registrar una base común; no puede revertirse automáticamente"
                 )
@@ -1733,11 +1765,14 @@ def rollback_state_adoption(
                 row = ExchangeStateAdoption(**payload)
                 session.add(row)
                 session.flush()
-            if session.scalar(
-                select(ExchangeStateAdoptionRollback).where(
-                    ExchangeStateAdoptionRollback.adoption_record_id == row.id
+            if (
+                session.scalar(
+                    select(ExchangeStateAdoptionRollback).where(
+                        ExchangeStateAdoptionRollback.adoption_record_id == row.id
+                    )
                 )
-            ) is not None:
+                is not None
+            ):
                 raise ValueError("La adopción restaurada ya tiene un rollback registrado")
             stale_count = _stale_active_dry_runs(session)
             parameters_sha = sha256_json(

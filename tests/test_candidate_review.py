@@ -19,7 +19,12 @@ from archive_workbench.candidate_review import (
 )
 from archive_workbench.catalog import register_test_corpus
 from archive_workbench.contracts.test_corpus import TestCorpus as CorpusDefinition
-from archive_workbench.db import create_sqlite_engine, database_path, session_scope, upgrade_database
+from archive_workbench.db import (
+    create_sqlite_engine,
+    database_path,
+    session_scope,
+    upgrade_database,
+)
 from archive_workbench.db.models import (
     DigitalObject,
     EditableObject,
@@ -217,9 +222,14 @@ def test_compare_and_initialize_candidate_page(tmp_path: Path) -> None:
             assert page and selection
             assert page.source_extraction_run_id == new_run_id
             assert selection.extraction_run_id == new_run_id
-            assert session.scalar(select(ExtractionPageSelectionRevision).where(
-                ExtractionPageSelectionRevision.selection_id == selection.id
-            ).order_by(ExtractionPageSelectionRevision.revision_number.desc())).revision_number == 2
+            assert (
+                session.scalar(
+                    select(ExtractionPageSelectionRevision)
+                    .where(ExtractionPageSelectionRevision.selection_id == selection.id)
+                    .order_by(ExtractionPageSelectionRevision.revision_number.desc())
+                ).revision_number
+                == 2
+            )
             timeline = page_history_rows(session, source_key="doc_candidates", page=1)
             assert any(item.category == "Selección OCR" for item in timeline)
             assert any(item.operation == "bootstrap" for item in timeline)
@@ -366,8 +376,9 @@ def test_manual_resolution_keeps_human_edits_and_records_decision(tmp_path: Path
             assert len(objects) == original_object_count
             assert any(item.current_text == "Corrección humana preservada" for item in objects)
             revision = session.scalar(
-                select(EditablePageRevision)
-                .where(EditablePageRevision.operation == "manual_keep_edits")
+                select(EditablePageRevision).where(
+                    EditablePageRevision.operation == "manual_keep_edits"
+                )
             )
             assert revision is not None
             baseline_event = session.scalar(
@@ -485,11 +496,14 @@ def test_rebase_preserves_annotations_across_fragmentation(tmp_path: Path) -> No
             assert mention.editable_object_id == active[0].id
             assert active[0].current_text[mention.start_offset : mention.end_offset] == "Texto"
             assert mention.object_revision_number == active[0].revision_number
-            assert session.scalar(
-                select(EntityMentionRevision).where(
-                    EntityMentionRevision.operation == "rebase_relocate"
+            assert (
+                session.scalar(
+                    select(EntityMentionRevision).where(
+                        EntityMentionRevision.operation == "rebase_relocate"
+                    )
                 )
-            ) is not None
+                is not None
+            )
             page_revision = session.scalar(
                 select(EditablePageRevision).where(EditablePageRevision.operation == "rebase")
             )
@@ -617,9 +631,12 @@ def test_rebase_conflict_blocks_all_changes(tmp_path: Path) -> None:
             selection = session.scalar(select(ExtractionPageSelection))
             assert selection is not None
             assert selection.extraction_run_id == old_run_id
-            assert session.scalar(
-                select(EditablePageRevision).where(EditablePageRevision.operation == "rebase")
-            ) is None
+            assert (
+                session.scalar(
+                    select(EditablePageRevision).where(EditablePageRevision.operation == "rebase")
+                )
+                is None
+            )
     finally:
         engine.dispose()
 
@@ -643,8 +660,7 @@ def test_rebase_duplicate_mentions_can_be_resolved_by_rejecting_one(tmp_path: Pa
                 source_keys={"doc_candidates"},
             )
             target = session.scalar(
-                select(EditableObject)
-                .where(
+                select(EditableObject).where(
                     EditableObject.lifecycle_status == "active",
                     EditableObject.current_text == "Texto viejo",
                 )
@@ -682,9 +698,7 @@ def test_rebase_duplicate_mentions_can_be_resolved_by_rejecting_one(tmp_path: Pa
                 candidate_run_id=new_run_id,
             )
             assert preview.can_apply is False
-            assert {item.reason_code for item in preview.mention_conflicts} == {
-                "duplicate_target"
-            }
+            assert {item.reason_code for item in preview.mention_conflicts} == {"duplicate_target"}
             assert {item.mention_id for item in preview.mention_conflicts} == set(mention_ids)
 
             resolutions = {
@@ -721,10 +735,10 @@ def test_rebase_duplicate_mentions_can_be_resolved_by_rejecting_one(tmp_path: Pa
             active_object = session.get(EditableObject, relocated.editable_object_id)
             assert active_object is not None
             assert active_object.lifecycle_status == "active"
-            assert active_object.current_text[relocated.start_offset : relocated.end_offset] == "Texto"
-            operations = set(
-                session.scalars(select(EntityMentionRevision.operation)).all()
+            assert (
+                active_object.current_text[relocated.start_offset : relocated.end_offset] == "Texto"
             )
+            operations = set(session.scalars(select(EntityMentionRevision.operation)).all())
             assert "rebase_relocate" in operations
             assert "rebase_reject_conflict" in operations
     finally:
@@ -937,9 +951,7 @@ def test_rebase_text_conflict_can_reapply_human_correction(tmp_path: Path) -> No
             )
             assert revision is not None
             assert revision.details_json["manual_text_resolution_count"] == 1
-            assert revision.details_json["text_resolution_methods"] == [
-                "manual_apply_human"
-            ]
+            assert revision.details_json["text_resolution_methods"] == ["manual_apply_human"]
     finally:
         engine.dispose()
 
@@ -1069,9 +1081,7 @@ def test_rebase_can_return_to_a_previously_used_candidate(tmp_path: Path) -> Non
             expected_sources = {
                 row.id
                 for row in session.scalars(
-                    select(ExtractedObject).where(
-                        ExtractedObject.extraction_run_id == new_run_id
-                    )
+                    select(ExtractedObject).where(ExtractedObject.extraction_run_id == new_run_id)
                 ).all()
             }
             assert {row.source_extracted_object_id for row in active} == expected_sources
@@ -1096,8 +1106,7 @@ def test_rebase_can_return_to_a_previously_used_candidate(tmp_path: Path) -> Non
             ).all()
             assert len(page_revisions) == 3
             assert any(
-                row.details_json.get("source_links_released", 0) > 0
-                for row in page_revisions[1:]
+                row.details_json.get("source_links_released", 0) > 0 for row in page_revisions[1:]
             )
     finally:
         engine.dispose()
@@ -1167,9 +1176,7 @@ def test_regional_text_replacement_changes_one_editable_object_and_keeps_page_so
             )
             regional_run.engine = "tesseract_regions"
             regional_object = session.scalar(
-                select(ExtractedObject).where(
-                    ExtractedObject.extraction_run_id == regional_run.id
-                )
+                select(ExtractedObject).where(ExtractedObject.extraction_run_id == regional_run.id)
             )
             assert regional_object is not None
             editable_page = session.scalar(select(EditablePage))
@@ -1195,9 +1202,12 @@ def test_regional_text_replacement_changes_one_editable_object_and_keeps_page_so
             assert editable_page.source_extraction_run_id == old_run_id
             assert target.current_text == "DR. GUILLERMO A. BELGRANO RAWSON"
             assert untouched.current_text == untouched_text
-            assert target.current_attributes_json["regional_ocr_text_replacements"][-1][
-                "regional_run_id"
-            ] == regional_run.id
+            assert (
+                target.current_attributes_json["regional_ocr_text_replacements"][-1][
+                    "regional_run_id"
+                ]
+                == regional_run.id
+            )
 
         with session_scope(engine) as session:
             timeline = page_history_rows(session, source_key="doc_candidates", page=1)
@@ -1230,9 +1240,7 @@ def test_regional_text_can_be_added_as_new_editable_object_with_provenance(
             )
             regional_run.engine = "tesseract_regions"
             regional_object = session.scalar(
-                select(ExtractedObject).where(
-                    ExtractedObject.extraction_run_id == regional_run.id
-                )
+                select(ExtractedObject).where(ExtractedObject.extraction_run_id == regional_run.id)
             )
             assert regional_object is not None
             editable_page = session.scalar(select(EditablePage))
@@ -1269,12 +1277,21 @@ def test_regional_text_can_be_added_as_new_editable_object_with_provenance(
             assert added.current_text == "SUBSECRETARIO DEL INTERIOR"
             assert added.source_extracted_object_id is None
             assert added.current_attributes_json["regional_ocr_added"] is True
-            assert added.current_attributes_json["regional_ocr_source"][
-                "regional_run_id"
-            ] == regional_run.id
+            assert (
+                added.current_attributes_json["regional_ocr_source"]["regional_run_id"]
+                == regional_run.id
+            )
             assert added.current_geometry_json == placement_geometry
-            assert added.current_attributes_json["regional_ocr_source"]["source_geometry"] == regional_object.geometry_json
-            assert added.current_attributes_json["regional_ocr_source"]["placement_geometry_defined_by_user"] is True
+            assert (
+                added.current_attributes_json["regional_ocr_source"]["source_geometry"]
+                == regional_object.geometry_json
+            )
+            assert (
+                added.current_attributes_json["regional_ocr_source"][
+                    "placement_geometry_defined_by_user"
+                ]
+                is True
+            )
             assert editable_page.source_extraction_run_id == old_run_id
             active = session.scalars(
                 select(EditableObject).where(

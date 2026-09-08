@@ -143,11 +143,7 @@ class TeamCopyTargetAssessment:
 
     @property
     def is_empty(self) -> bool:
-        return not (
-            self.archival_unit_count
-            or self.digital_object_count
-            or self.authority_count
-        )
+        return not (self.archival_unit_count or self.digital_object_count or self.authority_count)
 
 
 @dataclass(frozen=True, slots=True)
@@ -165,8 +161,7 @@ class TeamCopyAdoptionSummary:
 
 def _canonical_json_bytes(value: object) -> bytes:
     return (
-        json.dumps(value, ensure_ascii=False, sort_keys=True, separators=(",", ":"))
-        + "\n"
+        json.dumps(value, ensure_ascii=False, sort_keys=True, separators=(",", ":")) + "\n"
     ).encode("utf-8")
 
 
@@ -323,9 +318,7 @@ def plan_team_copy(
     return TeamCopyPlan(
         profile_name=profile_name,
         included_groups=selected_groups,
-        omitted_groups=tuple(
-            key for key in TEAM_COPY_GROUP_LABELS if key not in selected_set
-        ),
+        omitted_groups=tuple(key for key in TEAM_COPY_GROUP_LABELS if key not in selected_set),
         group_summaries=tuple(summaries),
         core_file_count=len(core),
         core_byte_size=core_bytes,
@@ -349,11 +342,7 @@ def _project_files_for_copy(
     )
     selected_set = set(selected_groups)
     candidates, _ = _all_copy_candidates(project_root)
-    rows = [
-        path
-        for path, group in candidates
-        if group == "core" or group in selected_set
-    ]
+    rows = [path for path, group in candidates if group == "core" or group in selected_set]
     return rows, plan
 
 
@@ -365,38 +354,26 @@ def inspect_team_copy_package(path: Path) -> TeamCopyPackageInspection:
         with zipfile.ZipFile(source, "r") as archive:
             names = archive.namelist()
             unsafe = [
-                name
-                for name in names
-                if Path(name).is_absolute() or ".." in Path(name).parts
+                name for name in names if Path(name).is_absolute() or ".." in Path(name).parts
             ]
             if unsafe:
                 raise ValueError("La copia de trabajo contiene rutas inseguras")
-            manifests = [
-                name for name in names if Path(name).name == TEAM_COPY_MANIFEST
-            ]
+            manifests = [name for name in names if Path(name).name == TEAM_COPY_MANIFEST]
             if len(manifests) != 1:
-                raise ValueError(
-                    "El ZIP no contiene un manifiesto único de copia de trabajo"
-                )
+                raise ValueError("El ZIP no contiene un manifiesto único de copia de trabajo")
             manifest_name = manifests[0]
             project_folder = str(Path(manifest_name).parent.as_posix())
             marker_name = f"{project_folder}/{TEAM_COPY_MARKER.as_posix()}"
             db_name = f"{project_folder}/data/archive_workbench.sqlite3"
             if marker_name not in names or db_name not in names:
-                raise ValueError(
-                    "La copia de trabajo no contiene su marca o su base SQLite"
-                )
+                raise ValueError("La copia de trabajo no contiene su marca o su base SQLite")
             broken = archive.testzip()
             if broken is not None:
-                raise ValueError(
-                    f"La copia de trabajo contiene un archivo ZIP dañado: {broken}"
-                )
+                raise ValueError(f"La copia de trabajo contiene un archivo ZIP dañado: {broken}")
             try:
                 manifest = json.loads(archive.read(manifest_name).decode("utf-8"))
             except (UnicodeDecodeError, json.JSONDecodeError) as exc:
-                raise ValueError(
-                    "No se pudo leer el manifiesto de la copia de trabajo"
-                ) from exc
+                raise ValueError("No se pudo leer el manifiesto de la copia de trabajo") from exc
     except zipfile.BadZipFile as exc:
         raise ValueError("El archivo elegido no es un ZIP válido") from exc
 
@@ -485,10 +462,7 @@ def create_team_copy_package(
     stamp = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%SZ")
     if output_path is None:
         output_path = (
-            root
-            / "exchange"
-            / "outgoing"
-            / f"{stamp}_copia_trabajo_{short_id(package_id)}.zip"
+            root / "exchange" / "outgoing" / f"{stamp}_copia_trabajo_{short_id(package_id)}.zip"
         )
     destination = output_path.expanduser().resolve()
     destination.parent.mkdir(parents=True, exist_ok=True)
@@ -501,9 +475,7 @@ def create_team_copy_package(
         root,
         included_groups=selected_groups,
     )
-    omitted_groups = tuple(
-        key for key in TEAM_COPY_GROUP_LABELS if key not in set(selected_groups)
-    )
+    omitted_groups = tuple(key for key in TEAM_COPY_GROUP_LABELS if key not in set(selected_groups))
     marker = {
         "format": TEAM_COPY_FORMAT,
         "package_id": package_id,
@@ -562,15 +534,11 @@ def create_team_copy_package(
         temporary = destination.with_suffix(destination.suffix + ".tmp")
         temporary.unlink(missing_ok=True)
         try:
-            with zipfile.ZipFile(
-                temporary, "w", compression=zipfile.ZIP_DEFLATED
-            ) as archive:
+            with zipfile.ZipFile(temporary, "w", compression=zipfile.ZIP_DEFLATED) as archive:
                 for source in files:
                     relative = source.relative_to(root).as_posix()
                     archive.write(source, f"{project_folder}/{relative}")
-                archive.write(
-                    snapshot_db, f"{project_folder}/data/archive_workbench.sqlite3"
-                )
+                archive.write(snapshot_db, f"{project_folder}/data/archive_workbench.sqlite3")
                 archive.writestr(
                     f"{project_folder}/{TEAM_COPY_MARKER.as_posix()}",
                     _canonical_json_bytes(marker),
@@ -641,7 +609,9 @@ def activate_received_team_copy(
             if project is None:
                 raise ValueError("La copia recibida no contiene un proyecto registrado")
             if project.id != marker.get("project_id"):
-                raise ValueError("La copia recibida no corresponde al proyecto indicado en su manifiesto")
+                raise ValueError(
+                    "La copia recibida no corresponde al proyecto indicado en su manifiesto"
+                )
             observed_state = current_editable_state_sha256(session, project.id)
             expected_state = str(marker.get("base_state_sha256") or "")
             if not expected_state or observed_state != expected_state:
@@ -702,9 +672,7 @@ def assess_team_copy_target(project_root: Path) -> TeamCopyTargetAssessment:
                 raise ValueError("El proyecto actual no está registrado en SQLite")
             archival_unit_count = int(
                 session.scalar(
-                    select(func.count(ArchivalUnit.id)).where(
-                        ArchivalUnit.project_id == project.id
-                    )
+                    select(func.count(ArchivalUnit.id)).where(ArchivalUnit.project_id == project.id)
                 )
                 or 0
             )

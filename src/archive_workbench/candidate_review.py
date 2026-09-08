@@ -323,9 +323,7 @@ def compare_candidate_page(
     candidate_run_id: str,
     digital_object_id: str | None = None,
 ) -> CandidatePageComparison:
-    _source, digital, unit = _registration(
-        session, source_key, digital_object_id=digital_object_id
-    )
+    _source, digital, unit = _registration(session, source_key, digital_object_id=digital_object_id)
     candidate_run, candidate_page = _candidate_page(
         session,
         digital_object_id=digital.id,
@@ -828,7 +826,8 @@ def resolve_candidate_keep_edits(
         editable_page,
         operation="manual_keep_edits",
         created_by=resolved_by,
-        note=note or "Se conservó íntegramente la edición revisada al vincular la nueva extracción.",
+        note=note
+        or "Se conservó íntegramente la edición revisada al vincular la nueva extracción.",
         details={
             "strategy": "keep_existing_editable_objects",
             "previous_extraction_run_id": previous_run_id,
@@ -887,9 +886,7 @@ def prepare_candidate_run_for_review(
         raise ValueError("El resultado elegido no contiene páginas completadas.")
     initialized_pages = set(
         session.scalars(
-            select(EditablePage.page_number).where(
-                EditablePage.digital_object_id == digital.id
-            )
+            select(EditablePage.page_number).where(EditablePage.digital_object_id == digital.id)
         ).all()
     )
     target_pages = run_pages - initialized_pages
@@ -984,11 +981,7 @@ def replace_editable_object_text_from_regional_candidate(
         raise ValueError("El fragmento de texto elegido ya no está activo en esta página.")
 
     regional = session.get(ExtractedObject, regional_object_id)
-    if (
-        regional is None
-        or regional.extraction_run_id != run.id
-        or regional.page_number != page
-    ):
+    if regional is None or regional.extraction_run_id != run.id or regional.page_number != page:
         raise ValueError("El texto recuperado que elegiste no pertenece a esta página.")
     replacement = regional.original_text
     if not replacement.strip():
@@ -1021,10 +1014,7 @@ def replace_editable_object_text_from_regional_candidate(
         operation="regional_ocr_replace",
         created_by=changed_by,
         note=note
-        or (
-            "Texto corregido con una lectura parcial de la página; "
-            f"origen regional {run.id}."
-        ),
+        or (f"Texto corregido con una lectura parcial de la página; origen regional {run.id}."),
         base_revision_number=base,
     )
     session.flush()
@@ -1085,11 +1075,7 @@ def add_editable_object_from_regional_candidate(
         )
 
     regional = session.get(ExtractedObject, regional_object_id)
-    if (
-        regional is None
-        or regional.extraction_run_id != run.id
-        or regional.page_number != page
-    ):
+    if regional is None or regional.extraction_run_id != run.id or regional.page_number != page:
         raise ValueError("El texto recuperado que elegiste no pertenece a esta página.")
     added_text = regional.original_text
     if not added_text.strip():
@@ -1214,7 +1200,9 @@ def page_history_rows(
                 occurred_at=item.created_at,
                 category="Página editable",
                 operation=item.operation,
-                title=page_titles.get(item.operation, item.operation.replace("_", " ").capitalize()),
+                title=page_titles.get(
+                    item.operation, item.operation.replace("_", " ").capitalize()
+                ),
                 actor=item.created_by,
                 note=item.note,
                 details={

@@ -28,20 +28,16 @@ from archive_workbench.db.models import (
     EditablePageAction,
     EditablePageRevision,
     EntityMention,
-    EntityMentionRevision,
     SegmentEntityMention,
     EntityRelation,
-    EntityRelationRevision,
     DocumentPart,
     ArchivalFieldValue,
     ArchivalUnit,
     AudiovisualMedia,
     AudiovisualTimelineAnnotation,
     AudiovisualTimelineAnnotationRevision,
-    ArchivalUnitRevision,
     AuthorityAlias,
     AuthorityRecord,
-    AuthorityRevision,
     DigitalObject,
     DigitalObjectUnitLink,
     ExtractedObject,
@@ -54,7 +50,6 @@ from archive_workbench.db.models import (
     TranscriptSegmentRevision,
     TranscriptionRun,
     WorkAssignment,
-    WorkAssignmentRevision,
     ExchangeBundleApplication,
     ExchangeBundleRecord,
     ExchangeChangeEvent,
@@ -258,20 +253,22 @@ def _editable_state_payload(session: Session, project_id: str) -> dict[str, Any]
         )
     ).all()
     units = session.scalars(
-        select(ArchivalUnit)
-        .where(ArchivalUnit.project_id == project_id)
-        .order_by(ArchivalUnit.id)
+        select(ArchivalUnit).where(ArchivalUnit.project_id == project_id).order_by(ArchivalUnit.id)
     ).all()
     unit_ids = [row.id for row in units]
-    field_rows = session.scalars(
-        select(ArchivalFieldValue)
-        .where(ArchivalFieldValue.archival_unit_id.in_(unit_ids))
-        .order_by(
-            ArchivalFieldValue.archival_unit_id,
-            ArchivalFieldValue.field_key,
-            ArchivalFieldValue.sort_order,
-        )
-    ).all() if unit_ids else []
+    field_rows = (
+        session.scalars(
+            select(ArchivalFieldValue)
+            .where(ArchivalFieldValue.archival_unit_id.in_(unit_ids))
+            .order_by(
+                ArchivalFieldValue.archival_unit_id,
+                ArchivalFieldValue.field_key,
+                ArchivalFieldValue.sort_order,
+            )
+        ).all()
+        if unit_ids
+        else []
+    )
     fields_by_unit: dict[str, list[dict[str, Any]]] = {unit_id: [] for unit_id in unit_ids}
     for row in field_rows:
         fields_by_unit.setdefault(row.archival_unit_id, []).append(
@@ -297,11 +294,17 @@ def _editable_state_payload(session: Session, project_id: str) -> dict[str, Any]
         authority_query = authority_query.options(defer(AuthorityRecord.profile_json))
     authorities = session.scalars(authority_query).all()
     authority_ids = [row.id for row in authorities]
-    authority_aliases = session.scalars(
-        select(AuthorityAlias)
-        .where(AuthorityAlias.authority_id.in_(authority_ids))
-        .order_by(AuthorityAlias.authority_id, AuthorityAlias.normalized_alias, AuthorityAlias.id)
-    ).all() if authority_ids else []
+    authority_aliases = (
+        session.scalars(
+            select(AuthorityAlias)
+            .where(AuthorityAlias.authority_id.in_(authority_ids))
+            .order_by(
+                AuthorityAlias.authority_id, AuthorityAlias.normalized_alias, AuthorityAlias.id
+            )
+        ).all()
+        if authority_ids
+        else []
+    )
     aliases_by_authority: dict[str, list[AuthorityAlias]] = {
         authority_id: [] for authority_id in authority_ids
     }
@@ -425,7 +428,6 @@ def _editable_state_payload(session: Session, project_id: str) -> dict[str, Any]
         if audiovisual_timeline_annotation_ids
         else []
     )
-
 
     links = session.execute(
         select(DigitalObjectUnitLink, DigitalObject)
@@ -628,8 +630,7 @@ def _editable_state_payload(session: Session, project_id: str) -> dict[str, Any]
                 "registration_status": row.registration_status,
                 "completion_confirmed": bool(row.completion_confirmed),
                 "completion_confirmed_at": (
-                    row.completion_confirmed_at.isoformat()
-                    if row.completion_confirmed_at else None
+                    row.completion_confirmed_at.isoformat() if row.completion_confirmed_at else None
                 ),
                 "completion_confirmed_by": row.completion_confirmed_by,
                 "revision": row.revision,
@@ -670,7 +671,9 @@ def _editable_state_payload(session: Session, project_id: str) -> dict[str, Any]
                         "channel": row.channel,
                         "responsible": row.responsible,
                         "provenance": row.provenance,
-                        "recorded_date": row.recorded_date.isoformat() if row.recorded_date else None,
+                        "recorded_date": row.recorded_date.isoformat()
+                        if row.recorded_date
+                        else None,
                         "rights": row.rights,
                         "description": row.description,
                         "container_format": row.container_format,
@@ -869,7 +872,9 @@ def exchange_status(session: Session) -> ExchangeStatus:
     last = checkpoints[0] if checkpoints else None
     bundles = int(
         session.scalar(
-            select(func.count()).select_from(ExchangeBundleRecord).where(
+            select(func.count())
+            .select_from(ExchangeBundleRecord)
+            .where(
                 ExchangeBundleRecord.workspace_id == workspace.id,
                 ExchangeBundleRecord.direction == "outgoing",
             )
@@ -1064,9 +1069,7 @@ def export_change_bundle(
         )
         .order_by(ExchangeChangeEvent.sequence_number)
     ).all()
-    events = [
-        _enrich_candidate_exchange_event(session, _event_contract(row)) for row in rows
-    ]
+    events = [_enrich_candidate_exchange_event(session, _event_contract(row)) for row in rows]
     # Las decisiones sobre la selección OCR y la base editable viajan como
     # eventos normales. El receptor verifica durante el dry-run que las
     # corridas, páginas y objetos OCR referenciados existan localmente antes
@@ -1096,9 +1099,9 @@ def export_change_bundle(
         changes_sha256=changes_sha,
         attachment_checksums={},
     )
-    manifest_bytes = _canonical_json_bytes(
-        manifest.model_dump(mode="json", exclude_none=True)
-    ) + b"\n"
+    manifest_bytes = (
+        _canonical_json_bytes(manifest.model_dump(mode="json", exclude_none=True)) + b"\n"
+    )
     checksums = (
         f"{hashlib.sha256(manifest_bytes).hexdigest()}  manifest.json\n"
         f"{changes_sha}  changes.jsonl\n"
@@ -1177,17 +1180,13 @@ def inspect_change_bundle(path: Path) -> BundleInspection:
         with zipfile.ZipFile(bundle_path, "r") as archive:
             names = set(archive.namelist())
             unsafe = [
-                name
-                for name in names
-                if Path(name).is_absolute() or ".." in Path(name).parts
+                name for name in names if Path(name).is_absolute() or ".." in Path(name).parts
             ]
             if unsafe:
                 raise ValueError("El ZIP contiene rutas inseguras")
             missing = {"manifest.json", "changes.jsonl", "checksums.sha256"} - names
             if missing:
-                raise ValueError(
-                    "Faltan archivos obligatorios: " + ", ".join(sorted(missing))
-                )
+                raise ValueError("Faltan archivos obligatorios: " + ", ".join(sorted(missing)))
             extra = names - allowed
             manifest_bytes = archive.read("manifest.json")
             changes_bytes = archive.read("changes.jsonl")
@@ -1217,7 +1216,9 @@ def inspect_change_bundle(path: Path) -> BundleInspection:
         try:
             event = ChangeEvent.model_validate_json(raw)
         except Exception as exc:  # Pydantic agrega el detalle exacto.
-            raise ValueError(f"Evento inválido en changes.jsonl, línea {line_number}: {exc}") from exc
+            raise ValueError(
+                f"Evento inválido en changes.jsonl, línea {line_number}: {exc}"
+            ) from exc
         events.append(event)
     if len(events) != manifest.event_count:
         raise ValueError(
@@ -1291,7 +1292,9 @@ def compare_change_bundle_manifest(
         BundleManifestComparisonRow(
             field="Copia de origen",
             local_value=(
-                f"{workspace.workspace_name} ({workspace.id})" if workspace is not None else "sin registrar"
+                f"{workspace.workspace_name} ({workspace.id})"
+                if workspace is not None
+                else "sin registrar"
             ),
             incoming_value=f"{manifest.source_workspace_name} ({manifest.source_workspace_id})",
             status="misma copia" if source_is_local else "otra copia",
@@ -1322,9 +1325,7 @@ def compare_change_bundle_manifest(
         BundleManifestComparisonRow(
             field="Secuencias",
             local_value=(
-                str(_current_sequence(session, workspace.id))
-                if workspace is not None
-                else "—"
+                str(_current_sequence(session, workspace.id)) if workspace is not None else "—"
             ),
             incoming_value=(
                 f"sin eventos · base {manifest.base_sequence}"
@@ -1461,9 +1462,7 @@ def _matching_checkpoint(
             ExchangeCheckpoint.workspace_id == workspace_id,
             ExchangeCheckpoint.state_sha256 == state_sha256,
         )
-        .order_by(
-            ExchangeCheckpoint.sequence_number.desc(), ExchangeCheckpoint.created_at.desc()
-        )
+        .order_by(ExchangeCheckpoint.sequence_number.desc(), ExchangeCheckpoint.created_at.desc())
     )
 
 
@@ -1483,9 +1482,7 @@ def _common_base_agreement_for_checkpoint(
         )
     ).all()
     if len(rows) > 1:
-        raise ValueError(
-            "Existe más de un acuerdo activo para el mismo punto de control"
-        )
+        raise ValueError("Existe más de un acuerdo activo para el mismo punto de control")
     return rows[0] if rows else None
 
 
@@ -1553,20 +1550,16 @@ def _recovered_lineage_decision(
             ExchangeLineageDecision.target_bundle_id == manifest.bundle_id,
             ExchangeLineageDecision.target_bundle_sha256 == bundle_sha256,
             ExchangeLineageDecision.source_workspace_id == manifest.source_workspace_id,
-            ExchangeLineageDecision.target_base_checkpoint_id
-            == manifest.base_checkpoint_id,
+            ExchangeLineageDecision.target_base_checkpoint_id == manifest.base_checkpoint_id,
             ExchangeLineageDecision.target_base_state_sha256
             == manifest.base_checkpoint_state_sha256,
             ExchangeLineageDecision.target_base_sequence == manifest.base_sequence,
-            ExchangeLineageDecision.remote_workspace_id
-            == manifest.source_workspace_id,
+            ExchangeLineageDecision.remote_workspace_id == manifest.source_workspace_id,
             ExchangeLineageDecision.remote_sequence == manifest.base_sequence,
         )
     ).all()
     if len(rows) > 1:
-        raise ValueError(
-            "Existe más de una decisión de recuperación para el mismo paquete"
-        )
+        raise ValueError("Existe más de una decisión de recuperación para el mismo paquete")
     return rows[0] if rows else None
 
 
@@ -1673,9 +1666,7 @@ def _catalog_unit_values(session: Session, unit: ArchivalUnit) -> dict[str, Any]
     }
 
 
-def _digital_link_values(
-    session: Session, link: DigitalObjectUnitLink
-) -> dict[str, Any]:
+def _digital_link_values(session: Session, link: DigitalObjectUnitLink) -> dict[str, Any]:
     digital = session.get(DigitalObject, link.digital_object_id)
     return {
         "digital_object_id": link.digital_object_id,
@@ -1692,7 +1683,6 @@ def _digital_link_values(
     }
 
 
-
 def _authority_values(session: Session, authority: AuthorityRecord) -> dict[str, Any]:
     aliases = session.scalars(
         select(AuthorityAlias)
@@ -1705,7 +1695,9 @@ def _authority_values(session: Session, authority: AuthorityRecord) -> dict[str,
         "normalized_name": authority.normalized_name,
         "description": authority.description,
         "temporal_expression": authority.temporal_expression,
-        "temporal_start": authority.temporal_start.isoformat() if authority.temporal_start else None,
+        "temporal_start": authority.temporal_start.isoformat()
+        if authority.temporal_start
+        else None,
         "temporal_end": authority.temporal_end.isoformat() if authority.temporal_end else None,
         "temporal_precision": authority.temporal_precision,
         "temporal_approximate": bool(authority.temporal_approximate),
@@ -1742,6 +1734,7 @@ def _entity_mention_values(mention: EntityMention) -> dict[str, Any]:
         "confidence": mention.confidence,
         "note": mention.note,
     }
+
 
 def _entity_relation_values(relation: EntityRelation) -> dict[str, Any]:
     return {
@@ -1797,7 +1790,9 @@ def _normalize_incoming_event(event: ChangeEvent) -> tuple[ChangeEvent, str | No
         "restore",
     }:
         return event, None
-    expected, target = ("active", "deleted") if event.operation.value == "delete" else ("deleted", "active")
+    expected, target = (
+        ("active", "deleted") if event.operation.value == "delete" else ("deleted", "active")
+    )
     canonical = {"lifecycle_status": [expected, target]}
     if event.changed_fields == canonical:
         return event, None
@@ -1808,7 +1803,6 @@ def _normalize_incoming_event(event: ChangeEvent) -> tuple[ChangeEvent, str | No
         f"El evento {event.event_id} de {event.operation.value} fue normalizado: "
         "solo se considera lifecycle_status.",
     )
-
 
 
 _CANDIDATE_EVENT_METADATA_FIELDS = {
@@ -1833,7 +1827,6 @@ _OBJECT_EVENT_METADATA_FIELDS = {
 }
 
 
-
 def _non_state_event_fields(event: ChangeEvent) -> set[str]:
     if event.entity_type in {
         "extraction_selection_baseline",
@@ -1850,10 +1843,10 @@ def _state_only_event(event: ChangeEvent) -> ChangeEvent:
     if not metadata:
         return event
     changed = {
-        field: value for field, value in event.changed_fields.items()
-        if field not in metadata
+        field: value for field, value in event.changed_fields.items() if field not in metadata
     }
     return event.model_copy(update={"changed_fields": changed})
+
 
 def _assess_prior_incoming_state(
     event: ChangeEvent,
@@ -1910,8 +1903,7 @@ def _assess_prior_incoming_state(
             [],
         )
     mismatches = [
-        field for field, current, old, _new in pairs
-        if not _exchange_values_equal(current, old)
+        field for field, current, old, _new in pairs if not _exchange_values_equal(current, old)
     ]
     return (
         MergeDisposition.REVIEW.value,
@@ -1996,9 +1988,23 @@ def _assess_current_state(
                 for field, current in checks.items()
                 if field in event.changed_fields
             ]
-            if comparable and all(_exchange_values_equal(current, new) for _field, current, new in comparable):
-                return MergeDisposition.DUPLICATE.value, "La creación ya está representada localmente.", []
-            return MergeDisposition.REVIEW.value, "La entidad ya existe con un estado diferente.", [field for field, current, new in comparable if not _exchange_values_equal(current, new)]
+            if comparable and all(
+                _exchange_values_equal(current, new) for _field, current, new in comparable
+            ):
+                return (
+                    MergeDisposition.DUPLICATE.value,
+                    "La creación ya está representada localmente.",
+                    [],
+                )
+            return (
+                MergeDisposition.REVIEW.value,
+                "La entidad ya existe con un estado diferente.",
+                [
+                    field
+                    for field, current, new in comparable
+                    if not _exchange_values_equal(current, new)
+                ],
+            )
         if obj is None:
             return MergeDisposition.REVIEW.value, "El objeto editable no existe localmente.", []
         attributes = {
@@ -2044,7 +2050,11 @@ def _assess_current_state(
             old_run = _changed_pair(event, "extraction_run_id")
             old_page = _changed_pair(event, "extraction_page_id")
             if old_run and old_page and old_run[0] is None and old_page[0] is None:
-                return MergeDisposition.APPLY.value, "La selección OCR todavía no existe localmente.", []
+                return (
+                    MergeDisposition.APPLY.value,
+                    "La selección OCR todavía no existe localmente.",
+                    [],
+                )
             return MergeDisposition.REVIEW.value, "La selección OCR no existe localmente.", []
         pairs = []
         for field, attribute in (
@@ -2073,10 +2083,20 @@ def _assess_current_state(
     elif event.entity_type == "editable_page_action":
         action = session.get(EditablePageAction, event.entity_id)
         fields = (
-            "editable_page_id", "sequence_number", "action_type", "status",
-            "before_snapshot", "after_snapshot", "selected_object_id", "note",
-            "created_by", "created_at", "undone_by", "undone_at",
-            "redone_by", "redone_at",
+            "editable_page_id",
+            "sequence_number",
+            "action_type",
+            "status",
+            "before_snapshot",
+            "after_snapshot",
+            "selected_object_id",
+            "note",
+            "created_by",
+            "created_at",
+            "undone_by",
+            "undone_at",
+            "redone_by",
+            "redone_at",
         )
         mapping = {
             "editable_page_id": "editable_page_id",
@@ -2106,12 +2126,24 @@ def _assess_current_state(
                 if field.endswith("_at") or field == "created_at":
                     expected = _coerce_datetime(expected)
                 comparable.append((field, current, expected))
-            if comparable and all(_exchange_values_equal(current, expected) for _field, current, expected in comparable):
-                return MergeDisposition.DUPLICATE.value, "La acción ya está representada localmente.", []
-            return MergeDisposition.REVIEW.value, "El ID de acción ya existe con otro estado.", [
-                field for field, current, expected in comparable
-                if not _exchange_values_equal(current, expected)
-            ]
+            if comparable and all(
+                _exchange_values_equal(current, expected)
+                for _field, current, expected in comparable
+            ):
+                return (
+                    MergeDisposition.DUPLICATE.value,
+                    "La acción ya está representada localmente.",
+                    [],
+                )
+            return (
+                MergeDisposition.REVIEW.value,
+                "El ID de acción ya existe con otro estado.",
+                [
+                    field
+                    for field, current, expected in comparable
+                    if not _exchange_values_equal(current, expected)
+                ],
+            )
         if action is None:
             return MergeDisposition.REVIEW.value, "La acción de página no existe localmente.", []
         pairs = []
@@ -2135,21 +2167,39 @@ def _assess_current_state(
             "editable_object_id": _new_value(event.changed_fields, "editable_object_id"),
             "body": _new_value(event.changed_fields, "body"),
         }
-        if comment.editable_object_id == expected["editable_object_id"] and comment.body == expected["body"]:
+        if (
+            comment.editable_object_id == expected["editable_object_id"]
+            and comment.body == expected["body"]
+        ):
             return MergeDisposition.DUPLICATE.value, "El comentario ya existe localmente.", []
-        return MergeDisposition.REVIEW.value, "El ID del comentario ya existe con otro contenido.", ["editable_object_id", "body"]
+        return (
+            MergeDisposition.REVIEW.value,
+            "El ID del comentario ya existe con otro contenido.",
+            ["editable_object_id", "body"],
+        )
     elif event.entity_type == "editable_object_tag":
         tag = session.get(EditableObjectTag, event.entity_id)
         if event.operation.value == "create":
             if tag is None:
                 return MergeDisposition.APPLY.value, "La etiqueta no existe localmente.", []
-            expected = {field: _new_value(event.changed_fields, field) for field in ("editable_object_id", "tag", "normalized_tag", "tag_kind")}
+            expected = {
+                field: _new_value(event.changed_fields, field)
+                for field in ("editable_object_id", "tag", "normalized_tag", "tag_kind")
+            }
             if all(getattr(tag, field) == value for field, value in expected.items()):
                 return MergeDisposition.DUPLICATE.value, "La etiqueta ya existe localmente.", []
-            return MergeDisposition.REVIEW.value, "El ID de etiqueta ya existe con otros valores.", list(expected)
+            return (
+                MergeDisposition.REVIEW.value,
+                "El ID de etiqueta ya existe con otros valores.",
+                list(expected),
+            )
         if event.operation.value == "delete":
             if tag is None:
-                return MergeDisposition.DUPLICATE.value, "La etiqueta ya está ausente localmente.", []
+                return (
+                    MergeDisposition.DUPLICATE.value,
+                    "La etiqueta ya está ausente localmente.",
+                    [],
+                )
             pairs = []
             for field in ("editable_object_id", "tag", "normalized_tag", "tag_kind"):
                 pair = _changed_pair(event, field)
@@ -2161,19 +2211,33 @@ def _assess_current_state(
         unit = session.get(ArchivalUnit, event.entity_id)
         if event.operation.value == "create":
             if unit is None:
-                return MergeDisposition.APPLY.value, "La unidad archivística no existe localmente.", []
+                return (
+                    MergeDisposition.APPLY.value,
+                    "La unidad archivística no existe localmente.",
+                    [],
+                )
             current_values = _catalog_unit_values(session, unit)
             comparable = [
                 (field, current_values.get(field), _new_value(event.changed_fields, field))
                 for field in event.changed_fields
                 if field in current_values
             ]
-            if comparable and all(_exchange_values_equal(current, new) for _field, current, new in comparable):
-                return MergeDisposition.DUPLICATE.value, "La unidad ya está representada localmente.", []
+            if comparable and all(
+                _exchange_values_equal(current, new) for _field, current, new in comparable
+            ):
+                return (
+                    MergeDisposition.DUPLICATE.value,
+                    "La unidad ya está representada localmente.",
+                    [],
+                )
             return (
                 MergeDisposition.REVIEW.value,
                 "El ID de la unidad ya existe con otros valores.",
-                [field for field, current, new in comparable if not _exchange_values_equal(current, new)],
+                [
+                    field
+                    for field, current, new in comparable
+                    if not _exchange_values_equal(current, new)
+                ],
             )
         if unit is None:
             return MergeDisposition.REVIEW.value, "La unidad archivística no existe localmente.", []
@@ -2194,18 +2258,23 @@ def _assess_current_state(
                 page_end = _changed_pair(event, "page_end")
                 old_sha = sha256[0] if sha256 else None
                 old_unit = unit_id[0] if unit_id else None
-                digital = session.scalar(
-                    select(DigitalObject).where(
-                        DigitalObject.project_id == event.project_id,
-                        DigitalObject.sha256 == old_sha,
+                digital = (
+                    session.scalar(
+                        select(DigitalObject).where(
+                            DigitalObject.project_id == event.project_id,
+                            DigitalObject.sha256 == old_sha,
+                        )
                     )
-                ) if isinstance(old_sha, str) else None
+                    if isinstance(old_sha, str)
+                    else None
+                )
                 if digital is not None and isinstance(old_unit, str):
                     link = session.scalar(
                         select(DigitalObjectUnitLink).where(
                             DigitalObjectUnitLink.digital_object_id == digital.id,
                             DigitalObjectUnitLink.archival_unit_id == old_unit,
-                            DigitalObjectUnitLink.relation_type == (relation_type[0] if relation_type else "represents"),
+                            DigitalObjectUnitLink.relation_type
+                            == (relation_type[0] if relation_type else "represents"),
                             DigitalObjectUnitLink.page_start.is_(None)
                             if not page_start or page_start[0] is None
                             else DigitalObjectUnitLink.page_start == page_start[0],
@@ -2215,7 +2284,11 @@ def _assess_current_state(
                         )
                     )
             if link is None:
-                return MergeDisposition.DUPLICATE.value, "El vínculo ya está ausente localmente.", []
+                return (
+                    MergeDisposition.DUPLICATE.value,
+                    "El vínculo ya está ausente localmente.",
+                    [],
+                )
             current_values = _digital_link_values(session, link)
             pairs = []
             for field, current in current_values.items():
@@ -2230,31 +2303,49 @@ def _assess_current_state(
                     for field in event.changed_fields
                     if field in current_values
                 ]
-                if comparable and all(_exchange_values_equal(current, new) for _field, current, new in comparable):
+                if comparable and all(
+                    _exchange_values_equal(current, new) for _field, current, new in comparable
+                ):
                     return MergeDisposition.DUPLICATE.value, "El vínculo ya existe localmente.", []
                 return (
                     MergeDisposition.REVIEW.value,
                     "El ID del vínculo ya existe con otros valores.",
-                    [field for field, current, new in comparable if not _exchange_values_equal(current, new)],
+                    [
+                        field
+                        for field, current, new in comparable
+                        if not _exchange_values_equal(current, new)
+                    ],
                 )
             unit_id = _new_value(event.changed_fields, "archival_unit_id")
             if not isinstance(unit_id, str):
-                return MergeDisposition.REVIEW.value, "El vínculo no identifica una unidad archivística.", []
+                return (
+                    MergeDisposition.REVIEW.value,
+                    "El vínculo no identifica una unidad archivística.",
+                    [],
+                )
             if (
                 session.get(ArchivalUnit, unit_id) is None
                 and ("archival_unit", unit_id) not in incoming_creations
             ):
-                return MergeDisposition.REVIEW.value, "El vínculo apunta a una unidad inexistente.", []
+                return (
+                    MergeDisposition.REVIEW.value,
+                    "El vínculo apunta a una unidad inexistente.",
+                    [],
+                )
             sha256 = _new_value(event.changed_fields, "sha256")
             relation_type = _new_value(event.changed_fields, "relation_type")
             page_start = _new_value(event.changed_fields, "page_start")
             page_end = _new_value(event.changed_fields, "page_end")
-            digital = session.scalar(
-                select(DigitalObject).where(
-                    DigitalObject.project_id == event.project_id,
-                    DigitalObject.sha256 == sha256,
+            digital = (
+                session.scalar(
+                    select(DigitalObject).where(
+                        DigitalObject.project_id == event.project_id,
+                        DigitalObject.sha256 == sha256,
+                    )
                 )
-            ) if isinstance(sha256, str) else None
+                if isinstance(sha256, str)
+                else None
+            )
             if digital is not None:
                 existing = session.scalar(
                     select(DigitalObjectUnitLink).where(
@@ -2270,8 +2361,16 @@ def _assess_current_state(
                     )
                 )
                 if existing is not None:
-                    return MergeDisposition.DUPLICATE.value, "El mismo contenido ya está vinculado a la unidad.", []
-            return MergeDisposition.APPLY.value, "El vínculo y sus metadatos pueden incorporarse.", []
+                    return (
+                        MergeDisposition.DUPLICATE.value,
+                        "El mismo contenido ya está vinculado a la unidad.",
+                        [],
+                    )
+            return (
+                MergeDisposition.APPLY.value,
+                "El vínculo y sus metadatos pueden incorporarse.",
+                [],
+            )
         else:
             return MergeDisposition.REVIEW.value, "Operación de vínculo digital no admitida.", []
     elif event.entity_type == "authority_record":
@@ -2285,12 +2384,18 @@ def _assess_current_state(
                 for field in event.changed_fields
                 if field in current_values
             ]
-            if comparable and all(_exchange_values_equal(current, new) for _field, current, new in comparable):
+            if comparable and all(
+                _exchange_values_equal(current, new) for _field, current, new in comparable
+            ):
                 return MergeDisposition.DUPLICATE.value, "La autoridad ya existe localmente.", []
             return (
                 MergeDisposition.REVIEW.value,
                 "El ID de autoridad ya existe con otros valores.",
-                [field for field, current, new in comparable if not _exchange_values_equal(current, new)],
+                [
+                    field
+                    for field, current, new in comparable
+                    if not _exchange_values_equal(current, new)
+                ],
             )
         if authority is None:
             return MergeDisposition.REVIEW.value, "La autoridad no existe localmente.", []
@@ -2311,12 +2416,18 @@ def _assess_current_state(
                 for field in event.changed_fields
                 if field in current_values
             ]
-            if comparable and all(_exchange_values_equal(current, new) for _field, current, new in comparable):
+            if comparable and all(
+                _exchange_values_equal(current, new) for _field, current, new in comparable
+            ):
                 return MergeDisposition.DUPLICATE.value, "La mención ya existe localmente.", []
             return (
                 MergeDisposition.REVIEW.value,
                 "El ID de mención ya existe con otros valores.",
-                [field for field, current, new in comparable if not _exchange_values_equal(current, new)],
+                [
+                    field
+                    for field, current, new in comparable
+                    if not _exchange_values_equal(current, new)
+                ],
             )
         if mention is None:
             return MergeDisposition.REVIEW.value, "La mención no existe localmente.", []
@@ -2337,12 +2448,18 @@ def _assess_current_state(
                 for field in event.changed_fields
                 if field in current_values
             ]
-            if comparable and all(_exchange_values_equal(current, new) for _field, current, new in comparable):
+            if comparable and all(
+                _exchange_values_equal(current, new) for _field, current, new in comparable
+            ):
                 return MergeDisposition.DUPLICATE.value, "La relación ya existe localmente.", []
             return (
                 MergeDisposition.REVIEW.value,
                 "El ID de relación ya existe con otros valores.",
-                [field for field, current, new in comparable if not _exchange_values_equal(current, new)],
+                [
+                    field
+                    for field, current, new in comparable
+                    if not _exchange_values_equal(current, new)
+                ],
             )
         if relation is None:
             return MergeDisposition.REVIEW.value, "La relación no existe localmente.", []
@@ -2378,12 +2495,18 @@ def _assess_current_state(
                 for field in event.changed_fields
                 if field in current_values
             ]
-            if comparable and all(_exchange_values_equal(current, new) for _field, current, new in comparable):
+            if comparable and all(
+                _exchange_values_equal(current, new) for _field, current, new in comparable
+            ):
                 return MergeDisposition.DUPLICATE.value, "La asignación ya existe localmente.", []
             return (
                 MergeDisposition.REVIEW.value,
                 "El ID de asignación ya existe con otros valores.",
-                [field for field, current, new in comparable if not _exchange_values_equal(current, new)],
+                [
+                    field
+                    for field, current, new in comparable
+                    if not _exchange_values_equal(current, new)
+                ],
             )
         if assignment is None:
             return MergeDisposition.REVIEW.value, "La asignación no existe localmente.", []
@@ -2394,16 +2517,30 @@ def _assess_current_state(
             if pair is not None:
                 pairs.append((field, current, pair[0], pair[1]))
     else:
-        return MergeDisposition.REVIEW.value, f"Tipo de entidad no evaluable: {event.entity_type}", []
+        return (
+            MergeDisposition.REVIEW.value,
+            f"Tipo de entidad no evaluable: {event.entity_type}",
+            [],
+        )
 
     if not pairs:
         return MergeDisposition.DUPLICATE.value, "El evento no contiene cambios efectivos.", []
     if all(_exchange_values_equal(current, new) for _field, current, _old, new in pairs):
-        return MergeDisposition.DUPLICATE.value, "El cambio ya está representado en el estado local.", []
+        return (
+            MergeDisposition.DUPLICATE.value,
+            "El cambio ya está representado en el estado local.",
+            [],
+        )
     if all(_exchange_values_equal(current, old) for _field, current, old, _new in pairs):
         return MergeDisposition.APPLY.value, "Las precondiciones coinciden con el estado local.", []
-    mismatches = [field for field, current, old, _new in pairs if not _exchange_values_equal(current, old)]
-    return MergeDisposition.CONFLICT.value, "Las precondiciones no coinciden con el estado local actual.", mismatches
+    mismatches = [
+        field for field, current, old, _new in pairs if not _exchange_values_equal(current, old)
+    ]
+    return (
+        MergeDisposition.CONFLICT.value,
+        "Las precondiciones no coinciden con el estado local actual.",
+        mismatches,
+    )
 
 
 def _ocr_page_dependency_problem(session: Session, event: ChangeEvent) -> str | None:
@@ -2428,10 +2565,7 @@ def _ocr_page_dependency_problem(session: Session, event: ChangeEvent) -> str | 
         )
     if run.digital_object_id != digital_object_id:
         return "La corrida OCR referenciada pertenece a otro documento."
-    if (
-        extraction_page.extraction_run_id != run.id
-        or extraction_page.page_number != page_number
-    ):
+    if extraction_page.extraction_run_id != run.id or extraction_page.page_number != page_number:
         return "La página OCR referenciada no coincide con la corrida, el documento y la página."
     return None
 
@@ -2519,12 +2653,9 @@ def _parent_reference_problem(
     if event.entity_type == "entity_mention":
         object_id = _new_value(event.changed_fields, "editable_object_id")
         authority_id = _new_value(event.changed_fields, "authority_id")
-        if (
-            not isinstance(object_id, str)
-            or (
-                session.get(EditableObject, object_id) is None
-                and ("editable_object", object_id) not in incoming_creations
-            )
+        if not isinstance(object_id, str) or (
+            session.get(EditableObject, object_id) is None
+            and ("editable_object", object_id) not in incoming_creations
         ):
             return "La mención apunta a un objeto editable inexistente."
         if authority_id is not None and (
@@ -2591,7 +2722,12 @@ def _combine_pair_assessments(
     from archive_workbench.domain.enums import MergeDisposition
 
     if not pair_rows:
-        return (MergeDisposition.APPLY.value, "No hay cambios locales concurrentes sobre la entidad.", [], [])
+        return (
+            MergeDisposition.APPLY.value,
+            "No hay cambios locales concurrentes sobre la entidad.",
+            [],
+            [],
+        )
     by_priority = {
         MergeDisposition.CONFLICT: 4,
         MergeDisposition.REVIEW: 3,
@@ -2651,9 +2787,14 @@ def _dry_run_markdown(report: Any) -> str:
             ]
         )
         if row.overlapping_fields:
-            lines.append("- Campos superpuestos: " + ", ".join(f"`{x}`" for x in row.overlapping_fields))
+            lines.append(
+                "- Campos superpuestos: " + ", ".join(f"`{x}`" for x in row.overlapping_fields)
+            )
         if row.local_event_ids:
-            lines.append("- Eventos locales relacionados: " + ", ".join(f"`{x}`" for x in row.local_event_ids))
+            lines.append(
+                "- Eventos locales relacionados: "
+                + ", ".join(f"`{x}`" for x in row.local_event_ids)
+            )
         lines.append("")
     return "\n".join(lines).rstrip() + "\n"
 
@@ -2773,12 +2914,8 @@ def dry_run_change_bundle(
             else None
         )
         if recovered_checkpoint is not None and recovered_checkpoint.workspace_id != workspace.id:
-            raise ValueError(
-                "La decisión de recuperación refiere a un punto de otra copia local"
-            )
-        common_checkpoint_id = (
-            recovered_checkpoint.id if recovered_checkpoint is not None else None
-        )
+            raise ValueError("La decisión de recuperación refiere a un punto de otra copia local")
+        common_checkpoint_id = recovered_checkpoint.id if recovered_checkpoint is not None else None
         common_checkpoint_label = recovered_decision.local_checkpoint_label
         common_checkpoint_sequence = recovered_decision.local_checkpoint_sequence
 
@@ -2800,14 +2937,10 @@ def dry_run_change_bundle(
         )
     force_review_reason: str | None = None
     if manifest.database_revision not in _known_database_revisions():
-        force_review_reason = (
-            f"La revisión de base de origen {manifest.database_revision} no es conocida por esta versión."
-        )
+        force_review_reason = f"La revisión de base de origen {manifest.database_revision} no es conocida por esta versión."
         warnings.append(force_review_reason)
     if common_checkpoint_sequence is None:
-        warnings.append(
-            "No se encontró un punto local verificable para la base del paquete."
-        )
+        warnings.append("No se encontró un punto local verificable para la base del paquete.")
 
     local_events: list[ExchangeChangeEvent] = []
     if common_checkpoint_sequence is not None:
@@ -2845,7 +2978,9 @@ def dry_run_change_bundle(
             if parent_problem:
                 disposition = MergeDisposition.REVIEW.value
                 reason = parent_problem
-            elif (chain_assessment := _assess_prior_incoming_state(incoming, incoming_state)) is not None:
+            elif (
+                chain_assessment := _assess_prior_incoming_state(incoming, incoming_state)
+            ) is not None:
                 disposition, reason, overlaps = chain_assessment
             elif local_candidates:
                 merge_rules = ProjectDecisions.model_validate(project.decisions_json).merge
@@ -2857,7 +2992,9 @@ def dry_run_change_bundle(
                     )
                     for local in local_candidates
                 ]
-                disposition, reason, local_ids, overlaps = _combine_pair_assessments(incoming, pairs)
+                disposition, reason, local_ids, overlaps = _combine_pair_assessments(
+                    incoming, pairs
+                )
                 if disposition == MergeDisposition.APPLY.value:
                     state_disposition, state_reason, state_overlaps = _assess_current_state(
                         session, incoming, incoming_creations
@@ -2893,9 +3030,7 @@ def dry_run_change_bundle(
         overall = "needs_review"
     else:
         overall = "ready_to_apply"
-    base_status = (
-        "matched" if common_checkpoint_sequence is not None else "unmatched"
-    )
+    base_status = "matched" if common_checkpoint_sequence is not None else "unmatched"
     assessed_state_sha256 = current_editable_state_sha256(session, project.id)
     assessed_sequence_number = _current_sequence(session, workspace.id)
 
@@ -2925,7 +3060,8 @@ def dry_run_change_bundle(
     report_json = report_dir / f"{manifest.bundle_id}_dry_run.json"
     report_md = report_dir / f"{manifest.bundle_id}_dry_run.md"
     report_json.write_text(
-        json.dumps(report.model_dump(mode="json"), ensure_ascii=False, indent=2, sort_keys=True) + "\n",
+        json.dumps(report.model_dump(mode="json"), ensure_ascii=False, indent=2, sort_keys=True)
+        + "\n",
         encoding="utf-8",
     )
     report_md.write_text(_dry_run_markdown(report), encoding="utf-8")
@@ -3136,12 +3272,10 @@ def incoming_bundle_diagnostics(
         assessed_sequence_number=dry.assessed_sequence_number,
         current_sequence_number=current_sequence,
         state_changed=(
-            dry.assessed_state_sha256 is None
-            or dry.assessed_state_sha256 != current_state
+            dry.assessed_state_sha256 is None or dry.assessed_state_sha256 != current_state
         ),
         sequence_changed=(
-            dry.assessed_sequence_number is None
-            or dry.assessed_sequence_number != current_sequence
+            dry.assessed_sequence_number is None or dry.assessed_sequence_number != current_sequence
         ),
         local_events_after_assessment=local_events,
     )
@@ -3247,9 +3381,7 @@ def fork_exchange_workspace(
     session.execute(delete(ExchangeChangeEvent))
     session.execute(delete(ExchangeWorkspace))
     session.flush()
-    workspace = ensure_exchange_workspace(
-        session, workspace_name=clean_name, changed_by=created_by
-    )
+    workspace = ensure_exchange_workspace(session, workspace_name=clean_name, changed_by=created_by)
     checkpoint = create_exchange_checkpoint(
         session,
         label=clean_label,
@@ -3326,8 +3458,7 @@ def _dry_run_for_bundle(session: Session, bundle_ref: str):
             )
     if dry is None:
         raise ValueError(
-            "El bundle todavía no tiene un dry-run persistido. "
-            "Ejecutá exchange-dry-run primero."
+            "El bundle todavía no tiene un dry-run persistido. Ejecutá exchange-dry-run primero."
         )
     return dry
 
@@ -3510,9 +3641,7 @@ def conflict_field_rows(session: Session, bundle_ref: str) -> list[ConflictField
         .order_by(ExchangeIncomingEventAssessment.source_sequence_number)
     ).all()
     resolutions = session.scalars(
-        select(ExchangeConflictResolution).where(
-            ExchangeConflictResolution.dry_run_id == dry.id
-        )
+        select(ExchangeConflictResolution).where(ExchangeConflictResolution.dry_run_id == dry.id)
     ).all()
     by_key = {(row.incoming_event_id, row.field_name): row for row in resolutions}
     result: list[ConflictFieldRow] = []
@@ -3585,9 +3714,7 @@ def save_conflict_resolution(
     event = ChangeEvent.model_validate(assessment.incoming_event_json)
     if field_name not in _event_fields_requiring_decision(session, event):
         if field_name in _event_resolvable_fields(event):
-            raise ValueError(
-                f"El campo {field_name} ya coincide entre la copia local y el bundle"
-            )
+            raise ValueError(f"El campo {field_name} ya coincide entre la copia local y el bundle")
         raise ValueError(f"El evento no modifica el campo: {field_name}")
     clean_choice = choice.strip().lower()
     if clean_choice not in {"local", "incoming", "custom"}:
@@ -3781,9 +3908,7 @@ def resolution_status(session: Session, bundle_ref: str) -> ResolutionStatusSumm
         )
     ).all()
     resolutions = session.scalars(
-        select(ExchangeConflictResolution).where(
-            ExchangeConflictResolution.dry_run_id == dry.id
-        )
+        select(ExchangeConflictResolution).where(ExchangeConflictResolution.dry_run_id == dry.id)
     ).all()
     by_event: dict[str, dict[str, ExchangeConflictResolution]] = {}
     for row in resolutions:
@@ -3865,9 +3990,7 @@ def finalize_bundle_resolutions(
     if status.event_count == 0:
         raise ValueError("El bundle no contiene conflictos o eventos revisables")
     if status.overall_status != "ready_to_finalize":
-        raise ValueError(
-            f"Todavía quedan {status.unresolved_field_count} campos sin resolver"
-        )
+        raise ValueError(f"Todavía quedan {status.unresolved_field_count} campos sin resolver")
     assessments = session.scalars(
         select(ExchangeIncomingEventAssessment).where(
             ExchangeIncomingEventAssessment.dry_run_id == dry.id,
@@ -3875,9 +3998,7 @@ def finalize_bundle_resolutions(
         )
     ).all()
     resolutions = session.scalars(
-        select(ExchangeConflictResolution).where(
-            ExchangeConflictResolution.dry_run_id == dry.id
-        )
+        select(ExchangeConflictResolution).where(ExchangeConflictResolution.dry_run_id == dry.id)
     ).all()
     by_key = {(row.incoming_event_id, row.field_name): row for row in resolutions}
     for assessment in assessments:
@@ -3890,8 +4011,7 @@ def finalize_bundle_resolutions(
             if current != row.local_value_json:
                 dry.overall_status = "stale"
                 raise ValueError(
-                    f"El campo {field} del evento {event.event_id} "
-                    "cambió después de la resolución"
+                    f"El campo {field} del evento {event.event_id} cambió después de la resolución"
                 )
     dry.overall_status = "ready_to_apply_resolved"
     session.flush()
@@ -3934,9 +4054,7 @@ def _resolved_event(
         row = by_field[field]
         current = _current_field_value(session, event, field)
         if current != row.local_value_json:
-            raise ValueError(
-                f"La resolución del campo {field} del evento {event.event_id} caducó"
-            )
+            raise ValueError(f"La resolución del campo {field} del evento {event.event_id} caducó")
         if row.resolved_value_json != current:
             changed[field] = [current, row.resolved_value_json]
     if not changed:
@@ -4041,14 +4159,12 @@ def _apply_object_event(
 ) -> None:
     from archive_workbench.editing import _append_revision
 
-    actor = _bundle_actor(
-        event, applied_by=applied_by, source_workspace_name=source_workspace_name
-    )
+    actor = _bundle_actor(event, applied_by=applied_by, source_workspace_name=source_workspace_name)
     remote_operation = _new_value(event.changed_fields, "revision_operation")
     remote_note = _new_value(event.changed_fields, "revision_note")
-    remote_created_at = _coerce_datetime(
-        _new_value(event.changed_fields, "revision_created_at")
-    ) or event.timestamp
+    remote_created_at = (
+        _coerce_datetime(_new_value(event.changed_fields, "revision_created_at")) or event.timestamp
+    )
     obj = session.get(EditableObject, event.entity_id)
     if event.operation.value == "create":
         if obj is not None:
@@ -4097,7 +4213,10 @@ def _apply_object_event(
             )
             session.add(page)
             session.flush()
-        if page.digital_object_id != context["digital_object_id"] or page.page_number != context["page_number"]:
+        if (
+            page.digital_object_id != context["digital_object_id"]
+            or page.page_number != context["page_number"]
+        ):
             raise ValueError("El contexto de página del objeto recibido es inconsistente")
         new_revision = event.new_revision or 1
         if new_revision != 1:
@@ -4108,7 +4227,9 @@ def _apply_object_event(
             digital_object_id=context["digital_object_id"],
             page_number=int(context["page_number"]),
             document_part_id=_new_value(event.changed_fields, "document_part_id"),
-            source_extracted_object_id=_new_value(event.changed_fields, "source_extracted_object_id"),
+            source_extracted_object_id=_new_value(
+                event.changed_fields, "source_extracted_object_id"
+            ),
             source_origin_id=_new_value(event.changed_fields, "source_origin_id"),
             current_text=_new_value(event.changed_fields, "text") or "",
             current_object_type=_new_value(event.changed_fields, "object_type") or "paragraph",
@@ -4130,7 +4251,11 @@ def _apply_object_event(
             obj,
             operation=(remote_operation if isinstance(remote_operation, str) else "create"),
             created_by=actor,
-            note=(remote_note if isinstance(remote_note, str) else f"Aplicado desde evento remoto {event.event_id}"),
+            note=(
+                remote_note
+                if isinstance(remote_note, str)
+                else f"Aplicado desde evento remoto {event.event_id}"
+            ),
             base_revision_number=None,
             created_at=remote_created_at,
         )
@@ -4171,13 +4296,20 @@ def _apply_object_event(
             session,
             obj,
             operation=(
-                remote_operation if isinstance(remote_operation, str) else
-                "delete" if event.operation.value == "delete" else
-                "restore" if event.operation.value == "restore" else
-                "exchange_apply"
+                remote_operation
+                if isinstance(remote_operation, str)
+                else "delete"
+                if event.operation.value == "delete"
+                else "restore"
+                if event.operation.value == "restore"
+                else "exchange_apply"
             ),
             created_by=actor,
-            note=(remote_note if isinstance(remote_note, str) else f"Aplicado desde evento remoto {event.event_id}"),
+            note=(
+                remote_note
+                if isinstance(remote_note, str)
+                else f"Aplicado desde evento remoto {event.event_id}"
+            ),
             base_revision_number=base,
             created_at=remote_created_at,
         )
@@ -4282,9 +4414,7 @@ def _apply_selection_baseline_event(
     assert isinstance(page_number, int)
     assert isinstance(run_id, str)
     assert isinstance(extraction_page_id, str)
-    actor = _bundle_actor(
-        event, applied_by=applied_by, source_workspace_name=source_workspace_name
-    )
+    actor = _bundle_actor(event, applied_by=applied_by, source_workspace_name=source_workspace_name)
     note = _new_value(event.changed_fields, "note")
     if not isinstance(note, str) or not note.strip():
         note = f"Selección OCR aplicada desde el evento remoto {event.event_id}."
@@ -4307,7 +4437,9 @@ def _apply_selection_baseline_event(
         run_pair = _changed_pair(event, "extraction_run_id")
         page_pair = _changed_pair(event, "extraction_page_id")
         if not run_pair or not page_pair or run_pair[0] is not None or page_pair[0] is not None:
-            raise ValueError("La selección OCR recibida no existe localmente y no es una creación válida.")
+            raise ValueError(
+                "La selección OCR recibida no existe localmente y no es una creación válida."
+            )
         selection = ExtractionPageSelection(
             id=event.entity_id,
             digital_object_id=digital_object_id,
@@ -4403,7 +4535,11 @@ def _infer_remote_page_baseline_operation(
         )
         or 0
     )
-    return "candidate_adopted" if active_count and active_source_count == active_count else "manual_keep_edits"
+    return (
+        "candidate_adopted"
+        if active_count and active_source_count == active_count
+        else "manual_keep_edits"
+    )
 
 
 def _apply_editable_page_baseline_event(
@@ -4445,16 +4581,13 @@ def _apply_editable_page_baseline_event(
         )
     )
     if selection is None or (
-        selection.extraction_run_id != run_id
-        or selection.extraction_page_id != extraction_page_id
+        selection.extraction_run_id != run_id or selection.extraction_page_id != extraction_page_id
     ):
         raise ValueError(
             "La base editable recibida no coincide con la selección OCR local. "
             "El evento de selección debe aplicarse antes."
         )
-    actor = _bundle_actor(
-        event, applied_by=applied_by, source_workspace_name=source_workspace_name
-    )
+    actor = _bundle_actor(event, applied_by=applied_by, source_workspace_name=source_workspace_name)
     operation = _new_value(event.changed_fields, "page_operation")
     if operation not in {"candidate_adopted", "manual_keep_edits", "rebase"}:
         operation = _infer_remote_page_baseline_operation(session, page=page, run_id=run_id)
@@ -4506,9 +4639,7 @@ def _apply_page_action_event(
     applied_by: str,
     source_workspace_name: str,
 ) -> None:
-    actor = _bundle_actor(
-        event, applied_by=applied_by, source_workspace_name=source_workspace_name
-    )
+    actor = _bundle_actor(event, applied_by=applied_by, source_workspace_name=source_workspace_name)
     action = session.get(EditablePageAction, event.entity_id)
     datetime_fields = {"created_at", "undone_at", "redone_at"}
     mapping = {
@@ -4675,9 +4806,7 @@ def _coerce_date(value: Any) -> date | None:
     raise ValueError(f"Fecha temporal inválida en evento: {value!r}")
 
 
-def _replace_catalog_fields(
-    session: Session, *, unit_id: str, fields: Any
-) -> None:
+def _replace_catalog_fields(session: Session, *, unit_id: str, fields: Any) -> None:
     if not isinstance(fields, list):
         raise ValueError("Los campos descriptivos recibidos deben formar una lista")
     session.execute(
@@ -4732,18 +4861,30 @@ def _apply_archival_unit_event(
     if event.operation.value == "create":
         if unit is not None:
             raise ValueError(f"La unidad archivística {event.entity_id} ya existe")
-        values = {field: _new_value(event.changed_fields, field) for field in (
-            "parent_id", "level_key", "reference_code", "title",
-            "registration_status", "completion_confirmed",
-            "completion_confirmed_at", "completion_confirmed_by", "fields",
-        )}
+        values = {
+            field: _new_value(event.changed_fields, field)
+            for field in (
+                "parent_id",
+                "level_key",
+                "reference_code",
+                "title",
+                "registration_status",
+                "completion_confirmed",
+                "completion_confirmed_at",
+                "completion_confirmed_by",
+                "fields",
+            )
+        }
         if not isinstance(values["level_key"], str) or not values["level_key"]:
             raise ValueError("La unidad recibida no tiene nivel archivístico")
         if not isinstance(values["title"], str) or not values["title"].strip():
             raise ValueError("La unidad recibida no tiene título")
         _validate_parent(
-            session, decisions, project_id=event.project_id,
-            level_key=values["level_key"], parent_id=values["parent_id"],
+            session,
+            decisions,
+            project_id=event.project_id,
+            level_key=values["level_key"],
+            parent_id=values["parent_id"],
         )
         revision = event.new_revision or 1
         if revision != 1:
@@ -4770,7 +4911,10 @@ def _apply_archival_unit_event(
         _replace_catalog_fields(session, unit_id=unit.id, fields=values["fields"] or [])
         session.flush()
         _append_revision(
-            session, unit, operation="create", changed_by=actor,
+            session,
+            unit,
+            operation="create",
+            changed_by=actor,
             note=f"Aplicado desde evento remoto {event.event_id}",
         )
         return
@@ -4797,8 +4941,12 @@ def _apply_archival_unit_event(
         prospective_level = level_pair[1]
     if parent_pair is not None or level_pair is not None:
         _validate_parent(
-            session, decisions, project_id=unit.project_id,
-            level_key=prospective_level, parent_id=prospective_parent, moving_unit_id=unit.id,
+            session,
+            decisions,
+            project_id=unit.project_id,
+            level_key=prospective_level,
+            parent_id=prospective_parent,
+            moving_unit_id=unit.id,
         )
     changed = False
     for field, attribute in scalar_fields.items():
@@ -4810,7 +4958,12 @@ def _apply_archival_unit_event(
         changed = True
     date_pair = _changed_pair(event, "completion_confirmed_at")
     if date_pair is not None:
-        _assert_expected(current["completion_confirmed_at"], date_pair[0], event=event, field="completion_confirmed_at")
+        _assert_expected(
+            current["completion_confirmed_at"],
+            date_pair[0],
+            event=event,
+            field="completion_confirmed_at",
+        )
         unit.completion_confirmed_at = _coerce_datetime(date_pair[1])
         changed = True
     fields_pair = _changed_pair(event, "fields")
@@ -4825,7 +4978,10 @@ def _apply_archival_unit_event(
     unit.updated_at = utc_now()
     session.flush()
     _append_revision(
-        session, unit, operation="exchange_apply", changed_by=actor,
+        session,
+        unit,
+        operation="exchange_apply",
+        changed_by=actor,
         note=f"Aplicado desde evento remoto {event.event_id}",
     )
 
@@ -4850,12 +5006,16 @@ def _apply_digital_link_event(
             relation_type = (_changed_pair(event, "relation_type") or ("represents", None))[0]
             page_start = (_changed_pair(event, "page_start") or (None, None))[0]
             page_end = (_changed_pair(event, "page_end") or (None, None))[0]
-            digital = session.scalar(
-                select(DigitalObject).where(
-                    DigitalObject.project_id == event.project_id,
-                    DigitalObject.sha256 == old_sha,
+            digital = (
+                session.scalar(
+                    select(DigitalObject).where(
+                        DigitalObject.project_id == event.project_id,
+                        DigitalObject.sha256 == old_sha,
+                    )
                 )
-            ) if isinstance(old_sha, str) else None
+                if isinstance(old_sha, str)
+                else None
+            )
             if digital is not None and isinstance(old_unit, str):
                 link = session.scalar(
                     select(DigitalObjectUnitLink).where(
@@ -4863,9 +5023,11 @@ def _apply_digital_link_event(
                         DigitalObjectUnitLink.archival_unit_id == old_unit,
                         DigitalObjectUnitLink.relation_type == relation_type,
                         DigitalObjectUnitLink.page_start.is_(None)
-                        if page_start is None else DigitalObjectUnitLink.page_start == page_start,
+                        if page_start is None
+                        else DigitalObjectUnitLink.page_start == page_start,
                         DigitalObjectUnitLink.page_end.is_(None)
-                        if page_end is None else DigitalObjectUnitLink.page_end == page_end,
+                        if page_end is None
+                        else DigitalObjectUnitLink.page_end == page_end,
                     )
                 )
         if link is None:
@@ -4889,11 +5051,21 @@ def _apply_digital_link_event(
     unit = session.get(ArchivalUnit, unit_id)
     if unit is None or unit.project_id != event.project_id:
         raise ValueError("La unidad del vínculo digital no existe")
-    values = {field: _new_value(event.changed_fields, field) for field in (
-        "digital_object_id", "relation_type", "page_start", "page_end",
-        "digital_project_id", "media_type", "original_filename", "sha256",
-        "byte_size", "page_count",
-    )}
+    values = {
+        field: _new_value(event.changed_fields, field)
+        for field in (
+            "digital_object_id",
+            "relation_type",
+            "page_start",
+            "page_end",
+            "digital_project_id",
+            "media_type",
+            "original_filename",
+            "sha256",
+            "byte_size",
+            "page_count",
+        )
+    }
     if values["digital_project_id"] != event.project_id:
         raise ValueError("Los metadatos digitales pertenecen a otro proyecto")
     if not isinstance(values["sha256"], str) or len(values["sha256"]) != 64:
@@ -4933,8 +5105,12 @@ def _apply_digital_link_event(
                 raise ValueError(f"El objeto digital existente difiere en {field}")
     actor = f"{applied_by} [bundle de {source_workspace_name}]"
     _ensure_catalog_source_registration(
-        session, project_id=event.project_id, unit=unit, digital=digital,
-        registered_by=actor, relative_path=None,
+        session,
+        project_id=event.project_id,
+        unit=unit,
+        digital=digital,
+        registered_by=actor,
+        relative_path=None,
     )
     link = DigitalObjectUnitLink(
         id=event.entity_id,
@@ -4946,7 +5122,6 @@ def _apply_digital_link_event(
     )
     session.add(link)
     session.flush()
-
 
 
 def _replace_authority_aliases(
@@ -5005,10 +5180,20 @@ def _apply_authority_event(
     actor = f"{applied_by} [bundle de {source_workspace_name}]"
     authority = session.get(AuthorityRecord, event.entity_id)
     fields = (
-        "entity_type", "preferred_name", "normalized_name", "description",
-        "temporal_expression", "temporal_start", "temporal_end",
-        "temporal_precision", "temporal_approximate", "temporal_note", "profile_json",
-        "lifecycle_status", "review_status", "aliases",
+        "entity_type",
+        "preferred_name",
+        "normalized_name",
+        "description",
+        "temporal_expression",
+        "temporal_start",
+        "temporal_end",
+        "temporal_precision",
+        "temporal_approximate",
+        "temporal_note",
+        "profile_json",
+        "lifecycle_status",
+        "review_status",
+        "aliases",
     )
     if event.operation.value == "create":
         if authority is not None:
@@ -5094,7 +5279,9 @@ def _apply_authority_event(
         if pair is None:
             continue
         _assert_expected(current[field], pair[0], event=event, field=field)
-        incoming_value = _coerce_date(pair[1]) if field in {"temporal_start", "temporal_end"} else pair[1]
+        incoming_value = (
+            _coerce_date(pair[1]) if field in {"temporal_start", "temporal_end"} else pair[1]
+        )
         prospective[field] = incoming_value
         setattr(authority, attribute, incoming_value)
         changed = True
@@ -5178,9 +5365,17 @@ def _apply_entity_mention_event(
     actor = f"{applied_by} [bundle de {source_workspace_name}]"
     mention = session.get(EntityMention, event.entity_id)
     fields = (
-        "editable_object_id", "authority_id", "mention_text", "normalized_text",
-        "start_offset", "end_offset", "object_revision_number", "status", "source",
-        "confidence", "note",
+        "editable_object_id",
+        "authority_id",
+        "mention_text",
+        "normalized_text",
+        "start_offset",
+        "end_offset",
+        "object_revision_number",
+        "status",
+        "source",
+        "confidence",
+        "note",
     )
     if event.operation.value == "create":
         if mention is not None:
@@ -5204,9 +5399,7 @@ def _apply_entity_mention_event(
                 raise ValueError("Los offsets de la mención están fuera del texto")
         if values["status"] not in MENTION_STATUSES:
             raise ValueError("El estado de mención recibido es inválido")
-        _validate_mention_link(
-            status=values["status"], authority_id=values["authority_id"]
-        )
+        _validate_mention_link(status=values["status"], authority_id=values["authority_id"])
         if values["source"] not in MENTION_SOURCES:
             raise ValueError("El origen de mención recibido es inválido")
         if values["status"] != "rejected" and start is not None and end is not None:
@@ -5290,9 +5483,7 @@ def _apply_entity_mention_event(
     )
     if prospective["status"] not in MENTION_STATUSES:
         raise ValueError("El estado de mención recibido es inválido")
-    _validate_mention_link(
-        status=prospective["status"], authority_id=prospective["authority_id"]
-    )
+    _validate_mention_link(status=prospective["status"], authority_id=prospective["authority_id"])
     if prospective["source"] not in MENTION_SOURCES:
         raise ValueError("El origen de mención recibido es inválido")
     clean_text = str(prospective["mention_text"] or "")
@@ -5318,9 +5509,7 @@ def _apply_entity_mention_event(
             exclude_mention_id=mention.id,
         )
         if duplicate is not None:
-            raise ValueError(
-                "El bundle produciría dos menciones activas sobre el mismo fragmento"
-            )
+            raise ValueError("El bundle produciría dos menciones activas sobre el mismo fragmento")
     mention.revision += 1
     mention.updated_by = actor
     mention.updated_at = utc_now()
@@ -5332,6 +5521,7 @@ def _apply_entity_mention_event(
         changed_by=actor,
         note=f"Aplicado desde evento remoto {event.event_id}",
     )
+
 
 def _apply_entity_relation_event(
     session: Session,
@@ -5351,11 +5541,23 @@ def _apply_entity_relation_event(
     actor = f"{applied_by} [bundle de {source_workspace_name}]"
     relation = session.get(EntityRelation, event.entity_id)
     fields = (
-        "source_authority_id", "relation_kind", "relation_label", "target_authority_id",
-        "target_archival_unit_id", "target_document_part_id", "evidence_note",
-        "provenance_note", "temporal_expression", "temporal_start", "temporal_end",
-        "temporal_precision", "temporal_approximate", "temporal_note", "profile_json",
-        "lifecycle_status", "review_status",
+        "source_authority_id",
+        "relation_kind",
+        "relation_label",
+        "target_authority_id",
+        "target_archival_unit_id",
+        "target_document_part_id",
+        "evidence_note",
+        "provenance_note",
+        "temporal_expression",
+        "temporal_start",
+        "temporal_end",
+        "temporal_precision",
+        "temporal_approximate",
+        "temporal_note",
+        "profile_json",
+        "lifecycle_status",
+        "review_status",
     )
     if event.operation.value == "create":
         if relation is not None:
@@ -5420,7 +5622,10 @@ def _apply_entity_relation_event(
         session.add(relation)
         session.flush()
         _append_relation_revision(
-            session, relation, operation="create", changed_by=actor,
+            session,
+            relation,
+            operation="create",
+            changed_by=actor,
             note=f"Aplicado desde evento remoto {event.event_id}",
         )
         return
@@ -5435,7 +5640,9 @@ def _apply_entity_relation_event(
         if pair is None:
             continue
         _assert_expected(current[field], pair[0], event=event, field=field)
-        incoming_value = _coerce_date(pair[1]) if field in {"temporal_start", "temporal_end"} else pair[1]
+        incoming_value = (
+            _coerce_date(pair[1]) if field in {"temporal_start", "temporal_end"} else pair[1]
+        )
         prospective[field] = incoming_value
         setattr(relation, field, incoming_value)
         changed = True
@@ -5479,7 +5686,10 @@ def _apply_entity_relation_event(
     relation.updated_at = utc_now()
     session.flush()
     _append_relation_revision(
-        session, relation, operation="exchange_apply", changed_by=actor,
+        session,
+        relation,
+        operation="exchange_apply",
+        changed_by=actor,
         note=f"Aplicado desde evento remoto {event.event_id}",
     )
 
@@ -5505,9 +5715,21 @@ def _apply_work_assignment_event(
     actor = f"{applied_by} [bundle de {source_workspace_name}]"
     assignment = session.get(WorkAssignment, event.entity_id)
     fields = (
-        "project_id", "source_type", "source_key", "page_start", "page_end",
-        "assignment_kind", "assignee", "status", "priority", "due_at",
-        "parent_assignment_id", "outcome", "note", "submitted_at", "completed_at",
+        "project_id",
+        "source_type",
+        "source_key",
+        "page_start",
+        "page_end",
+        "assignment_kind",
+        "assignee",
+        "status",
+        "priority",
+        "due_at",
+        "parent_assignment_id",
+        "outcome",
+        "note",
+        "submitted_at",
+        "completed_at",
     )
     if event.operation.value == "create":
         if assignment is not None:
@@ -5549,7 +5771,11 @@ def _apply_work_assignment_event(
         )
         if values["assignment_kind"] != "cross_review" and values["outcome"] is not None:
             raise ValueError("Solo una revisión cruzada puede registrar resultado")
-        if values["assignment_kind"] == "cross_review" and values["status"] == "completed" and values["outcome"] is None:
+        if (
+            values["assignment_kind"] == "cross_review"
+            and values["status"] == "completed"
+            and values["outcome"] is None
+        ):
             raise ValueError("La revisión cruzada completada no tiene resultado")
         assignment = WorkAssignment(
             id=event.entity_id,
@@ -5577,7 +5803,10 @@ def _apply_work_assignment_event(
         session.add(assignment)
         session.flush()
         _append_assignment_revision(
-            session, assignment, operation="create", changed_by=actor,
+            session,
+            assignment,
+            operation="create",
+            changed_by=actor,
             note=f"Aplicado desde evento remoto {event.event_id}",
         )
         return
@@ -5634,7 +5863,11 @@ def _apply_work_assignment_event(
     )
     if prospective["assignment_kind"] != "cross_review" and prospective["outcome"] is not None:
         raise ValueError("Solo una revisión cruzada puede registrar resultado")
-    if prospective["assignment_kind"] == "cross_review" and prospective["status"] == "completed" and prospective["outcome"] is None:
+    if (
+        prospective["assignment_kind"] == "cross_review"
+        and prospective["status"] == "completed"
+        and prospective["outcome"] is None
+    ):
         raise ValueError("La revisión cruzada completada no tiene resultado")
     assignment.source_type = str(prospective["source_type"])
     assignment.source_key = str(prospective["source_key"])
@@ -5655,10 +5888,12 @@ def _apply_work_assignment_event(
     assignment.updated_at = utc_now()
     session.flush()
     _append_assignment_revision(
-        session, assignment, operation="exchange_apply", changed_by=actor,
+        session,
+        assignment,
+        operation="exchange_apply",
+        changed_by=actor,
         note=f"Aplicado desde evento remoto {event.event_id}",
     )
-
 
 
 def _apply_incoming_event(
@@ -5776,9 +6011,7 @@ def apply_change_bundle(
         ExchangeIncomingEventAssessment,
     )
 
-    dry = session.scalar(
-        select(ExchangeDryRun).where(ExchangeDryRun.bundle_id == bundle_ref)
-    )
+    dry = session.scalar(select(ExchangeDryRun).where(ExchangeDryRun.bundle_id == bundle_ref))
     if dry is None:
         candidate = Path(bundle_ref).expanduser()
         if candidate.is_file():
@@ -5802,9 +6035,7 @@ def apply_change_bundle(
     if existing is not None:
         raise ValueError(f"El bundle {dry.bundle_id} ya fue aplicado")
     if dry.overall_status not in {"ready_to_apply", "ready_to_apply_resolved"}:
-        raise ValueError(
-            f"El bundle no puede aplicarse: estado dry-run {dry.overall_status}"
-        )
+        raise ValueError(f"El bundle no puede aplicarse: estado dry-run {dry.overall_status}")
     workspace = ensure_exchange_workspace(session, changed_by=applied_by)
     project = _project(session)
     if dry.assessed_state_sha256 is None or dry.assessed_sequence_number is None:
@@ -5845,7 +6076,9 @@ def apply_change_bundle(
         raise ValueError("Los eventos del bundle ya no coinciden con la evaluación persistida")
     for row in assessments:
         persisted = ChangeEvent.model_validate(row.incoming_event_json)
-        if persisted.model_dump(mode="json", exclude_none=True) != by_id[row.incoming_event_id].model_dump(mode="json", exclude_none=True):
+        if persisted.model_dump(mode="json", exclude_none=True) != by_id[
+            row.incoming_event_id
+        ].model_dump(mode="json", exclude_none=True):
             raise ValueError(
                 f"El evento {row.incoming_event_id} cambió semánticamente desde el dry-run"
             )

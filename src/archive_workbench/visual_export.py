@@ -73,8 +73,7 @@ def _verified_source_asset(project_root: Path, asset: DerivativeAsset) -> Path:
     digest = _sha256_path(path)
     if digest != asset.sha256:
         raise ValueError(
-            "El derivado de página fue modificado después de registrarse: "
-            f"{asset.relative_path}"
+            f"El derivado de página fue modificado después de registrarse: {asset.relative_path}"
         )
     if path.stat().st_size != asset.byte_size:
         raise ValueError(
@@ -102,7 +101,9 @@ def _jsonl_bytes(rows: Iterable[dict[str, Any]]) -> bytes:
     return (("\n".join(lines) + "\n") if lines else "").encode("utf-8")
 
 
-def _record_map(records: list[dict[str, Any]]) -> tuple[dict[str, list[str]], dict[tuple[str, int], list[str]]]:
+def _record_map(
+    records: list[dict[str, Any]],
+) -> tuple[dict[str, list[str]], dict[tuple[str, int], list[str]]]:
     by_object: dict[str, list[str]] = {}
     for record in records:
         record_id = str(record["record_id"])
@@ -111,7 +112,9 @@ def _record_map(records: list[dict[str, Any]]) -> tuple[dict[str, list[str]], di
     return by_object, {}
 
 
-def _source_registrations(session: Session, *, project_id: str, digital_ids: set[str]) -> dict[str, SourceRegistration]:
+def _source_registrations(
+    session: Session, *, project_id: str, digital_ids: set[str]
+) -> dict[str, SourceRegistration]:
     if not digital_ids:
         return {}
     rows = session.scalars(
@@ -129,7 +132,9 @@ def _source_registrations(session: Session, *, project_id: str, digital_ids: set
     return result
 
 
-def _geometry_bbox(geometry: list[dict[str, Any]], *, page: int, width: int, height: int) -> tuple[int, int, int, int]:
+def _geometry_bbox(
+    geometry: list[dict[str, Any]], *, page: int, width: int, height: int
+) -> tuple[int, int, int, int]:
     points: list[tuple[float, float]] = []
     for item in geometry or []:
         if item.get("page") not in (None, page):
@@ -204,7 +209,9 @@ def build_text_image_package(
     registrations = _source_registrations(session, project_id=project_id, digital_ids=digital_ids)
     digitals = {
         row.id: row
-        for row in session.scalars(select(DigitalObject).where(DigitalObject.id.in_(digital_ids))).all()
+        for row in session.scalars(
+            select(DigitalObject).where(DigitalObject.id.in_(digital_ids))
+        ).all()
     }
 
     editable_pages = session.scalars(
@@ -257,7 +264,9 @@ def build_text_image_package(
         all_context_rows = session.execute(
             select(EditableObject, EditablePage, ExtractedObject, DocumentPart)
             .join(EditablePage, EditablePage.id == EditableObject.editable_page_id)
-            .outerjoin(ExtractedObject, ExtractedObject.id == EditableObject.source_extracted_object_id)
+            .outerjoin(
+                ExtractedObject, ExtractedObject.id == EditableObject.source_extracted_object_id
+            )
             .outerjoin(DocumentPart, DocumentPart.id == EditableObject.document_part_id)
             .where(
                 EditableObject.digital_object_id.in_(digital_ids),
@@ -312,9 +321,13 @@ def build_text_image_package(
                 {
                     "page_context_id": context_id,
                     "digital_object_id": digital_id,
-                    "source_key": registrations[digital_id].source_key if digital_id in registrations else None,
+                    "source_key": registrations[digital_id].source_key
+                    if digital_id in registrations
+                    else None,
                     "page_number": page_number,
-                    "page_review_status": page_by_key[key].review_status if key in page_by_key else None,
+                    "page_review_status": page_by_key[key].review_status
+                    if key in page_by_key
+                    else None,
                     "object_ids": [item["object_id"] for item in members],
                     "primary_object_ids": [
                         item["object_id"] for item in members if item["included_in_primary_export"]
@@ -393,13 +406,19 @@ def build_text_image_package(
                 "source_asset_id": source_asset.id,
                 "source_asset_sha256": source_asset.sha256,
                 "source_asset_relative_path": source_asset.relative_path,
-                "primary_record_ids": sorted(primary_records_by_page.get((digital_id, page_number), set())),
+                "primary_record_ids": sorted(
+                    primary_records_by_page.get((digital_id, page_number), set())
+                ),
                 "page_context_id": context_ids_by_page.get((digital_id, page_number)),
                 "document_context_id": document_context_ids.get(digital_id),
             }
 
             if options.include_pages:
-                relative = Path("images") / "pages" / f"{digital_id}_p{page_number:04d}{_extension(source_path, source_asset.mime_type)}"
+                relative = (
+                    Path("images")
+                    / "pages"
+                    / f"{digital_id}_p{page_number:04d}{_extension(source_path, source_asset.mime_type)}"
+                )
                 target = temp_root / relative
                 shutil.copy2(source_path, target)
                 visual_assets.append(
@@ -421,22 +440,29 @@ def build_text_image_package(
                 regions = session.scalars(
                     select(ExtractionRegion)
                     .where(
-                        ExtractionRegion.extraction_run_id == editable_page.source_extraction_run_id,
+                        ExtractionRegion.extraction_run_id
+                        == editable_page.source_extraction_run_id,
                         ExtractionRegion.page_number == page_number,
                     )
                     .order_by(ExtractionRegion.reading_order, ExtractionRegion.region_key)
                 ).all()
                 for region in regions:
                     crop_source = _safe_project_file(project_root, region.crop_path)
-                    relative = Path("images") / "regions" / (
-                    f"{_safe_component(digital_id)}_p{page_number:04d}_"
-                    f"{_safe_component(region.region_key)}{_extension(crop_source)}"
-                )
+                    relative = (
+                        Path("images")
+                        / "regions"
+                        / (
+                            f"{_safe_component(digital_id)}_p{page_number:04d}_"
+                            f"{_safe_component(region.region_key)}{_extension(crop_source)}"
+                        )
+                    )
                     target = temp_root / relative
                     shutil.copy2(crop_source, target)
                     with Image.open(target) as image:
                         width, height = image.size
-                        mime_type = Image.MIME.get(image.format) or mimetypes.guess_type(target.name)[0]
+                        mime_type = (
+                            Image.MIME.get(image.format) or mimetypes.guess_type(target.name)[0]
+                        )
                     visual_assets.append(
                         {
                             "asset_id": f"region:{region.id}",
@@ -486,7 +512,11 @@ def build_text_image_package(
                                 height=height,
                             )
                             crop = source_image.crop(bbox)
-                            relative = Path("images") / "figures" / f"{digital_id}_p{page_number:04d}_{figure.id}.png"
+                            relative = (
+                                Path("images")
+                                / "figures"
+                                / f"{digital_id}_p{page_number:04d}_{figure.id}.png"
+                            )
                             target = temp_root / relative
                             crop.save(target, format="PNG")
                             visual_assets.append(

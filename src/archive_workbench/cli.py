@@ -95,7 +95,6 @@ from archive_workbench.editing import (
 )
 from archive_workbench.extraction import (
     extract_documents_preferred,
-    extraction_doctor,
     extraction_history_rows,
     extraction_status_rows,
     selected_extraction_status_rows,
@@ -144,7 +143,6 @@ from archive_workbench.preprocessing import (
     profile_for_preprocessing,
 )
 from archive_workbench.work import (
-    ASSIGNMENT_KINDS,
     ASSIGNMENT_PRIORITIES,
     ASSIGNMENT_STATUSES,
     CROSS_REVIEW_OUTCOMES,
@@ -467,9 +465,7 @@ def catalog_tree_command(
     if level is not None and level not in {item.key for item in decisions.archival_levels}:
         raise typer.BadParameter(f"Nivel desconocido: {level}")
     if status is not None and status not in REGISTRATION_STATUSES:
-        raise typer.BadParameter(
-            "Estado inválido; use " + ", ".join(REGISTRATION_STATUSES)
-        )
+        raise typer.BadParameter("Estado inválido; use " + ", ".join(REGISTRATION_STATUSES))
     _require_current_database(project_root)
     engine = create_sqlite_engine(database_path(project_root))
     try:
@@ -558,7 +554,9 @@ def catalog_template_validate_command(
     payload = report.as_dict()
     if output is not None:
         output.parent.mkdir(parents=True, exist_ok=True)
-        output.write_text(json.dumps(payload, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
+        output.write_text(
+            json.dumps(payload, ensure_ascii=False, indent=2) + "\n", encoding="utf-8"
+        )
         typer.echo(f"Informe: {output}")
     typer.echo(
         f"Filas {len(report.rows)} | crear {report.create_count} | "
@@ -584,9 +582,7 @@ def catalog_template_import_command(
     apply: bool = typer.Option(
         False, "--apply", help="Aplica los cambios después de una simulación válida"
     ),
-    confirm: str = typer.Option(
-        "", "--confirm", help="Para aplicar, escriba exactamente IMPORTAR"
-    ),
+    confirm: str = typer.Option("", "--confirm", help="Para aplicar, escriba exactamente IMPORTAR"),
     changed_by: str = typer.Option("local_user", "--changed-by"),
 ) -> None:
     """Valida una plantilla y, con doble confirmación, la aplica transaccionalmente."""
@@ -610,17 +606,13 @@ def catalog_template_import_command(
             if not report.valid:
                 for issue in report.issues:
                     if issue.severity == "error":
-                        typer.echo(
-                            f"ERROR: {issue.sheet} fila {issue.row or '-'}: {issue.message}"
-                        )
+                        typer.echo(f"ERROR: {issue.sheet} fila {issue.row or '-'}: {issue.message}")
                 raise typer.Exit(code=1)
             if not apply:
                 typer.echo("OK: simulación válida; no se aplicaron cambios")
                 return
             if confirm != "IMPORTAR":
-                raise typer.BadParameter(
-                    "Para aplicar la plantilla use --apply --confirm IMPORTAR"
-                )
+                raise typer.BadParameter("Para aplicar la plantilla use --apply --confirm IMPORTAR")
             result = apply_catalog_template(
                 session,
                 decisions=decisions,
@@ -651,9 +643,7 @@ def catalog_register_file_command(
 ) -> None:
     """Registra un archivo local por SHA-256 y lo vincula con una unidad."""
     if relation_type not in RELATION_TYPES:
-        raise typer.BadParameter(
-            "Relación inválida; use " + ", ".join(RELATION_TYPES)
-        )
+        raise typer.BadParameter("Relación inválida; use " + ", ".join(RELATION_TYPES))
     decisions = load_decisions(project_root / "config" / "decisions.yaml")
     _require_current_database(project_root)
     engine = create_sqlite_engine(database_path(project_root))
@@ -708,7 +698,9 @@ def prepare_derivatives_command(
     source_key: list[str] | None = typer.Option(
         None, "--source-key", help="Procesa solo uno o más identificadores del corpus"
     ),
-    force: bool = typer.Option(False, help="Genera una nueva corrida aunque exista una equivalente"),
+    force: bool = typer.Option(
+        False, help="Genera una nueva corrida aunque exista una equivalente"
+    ),
     ocr_treatment: str = typer.Option(
         "original",
         "--ocr-treatment",
@@ -720,16 +712,13 @@ def prepare_derivatives_command(
     geometry_mode: str = typer.Option(
         "none",
         "--geometry-mode",
-        help=(
-            "Corrección geométrica: none, conservative o conservative_dewarp"
-        ),
+        help=("Corrección geométrica: none, conservative o conservative_dewarp"),
     ),
 ) -> None:
     """Genera PNG para OCR y previsualizaciones WebP/JPEG/PNG por página."""
     if ocr_treatment not in OCR_TREATMENT_LABELS:
         raise typer.BadParameter(
-            "--ocr-treatment debe ser uno de: "
-            + ", ".join(OCR_TREATMENT_LABELS)
+            "--ocr-treatment debe ser uno de: " + ", ".join(OCR_TREATMENT_LABELS)
         )
     if geometry_mode not in GEOMETRY_MODE_LABELS:
         raise typer.BadParameter(
@@ -741,9 +730,7 @@ def prepare_derivatives_command(
     engine = create_sqlite_engine(database_path(project_root))
     try:
         with session_scope(engine) as session:
-            profile = profile_for_preprocessing(
-                decisions, ocr_treatment, geometry_mode
-            )
+            profile = profile_for_preprocessing(decisions, ocr_treatment, geometry_mode)
             summary = prepare_derivatives(
                 session,
                 project_root=project_root,
@@ -882,7 +869,9 @@ def extract_command(
         for check in resolution.effective_report.checks:
             if check.required and not check.ok:
                 typer.echo(f"ERROR {check.name}: {check.detail}")
-        raise typer.BadParameter("El entorno de extracción no está listo; ejecute extraction-doctor")
+        raise typer.BadParameter(
+            "El entorno de extracción no está listo; ejecute extraction-doctor"
+        )
     if resolution.fallback_used:
         typer.echo(
             "INFO: el backend preferido no está disponible; se usará "
@@ -969,7 +958,9 @@ def ocr_benchmark_command(
         engine.dispose()
     typer.echo(f"OK: benchmark {summary.benchmark_id} — {len(summary.candidates)} candidatos")
     for candidate in summary.candidates[:10]:
-        confidence = "-" if candidate.mean_confidence is None else f"{candidate.mean_confidence:.1f}"
+        confidence = (
+            "-" if candidate.mean_confidence is None else f"{candidate.mean_confidence:.1f}"
+        )
         typer.echo(
             f"{candidate.candidate_id} | score {candidate.heuristic_score:.3f} | "
             f"conf {confidence} | palabras {candidate.word_count} | "
@@ -1052,9 +1043,7 @@ def ocr_benchmark_truth_command(
 def page_quality_assess_command(
     project_root: Path = typer.Argument(..., help="Raíz del proyecto operativo"),
     source_key: str = typer.Argument(..., help="Identificador del documento"),
-    page: list[int] | None = typer.Option(
-        None, "--page", help="Página concreta; puede repetirse"
-    ),
+    page: list[int] | None = typer.Option(None, "--page", help="Página concreta; puede repetirse"),
     run_id: str | None = typer.Option(
         None, "--run-id", help="Corrida a evaluar; por defecto usa la selección canónica"
     ),
@@ -1112,9 +1101,7 @@ def review_extraction_command(
             )
     finally:
         engine.dispose()
-    typer.echo(
-        f"OK: extracción {run.id} de {source_key} marcada como {run.quality_status}"
-    )
+    typer.echo(f"OK: extracción {run.id} de {source_key} marcada como {run.quality_status}")
 
 
 @app.command("extraction-history")
@@ -1165,9 +1152,7 @@ def select_extraction_command(
             )
     finally:
         engine.dispose()
-    typer.echo(
-        f"OK: {changed} página(s) seleccionadas desde {run.profile_key or run.id}"
-    )
+    typer.echo(f"OK: {changed} página(s) seleccionadas desde {run.profile_key or run.id}")
 
 
 @app.command("restore-profile-pages")
@@ -1251,7 +1236,6 @@ def extraction_status_command(
     typer.echo(f"Total: {len(rows)} documentos")
 
 
-
 @app.command("create-document-plan")
 def create_document_plan_command(
     project_root: Path = typer.Argument(..., help="Raíz del proyecto operativo"),
@@ -1273,9 +1257,7 @@ def create_document_plan_command(
             )
     finally:
         engine.dispose()
-    destination = output or (
-        project_root / "config" / "document_plans" / f"{source_key}.yaml"
-    )
+    destination = output or (project_root / "config" / "document_plans" / f"{source_key}.yaml")
     write_document_plan(destination, plan)
     typer.echo(
         f"OK: plan draft {plan.plan_key} — {plan.expected_page_count} páginas; "
@@ -1457,6 +1439,7 @@ def document_plan_status_command(
         )
     typer.echo(f"Total: {len(rows)} documentos")
 
+
 @app.command("document-parts")
 def document_parts_command(
     project_root: Path = typer.Argument(..., help="Raíz del proyecto operativo"),
@@ -1512,9 +1495,7 @@ def render_regions_command(
     engine = create_sqlite_engine(database_path(project_root))
     try:
         with session_scope(engine) as session:
-            results = render_region_template(
-                session, project_root=project_root, template=template
-            )
+            results = render_region_template(session, project_root=project_root, template=template)
     finally:
         engine.dispose()
     for result in results:
@@ -1676,9 +1657,7 @@ def _resolve_text_input(text: str | None, text_file: Path | None) -> str | None:
         raise typer.BadParameter("Use --text o --text-file, no ambos")
     if text_file is not None:
         if not text_file.exists():
-            raise typer.BadParameter(
-                f"El archivo indicado en --text-file no existe: {text_file}"
-            )
+            raise typer.BadParameter(f"El archivo indicado en --text-file no existe: {text_file}")
         if not text_file.is_file():
             raise typer.BadParameter(
                 f"La ruta indicada en --text-file no es un archivo: {text_file}"
@@ -1690,9 +1669,7 @@ def _resolve_text_input(text: str | None, text_file: Path | None) -> str | None:
                 f"El archivo de texto no está codificado como UTF-8: {text_file}"
             ) from exc
         except OSError as exc:
-            raise typer.BadParameter(
-                f"No se pudo leer --text-file {text_file}: {exc}"
-            ) from exc
+            raise typer.BadParameter(f"No se pudo leer --text-file {text_file}: {exc}") from exc
     return text
 
 
@@ -1960,12 +1937,16 @@ def search_editable_command(
     page_status: list[str] | None = typer.Option(None, "--page-status"),
     document_part: list[str] | None = typer.Option(None, "--document-part"),
     tag_kind: list[str] | None = typer.Option(None, "--tag-kind"),
-    temporal_start: str | None = typer.Option(None, "--temporal-start", help="Inicio ISO YYYY-MM-DD"),
+    temporal_start: str | None = typer.Option(
+        None, "--temporal-start", help="Inicio ISO YYYY-MM-DD"
+    ),
     temporal_end: str | None = typer.Option(None, "--temporal-end", help="Final ISO YYYY-MM-DD"),
     temporal_include_undated: bool = typer.Option(False, "--temporal-include-undated"),
     include_deleted: bool = typer.Option(False, "--include-deleted"),
     partial_words: bool = typer.Option(
-        False, "--partial-words", help="Permite coincidencias dentro de palabras; mínimo 3 caracteres"
+        False,
+        "--partial-words",
+        help="Permite coincidencias dentro de palabras; mínimo 3 caracteres",
     ),
     limit: int = typer.Option(50, "--limit", min=1, max=500),
 ) -> None:
@@ -2085,9 +2066,7 @@ def exchange_checkpoint_command(
     engine = create_sqlite_engine(database_path(project_root))
     try:
         with session_scope(engine) as session:
-            row = create_exchange_checkpoint(
-                session, label=label, created_by=created_by, note=note
-            )
+            row = create_exchange_checkpoint(session, label=label, created_by=created_by, note=note)
     except ValueError as exc:
         raise typer.BadParameter(str(exc)) from exc
     finally:
@@ -2125,7 +2104,9 @@ def exchange_checkpoints_command(
 @app.command("exchange-export-bundle")
 def exchange_export_bundle_command(
     project_root: Path = typer.Argument(..., help="Raíz del proyecto operativo"),
-    since: str | None = typer.Option(None, "--since", help="ID o etiqueta del checkpoint; por defecto el último"),
+    since: str | None = typer.Option(
+        None, "--since", help="ID o etiqueta del checkpoint; por defecto el último"
+    ),
     created_by: str = typer.Option("local_user", "--created-by"),
     destination: Path | None = typer.Option(None, "--destination"),
 ) -> None:
@@ -2149,14 +2130,10 @@ def exchange_export_bundle_command(
         range_text = f"secuencias {summary.base_sequence + 1}-{summary.last_sequence}"
     else:
         range_text = f"sin eventos nuevos; secuencia {summary.last_sequence}"
-    typer.echo(
-        f"OK: bundle {summary.bundle_id} | eventos {summary.event_count} | {range_text}"
-    )
+    typer.echo(f"OK: bundle {summary.bundle_id} | eventos {summary.event_count} | {range_text}")
     typer.echo(f"Archivo: {summary.output_path}")
     typer.echo(f"SHA-256: {summary.bundle_sha256}")
-    typer.echo(
-        f"Nuevo checkpoint: {summary.next_checkpoint_label} | {summary.next_checkpoint_id}"
-    )
+    typer.echo(f"Nuevo checkpoint: {summary.next_checkpoint_label} | {summary.next_checkpoint_id}")
 
 
 @app.command("exchange-inspect-bundle")
@@ -2231,9 +2208,7 @@ def exchange_lineage_diagnose_command(
         f"{len(report.recovery_candidates)} | contradicciones: {report.contradiction_count}"
     )
     for finding in report.findings:
-        typer.echo(
-            f"- {finding.strength} | {finding.code} | {finding.artifact_reference}"
-        )
+        typer.echo(f"- {finding.strength} | {finding.code} | {finding.artifact_reference}")
         typer.echo(f"    {finding.explanation}")
     if report.recovery_candidates:
         typer.echo("Cadenas concluyentes:")
@@ -2285,17 +2260,13 @@ def exchange_lineage_recover_command(
     finally:
         engine.dispose()
 
-    typer.echo(
-        f"OK: linaje recuperado para {summary.bundle_id} | "
-        f"método {summary.recovery_method}"
-    )
+    typer.echo(f"OK: linaje recuperado para {summary.bundle_id} | método {summary.recovery_method}")
     typer.echo(
         f"Punto local: {summary.local_checkpoint_label or '-'} | "
         f"secuencia {summary.local_checkpoint_sequence}"
     )
     typer.echo(
-        f"Origen remoto: {summary.remote_workspace_id} | "
-        f"secuencia {summary.remote_sequence}"
+        f"Origen remoto: {summary.remote_workspace_id} | secuencia {summary.remote_sequence}"
     )
     typer.echo(
         f"Caso: {summary.case_id} | decisión: {summary.decision_id} | "
@@ -2379,9 +2350,7 @@ def exchange_common_base_propose_command(
         f"Copia iniciadora: {summary.initiator_workspace_id} | "
         f"contraparte: {summary.counterpart_workspace_id}"
     )
-    typer.echo(
-        f"Secuencia: {summary.initiator_sequence} | estado: {summary.state_sha256}"
-    )
+    typer.echo(f"Secuencia: {summary.initiator_sequence} | estado: {summary.state_sha256}")
     typer.echo(f"Propuesta: {summary.output_path}")
     typer.echo(f"SHA-256 del manifiesto: {summary.proposal_sha256}")
     typer.echo(f"SHA-256 del ZIP: {summary.artifact_sha256}")
@@ -2428,9 +2397,7 @@ def exchange_common_base_accept_command(
     typer.echo(f"Estado editable: {summary.state_sha256}")
     typer.echo(f"Manifiesto completado: {summary.output_path}")
     typer.echo(f"SHA-256 del manifiesto: {summary.manifest_sha256}")
-    typer.echo(
-        f"Simulaciones anteriores invalidadas: {summary.stale_dry_run_count}"
-    )
+    typer.echo(f"Simulaciones anteriores invalidadas: {summary.stale_dry_run_count}")
     typer.echo(
         "La copia iniciadora todavía debe finalizar este mismo manifiesto. "
         "No se modificó el corpus."
@@ -2476,9 +2443,7 @@ def exchange_common_base_finalize_command(
     )
     typer.echo(f"Estado editable: {summary.state_sha256}")
     typer.echo(f"SHA-256 del manifiesto compartido: {summary.manifest_sha256}")
-    typer.echo(
-        f"Simulaciones anteriores invalidadas: {summary.stale_dry_run_count}"
-    )
+    typer.echo(f"Simulaciones anteriores invalidadas: {summary.stale_dry_run_count}")
     typer.echo("La base común ya quedó registrada en esta copia. No se modificó el corpus.")
 
 
@@ -2500,19 +2465,13 @@ def exchange_common_base_agreements_command(
             f"local={row.local_workspace_id} sec.{row.local_sequence} | "
             f"contraparte={row.counterpart_workspace_id} sec.{row.counterpart_sequence}"
         )
+        typer.echo(f"    punto: {row.checkpoint_label} | estado: {row.state_sha256}")
+        typer.echo(f"    manifiesto: {row.manifest_sha256} | propuesta: {row.proposal_sha256}")
         typer.echo(
-            f"    punto: {row.checkpoint_label} | estado: {row.state_sha256}"
-        )
-        typer.echo(
-            f"    manifiesto: {row.manifest_sha256} | propuesta: {row.proposal_sha256}"
-        )
-        typer.echo(
-            f"    registro: {row.source} | {row.registered_by} | "
-            f"{row.created_at.isoformat()}"
+            f"    registro: {row.source} | {row.registered_by} | {row.created_at.isoformat()}"
         )
         typer.echo(f"    fundamento: {row.registration_reason}")
     typer.echo(f"Total: {len(rows)} acuerdos")
-
 
 
 @app.command("exchange-state-package-create")
@@ -2658,9 +2617,7 @@ def exchange_state_adoptions_command(
             f"{row.applied_at.isoformat()}"
         )
         typer.echo(f"    fundamento: {row.application_reason}")
-        typer.echo(
-            f"    estado: {row.previous_state_sha256} -> {row.adopted_state_sha256}"
-        )
+        typer.echo(f"    estado: {row.previous_state_sha256} -> {row.adopted_state_sha256}")
         typer.echo(f"    backup: {row.backup_path}")
         if row.rolled_back:
             typer.echo(
@@ -2854,8 +2811,7 @@ def exchange_conflicts_command(
         typer.echo(f"      recibido: {row.incoming_value!r}")
         if row.choice:
             typer.echo(
-                f"      decisión: {row.choice} -> {row.resolved_value!r} "
-                f"({row.resolved_by or '-'})"
+                f"      decisión: {row.choice} -> {row.resolved_value!r} ({row.resolved_by or '-'})"
             )
     typer.echo(f"Total: {len(rows)} campos")
 
@@ -3078,9 +3034,7 @@ def _parse_temporal_cli_date(value: str | None, option_name: str) -> date | None
     try:
         return date.fromisoformat(value.strip())
     except ValueError as exc:
-        raise typer.BadParameter(
-            f"{option_name} debe usar formato ISO YYYY-MM-DD"
-        ) from exc
+        raise typer.BadParameter(f"{option_name} debe usar formato ISO YYYY-MM-DD") from exc
 
 
 def _single_project_id(session) -> str:
@@ -3111,13 +3065,10 @@ def _echo_authority_dictionary_report(report) -> None:
         if issue.field:
             location += f"/{issue.field}"
         candidates = (
-            " | candidatos: " + ", ".join(issue.candidate_ids)
-            if issue.candidate_ids
-            else ""
+            " | candidatos: " + ", ".join(issue.candidate_ids) if issue.candidate_ids else ""
         )
         typer.echo(
-            f"{issue.severity.upper()} | {issue.code} | {location} | "
-            f"{issue.message}{candidates}"
+            f"{issue.severity.upper()} | {issue.code} | {location} | {issue.message}{candidates}"
         )
 
 
@@ -3142,9 +3093,7 @@ def authority_dictionary_export_command(
     try:
         with session_scope(engine) as session:
             project_id = _single_project_id(session)
-            content = export_authority_dictionary_bytes(
-                session, project_id=project_id
-            )
+            content = export_authority_dictionary_bytes(session, project_id=project_id)
     finally:
         engine.dispose()
     output.parent.mkdir(parents=True, exist_ok=True)
@@ -3196,9 +3145,7 @@ def authority_dictionary_import_command(
     apply: bool = typer.Option(
         False, "--apply", help="Aplica el diccionario después de una simulación válida"
     ),
-    confirm: str = typer.Option(
-        "", "--confirm", help="Para aplicar, escriba exactamente IMPORTAR"
-    ),
+    confirm: str = typer.Option("", "--confirm", help="Para aplicar, escriba exactamente IMPORTAR"),
     changed_by: str = typer.Option("local_user", "--changed-by"),
     output: Path | None = typer.Option(
         None, "--output", help="Informe JSON opcional de la simulación"
@@ -3230,9 +3177,7 @@ def authority_dictionary_import_command(
                 typer.echo("Simulación válida. No se aplicaron cambios; use --apply.")
                 return
             if confirm.strip() != "IMPORTAR":
-                raise typer.BadParameter(
-                    "Para aplicar use --apply --confirm IMPORTAR"
-                )
+                raise typer.BadParameter("Para aplicar use --apply --confirm IMPORTAR")
             result = apply_authority_dictionary(
                 session,
                 project_id=project_id,
@@ -3376,22 +3321,16 @@ def mention_scan_object_command(
     project_root: Path = typer.Argument(..., help="Raíz del proyecto operativo"),
     object_id: str = typer.Argument(..., help="UUID del objeto textual editable, no de la entidad"),
     page_status: list[str] | None = typer.Option(None, "--page-status"),
-    confirm_broader_quality_scope: bool = typer.Option(
-        False, "--confirm-broader-quality-scope"
-    ),
+    confirm_broader_quality_scope: bool = typer.Option(False, "--confirm-broader-quality-scope"),
     quality_reason: str | None = typer.Option(None, "--quality-reason"),
     created_by: str = typer.Option("local_user", "--created-by"),
 ) -> None:
     """Busca entidades conocidas dentro de un objeto textual editable."""
     invalid = set(page_status or ()) - set(PAGE_REVIEW_STATUSES)
     if invalid:
-        raise typer.BadParameter(
-            "Estados de página inválidos: " + ", ".join(sorted(invalid))
-        )
+        raise typer.BadParameter("Estados de página inválidos: " + ", ".join(sorted(invalid)))
     selected_page_statuses = tuple(
-        page_status
-        if page_status is not None
-        else DEFAULT_AUTOMATIC_PAGE_REVIEW_STATUSES
+        page_status if page_status is not None else DEFAULT_AUTOMATIC_PAGE_REVIEW_STATUSES
     )
     _require_current_database(project_root)
     engine = create_sqlite_engine(database_path(project_root))
@@ -3429,22 +3368,16 @@ def mention_scan_all_command(
         None, "--source-key", help="Limita el escaneo a uno o más documentos"
     ),
     page_status: list[str] | None = typer.Option(None, "--page-status"),
-    confirm_broader_quality_scope: bool = typer.Option(
-        False, "--confirm-broader-quality-scope"
-    ),
+    confirm_broader_quality_scope: bool = typer.Option(False, "--confirm-broader-quality-scope"),
     quality_reason: str | None = typer.Option(None, "--quality-reason"),
     created_by: str = typer.Option("local_user", "--created-by"),
 ) -> None:
     """Busca nombres y alias de entidades en todos los objetos textuales activos."""
     invalid = set(page_status or ()) - set(PAGE_REVIEW_STATUSES)
     if invalid:
-        raise typer.BadParameter(
-            "Estados de página inválidos: " + ", ".join(sorted(invalid))
-        )
+        raise typer.BadParameter("Estados de página inválidos: " + ", ".join(sorted(invalid)))
     selected_page_statuses = tuple(
-        page_status
-        if page_status is not None
-        else DEFAULT_AUTOMATIC_PAGE_REVIEW_STATUSES
+        page_status if page_status is not None else DEFAULT_AUTOMATIC_PAGE_REVIEW_STATUSES
     )
     _require_current_database(project_root)
     decisions = load_decisions(project_root / "config" / "decisions.yaml")
@@ -3480,9 +3413,7 @@ def mention_find_entity_command(
         None, "--source-key", help="Limita la búsqueda a uno o más documentos"
     ),
     page_status: list[str] | None = typer.Option(None, "--page-status"),
-    confirm_broader_quality_scope: bool = typer.Option(
-        False, "--confirm-broader-quality-scope"
-    ),
+    confirm_broader_quality_scope: bool = typer.Option(False, "--confirm-broader-quality-scope"),
     quality_reason: str | None = typer.Option(None, "--quality-reason"),
     run_by: str = typer.Option("local_user", "--run-by"),
     include_existing: bool = typer.Option(
@@ -3492,13 +3423,9 @@ def mention_find_entity_command(
     """Previsualiza coincidencias del nombre preferido y los alias sin modificar la base."""
     invalid = set(page_status or ()) - set(PAGE_REVIEW_STATUSES)
     if invalid:
-        raise typer.BadParameter(
-            "Estados de página inválidos: " + ", ".join(sorted(invalid))
-        )
+        raise typer.BadParameter("Estados de página inválidos: " + ", ".join(sorted(invalid)))
     selected_page_statuses = tuple(
-        page_status
-        if page_status is not None
-        else DEFAULT_AUTOMATIC_PAGE_REVIEW_STATUSES
+        page_status if page_status is not None else DEFAULT_AUTOMATIC_PAGE_REVIEW_STATUSES
     )
     _require_current_database(project_root)
     engine = create_sqlite_engine(database_path(project_root))
@@ -3534,15 +3461,18 @@ def mention_find_entity_command(
     finally:
         engine.dispose()
     for row in rows:
-        match = "nombre preferido" if row.match_kind == "preferred" else f"alias {row.matched_surface!r}"
+        match = (
+            "nombre preferido"
+            if row.match_kind == "preferred"
+            else f"alias {row.matched_surface!r}"
+        )
         if row.already_included:
             existing = f" | ya incorporada {row.existing_status}"
         elif row.can_link_existing:
             existing = " | mención existente sin autoridad: se vinculará al incorporar"
         elif row.has_authority_conflict:
             existing = (
-                " | conflicto: ya vinculada a "
-                f"{row.existing_authority_name or 'otra autoridad'}"
+                f" | conflicto: ya vinculada a {row.existing_authority_name or 'otra autoridad'}"
             )
         else:
             existing = ""
@@ -3563,9 +3493,7 @@ def mention_include_entity_command(
     ),
     status: str = typer.Option("pending", "--status", help="pending o accepted"),
     page_status: list[str] | None = typer.Option(None, "--page-status"),
-    confirm_broader_quality_scope: bool = typer.Option(
-        False, "--confirm-broader-quality-scope"
-    ),
+    confirm_broader_quality_scope: bool = typer.Option(False, "--confirm-broader-quality-scope"),
     quality_reason: str | None = typer.Option(None, "--quality-reason"),
     created_by: str = typer.Option("local_user", "--created-by"),
     confirm_all: bool = typer.Option(
@@ -3577,13 +3505,9 @@ def mention_include_entity_command(
         raise typer.BadParameter("Use --confirm-all después de revisar mention-find-entity")
     invalid = set(page_status or ()) - set(PAGE_REVIEW_STATUSES)
     if invalid:
-        raise typer.BadParameter(
-            "Estados de página inválidos: " + ", ".join(sorted(invalid))
-        )
+        raise typer.BadParameter("Estados de página inválidos: " + ", ".join(sorted(invalid)))
     selected_page_statuses = tuple(
-        page_status
-        if page_status is not None
-        else DEFAULT_AUTOMATIC_PAGE_REVIEW_STATUSES
+        page_status if page_status is not None else DEFAULT_AUTOMATIC_PAGE_REVIEW_STATUSES
     )
     _require_current_database(project_root)
     engine = create_sqlite_engine(database_path(project_root))
@@ -3726,9 +3650,7 @@ def graph_check_command(
     engine = create_sqlite_engine(database_path(project_root))
     try:
         with session_scope(engine) as session:
-            issues = graph_consistency_issues(
-                session, project_id=_single_project_id(session)
-            )
+            issues = graph_consistency_issues(session, project_id=_single_project_id(session))
     finally:
         engine.dispose()
     visible = [row for row in issues if include_info or row.severity != "info"]
@@ -3791,10 +3713,7 @@ def graph_export_command(
         raise typer.BadParameter(str(exc)) from exc
     finally:
         engine.dispose()
-    typer.echo(
-        f"OK: {len(view.nodes)} nodos | {len(view.edges)} aristas | "
-        f"{len(issues)} controles"
-    )
+    typer.echo(f"OK: {len(view.nodes)} nodos | {len(view.edges)} aristas | {len(issues)} controles")
     if view.truncated:
         typer.echo(
             f"ADVERTENCIA: la exportación fue limitada desde {view.total_nodes_before_limit} nodos."
@@ -3830,9 +3749,7 @@ def analysis_quality_audit_command(
         if row.confirmation_reason:
             typer.echo(f"    fundamento: {row.confirmation_reason}")
         if row.target_type or row.target_id:
-            typer.echo(
-                f"    destino: {row.target_type or '-'} | {row.target_id or '-'}"
-            )
+            typer.echo(f"    destino: {row.target_type or '-'} | {row.target_id or '-'}")
         if row.parameters_sha256:
             typer.echo(f"    parámetros: {row.parameters_sha256}")
     typer.echo(f"Total mostrado: {len(rows)} autorizaciones")
@@ -3870,9 +3787,7 @@ def export_profile_save_command(
     object_type: list[str] | None = typer.Option(None, "--object-type"),
     object_review_status: list[str] | None = typer.Option(None, "--object-review-status"),
     page_review_status: list[str] | None = typer.Option(None, "--page-review-status"),
-    confirm_broader_quality_scope: bool = typer.Option(
-        False, "--confirm-broader-quality-scope"
-    ),
+    confirm_broader_quality_scope: bool = typer.Option(False, "--confirm-broader-quality-scope"),
     quality_reason: str | None = typer.Option(None, "--quality-reason"),
     temporal_start: str | None = typer.Option(None, "--temporal-start"),
     temporal_end: str | None = typer.Option(None, "--temporal-end"),
@@ -3945,7 +3860,9 @@ def corpus_export_preview_command(
     try:
         with session_scope(engine) as session:
             project_id = _single_project_id(session)
-            profile = resolve_export_profile(session, project_id=project_id, profile_ref=profile_ref)
+            profile = resolve_export_profile(
+                session, project_id=project_id, profile_ref=profile_ref
+            )
             result = preview_export(session, project_id=project_id, profile=profile, limit=limit)
     except ValueError as exc:
         raise typer.BadParameter(str(exc)) from exc
@@ -3953,7 +3870,9 @@ def corpus_export_preview_command(
         engine.dispose()
     typer.echo(f"Registros: {result.total_records} | caracteres: {result.total_characters}")
     for row in result.records:
-        typer.echo(f"{row.codigo} | {row.titulo} | {row.object_count} objetos | {len(row.texto)} caracteres")
+        typer.echo(
+            f"{row.codigo} | {row.titulo} | {row.object_count} objetos | {len(row.texto)} caracteres"
+        )
 
 
 @app.command("corpus-export")
@@ -3974,7 +3893,9 @@ def corpus_export_command(
     try:
         with session_scope(engine) as session:
             project_id = _single_project_id(session)
-            profile = resolve_export_profile(session, project_id=project_id, profile_ref=profile_ref)
+            profile = resolve_export_profile(
+                session, project_id=project_id, profile_ref=profile_ref
+            )
             result = run_export(
                 session,
                 project_root=project_root,
@@ -4054,7 +3975,6 @@ def semantic_profile_list_command(
     typer.echo(f"Total: {len(rows)} perfiles")
 
 
-
 @app.command("discovery-providers")
 def discovery_providers_command() -> None:
     """Lista adaptadores de descubrimiento y su disponibilidad local."""
@@ -4065,9 +3985,7 @@ def discovery_providers_command() -> None:
             f"familias={','.join(row.supported_families)}"
         )
         typer.echo(f"    {row.availability_reason}")
-    typer.echo(
-        "Ningún proveedor se considera superior o predeterminado por evidencia empírica."
-    )
+    typer.echo("Ningún proveedor se considera superior o predeterminado por evidencia empírica.")
 
 
 @app.command("discovery-evaluate")
@@ -4075,13 +3993,9 @@ def discovery_evaluate_command(
     corpus: Path = typer.Argument(..., help="Corpus JSONL con texto, offsets y procedencia"),
     output: Path = typer.Option(..., "--output", help="Informe JSON reproducible"),
     provider: str = typer.Option(DISCOVERY_PROVIDER_KEY, "--provider"),
-    provider_version: str = typer.Option(
-        DISCOVERY_PROVIDER_VERSION, "--provider-version"
-    ),
+    provider_version: str = typer.Option(DISCOVERY_PROVIDER_VERSION, "--provider-version"),
     family: list[str] | None = typer.Option(None, "--family"),
-    minimum_confidence: float = typer.Option(
-        0.0, "--minimum-confidence", min=0.0, max=1.0
-    ),
+    minimum_confidence: float = typer.Option(0.0, "--minimum-confidence", min=0.0, max=1.0),
 ) -> None:
     """Evalúa un proveedor por familia sin escribir en una base de proyecto."""
     try:
@@ -4101,9 +4015,7 @@ def discovery_evaluate_command(
         f"recuperación={metrics['recall']:.6f} | F1={metrics['f1']:.6f}"
     )
     typer.echo(f"SHA-256 informe: {result.report_sha256}")
-    typer.echo(
-        f"SHA-256 parámetros: {result.payload['parameters']['sha256']}"
-    )
+    typer.echo(f"SHA-256 parámetros: {result.payload['parameters']['sha256']}")
 
 
 @app.command("discovery-evaluation-compare")
@@ -4146,9 +4058,7 @@ def discovery_profile_save_command(
         "--provider-version",
         help="Versión exacta; para spaCy usar modelo@versión",
     ),
-    confirm_broader_quality_scope: bool = typer.Option(
-        False, "--confirm-broader-quality-scope"
-    ),
+    confirm_broader_quality_scope: bool = typer.Option(False, "--confirm-broader-quality-scope"),
     quality_reason: str | None = typer.Option(None, "--quality-reason"),
     changed_by: str = typer.Option("local_user", "--changed-by"),
 ) -> None:
@@ -4156,18 +4066,12 @@ def discovery_profile_save_command(
     selected_families = tuple(family or DISCOVERY_FAMILIES[:-1])
     invalid_families = set(selected_families) - set(DISCOVERY_FAMILIES)
     if invalid_families:
-        raise typer.BadParameter(
-            "Familias inválidas: " + ", ".join(sorted(invalid_families))
-        )
+        raise typer.BadParameter("Familias inválidas: " + ", ".join(sorted(invalid_families)))
     invalid_pages = set(page_status or ()) - set(PAGE_REVIEW_STATUSES)
     if invalid_pages:
-        raise typer.BadParameter(
-            "Estados de página inválidos: " + ", ".join(sorted(invalid_pages))
-        )
+        raise typer.BadParameter("Estados de página inválidos: " + ", ".join(sorted(invalid_pages)))
     selected_pages = tuple(
-        page_status
-        if page_status is not None
-        else DEFAULT_AUTOMATIC_PAGE_REVIEW_STATUSES
+        page_status if page_status is not None else DEFAULT_AUTOMATIC_PAGE_REVIEW_STATUSES
     )
     _require_current_database(project_root)
     engine = create_sqlite_engine(database_path(project_root))
@@ -4203,12 +4107,12 @@ def discovery_profile_save_command(
         raise typer.BadParameter(str(exc)) from exc
     finally:
         engine.dispose()
+    typer.echo(f"OK: perfil {profile.id} | {profile.name} | revisión {profile.revision}")
     typer.echo(
-        f"OK: perfil {profile.id} | {profile.name} | revisión {profile.revision}"
-    )
-    typer.echo(
-        "Familias: " + ", ".join(profile.families_json or [])
-        + " | páginas=" + ",".join(profile.include_page_review_statuses_json or [])
+        "Familias: "
+        + ", ".join(profile.families_json or [])
+        + " | páginas="
+        + ",".join(profile.include_page_review_statuses_json or [])
     )
 
 
@@ -4221,9 +4125,7 @@ def discovery_profiles_command(
     engine = create_sqlite_engine(database_path(project_root))
     try:
         with session_scope(engine) as session:
-            rows = discovery_profile_rows(
-                session, project_id=_single_project_id(session)
-            )
+            rows = discovery_profile_rows(session, project_id=_single_project_id(session))
     finally:
         engine.dispose()
     for row in rows:
@@ -4283,9 +4185,7 @@ def discovery_runs_command(
     engine = create_sqlite_engine(database_path(project_root))
     try:
         with session_scope(engine) as session:
-            rows = discovery_run_rows(
-                session, project_id=_single_project_id(session), limit=limit
-            )
+            rows = discovery_run_rows(session, project_id=_single_project_id(session), limit=limit)
     finally:
         engine.dispose()
     for row in rows:
@@ -4460,9 +4360,7 @@ def discovery_context_records_command(
     engine = create_sqlite_engine(database_path(project_root))
     try:
         with session_scope(engine) as session:
-            rows = discovery_context_record_rows(
-                session, project_id=_single_project_id(session)
-            )
+            rows = discovery_context_record_rows(session, project_id=_single_project_id(session))
     finally:
         engine.dispose()
     for row in rows:
@@ -4476,7 +4374,6 @@ def discovery_context_records_command(
         if row.target_authority_id:
             typer.echo(f"    autoridad vinculada: {row.target_authority_id}")
     typer.echo(f"Total: {len(rows)} registros propios")
-
 
 
 @app.command("discovery-groups-rebuild")
@@ -4671,9 +4568,7 @@ def discovery_continuities_command(
     engine = create_sqlite_engine(database_path(project_root))
     try:
         with session_scope(engine) as session:
-            rows = discovery_continuity_rows(
-                session, project_id=_single_project_id(session)
-            )
+            rows = discovery_continuity_rows(session, project_id=_single_project_id(session))
     finally:
         engine.dispose()
     for row in rows:
@@ -4686,6 +4581,7 @@ def discovery_continuities_command(
         )
         typer.echo(f"    evidencia: {row.evidence_sha256}")
     typer.echo(f"Total: {len(rows)} continuidades")
+
 
 @app.command("discovery-audit")
 def discovery_audit_command(
@@ -4727,9 +4623,7 @@ def semantic_profile_save_command(
     object_type: list[str] | None = typer.Option(None, "--object-type"),
     object_status: list[str] | None = typer.Option(None, "--object-status"),
     page_status: list[str] | None = typer.Option(None, "--page-status"),
-    confirm_broader_quality_scope: bool = typer.Option(
-        False, "--confirm-broader-quality-scope"
-    ),
+    confirm_broader_quality_scope: bool = typer.Option(False, "--confirm-broader-quality-scope"),
     quality_reason: str | None = typer.Option(None, "--quality-reason"),
     query_prefix: str = typer.Option("query: ", "--query-prefix"),
     document_prefix: str = typer.Option("passage: ", "--document-prefix"),
@@ -4742,13 +4636,9 @@ def semantic_profile_save_command(
         )
     invalid = set(page_status or ()) - set(PAGE_REVIEW_STATUSES)
     if invalid:
-        raise typer.BadParameter(
-            "Estados de página inválidos: " + ", ".join(sorted(invalid))
-        )
+        raise typer.BadParameter("Estados de página inválidos: " + ", ".join(sorted(invalid)))
     selected_page_statuses = tuple(
-        page_status
-        if page_status is not None
-        else DEFAULT_AUTOMATIC_PAGE_REVIEW_STATUSES
+        page_status if page_status is not None else DEFAULT_AUTOMATIC_PAGE_REVIEW_STATUSES
     )
     _require_current_database(project_root)
     engine = create_sqlite_engine(database_path(project_root))
@@ -4921,8 +4811,14 @@ def semantic_search_command(
     finally:
         engine.dispose()
     for index, row in enumerate(rows, start=1):
-        pages = str(row.page_start) if row.page_start == row.page_end else f"{row.page_start}-{row.page_end}"
-        typer.echo(f"{index}. {row.score:.4f} | {row.title} | páginas {pages} | {row.source_key or '-'}")
+        pages = (
+            str(row.page_start)
+            if row.page_start == row.page_end
+            else f"{row.page_start}-{row.page_end}"
+        )
+        typer.echo(
+            f"{index}. {row.score:.4f} | {row.title} | páginas {pages} | {row.source_key or '-'}"
+        )
         typer.echo(f"    {' '.join(row.excerpt.split())}")
     typer.echo(f"Total: {len(rows)} resultados")
 
@@ -5040,13 +4936,12 @@ def processing_jobs_command(
     engine = create_sqlite_engine(database_path(project_root))
     try:
         with session_scope(engine) as session:
-            rows = processing_job_rows(
-                session, project_id=decisions.project_id, limit=limit
+            rows = processing_job_rows(session, project_id=decisions.project_id, limit=limit)
+            item_map = (
+                {row.job_id: processing_job_item_rows(session, job_id=row.job_id) for row in rows}
+                if show_items
+                else {}
             )
-            item_map = {
-                row.job_id: processing_job_item_rows(session, job_id=row.job_id)
-                for row in rows
-            } if show_items else {}
     finally:
         engine.dispose()
     for row in rows:
@@ -5058,8 +4953,7 @@ def processing_jobs_command(
         for item in item_map.get(row.job_id, []):
             pages = ",".join(map(str, item.pages)) or "-"
             typer.echo(
-                f"  {item.source_key} | {item.status} | páginas {pages} | "
-                f"{item.message or '-'}"
+                f"  {item.source_key} | {item.status} | páginas {pages} | {item.message or '-'}"
             )
     typer.echo(f"Total: {len(rows)} trabajos")
 
@@ -5196,9 +5090,7 @@ def work_assignment_update_command(
                 status=status,
                 priority=priority,
                 outcome=outcome if outcome is not None else current.outcome,
-                assignment_note=(
-                    assignment_note if assignment_note is not None else current.note
-                ),
+                assignment_note=(assignment_note if assignment_note is not None else current.note),
                 change_note=change_note,
             )
             revision = row.revision
@@ -5272,7 +5164,6 @@ def work_summary_command(
     typer.echo(f"Total: {len(rows)} responsables")
 
 
-
 @app.command("review-app")
 def review_app_command(
     project_root: Path | None = typer.Argument(
@@ -5287,8 +5178,7 @@ def review_app_command(
     """Abre Archive Workbench con un proyecto concreto o con el inicio general."""
     if importlib.util.find_spec("streamlit") is None:
         raise typer.BadParameter(
-            "Streamlit no está instalado. Ejecutá: "
-            'pip install -e ".[dev,extraction,streamlit]"'
+            'Streamlit no está instalado. Ejecutá: pip install -e ".[dev,extraction,streamlit]"'
         )
     resolved_root: Path | None = None
     if project_root is not None:
@@ -5339,9 +5229,7 @@ def exchange_apply_bundle_command(
 ) -> None:
     """Aplica un bundle ready_to_apply con backup previo y checkpoint posterior."""
     if not confirm_apply:
-        raise typer.BadParameter(
-            "Use --confirm-apply después de revisar el reporte dry-run"
-        )
+        raise typer.BadParameter("Use --confirm-apply después de revisar el reporte dry-run")
     _require_current_database(project_root)
     engine = create_sqlite_engine(database_path(project_root))
     try:
@@ -5361,14 +5249,10 @@ def exchange_apply_bundle_command(
         f"duplicados omitidos {summary.duplicate_event_count} | "
         f"conservados localmente {summary.kept_local_event_count}"
     )
-    typer.echo(
-        f"Secuencia local: {summary.local_sequence_start} -> {summary.local_sequence_end}"
-    )
+    typer.echo(f"Secuencia local: {summary.local_sequence_start} -> {summary.local_sequence_end}")
     typer.echo(f"Backup: {summary.backup_path}")
     typer.echo(f"SHA-256 backup: {summary.backup_sha256}")
-    typer.echo(
-        f"Checkpoint: {summary.checkpoint_label} | {summary.checkpoint_id}"
-    )
+    typer.echo(f"Checkpoint: {summary.checkpoint_label} | {summary.checkpoint_id}")
     typer.echo(f"Reporte: {summary.report_markdown_path}")
 
 

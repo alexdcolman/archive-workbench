@@ -4,6 +4,7 @@ Revision ID: 0041_catalog_authority_roles_graph_layers
 Revises: 0040_discovery_grouping_continuity
 Create Date: 2026-08-04
 """
+
 from __future__ import annotations
 
 from alembic import op
@@ -66,8 +67,7 @@ def _revision_changed_fields(fields: tuple[str, ...]) -> str:
         )
         expression = f"json_patch({expression}, {patch})"
     return (
-        f"CASE WHEN NEW.operation = 'create' THEN json_object({create_parts}) "
-        f"ELSE {expression} END"
+        f"CASE WHEN NEW.operation = 'create' THEN json_object({create_parts}) ELSE {expression} END"
     )
 
 

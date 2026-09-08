@@ -4,6 +4,7 @@ Revision ID: 0010_review_actions_annotations
 Revises: 0009_editable_objects
 Create Date: 2026-07-23
 """
+
 from __future__ import annotations
 
 from alembic import op
@@ -18,14 +19,20 @@ depends_on = None
 def upgrade() -> None:
     op.add_column(
         "editable_pages",
-        sa.Column("review_status", sa.String(length=32), nullable=False, server_default="unreviewed"),
+        sa.Column(
+            "review_status", sa.String(length=32), nullable=False, server_default="unreviewed"
+        ),
     )
     op.add_column("editable_pages", sa.Column("review_note", sa.Text(), nullable=True))
     op.add_column("editable_pages", sa.Column("reviewed_by", sa.String(length=200), nullable=True))
-    op.add_column("editable_pages", sa.Column("reviewed_at", sa.DateTime(timezone=True), nullable=True))
+    op.add_column(
+        "editable_pages", sa.Column("reviewed_at", sa.DateTime(timezone=True), nullable=True)
+    )
     op.add_column(
         "editable_objects",
-        sa.Column("review_status", sa.String(length=32), nullable=False, server_default="unreviewed"),
+        sa.Column(
+            "review_status", sa.String(length=32), nullable=False, server_default="unreviewed"
+        ),
     )
 
     op.create_table(

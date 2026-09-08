@@ -158,8 +158,7 @@ def _write_zip(path: Path, entries: dict[str, bytes]) -> None:
 
 def _checksum_bytes(entries: dict[str, bytes]) -> bytes:
     return "".join(
-        f"{hashlib.sha256(entries[name]).hexdigest()}  {name}\n"
-        for name in sorted(entries)
+        f"{hashlib.sha256(entries[name]).hexdigest()}  {name}\n" for name in sorted(entries)
     ).encode("utf-8")
 
 
@@ -171,9 +170,7 @@ def _read_verified_zip(path: Path, *, allowed: set[str]) -> dict[str, bytes]:
         with zipfile.ZipFile(artifact, "r") as archive:
             names = set(archive.namelist())
             unsafe = [
-                name
-                for name in names
-                if Path(name).is_absolute() or ".." in Path(name).parts
+                name for name in names if Path(name).is_absolute() or ".." in Path(name).parts
             ]
             if unsafe:
                 raise ValueError("El ZIP contiene rutas inseguras")
@@ -631,8 +628,8 @@ def finalize_common_base_agreement(
         confirmed=agreement_confirmed,
         source=source,
     )
-    proposal, proposal_sha, _proposal_artifact_sha, proposal_bytes = (
-        inspect_common_base_proposal(proposal_path)
+    proposal, proposal_sha, _proposal_artifact_sha, proposal_bytes = inspect_common_base_proposal(
+        proposal_path
     )
     agreement, embedded_proposal, manifest_sha, _agreement_artifact_sha, embedded_bytes = (
         inspect_common_base_agreement(agreement_path)
@@ -656,13 +653,9 @@ def finalize_common_base_agreement(
     local_sequence = _current_sequence(session, workspace.id)
     local_state = current_editable_state_sha256(session, project.id)
     if local_sequence != proposal.initiator_sequence:
-        raise ValueError(
-            "La secuencia de la copia iniciadora cambió después de crear la propuesta"
-        )
+        raise ValueError("La secuencia de la copia iniciadora cambió después de crear la propuesta")
     if local_state != agreement.state_sha256:
-        raise ValueError(
-            "El estado editable de la copia iniciadora ya no coincide con el acuerdo"
-        )
+        raise ValueError("El estado editable de la copia iniciadora ya no coincide con el acuerdo")
     checkpoint = create_exchange_checkpoint(
         session,
         label=agreement.checkpoint_label,

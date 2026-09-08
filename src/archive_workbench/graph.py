@@ -12,7 +12,7 @@ import re
 import unicodedata
 from xml.etree import ElementTree as ET
 
-from sqlalchemy import and_, or_, select
+from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from archive_workbench.db.models import (
@@ -27,7 +27,7 @@ from archive_workbench.db.models import (
     SourceRegistration,
 )
 from archive_workbench.sources import PROCESSABLE_SOURCE_TYPES
-from archive_workbench.temporal import format_temporal_range, temporal_expression_overlap
+from archive_workbench.temporal import temporal_expression_overlap
 
 GRAPH_EDGE_TYPES = (
     "hierarchy",
@@ -250,7 +250,8 @@ def build_graph(
     temporal_filter_active = temporal_start is not None or temporal_end is not None
     if temporal_filter_active:
         relations = [
-            row for row in relations
+            row
+            for row in relations
             if temporal_expression_overlap(
                 expression=row.temporal_expression,
                 item_start=row.temporal_start,
@@ -267,7 +268,8 @@ def build_graph(
             if item is not None
         }
         authorities = [
-            row for row in authorities
+            row
+            for row in authorities
             if row.id in relation_authority_ids
             or temporal_expression_overlap(
                 expression=row.temporal_expression,
@@ -327,7 +329,9 @@ def build_graph(
         )
         return key
 
-    def add_digital(digital_id: str, *, source_key: str | None = None, page: int | None = None) -> str | None:
+    def add_digital(
+        digital_id: str, *, source_key: str | None = None, page: int | None = None
+    ) -> str | None:
         digital = digital_by_id.get(digital_id)
         if digital is None:
             return None
@@ -335,7 +339,9 @@ def build_graph(
         key = _node_id("digital_object", digital.id)
         context_parts = [f"SHA-256 {digital.sha256[:12]}…"]
         if digital.page_count is not None:
-            context_parts.append(f"{digital.page_count} página{'s' if digital.page_count != 1 else ''}")
+            context_parts.append(
+                f"{digital.page_count} página{'s' if digital.page_count != 1 else ''}"
+            )
         nodes.setdefault(
             key,
             GraphNode(
@@ -358,7 +364,9 @@ def build_graph(
             node.page_number = page
         return key
 
-    def add_part(part_id: str, *, source_key: str | None = None, page: int | None = None) -> str | None:
+    def add_part(
+        part_id: str, *, source_key: str | None = None, page: int | None = None
+    ) -> str | None:
         part = part_by_id.get(part_id)
         if part is None:
             return None
@@ -406,7 +414,9 @@ def build_graph(
             .join(DigitalObject, DigitalObject.id == DigitalObjectUnitLink.digital_object_id)
             .join(ArchivalUnit, ArchivalUnit.id == DigitalObjectUnitLink.archival_unit_id)
             .where(DigitalObject.project_id == project_id, ArchivalUnit.project_id == project_id)
-            .order_by(DigitalObjectUnitLink.archival_unit_id, DigitalObjectUnitLink.digital_object_id)
+            .order_by(
+                DigitalObjectUnitLink.archival_unit_id, DigitalObjectUnitLink.digital_object_id
+            )
         ).all()
         for link in link_rows:
             unit_key = add_unit(link.archival_unit_id)
@@ -421,9 +431,7 @@ def build_graph(
                 source=document_key,
                 target=unit_key,
                 edge_type="document",
-                label=_DOCUMENT_RELATION_GRAPH_LABELS.get(
-                    link.relation_type, link.relation_type
-                ),
+                label=_DOCUMENT_RELATION_GRAPH_LABELS.get(link.relation_type, link.relation_type),
                 explanation=(
                     "Pertenencia catalográfica registrada entre un objeto digital "
                     "y una unidad archivística."
@@ -474,9 +482,13 @@ def build_graph(
         if relation_kind == "analytical":
             explanation = f"Relación analítica explícita registrada por el equipo entre una autoridad y una {target_kind}."
         elif relation_kind == "producer":
-            explanation = "Rol archivístico controlado que identifica a la autoridad productora de la unidad."
+            explanation = (
+                "Rol archivístico controlado que identifica a la autoridad productora de la unidad."
+            )
         else:
-            explanation = "Rol archivístico controlado que identifica a la autoridad gestora de la unidad."
+            explanation = (
+                "Rol archivístico controlado que identifica a la autoridad gestora de la unidad."
+            )
         edges[relation.id] = GraphEdge(
             edge_id=relation.id,
             source=source_key,
@@ -508,7 +520,9 @@ def build_graph(
             EntityMention.status.in_(mention_statuses),
             EditableObject.lifecycle_status == "active",
         )
-        .order_by(EntityMention.authority_id, EditableObject.digital_object_id, EditableObject.page_number)
+        .order_by(
+            EntityMention.authority_id, EditableObject.digital_object_id, EditableObject.page_number
+        )
     ).all()
 
     mention_groups: dict[tuple[str, str], dict[str, object]] = {}
@@ -590,7 +604,7 @@ def build_graph(
         document_keys = sorted(document_entities)
         for index, left in enumerate(document_keys):
             left_entities = document_entities[left]
-            for right in document_keys[index + 1:]:
+            for right in document_keys[index + 1 :]:
                 common = left_entities & document_entities[right]
                 if len(common) >= min_shared_entities:
                     shared[(left, right)].update(common)
@@ -642,7 +656,8 @@ def build_graph(
                     queue.append((neighbor, depth + 1))
         nodes = {key: value for key, value in nodes.items() if key in keep}
         edges = {
-            key: value for key, value in edges.items()
+            key: value
+            for key, value in edges.items()
             if value.source in keep and value.target in keep
         }
 
@@ -669,7 +684,8 @@ def build_graph(
             keep.add(focus_node_id)
         nodes = {key: value for key, value in nodes.items() if key in keep}
         edges = {
-            key: value for key, value in edges.items()
+            key: value
+            for key, value in edges.items()
             if value.source in keep and value.target in keep
         }
         truncated = True
@@ -683,11 +699,14 @@ def build_graph(
 
     return GraphView(
         nodes=sorted(nodes.values(), key=lambda row: (row.kind, row.label.casefold(), row.node_id)),
-        edges=sorted(edges.values(), key=lambda row: (row.edge_type, row.label.casefold(), row.edge_id)),
+        edges=sorted(
+            edges.values(), key=lambda row: (row.edge_type, row.label.casefold(), row.edge_id)
+        ),
         truncated=truncated,
         total_nodes_before_limit=total_nodes,
         total_edges_before_limit=total_edges,
     )
+
 
 def graph_consistency_issues(session: Session, *, project_id: str) -> list[GraphConsistencyIssue]:
     issues: list[GraphConsistencyIssue] = []
@@ -696,37 +715,51 @@ def graph_consistency_issues(session: Session, *, project_id: str) -> list[Graph
         .where(EntityRelation.project_id == project_id)
         .order_by(EntityRelation.created_at, EntityRelation.id)
     ).all()
-    authority_ids = {
-        relation.source_authority_id for relation in relations
-    } | {
+    authority_ids = {relation.source_authority_id for relation in relations} | {
         relation.target_authority_id
         for relation in relations
         if relation.target_authority_id is not None
     }
-    authorities = {
-        row.id: row
-        for row in session.scalars(
-            select(AuthorityRecord).where(AuthorityRecord.id.in_(authority_ids))
-        ).all()
-    } if authority_ids else {}
+    authorities = (
+        {
+            row.id: row
+            for row in session.scalars(
+                select(AuthorityRecord).where(AuthorityRecord.id.in_(authority_ids))
+            ).all()
+        }
+        if authority_ids
+        else {}
+    )
     unit_ids = {
         relation.target_archival_unit_id
         for relation in relations
         if relation.target_archival_unit_id is not None
     }
-    units = {
-        row.id: row
-        for row in session.scalars(select(ArchivalUnit).where(ArchivalUnit.id.in_(unit_ids))).all()
-    } if unit_ids else {}
+    units = (
+        {
+            row.id: row
+            for row in session.scalars(
+                select(ArchivalUnit).where(ArchivalUnit.id.in_(unit_ids))
+            ).all()
+        }
+        if unit_ids
+        else {}
+    )
     part_ids = {
         relation.target_document_part_id
         for relation in relations
         if relation.target_document_part_id is not None
     }
-    parts = {
-        row.id: row
-        for row in session.scalars(select(DocumentPart).where(DocumentPart.id.in_(part_ids))).all()
-    } if part_ids else {}
+    parts = (
+        {
+            row.id: row
+            for row in session.scalars(
+                select(DocumentPart).where(DocumentPart.id.in_(part_ids))
+            ).all()
+        }
+        if part_ids
+        else {}
+    )
 
     duplicate_groups: dict[tuple[str, str, str, str, str], list[EntityRelation]] = defaultdict(list)
     for relation in relations:
@@ -741,7 +774,13 @@ def graph_consistency_issues(session: Session, *, project_id: str) -> list[Graph
         else:
             target_kind, target_id = "missing", ""
         duplicate_groups[
-            ((relation.relation_kind or "analytical"), relation.source_authority_id, _normalized(relation.relation_label), target_kind, target_id)
+            (
+                (relation.relation_kind or "analytical"),
+                relation.source_authority_id,
+                _normalized(relation.relation_label),
+                target_kind,
+                target_id,
+            )
         ].append(relation)
 
         source = authorities.get(relation.source_authority_id)
@@ -766,12 +805,11 @@ def graph_consistency_issues(session: Session, *, project_id: str) -> list[Graph
             )
 
         target_missing = (
-            target_kind == "entity" and target_id not in authorities
-        ) or (
-            target_kind == "archival_unit" and target_id not in units
-        ) or (
-            target_kind == "document_part" and target_id not in parts
-        ) or target_kind == "missing"
+            (target_kind == "entity" and target_id not in authorities)
+            or (target_kind == "archival_unit" and target_id not in units)
+            or (target_kind == "document_part" and target_id not in parts)
+            or target_kind == "missing"
+        )
         if target_missing:
             issues.append(
                 GraphConsistencyIssue(
@@ -871,13 +909,9 @@ def graph_consistency_issues(session: Session, *, project_id: str) -> list[Graph
             EntityMention.id,
         )
     ).all()
-    logical_mention_groups: dict[
-        tuple[str, int, int, int], list[EntityMention]
-    ] = defaultdict(list)
+    logical_mention_groups: dict[tuple[str, int, int, int], list[EntityMention]] = defaultdict(list)
     for mention, editable in active_mention_rows:
-        projected = project_mention_span_to_current(
-            session, mention, editable_object=editable
-        )
+        projected = project_mention_span_to_current(session, mention, editable_object=editable)
         if projected is None:
             continue
         logical_mention_groups[
@@ -887,9 +921,7 @@ def graph_consistency_issues(session: Session, *, project_id: str) -> list[Graph
         if len(group) < 2:
             continue
         ids = ", ".join(item.id for item in group)
-        authorities = sorted(
-            {item.authority_id or "sin autoridad" for item in group}
-        )
+        authorities = sorted({item.authority_id or "sin autoridad" for item in group})
         issues.append(
             GraphConsistencyIssue(
                 code="duplicate_mention",
@@ -985,11 +1017,24 @@ def export_graph(
 
     nodes_path = root / "nodes.csv"
     with nodes_path.open("w", newline="", encoding="utf-8") as handle:
-        fieldnames = list(asdict(view.nodes[0]).keys()) if view.nodes else [
-            "node_id", "kind", "record_id", "label", "context", "subtype",
-            "review_status", "lifecycle_status", "degree", "source_key",
-            "page_number", "object_id",
-        ]
+        fieldnames = (
+            list(asdict(view.nodes[0]).keys())
+            if view.nodes
+            else [
+                "node_id",
+                "kind",
+                "record_id",
+                "label",
+                "context",
+                "subtype",
+                "review_status",
+                "lifecycle_status",
+                "degree",
+                "source_key",
+                "page_number",
+                "object_id",
+            ]
+        )
         writer = csv.DictWriter(handle, fieldnames=fieldnames)
         writer.writeheader()
         for row in view.nodes:
@@ -998,11 +1043,28 @@ def export_graph(
 
     edges_path = root / "edges.csv"
     with edges_path.open("w", newline="", encoding="utf-8") as handle:
-        fieldnames = list(asdict(view.edges[0]).keys()) if view.edges else [
-            "edge_id", "source", "target", "edge_type", "label", "explanation",
-            "weight", "relation_id", "review_status", "lifecycle_status",
-            "evidence_note", "provenance_note", "authority_ids", "source_key", "page_number", "object_id",
-        ]
+        fieldnames = (
+            list(asdict(view.edges[0]).keys())
+            if view.edges
+            else [
+                "edge_id",
+                "source",
+                "target",
+                "edge_type",
+                "label",
+                "explanation",
+                "weight",
+                "relation_id",
+                "review_status",
+                "lifecycle_status",
+                "evidence_note",
+                "provenance_note",
+                "authority_ids",
+                "source_key",
+                "page_number",
+                "object_id",
+            ]
+        )
         writer = csv.DictWriter(handle, fieldnames=fieldnames)
         writer.writeheader()
         for row in view.edges:
@@ -1141,7 +1203,9 @@ def _edge_tooltip(row: GraphEdge) -> str:
     return "\n".join(lines)
 
 
-def graph_payload(view: GraphView, *, selected_node: str | None = None, selected_edge: str | None = None) -> dict[str, object]:
+def graph_payload(
+    view: GraphView, *, selected_node: str | None = None, selected_edge: str | None = None
+) -> dict[str, object]:
     """Payload serializable para el componente interactivo."""
 
     parallel = graph_parallel_edge_metadata(view)
@@ -1216,7 +1280,9 @@ def _separate_graph_positions(
             break
 
 
-def graph_layout(view: GraphView, *, width: float = 1000.0, height: float = 720.0) -> dict[str, tuple[float, float]]:
+def graph_layout(
+    view: GraphView, *, width: float = 1000.0, height: float = 720.0
+) -> dict[str, tuple[float, float]]:
     """Layout de fuerzas determinista y sin dependencias externas."""
     node_ids = [row.node_id for row in view.nodes]
     if not node_ids:

@@ -103,11 +103,15 @@ def test_discovery_persists_reproducible_candidates_without_canonical_writes(
                 "time": 1,
                 "work": 1,
             }
-            assert before == after == {
-                "authorities": 0,
-                "mentions": 0,
-                "relations": 0,
-            }
+            assert (
+                before
+                == after
+                == {
+                    "authorities": 0,
+                    "mentions": 0,
+                    "relations": 0,
+                }
+            )
             assert {row.semantic_family for row in rows} == {
                 "actor",
                 "space",
@@ -130,9 +134,9 @@ def test_discovery_persists_reproducible_candidates_without_canonical_writes(
         engine.dispose()
 
 
-
-
-def test_discovery_profile_can_upgrade_rules_without_rewriting_historical_runs(tmp_path: Path) -> None:
+def test_discovery_profile_can_upgrade_rules_without_rewriting_historical_runs(
+    tmp_path: Path,
+) -> None:
     root = tmp_path / "discovery_profile_rule_upgrade"
     _seed_discovery_project(root)
     engine = create_sqlite_engine(database_path(root))
@@ -213,9 +217,7 @@ def test_discovery_candidate_rows_can_return_more_than_500_when_limit_is_none(
                 created_by="tests",
             )
             template = session.scalar(
-                select(DiscoveryCandidate).where(
-                    DiscoveryCandidate.run_id == summary.run_id
-                )
+                select(DiscoveryCandidate).where(DiscoveryCandidate.run_id == summary.run_id)
             )
             assert template is not None
             for index in range(501):
@@ -269,6 +271,7 @@ def test_discovery_candidate_rows_can_return_more_than_500_when_limit_is_none(
             assert len(complete) > 500
     finally:
         engine.dispose()
+
 
 def test_discovery_rejects_unconfirmed_scope_and_changed_profile_authorization(
     tmp_path: Path,
@@ -393,9 +396,7 @@ def test_discovery_skips_registered_authority_surface(tmp_path: Path) -> None:
                 project_id="search_project",
                 run_id=summary.run_id,
             )
-            assert "Ministerio de Archivos Imaginarios" not in {
-                row.exact_text for row in rows
-            }
+            assert "Ministerio de Archivos Imaginarios" not in {row.exact_text for row in rows}
             assert summary.candidate_count == 6
     finally:
         engine.dispose()
@@ -521,9 +522,7 @@ def test_discovery_audit_and_cli_expose_traceability(tmp_path: Path) -> None:
         with session_scope(engine) as session:
             run_id = session.scalar(select(DiscoveryRun.id))
             assert run_id
-            payload = discovery_audit_payload(
-                session, project_id="search_project", run_id=run_id
-            )
+            payload = discovery_audit_payload(session, project_id="search_project", run_id=run_id)
             assert payload["run"]["authorization_id"]
             assert payload["run"]["candidate_count"] == 7
             assert len(payload["candidates"]) == 7
@@ -552,9 +551,7 @@ def test_discovery_audit_and_cli_expose_traceability(tmp_path: Path) -> None:
 
 def test_discovery_ui_keeps_profile_and_detection_controls_explicit() -> None:
     root = Path(__file__).parents[1]
-    source = (root / "src/archive_workbench/discovery_app.py").read_text(
-        encoding="utf-8"
-    )
+    source = (root / "src/archive_workbench/discovery_app.py").read_text(encoding="utf-8")
     assert '"Tarea para buscar nuevas entidades"' in source
     assert 'key="open_discovery_task"' in source
     assert 'label_visibility="collapsed"' in source
@@ -565,14 +562,18 @@ def test_discovery_ui_keeps_profile_and_detection_controls_explicit() -> None:
     assert "Trazabilidad técnica" in source
     assert 'key="open_discovery_tasks"' not in source
     assert 'st.expander("Resumen de la búsqueda ejecutada"' not in source
-    assert 'identificador técnico' not in source
+    assert "identificador técnico" not in source
     assert "Alcance de calidad ampliado:" not in source
     assert "Confirmo que esta búsqueda puede incluir páginas" not in source
     assert "Por qué esta búsqueda debe incluir páginas" not in source
-    assert "disabled=" not in source[
-        source.index('"Guardar configuración de búsqueda"') :
-        source.index('"Buscar nuevas entidades en los textos"')
-    ]
+    assert (
+        "disabled="
+        not in source[
+            source.index('"Guardar configuración de búsqueda"') : source.index(
+                '"Buscar nuevas entidades en los textos"'
+            )
+        ]
+    )
 
 
 def test_open_discovery_validation_script_prepares_disposable_copy(
@@ -622,9 +623,7 @@ def test_open_discovery_validation_script_prepares_disposable_copy(
 
 
 def _candidate_by_text(session, text: str) -> DiscoveryCandidate:
-    row = session.scalar(
-        select(DiscoveryCandidate).where(DiscoveryCandidate.exact_text == text)
-    )
+    row = session.scalar(select(DiscoveryCandidate).where(DiscoveryCandidate.exact_text == text))
     assert row is not None
     return row
 
@@ -994,9 +993,7 @@ def test_discovery_review_cli_registers_and_lists_decision(tmp_path: Path) -> No
 
 def test_discovery_review_ui_offers_explicit_append_only_actions() -> None:
     root = Path(__file__).parents[1]
-    source = (root / "src/archive_workbench/discovery_app.py").read_text(
-        encoding="utf-8"
-    )
+    source = (root / "src/archive_workbench/discovery_app.py").read_text(encoding="utf-8")
     assert 'key=f"discovery_candidate_review_panel_{row.candidate_id}"' in source
     assert 'help="Abrí este panel para aceptar la referencia o descartarla."' in source
     assert 'with st.expander("Revisar propuesta de descubrimiento", expanded=False):' not in source
@@ -1007,7 +1004,10 @@ def test_discovery_review_ui_offers_explicit_append_only_actions() -> None:
     assert '"grouping": "Duplicados y cambios de texto"' in source
     assert 'key="open_discovery_task"' in source
     assert 'key="open_discovery_tasks"' not in source
-    assert '["Revisar posibles referencias repetidas", "Actualizar referencias después de corregir el texto"]' in source
+    assert (
+        '["Revisar posibles referencias repetidas", "Actualizar referencias después de corregir el texto"]'
+        in source
+    )
     assert 'key="open_discovery_grouping_tasks"' in source
     assert 'key="open_discovery_grouping_continuity_panel"' not in source
     assert '"Aceptar esta referencia"' in source
@@ -1016,9 +1016,13 @@ def test_discovery_review_ui_offers_explicit_append_only_actions() -> None:
     assert '"Confirmo que quiero crear esta entidad con estado Sin revisar"' in source
     assert '"Restaurar esta referencia para revisarla"' in source
     assert "create_entity_relation" not in source
-    candidate_review = source[source.index("def _render_candidate_review("):source.index("def _render_grouping_and_continuity(")]
+    candidate_review = source[
+        source.index("def _render_candidate_review(") : source.index(
+            "def _render_grouping_and_continuity("
+        )
+    ]
     assert "st.form(" not in candidate_review
-    bulk_workspace = source[source.index('with bulk_tab:'):source.index('with discarded_tab:')]
+    bulk_workspace = source[source.index("with bulk_tab:") : source.index("with discarded_tab:")]
     assert "st.form(" in bulk_workspace
     assert "st.form_submit_button" in bulk_workspace
 
@@ -1074,9 +1078,7 @@ def test_open_discovery_review_validation_preparation_preserves_existing_run(
     shutil.copytree(source, destination)
     upgrade_database(destination)
     (destination / "validation").mkdir(exist_ok=True)
-    (destination / "validation" / "disc01a.json").write_text(
-        json.dumps(payload), encoding="utf-8"
-    )
+    (destination / "validation" / "disc01a.json").write_text(json.dumps(payload), encoding="utf-8")
     result = prepare_review_validation(destination)
     assert result["revision"] == "0047_authority_relation_profiles"
     assert result["run_id"] == run.run_id

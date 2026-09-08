@@ -79,9 +79,7 @@ def _validate_part_for_object(
         raise ValueError("La parte interna pertenece a otro documento")
     sequence = list(part.page_sequence_json or range(part.page_start, part.page_end + 1))
     if obj.page_number not in sequence:
-        raise ValueError(
-            f"La parte {part.part_key} no incluye la página física {obj.page_number}"
-        )
+        raise ValueError(f"La parte {part.part_key} no incluye la página física {obj.page_number}")
     return part
 
 

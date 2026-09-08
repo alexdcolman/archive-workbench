@@ -4,6 +4,7 @@ Revision ID: 0022_catalog_usability_entity_relations
 Revises: 0021_entity_authorities
 Create Date: 2026-07-24
 """
+
 from __future__ import annotations
 
 from alembic import op
@@ -24,9 +25,16 @@ def _uuid_sql() -> str:
 
 
 def _event_insert_sql(
-    *, entity_type: str, entity_id: str, operation: str, actor: str,
-    timestamp: str, project_id: str, base_revision: str = "NULL",
-    new_revision: str = "NULL", changed_fields: str = "'{}'",
+    *,
+    entity_type: str,
+    entity_id: str,
+    operation: str,
+    actor: str,
+    timestamp: str,
+    project_id: str,
+    base_revision: str = "NULL",
+    new_revision: str = "NULL",
+    changed_fields: str = "'{}'",
 ) -> str:
     return f"""
         INSERT INTO exchange_change_events (
@@ -67,7 +75,9 @@ def _revision_changed_fields(*, table: str, id_field: str, fields: tuple[str, ..
             "ELSE '{}' END"
         )
         expression = f"json_patch({expression}, {patch})"
-    return f"CASE WHEN NEW.operation = 'create' THEN json_object({create_parts}) ELSE {expression} END"
+    return (
+        f"CASE WHEN NEW.operation = 'create' THEN json_object({create_parts}) ELSE {expression} END"
+    )
 
 
 def _create_fts(table: str, tokenizer: str, *, include_relations: bool) -> None:
@@ -99,8 +109,12 @@ def upgrade() -> None:
         sa.Column("target_archival_unit_id", sa.String(length=36), nullable=True),
         sa.Column("target_document_part_id", sa.String(length=36), nullable=True),
         sa.Column("evidence_note", sa.Text(), nullable=True),
-        sa.Column("lifecycle_status", sa.String(length=32), nullable=False, server_default="active"),
-        sa.Column("review_status", sa.String(length=32), nullable=False, server_default="unreviewed"),
+        sa.Column(
+            "lifecycle_status", sa.String(length=32), nullable=False, server_default="active"
+        ),
+        sa.Column(
+            "review_status", sa.String(length=32), nullable=False, server_default="unreviewed"
+        ),
         sa.Column("created_by", sa.String(length=200), nullable=False),
         sa.Column("created_at", sa.DateTime(timezone=True), nullable=False),
         sa.Column("updated_by", sa.String(length=200), nullable=False),
@@ -112,10 +126,18 @@ def upgrade() -> None:
             name="ck_entity_relation_one_target",
         ),
         sa.ForeignKeyConstraint(["project_id"], ["projects.id"], ondelete="CASCADE"),
-        sa.ForeignKeyConstraint(["source_authority_id"], ["authority_records.id"], ondelete="CASCADE"),
-        sa.ForeignKeyConstraint(["target_authority_id"], ["authority_records.id"], ondelete="CASCADE"),
-        sa.ForeignKeyConstraint(["target_archival_unit_id"], ["archival_units.id"], ondelete="CASCADE"),
-        sa.ForeignKeyConstraint(["target_document_part_id"], ["document_parts.id"], ondelete="CASCADE"),
+        sa.ForeignKeyConstraint(
+            ["source_authority_id"], ["authority_records.id"], ondelete="CASCADE"
+        ),
+        sa.ForeignKeyConstraint(
+            ["target_authority_id"], ["authority_records.id"], ondelete="CASCADE"
+        ),
+        sa.ForeignKeyConstraint(
+            ["target_archival_unit_id"], ["archival_units.id"], ondelete="CASCADE"
+        ),
+        sa.ForeignKeyConstraint(
+            ["target_document_part_id"], ["document_parts.id"], ondelete="CASCADE"
+        ),
         sa.PrimaryKeyConstraint("id"),
     )
     for name, columns in (
@@ -139,18 +161,23 @@ def upgrade() -> None:
         sa.Column("changed_at", sa.DateTime(timezone=True), nullable=False),
         sa.ForeignKeyConstraint(["relation_id"], ["entity_relations.id"], ondelete="CASCADE"),
         sa.PrimaryKeyConstraint("id"),
-        sa.UniqueConstraint("relation_id", "revision_number", name="uq_entity_relation_revision_number"),
+        sa.UniqueConstraint(
+            "relation_id", "revision_number", name="uq_entity_relation_revision_number"
+        ),
     )
     op.create_index(
-        "ix_entity_relation_revisions_relation", "entity_relation_revisions",
-        ["relation_id", "revision_number"]
+        "ix_entity_relation_revisions_relation",
+        "entity_relation_revisions",
+        ["relation_id", "revision_number"],
     )
 
     op.execute("DROP TABLE IF EXISTS editable_search_fts")
     op.execute("DROP TABLE IF EXISTS editable_search_trigram_fts")
     _create_fts("editable_search_fts", "unicode61 remove_diacritics 2", include_relations=True)
     _create_fts("editable_search_trigram_fts", "trigram case_sensitive 0", include_relations=True)
-    op.execute("UPDATE editable_search_state SET dirty_generation = dirty_generation + 1 WHERE id = 1")
+    op.execute(
+        "UPDATE editable_search_state SET dirty_generation = dirty_generation + 1 WHERE id = 1"
+    )
 
     for suffix, event in (("ai", "INSERT"), ("au", "UPDATE"), ("ad", "DELETE")):
         op.execute(
@@ -165,27 +192,37 @@ def upgrade() -> None:
         )
 
     relation_fields = (
-        "source_authority_id", "relation_label", "target_authority_id",
-        "target_archival_unit_id", "target_document_part_id", "evidence_note",
-        "lifecycle_status", "review_status",
+        "source_authority_id",
+        "relation_label",
+        "target_authority_id",
+        "target_archival_unit_id",
+        "target_document_part_id",
+        "evidence_note",
+        "lifecycle_status",
+        "review_status",
     )
     op.execute(
         f"""
         CREATE TRIGGER trg_exchange_entity_relation_revision_ai
         AFTER INSERT ON entity_relation_revisions
         BEGIN
-            {_event_insert_sql(
-                entity_type='entity_relation',
-                entity_id='NEW.relation_id',
+            {
+            _event_insert_sql(
+                entity_type="entity_relation",
+                entity_id="NEW.relation_id",
                 operation="CASE WHEN NEW.operation = 'create' THEN 'create' ELSE 'update' END",
-                actor='NEW.changed_by', timestamp='NEW.changed_at',
+                actor="NEW.changed_by",
+                timestamp="NEW.changed_at",
                 project_id="json_extract(NEW.snapshot_json, '$.project_id')",
                 base_revision="CASE WHEN NEW.operation = 'create' THEN NULL ELSE NEW.revision_number - 1 END",
-                new_revision='NEW.revision_number',
+                new_revision="NEW.revision_number",
                 changed_fields=_revision_changed_fields(
-                    table='entity_relation_revisions', id_field='relation_id', fields=relation_fields,
+                    table="entity_relation_revisions",
+                    id_field="relation_id",
+                    fields=relation_fields,
                 ),
-            )}
+            )
+        }
         END
         """
     )
@@ -211,13 +248,17 @@ def upgrade() -> None:
         CREATE TRIGGER trg_exchange_digital_object_unit_link_ad
         AFTER DELETE ON digital_object_unit_links
         BEGIN
-            {_event_insert_sql(
-                entity_type='digital_object_unit_link', entity_id='OLD.id', operation="'delete'",
+            {
+            _event_insert_sql(
+                entity_type="digital_object_unit_link",
+                entity_id="OLD.id",
+                operation="'delete'",
                 actor="COALESCE((SELECT registered_by FROM source_registrations WHERE digital_object_id = OLD.digital_object_id AND archival_unit_id = OLD.archival_unit_id ORDER BY registered_at DESC, id DESC LIMIT 1), 'local_user')",
                 timestamp="COALESCE((SELECT registered_at FROM source_registrations WHERE digital_object_id = OLD.digital_object_id AND archival_unit_id = OLD.archival_unit_id ORDER BY registered_at DESC, id DESC LIMIT 1), CURRENT_TIMESTAMP)",
-                project_id='(SELECT project_id FROM digital_objects WHERE id = OLD.digital_object_id)',
+                project_id="(SELECT project_id FROM digital_objects WHERE id = OLD.digital_object_id)",
                 changed_fields=link_deleted,
-            )}
+            )
+        }
         END
         """
     )
@@ -232,12 +273,16 @@ def downgrade() -> None:
     op.execute("DROP TABLE IF EXISTS editable_search_trigram_fts")
     _create_fts("editable_search_fts", "unicode61 remove_diacritics 2", include_relations=False)
     _create_fts("editable_search_trigram_fts", "trigram case_sensitive 0", include_relations=False)
-    op.execute("UPDATE editable_search_state SET dirty_generation = dirty_generation + 1 WHERE id = 1")
+    op.execute(
+        "UPDATE editable_search_state SET dirty_generation = dirty_generation + 1 WHERE id = 1"
+    )
     op.drop_index("ix_entity_relation_revisions_relation", table_name="entity_relation_revisions")
     op.drop_table("entity_relation_revisions")
     for name in (
-        "ix_entity_relations_target_part", "ix_entity_relations_target_unit",
-        "ix_entity_relations_target_authority", "ix_entity_relations_source",
+        "ix_entity_relations_target_part",
+        "ix_entity_relations_target_unit",
+        "ix_entity_relations_target_authority",
+        "ix_entity_relations_source",
         "ix_entity_relations_project",
     ):
         op.drop_index(name, table_name="entity_relations")

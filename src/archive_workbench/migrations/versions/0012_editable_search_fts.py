@@ -4,6 +4,7 @@ Revision ID: 0012_editable_search_fts
 Revises: 0011_editor_parts_tag_kinds
 Create Date: 2026-07-23
 """
+
 from __future__ import annotations
 
 from alembic import op

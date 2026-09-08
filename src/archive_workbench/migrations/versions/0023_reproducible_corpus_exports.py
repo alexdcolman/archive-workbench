@@ -4,6 +4,7 @@ Revision ID: 0023_reproducible_corpus_exports
 Revises: 0022_catalog_usability_entity_relations
 Create Date: 2026-07-24
 """
+
 from __future__ import annotations
 
 from alembic import op
@@ -27,7 +28,9 @@ def upgrade() -> None:
         sa.Column("output_format", sa.String(length=16), nullable=False, server_default="jsonl"),
         sa.Column("include_object_types_json", sa.JSON(), nullable=False, server_default="[]"),
         sa.Column("include_review_statuses_json", sa.JSON(), nullable=False, server_default="[]"),
-        sa.Column("include_page_review_statuses_json", sa.JSON(), nullable=False, server_default="[]"),
+        sa.Column(
+            "include_page_review_statuses_json", sa.JSON(), nullable=False, server_default="[]"
+        ),
         sa.Column("object_separator", sa.Text(), nullable=False, server_default="\n\n"),
         sa.Column("page_separator", sa.Text(), nullable=False, server_default="\n\n"),
         sa.Column("include_page_markers", sa.Boolean(), nullable=False, server_default=sa.false()),
