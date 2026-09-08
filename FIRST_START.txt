@@ -1,4 +1,4 @@
-ARCHIVE WORKBENCH 0.89.0 RC80 - PRIMER INICIO
+ARCHIVE WORKBENCH 0.89.0 RC86 - PRIMER INICIO
 
 Archive Workbench se ejecuta dentro de una imagen preparada de Docker. No instala Python ni las dependencias del programa en tu sistema.
 
@@ -30,6 +30,16 @@ ArchiveWorkbenchData/
   Settings/            preferencias y cachés de modelos
 
 ArchiveWorkbenchData queda fuera del contenedor. Actualizar o reemplazar la imagen no reemplaza su contenido.
+
+REQUISITOS
+
+La ruta administrada requiere Docker. En Windows y macOS se usa Docker Desktop; en Linux puede usarse Docker Desktop o Docker Engine con Docker Compose.
+
+La imagen CPU se publica para linux/amd64 y linux/arm64 y no requiere una placa NVIDIA. La imagen GPU es opcional, se publica para linux/amd64 y requiere una GPU NVIDIA accesible desde Docker; en Windows se usa Docker Desktop sobre WSL2 y en Linux se necesita NVIDIA Container Toolkit.
+
+Si la imagen elegida todavía no está en el equipo, el primer inicio necesita conexión a Internet para descargarla. El espacio en disco y la memoria necesarios dependen del tamaño del proyecto y de los modelos opcionales utilizados; no se fija una cifra mínima que no haya sido validada materialmente.
+
+La instalación técnica desde código requiere Python 3.11 o posterior.
 
 WINDOWS
 

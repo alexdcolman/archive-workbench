@@ -175,6 +175,11 @@ def test_cross_platform_launchers_select_prebuilt_cpu_or_gpu_images() -> None:
             assert "http://localhost:8501" not in source
 
     first_start = (ROOT / "FIRST_START.txt").read_text(encoding="utf-8")
+    assert "0.89.0 RC86" in first_start
+    assert "REQUISITOS" in first_start
+    assert "linux/amd64" in first_start
+    assert "linux/arm64" in first_start
+    assert "Python 3.11 o posterior" in first_start
     assert "Windows" in first_start
     assert "macOS" in first_start
     assert "Linux" in first_start
@@ -186,6 +191,14 @@ def test_cross_platform_launchers_select_prebuilt_cpu_or_gpu_images() -> None:
     assert "macOS" in first_start and "NVIDIA" in first_start
     assert "Elegir un proyecto" in first_start
     assert "Google Drive" in first_start
+
+    installation = (ROOT / "docs" / "instalacion.html").read_text(encoding="utf-8")
+    assert 'id="requisitos"' in installation
+    assert "linux/amd64" in installation and "linux/arm64" in installation
+    assert "Python 3.11 o posterior" in installation
+    assert "Perfil GPU validado" in installation
+    assert "large-v3" in installation and "float16" in installation
+    assert "RTX 3090" in installation and "no constituye un requisito mínimo" in installation
 
 
 def test_container_shell_scripts_have_valid_syntax() -> None:
