@@ -710,8 +710,8 @@ def test_pilot_guide_delegates_future_work_to_single_pending_ledger() -> None:
 def test_readme_points_only_to_current_documentation_map() -> None:
     text = (ROOT / "README.md").read_text(encoding="utf-8")
     citation = (ROOT / "CITATION.cff").read_text(encoding="utf-8")
-    assert "Versión actual: 0.89.0" in text
-    assert 'version: "0.89.0"' in citation
+    assert "Versión actual: 1.0.0 RC1" in text
+    assert 'version: "1.0.0-rc1"' in citation
     assert "archive-workbench review-app" in text
     assert "Abrir un proyecto existente" in text
     assert "Crear un proyecto nuevo" in text
@@ -783,7 +783,7 @@ def test_public_site_diagrams_are_accessible_and_readme_points_to_site() -> None
     assert "docs/index.html" in readme
     assert "docs/tutorial.html" in readme
     assert "docs/assets/diagrams/flujo-general.svg" in readme
-    assert "versión 0.89.0" in readme.lower()
+    assert "versión 1.0.0 rc1" in readme.lower()
 
 
 def test_web01_is_closed_after_publication_and_keeps_novice_reader_rules() -> None:

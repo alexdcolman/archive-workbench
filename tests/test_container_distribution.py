@@ -175,7 +175,7 @@ def test_cross_platform_launchers_select_prebuilt_cpu_or_gpu_images() -> None:
             assert "http://localhost:8501" not in source
 
     first_start = (ROOT / "FIRST_START.txt").read_text(encoding="utf-8")
-    assert "0.89.0 RC86" in first_start
+    assert "1.0.0 RC1" in first_start
     assert "REQUISITOS" in first_start
     assert "linux/amd64" in first_start
     assert "linux/arm64" in first_start

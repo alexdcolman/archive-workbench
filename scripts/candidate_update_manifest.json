@@ -1,6 +1,6 @@
 {
   "schema_version": 1,
-  "candidate": "0.89.0 RC85 / QA-01 + OPS-02 cerrados 2026-09-07",
+  "candidate": "1.0.0 RC1 / OPS-03 cerrado 2026-09-08",
   "relocations": [
     {
       "from": "docs/HISTORIAL_DE_CAMBIOS.md",

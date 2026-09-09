@@ -1,3 +1,14 @@
+## 1.0.0 RC1 - candidata de lanzamiento - 2026-09-08
+
+- Cierra materialmente `OPS-03` y corta la primera candidata de la serie 1.0.
+- Confirma la distribución CPU en Windows mediante Docker Desktop sobre una instalación independiente, con persistencia de un proyecto real no trivial y una transcripción audiovisual.
+- Valida materialmente una migración desde `0044_layout_structure_review` hasta `0047_authority_relation_profiles`: integridad SQLite correcta y ninguna pérdida de filas en las tablas preexistentes.
+- Verifica creación, inspección y recuperación de backup sobre la base migrada sin modificar el proyecto activo.
+- Repite el intercambio completo entre dos copias sintéticas: inspección, `dry-run`, aplicación 1/1, backup automático e integridad final correcta.
+- Mantiene congelados los 30 contratos públicos de 1.0 y la revisión SQLite `0047_authority_relation_profiles`.
+- Publica los identificadores `1.0.0rc1`, `1.0.0-rc1-cpu` y `1.0.0-rc1-gpu`.
+- Sin cambios funcionales ni de esquema posteriores a los gates materiales de `OPS-03`.
+
 ## 0.89.0 - documentación pre-release - 2026-09-05
 
 - Separa la documentación pública de GitHub Pages de las bitácoras internas de desarrollo y continuidad.
