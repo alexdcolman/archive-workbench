@@ -1,0 +1,75 @@
+name: Publish Archive Workbench 1.0.0 stable release
+
+on:
+  push:
+    branches: [stable-1.0.0-prep]
+
+permissions:
+  contents: write
+  actions: write
+
+jobs:
+  publish:
+    if: github.actor != 'github-actions[bot]'
+    runs-on: ubuntu-latest
+    env:
+      GH_TOKEN: ${{ github.token }}
+      RELEASE_SHA: 5ab1855f53656976d8edad2887fa512349f4a40c
+      TAG: v1.0.0
+    steps:
+      - name: Checkout preparation branch
+        uses: actions/checkout@v6
+        with:
+          ref: stable-1.0.0-prep
+
+      - name: Verify stable main commit
+        shell: bash
+        run: |
+          ACTUAL=$(gh api repos/${GITHUB_REPOSITORY}/git/ref/heads/main --jq '.object.sha')
+          test "$ACTUAL" = "$RELEASE_SHA"
+
+      - name: Create stable tag if absent
+        shell: bash
+        run: |
+          if gh api repos/${GITHUB_REPOSITORY}/git/ref/tags/${TAG} >/dev/null 2>&1; then
+            ACTUAL=$(gh api repos/${GITHUB_REPOSITORY}/git/ref/tags/${TAG} --jq '.object.sha')
+            test "$ACTUAL" = "$RELEASE_SHA"
+          else
+            gh api --method POST repos/${GITHUB_REPOSITORY}/git/refs \
+              -f ref="refs/tags/${TAG}" \
+              -f sha="$RELEASE_SHA" >/dev/null
+          fi
+
+      - name: Publish stable GitHub Release if absent
+        shell: bash
+        run: |
+          if gh api repos/${GITHUB_REPOSITORY}/releases/tags/${TAG} >/dev/null 2>&1; then
+            PRERELEASE=$(gh api repos/${GITHUB_REPOSITORY}/releases/tags/${TAG} --jq '.prerelease')
+            DRAFT=$(gh api repos/${GITHUB_REPOSITORY}/releases/tags/${TAG} --jq '.draft')
+            test "$PRERELEASE" = "false"
+            test "$DRAFT" = "false"
+          else
+            gh api --method POST repos/${GITHUB_REPOSITORY}/releases \
+              -f tag_name="$TAG" \
+              -f target_commitish="$RELEASE_SHA" \
+              -f name="Archive Workbench 1.0.0" \
+              -f body='Primera versión estable de Archive Workbench, promovida desde 1.0.0 RC1 sin cambios funcionales ni de esquema. Mantiene la revisión SQLite 0047_authority_relation_profiles y los 30 contratos públicos congelados.' \
+              -F draft=false \
+              -F prerelease=false \
+              -F make_latest=true >/dev/null
+          fi
+
+      - name: Dispatch CPU and GPU container publication
+        shell: bash
+        run: |
+          gh api --method POST repos/${GITHUB_REPOSITORY}/actions/workflows/publish-container.yml/dispatches \
+            -f ref=main >/dev/null
+
+      - name: Remove temporary publication workflow
+        shell: bash
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git rm .github/workflows/publish-stable-1.0.0.yml
+          git commit -m "Remove temporary stable release publisher"
+          git push origin HEAD:stable-1.0.0-prep
