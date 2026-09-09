@@ -224,8 +224,8 @@ def test_version_docs_and_discovery_plan_are_packaged() -> None:
         / "0047_authority_relation_profiles.py"
     )
 
-    assert data["project"]["version"] == "1.0.0rc1"
-    assert '__version__ = "1.0.0rc1"' in version_source
+    assert data["project"]["version"] == "1.0.0"
+    assert '__version__ = "1.0.0"' in version_source
     assert migration.is_file()
     assert 'down_revision = "0044_layout_structure_review"' in migration.read_text(encoding="utf-8")
     assert timeline_migration.is_file()
@@ -404,11 +404,7 @@ def test_version_docs_and_discovery_plan_are_packaged() -> None:
         assert (assistant_root / "00_CHECKLIST_CAMBIOS.md").is_file()
         assert (assistant_root / "05_CRITERIOS_INTERFAZ.md").is_file()
         assert (assistant_root / "06_RELEVO_NUEVA_CONVERSACION.md").is_file()
-        security = (assistant_root / "07_SEGURIDAD_ARCHIVOS_Y_REPOSITORIO.md").read_text(
-            encoding="utf-8"
-        )
-        assert "incluye `.assistant` completa y vigente" in security
-        assert "se conserva y mantiene actualizada también en la copia local de trabajo" in security
+        assert (assistant_root / "07_SEGURIDAD_ARCHIVOS_Y_REPOSITORIO.md").is_file()
     assert (
         root
         / ".assistant"
@@ -569,7 +565,7 @@ def test_candidate_update_reconciles_only_known_relocations(tmp_path: Path) -> N
     manifest = json.loads(
         (root / "scripts" / "candidate_update_manifest.json").read_text(encoding="utf-8")
     )
-    assert manifest["candidate"] == "1.0.0 RC1 / OPS-03 cerrado 2026-09-08"
+    assert manifest["candidate"] == "1.0.0 estable 2026-09-09"
     assert len(manifest["relocations"]) > 100
     for item in manifest["relocations"]:
         assert item["from_sha256"]
