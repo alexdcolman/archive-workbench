@@ -1,3 +1,10 @@
+## 1.0.0 - versión estable - 2026-09-09
+
+- Publica la primera versión estable de Archive Workbench a partir de la candidata `1.0.0 RC1`, sin cambios funcionales ni de esquema de base de datos.
+- Mantiene la revisión SQLite `0047_authority_relation_profiles` y los 30 contratos públicos congelados en RC1.
+- Actualiza los identificadores de distribución a `1.0.0`, `1.0.0-cpu` y `1.0.0-gpu`.
+- Conserva como cerrados los gates y recorridos materiales del pre-release; el corte estable sólo actualiza metadatos, documentación, empaquetado y distribución.
+
 ## 1.0.0 RC1 - candidata de lanzamiento - 2026-09-08
 
 - Cierra materialmente `OPS-03` y corta la primera candidata de la serie 1.0.

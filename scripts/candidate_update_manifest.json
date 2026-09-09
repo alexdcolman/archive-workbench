@@ -1,12 +1,12 @@
 {
   "schema_version": 1,
-  "candidate": "1.0.0 RC1 / OPS-03 cerrado 2026-09-08",
+  "candidate": "1.0.0 estable 2026-09-09",
   "relocations": [
     {
       "from": "docs/HISTORIAL_DE_CAMBIOS.md",
       "to": ".assistant/project_docs/HISTORIAL_DE_CAMBIOS.md",
       "from_sha256": "bc8c734969380581a3f6a0911943f8ab79a503973c7010a9defcca6eb972804a",
-      "to_sha256": "e4dda347dba3baa94f08fed4db572d1dbd33726e0addfb39294e38feadaa74d9"
+      "to_sha256": "309fbfb433d40875c6e776926789da2ce75d726d5a2db20273306898eb8f9321"
     },
     {
       "from": "docs/historico/actualizaciones/ACTUALIZACION_Y_PRUEBA_0.46.0.md",
@@ -762,13 +762,13 @@
       "from": "docs/operativos/ACTUALIZACION_ACTUAL.md",
       "to": ".assistant/project_docs/operativos/ACTUALIZACION_ACTUAL.md",
       "from_sha256": "52d0486e27a2bec74b7e00758ea2ac84fe207b257246e11797f041f7d27dd834",
-      "to_sha256": "4c411cf202c0d7591c91c9014cabf9bb0d1910196e48de6d489d37f975fd6f06"
+      "to_sha256": "68785ebd892fab531b5850a8c274ea90046f244bb9519f6831aa9b6cf5a923c9"
     },
     {
       "from": "docs/operativos/ESTRATEGIA_DE_PRUEBAS.md",
       "to": ".assistant/project_docs/operativos/ESTRATEGIA_DE_PRUEBAS.md",
       "from_sha256": "af257c784a1ad8743f760049ddf1738b82739c953f96cf3a4813ebe37d9a3952",
-      "to_sha256": "a549da6dd58025e24cff99c13c8a04da82198113821aca1550d45b733b8abde3"
+      "to_sha256": "0fb35b07ab478c229f9a4c910f283df038ac833259c98e5d1bfcc83eeb5102c5"
     },
     {
       "from": "docs/operativos/GUIA_PRUEBA_PILOTO.md",
@@ -780,19 +780,19 @@
       "from": "docs/operativos/HOJA_DE_RUTA_PRE_RELEASE.md",
       "to": ".assistant/project_docs/operativos/HOJA_DE_RUTA_PRE_RELEASE.md",
       "from_sha256": "05dc4e3561d036562a9a677f0f173572f9e6c177fc4064232cd2f0fe8428c0b6",
-      "to_sha256": "37300386fcf092ca0babe9ff607b95dc0c67174c58387adf5b1869304eb51339"
+      "to_sha256": "08722d1a5c6d916faf6bc1aa3268f8ca9ca3d6ee87fa7a9ec3bb6e5d3b0f9108"
     },
     {
       "from": "docs/operativos/IMPLEMENTACIONES_REALIZADAS.md",
       "to": ".assistant/project_docs/operativos/IMPLEMENTACIONES_REALIZADAS.md",
       "from_sha256": "f502c275f3a3725ad3c15307c6e75dd0fe2a40cbaa905b02099d2661239f269d",
-      "to_sha256": "971d12eed1108f5d59f4dae27f5bda2e92b7e9291fff66cf44a74134221942d2"
+      "to_sha256": "606e2a5b844713b3a9a71ab40745126acafcf01ce827dea9c0a55f1bf777a52d"
     },
     {
       "from": "docs/operativos/PENDIENTES_ACTIVOS.md",
       "to": ".assistant/project_docs/operativos/PENDIENTES_ACTIVOS.md",
       "from_sha256": "29d397c22105c1edf23a1024cdeeb6282ad47fc1633e71940bc9d59030ed77f1",
-      "to_sha256": "c17d2cdab50d3a5578327fa180ed40b37eeb380593fd67aa21b78b9ad2373dac"
+      "to_sha256": "1c0fed41ad543e0f7368e9f4030fb599e26899c3cce34c83186c65ee4957b0ba"
     },
     {
       "from": "docs/referencia/ARQUITECTURA_Y_MODELO_ACTUAL.md",
