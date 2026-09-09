@@ -2,7 +2,7 @@
 
 Archive Workbench es una aplicación local para describir unidades archivísticas, incorporar documentos digitalizados, extraer y revisar texto, trabajar con audio y video, registrar entidades y relaciones, buscar en los textos y transcripciones del proyecto y preparar resultados exportables. Está orientada a archivos, bibliotecas y equipos de investigación que necesitan conservar la procedencia de los materiales y de las decisiones realizadas durante el trabajo.
 
-Versión actual: 1.0.0 RC1, candidata de lanzamiento.
+Versión actual: 1.0.0, versión estable.
 
 [Documentación pública](docs/index.html) · [Instalación](docs/instalacion.html) · [Tutorial](docs/tutorial.html) · [Conceptos](docs/conceptos.html) · [Referencia técnica](docs/referencia.html) · [Desarrollo](docs/desarrollo.html) · [Problemas frecuentes](docs/problemas.html)
 
@@ -199,7 +199,7 @@ La página [Conceptos](docs/conceptos.html) define el vocabulario utilizado en e
 
 ## Estado y límites
 
-La versión 1.0.0 RC1 se encuentra en validación final previa a 1.0.0 estable. La calidad del OCR y de la transcripción depende del material, el motor de procesamiento y el perfil utilizados. Los resultados de búsqueda semántica y de detección automática de referencias requieren interpretación dentro del corpus y de su contexto documental.
+La versión 1.0.0 es la primera versión estable de Archive Workbench. La calidad del OCR y de la transcripción depende del material, el motor de procesamiento y el perfil utilizados. Los resultados de búsqueda semántica y de detección automática de referencias requieren interpretación dentro del corpus y de su contexto documental.
 
 El estado público del trabajo previo a 1.0 se resume en [Desarrollo](docs/desarrollo.html). Los cambios publicados se registran en [CHANGELOG.md](CHANGELOG.md).
 
@@ -221,6 +221,6 @@ Desarrollo: Alex Colman, en el marco del Grupo de Investigación en Archivos de 
 
 Cita sugerida:
 
-> Colman, Alex, y Grupo de Investigación en Archivos de la Represión (GIAR). 2026. *Archive Workbench* (versión 1.0.0 RC1) [software]. https://github.com/alexdcolman/archive-workbench
+> Colman, Alex, y Grupo de Investigación en Archivos de la Represión (GIAR). 2026. *Archive Workbench* (versión 1.0.0) [software]. https://github.com/alexdcolman/archive-workbench
 
 [`CITATION.cff`](CITATION.cff) contiene los metadatos de cita para GitHub y gestores bibliográficos.
