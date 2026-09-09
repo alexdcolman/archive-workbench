@@ -38,7 +38,7 @@ cd archive-workbench
 python3 -m venv .venv
 source .venv/bin/activate
 python -m pip install --upgrade pip
-pip install -e "[dev,extraction,streamlit,semantic,tiff,discovery,audiovisual,platform]"
+pip install -e ".[dev,extraction,streamlit,semantic,tiff,discovery,audiovisual,platform]"
 archive-workbench review-app</code></pre>
 <p>También puede abrirse una carpeta conocida con <span class="path">archive-workbench review-app RUTA_DEL_PROYECTO</span>. El comando <span class="path">archive-workbench init-project RUTA</span> crea una estructura de proyecto desde terminal; <span class="path">--complete-existing</span> completa una carpeta existente sin reemplazar archivos ya presentes.</p>
 <p class="callout warning"><span class="ui-label">Migraciones de base:</span> si un proyecto necesita una revisión de base más reciente, primero se crea y verifica una copia de seguridad. <span class="path">db-upgrade</span> no se ejecuta por rutina.</p>
