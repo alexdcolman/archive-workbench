@@ -56,7 +56,7 @@ jobs:
               -f body='Primera versión estable de Archive Workbench, promovida desde 1.0.0 RC1 sin cambios funcionales ni de esquema. Mantiene la revisión SQLite 0047_authority_relation_profiles y los 30 contratos públicos congelados.' \
               -F draft=false \
               -F prerelease=false \
-              -F make_latest=true >/dev/null
+              -f make_latest=true >/dev/null
           fi
 
       - name: Dispatch CPU and GPU container publication
