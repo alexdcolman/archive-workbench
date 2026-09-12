@@ -559,13 +559,13 @@ def _render_authority_workspace(
                         "El texto del documento cambió después de vincular esta mención. Hay que comprobar si la mención sigue correspondiendo a la versión vigente."
                     )
                 if action.button(
-                    "Abrir en Revisar documentos",
+                    "Abrir en Edición y anotación",
                     key=f"authority_open_mention_{mention.mention_id}",
                     disabled=not bool(mention.source_key),
                 ):
                     request_app_view(
                         st,
-                        mode="review",
+                        mode="annotation",
                         source_key=mention.source_key,
                         page=mention.page_number,
                         object_id=mention.object_id,
@@ -777,13 +777,13 @@ def _render_authority_workspace(
                                 f"{candidate.existing_authority_name or 'otra entidad'}."
                             )
                         if open_col.button(
-                            "Abrir este fragmento en Revisar documentos",
+                            "Abrir este fragmento en Edición y anotación",
                             key=f"authority_candidate_open_{candidate.candidate_key}",
                             disabled=not bool(candidate.source_key),
                         ):
                             request_app_view(
                                 st,
-                                mode="review",
+                                mode="annotation",
                                 source_key=candidate.source_key,
                                 page=candidate.page_number,
                                 object_id=candidate.object_id,

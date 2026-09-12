@@ -100,6 +100,7 @@ from archive_workbench.review_annotations import (
     add_object_comment,
     add_object_tag,
     object_comment_rows,
+    object_comment_rows_for_objects,
     remove_object_tag,
     set_object_review_status,
     set_page_review_status,
@@ -109,6 +110,8 @@ from archive_workbench.review_parts import (
     assign_page_objects_to_part,
 )
 from archive_workbench.review_canvas import clickable_review_canvas
+from archive_workbench.annotation_station import annotation_station, build_annotation_payload
+from archive_workbench.version import __version__
 from archive_workbench.audiovisual import search_transcript_segments, format_timestamp
 from archive_workbench.search import (
     MATCH_MODES,
@@ -250,7 +253,8 @@ _VIEW_LABELS = {
     "audiovisual": "Audio y video",
     "processing": "Procesar documentos",
     "work": "Organizar trabajo",
-    "review": "Revisar documentos",
+    "review": "Revisión estructural",
+    "annotation": "Edición y anotación",
     "search": "Búsqueda textual",
     "semantic": "Búsqueda semántica",
     "authorities": "Entidades y menciones",
@@ -266,6 +270,7 @@ _WORKFLOW_STEPS = (
     "processing",
     "work",
     "review",
+    "annotation",
     "search",
     "semantic",
     "authorities",
@@ -281,6 +286,7 @@ _VIEW_PHASES = {
     "processing": "1. Preparar el corpus",
     "work": "2. Organizar y revisar",
     "review": "2. Organizar y revisar",
+    "annotation": "2. Organizar y revisar",
     "search": "3. Explorar y describir",
     "semantic": "3. Explorar y describir",
     "authorities": "3. Explorar y describir",
@@ -312,9 +318,14 @@ _VIEW_GUIDANCE = {
         "Después podés abrir cada tarea en Revisar documentos.",
     ),
     "review": (
-        "Comparar la imagen de cada página con el texto extraído, corregirlo y registrar decisiones sobre orden, estructura, casilleros, etiquetas, comentarios y menciones.",
-        "Necesitás al menos una página enviada a Revisar documentos desde Procesar documentos.",
-        "Después podés buscar los textos revisados y registrar menciones de entidades o relaciones analíticas.",
+        "Revisar la estructura del documento: orden de lectura, columnas, partes internas, casilleros, campos y geometría de los bloques.",
+        "Necesitás al menos una página preparada para revisión desde Procesar documentos.",
+        "Para corregir texto y anotar de forma secuencial, pasá a Edición y anotación.",
+    ),
+    "annotation": (
+        "Corregir texto y anotar una página completa con la imagen siempre visible y navegación secuencial entre fragmentos.",
+        "Necesitás al menos una página preparada para revisión desde Procesar documentos.",
+        "Podés guardar y avanzar bloque por bloque, registrar entidades, categorías y comentarios, o volver a Revisión estructural cuando necesites modificar la constitución de la página.",
     ),
     "search": (
         "Encontrar palabras, frases y fragmentos exactos en los textos revisados y transcripciones que estén disponibles para búsqueda.",
@@ -2112,6 +2123,7 @@ def _apply_pending_app_mode(st) -> None:
         "processing",
         "work",
         "review",
+        "annotation",
         "search",
         "semantic",
         "authorities",
@@ -2143,13 +2155,356 @@ def _apply_pending_navigation(st, document_map: dict[str, object]) -> None:
     if page not in page_options:
         page = page_options[0]
 
-    st.session_state["review_app_mode"] = "review"
+    target_mode = st.session_state.get("review_app_mode")
+    st.session_state["review_app_mode"] = target_mode if target_mode in {"review", "annotation"} else "annotation"
     st.session_state["review_source_key"] = source_key
     st.session_state["review_page_source"] = source_key
     st.session_state["review_page_number"] = page
     object_id = pending.get("object_id")
     if object_id:
         st.session_state["review_pending_object_id"] = str(object_id)
+
+
+
+def _set_annotation_focus(st, object_id: str | None) -> None:
+    if object_id:
+        st.session_state["annotation_focus_object_id"] = str(object_id)
+    st.session_state["annotation_focus_token"] = int(
+        st.session_state.get("annotation_focus_token", 0)
+    ) + 1
+
+
+def _render_annotation_view(
+    st,
+    *,
+    project_root: Path,
+    db_path: Path,
+    decisions,
+    reviewer: str,
+    documents: list[object],
+    document_map: dict[str, object],
+    type_definitions: list[object],
+    type_labels: dict[str, str],
+) -> None:
+    section_heading(st, "Edición y anotación")
+    if not documents:
+        st.info(
+            "Todavía no hay documentos listos para editar. Primero prepará una extracción en Procesar documentos."
+        )
+        if st.button("Ir a Procesar documentos", key="annotation_go_processing_empty"):
+            _request_workflow_step(st, "processing")
+        return
+
+    source_key = str(st.session_state.get("review_source_key") or documents[0].source_key)
+    if source_key not in document_map:
+        source_key = documents[0].source_key
+    document = document_map[source_key]
+    page_options = list(document.editable_pages)
+    page = int(st.session_state.get("review_page_number") or page_options[0])
+    if page not in page_options:
+        page = page_options[0]
+    st.session_state["review_source_key"] = source_key
+    st.session_state["review_page_source"] = source_key
+    st.session_state["review_page_number"] = page
+
+    incoming_object = st.session_state.pop("review_pending_object_id", None)
+    if incoming_object:
+        _set_annotation_focus(st, str(incoming_object))
+
+    engine = create_sqlite_engine(db_path)
+    try:
+        with session_scope(engine) as session:
+            view = review_page_view(
+                session,
+                project_root=project_root,
+                source_key=source_key,
+                page=page,
+                include_deleted=False,
+            )
+            object_ids = [item.object_id for item in view.objects if item.lifecycle_status == "active"]
+            mentions = mention_rows(session, object_ids=tuple(object_ids))
+            mentions_by_object: dict[str, list[object]] = {object_id: [] for object_id in object_ids}
+            for row in mentions:
+                mentions_by_object.setdefault(row.object_id, []).append(row)
+            comments_by_object = object_comment_rows_for_objects(
+                session, object_ids=object_ids
+            )
+            available_authorities = authority_rows(
+                session,
+                project_id=decisions.project_id,
+                lifecycle_statuses=("active",),
+            )
+    finally:
+        engine.dispose()
+
+    valid_ids = {item.object_id for item in view.objects if item.lifecycle_status == "active"}
+    focus_object_id = st.session_state.get("annotation_focus_object_id")
+    if focus_object_id not in valid_ids:
+        focus_object_id = next(iter(valid_ids), None)
+        if focus_object_id:
+            st.session_state["annotation_focus_object_id"] = focus_object_id
+    document_index = next(
+        (index for index, row in enumerate(documents) if row.source_key == source_key), 0
+    )
+    page_index = page_options.index(page)
+    payload = build_annotation_payload(
+        view,
+        object_types=[{"key": item.key, "label": item.label} for item in type_definitions],
+        authorities=available_authorities,
+        mentions_by_object=mentions_by_object,
+        comments_by_object=comments_by_object,
+        type_label_map=type_labels,
+        document_rows=documents,
+        document_index=document_index,
+        page_index=page_index,
+        initial_object_id=str(focus_object_id) if focus_object_id else None,
+    )
+    payload["focus_token"] = int(st.session_state.get("annotation_focus_token", 0))
+
+    action = annotation_station(payload, key=f"annotation_station_{source_key}_{page}")
+    if not action:
+        return
+    nonce = str(action.get("nonce") or "")
+    if nonce and nonce == st.session_state.get("annotation_last_action_nonce"):
+        return
+    if nonce:
+        st.session_state["annotation_last_action_nonce"] = nonce
+
+    kind = str(action.get("kind") or "")
+    try:
+        if kind == "navigate":
+            scope = str(action.get("scope") or "")
+            delta = int(action.get("delta") or 0)
+            if scope == "page":
+                target_index = page_index + delta
+                if 0 <= target_index < len(page_options):
+                    st.session_state["review_page_number"] = page_options[target_index]
+                    st.session_state["review_page_source"] = source_key
+                    st.session_state.pop("annotation_focus_object_id", None)
+                    _set_annotation_focus(st, None)
+                    rerun_app(st)
+            elif scope == "document":
+                target_index = document_index + delta
+                if 0 <= target_index < len(documents):
+                    target_doc = documents[target_index]
+                    st.session_state["review_source_key"] = target_doc.source_key
+                    st.session_state["review_page_source"] = target_doc.source_key
+                    st.session_state["review_page_number"] = target_doc.editable_pages[0]
+                    st.session_state.pop("annotation_focus_object_id", None)
+                    _set_annotation_focus(st, None)
+                    rerun_app(st)
+            return
+
+        if kind == "jump":
+            target_source = str(action.get("source_key") or "")
+            if target_source in document_map:
+                target_doc = document_map[target_source]
+                target_page = int(action.get("page") or target_doc.editable_pages[0])
+                if target_page not in target_doc.editable_pages:
+                    target_page = target_doc.editable_pages[0]
+                st.session_state["review_source_key"] = target_source
+                st.session_state["review_page_source"] = target_source
+                st.session_state["review_page_number"] = target_page
+                st.session_state.pop("annotation_focus_object_id", None)
+                _set_annotation_focus(st, None)
+                rerun_app(st)
+            return
+
+        if kind == "save_page_review":
+            editable_page_id = str(action.get("editable_page_id") or "")
+            if editable_page_id != view.editable_page_id:
+                raise ValueError(
+                    "La página cambió desde que se abrió. Volvé a revisar su estado antes de guardar."
+                )
+            new_page_status = str(action.get("review_status") or view.page_review_status)
+            if new_page_status not in REVIEW_STATUSES:
+                raise ValueError("El estado de revisión de la página no es válido.")
+            new_page_note = str(action.get("review_note") or "")
+            _database_action(
+                db_path,
+                lambda session: set_page_review_status(
+                    session,
+                    editable_page_id=view.editable_page_id,
+                    status=new_page_status,
+                    changed_by=reviewer or "local_user",
+                    note=new_page_note,
+                ),
+            )
+            _set_annotation_focus(st, str(focus_object_id) if focus_object_id else None)
+            rerun_view(st)
+            return
+
+        object_id = str(action.get("object_id") or "")
+        current = next((item for item in view.objects if item.object_id == object_id), None)
+        if current is None or current.lifecycle_status != "active":
+            raise ValueError("El bloque seleccionado ya no está disponible en esta página.")
+
+        if kind == "save":
+            expected_revision = int(action.get("expected_revision") or 0)
+            if expected_revision != current.revision_number:
+                raise ValueError(
+                    "El bloque cambió desde que se abrió. Volvé a revisar su texto antes de guardar."
+                )
+            new_text = str(action.get("text") if action.get("text") is not None else current.text)
+            new_type = str(action.get("object_type") or current.object_type)
+            new_status = str(action.get("review_status") or current.review_status)
+            text_changed = new_text != current.text
+            type_changed = new_type != current.object_type
+            status_changed = new_status != current.review_status
+
+            def save_callback(session):
+                if text_changed or type_changed:
+                    update_editable_object(
+                        session,
+                        decisions=decisions,
+                        object_id=object_id,
+                        expected_revision=expected_revision,
+                        edited_by=reviewer or "local_user",
+                        text=new_text if text_changed else None,
+                        object_type=new_type if type_changed else None,
+                        note="Edición desde Edición y anotación",
+                    )
+                if status_changed:
+                    set_object_review_status(
+                        session,
+                        object_id=object_id,
+                        status=new_status,
+                        changed_by=reviewer or "local_user",
+                    )
+                return object_id
+
+            _database_action(db_path, save_callback)
+            advance = str(action.get("advance") or "none")
+            active_objects = [item for item in view.objects if item.lifecycle_status == "active"]
+            current_index = next(
+                (index for index, item in enumerate(active_objects) if item.object_id == object_id), 0
+            )
+            if advance == "block" and current_index + 1 < len(active_objects):
+                _set_annotation_focus(st, active_objects[current_index + 1].object_id)
+            elif advance == "page" and page_index + 1 < len(page_options):
+                st.session_state["review_page_number"] = page_options[page_index + 1]
+                st.session_state.pop("annotation_focus_object_id", None)
+                _set_annotation_focus(st, None)
+            elif advance == "document" and document_index + 1 < len(documents):
+                target_doc = documents[document_index + 1]
+                st.session_state["review_source_key"] = target_doc.source_key
+                st.session_state["review_page_source"] = target_doc.source_key
+                st.session_state["review_page_number"] = target_doc.editable_pages[0]
+                st.session_state.pop("annotation_focus_object_id", None)
+                _set_annotation_focus(st, None)
+            else:
+                _set_annotation_focus(st, object_id)
+            rerun_app(st)
+            return
+
+        if kind == "add_tag":
+            _database_action(
+                db_path,
+                lambda session: add_object_tag(
+                    session,
+                    object_id=object_id,
+                    tag=str(action.get("tag") or ""),
+                    tag_kind=str(action.get("tag_kind") or "unclassified"),
+                    created_by=reviewer or "local_user",
+                ),
+            )
+            _set_annotation_focus(st, object_id)
+            rerun_view(st)
+            return
+
+        if kind == "remove_tag":
+            _database_action(
+                db_path,
+                lambda session: remove_object_tag(
+                    session,
+                    object_id=object_id,
+                    tag_id=str(action.get("tag_id") or ""),
+                ),
+            )
+            _set_annotation_focus(st, object_id)
+            rerun_view(st)
+            return
+
+        if kind == "add_comment":
+            _database_action(
+                db_path,
+                lambda session: add_object_comment(
+                    session,
+                    object_id=object_id,
+                    body=str(action.get("body") or ""),
+                    created_by=reviewer or "local_user",
+                ),
+            )
+            _set_annotation_focus(st, object_id)
+            rerun_view(st)
+            return
+
+        if kind == "scan_mentions":
+            _database_action(
+                db_path,
+                lambda session: suggest_dictionary_mentions(
+                    session,
+                    object_id=object_id,
+                    created_by=reviewer or "local_user",
+                    quality_scope_source="ui",
+                ),
+            )
+            _set_annotation_focus(st, object_id)
+            rerun_view(st)
+            return
+
+        if kind == "create_mention":
+            start_offset = int(action.get("start_offset"))
+            end_offset = int(action.get("end_offset"))
+            authority_id = str(action.get("authority_id") or "") or None
+            mention_status = str(action.get("status") or "accepted")
+            if authority_id is None and mention_status in LINKED_MENTION_STATUSES:
+                raise ValueError(
+                    "Una mención aceptada o modificada debe estar vinculada a una entidad."
+                )
+            _database_action(
+                db_path,
+                lambda session: create_mention(
+                    session,
+                    object_id=object_id,
+                    mention_text=str(action.get("mention_text") or ""),
+                    created_by=reviewer or "local_user",
+                    authority_id=authority_id,
+                    start_offset=start_offset,
+                    end_offset=end_offset,
+                    status=mention_status,
+                    source="manual",
+                    note="Creada desde Edición y anotación",
+                ),
+            )
+            _set_annotation_focus(st, object_id)
+            rerun_view(st)
+            return
+
+        if kind == "update_mention":
+            authority_id = str(action.get("authority_id") or "") or None
+            mention_status = str(action.get("status") or "pending")
+            if authority_id is None and mention_status in LINKED_MENTION_STATUSES:
+                raise ValueError(
+                    "Una mención aceptada o modificada debe estar vinculada a una entidad."
+                )
+            _database_action(
+                db_path,
+                lambda session: update_mention(
+                    session,
+                    mention_id=str(action.get("mention_id") or ""),
+                    expected_revision=int(action.get("expected_revision") or 0),
+                    status=mention_status,
+                    authority_id=authority_id,
+                    note=str(action.get("note") or ""),
+                    changed_by=reviewer or "local_user",
+                ),
+            )
+            _set_annotation_focus(st, object_id)
+            rerun_view(st)
+            return
+    except (ValueError, RuntimeError, OSError, TypeError) as exc:
+        st.error(str(exc))
 
 
 def _highlight_search_snippet(value: str) -> str:
@@ -2184,7 +2539,7 @@ def _open_search_result(st, *, results, index: int, query: str) -> None:
     target = entries[index]
     request_app_view(
         st,
-        mode="review",
+        mode="annotation",
         source_key=str(target["source_key"]),
         page=int(target["page"]),
         object_id=str(target["object_id"]),
@@ -2287,7 +2642,7 @@ def _render_search_result_navigation(st) -> None:
         target = entries[next_index]
         request_app_view(
             st,
-            mode="review",
+            mode="annotation",
             source_key=str(target["source_key"]),
             page=int(target["page"]),
             object_id=str(target["object_id"]),
@@ -2735,7 +3090,7 @@ def _render_search_view(
                 )
             with action:
                 if st.button(
-                    "Abrir este resultado en Revisar documentos",
+                    "Abrir este resultado en Edición y anotación",
                     key=f"open_search_{index}_{row.object_id}",
                     use_container_width=True,
                 ):
@@ -5206,6 +5561,7 @@ def main() -> None:
         _apply_pending_navigation(st, document_map)
     with st.sidebar:
         st.title("Archive Workbench")
+        st.caption(f"Versión {__version__.replace('rc', ' RC').upper() if 'rc' in __version__ else __version__}")
         reviewer, active_palette = _render_preferences(
             st,
             current_actor=preferences.actor,
@@ -5230,7 +5586,7 @@ def main() -> None:
                 _render_section_guidance(st, app_mode)
         _render_managed_shutdown(st)
 
-    if app_mode in {"review", "search"}:
+    if app_mode in {"review", "annotation", "search"}:
         load_review_documents()
 
     def render_active_view() -> None:
@@ -5343,7 +5699,20 @@ def main() -> None:
                 actor=reviewer,
             )
             return
-        section_heading(st, "Revisar documentos")
+        if app_mode == "annotation":
+            _render_annotation_view(
+                st,
+                project_root=project_root,
+                db_path=db_path,
+                decisions=decisions,
+                reviewer=reviewer,
+                documents=documents,
+                document_map=document_map,
+                type_definitions=type_definitions,
+                type_labels=type_labels,
+            )
+            return
+        section_heading(st, "Revisión estructural")
         if not documents:
             st.info(
                 "Todavía no hay documentos listos para revisar. Primero elegí una extracción en Procesar documentos e inicializá la revisión de sus páginas."
@@ -5636,7 +6005,7 @@ def main() -> None:
                 _render_search_result_navigation(st)
 
             with editor_column:
-                st.subheader("Revisar texto y estructura de la página")
+                st.subheader("Revisar estructura de la página")
                 if not object_ids:
                     st.info(
                         "Esta página no tiene bloques de texto visibles con la configuración actual."
@@ -5706,21 +6075,15 @@ def main() -> None:
                             rerun_app(st)
 
                     (
-                        edit_tab,
                         structure_tab,
                         form_tab,
-                        annotations_tab,
-                        entities_tab,
                         attributes_tab,
                         history_tab,
                     ) = tracked_tabs(
                         st,
                         [
-                            "Editar texto",
                             "Orden y estructura",
                             "Casilleros y campos",
-                            "Estado y anotaciones",
-                            "Menciones de entidades",
                             "Datos adicionales",
                             "Historial general",
                         ],
@@ -5728,67 +6091,13 @@ def main() -> None:
                         help_by_label=TAB_HELP["review_object_tabs"],
                         rerun_on_change=False,
                     )
-                    with edit_tab:
-                        with st.form(
-                            f"edit_{selected.object_id}_{selected.revision_number}",
-                            enter_to_submit=False,
-                        ):
-                            new_text = st.text_area(
-                                "Texto corregido", value=selected.text, height=260
-                            )
-                            type_index = (
-                                type_keys.index(selected.object_type)
-                                if selected.object_type in type_keys
-                                else 0
-                            )
-                            new_type = st.selectbox(
-                                "Clase de bloque de texto",
-                                options=type_keys,
-                                index=type_index,
-                                format_func=lambda key: type_labels.get(key, key),
-                            )
-                            note = st.text_input("Nota sobre esta corrección (opcional)")
-                            save = st.form_submit_button(
-                                "Guardar esta corrección como nueva revisión", type="primary"
-                            )
-                        if save:
-
-                            def save_callback(session):
-                                return execute_page_action(
-                                    session,
-                                    editable_page_id=view.editable_page_id,
-                                    action_type="edit",
-                                    changed_by=reviewer or "local_user",
-                                    selected_object_id=selected.object_id,
-                                    note=note or None,
-                                    action=lambda: update_editable_object(
-                                        session,
-                                        decisions=decisions,
-                                        object_id=selected.object_id,
-                                        expected_revision=selected.revision_number,
-                                        edited_by=reviewer or "local_user",
-                                        text=new_text,
-                                        object_type=new_type,
-                                        note=note or None,
-                                    ),
-                                )
-
-                            _run_action(
-                                st,
-                                lambda: _database_action(db_path, save_callback),
-                                selection_key=object_state_key,
-                                fallback_selection=selected.object_id,
-                            )
-
-                        if selected.original_text is not None:
-                            with st.expander("Ver OCR original inmutable"):
-                                st.text(selected.original_text)
-
+                    with structure_tab:
                         lifecycle_label = (
                             "Restaurar este bloque de texto"
                             if selected.lifecycle_status == "deleted"
                             else "Marcar este bloque de texto como eliminado"
                         )
+                        st.caption("Ciclo de vida del bloque")
                         with st.form(
                             f"lifecycle_{selected.object_id}_{selected.revision_number}",
                             enter_to_submit=False,
@@ -5828,7 +6137,6 @@ def main() -> None:
                                 fallback_selection=selected.object_id,
                             )
 
-                    with structure_tab:
                         structure_task_labels = {
                             "proposal": "Revisar orden y columnas",
                             "columns": "Ajustar columnas",
@@ -5912,141 +6220,6 @@ def main() -> None:
                             object_state_key=object_state_key,
                         )
 
-                    with annotations_tab:
-                        with st.form(f"object_review_{selected.object_id}", enter_to_submit=False):
-                            object_review_status = st.selectbox(
-                                "Estado de revisión del bloque de texto",
-                                options=list(REVIEW_STATUSES),
-                                index=list(REVIEW_STATUSES).index(selected.review_status),
-                                format_func=lambda value: _STATUS_LABELS[value],
-                            )
-                            object_review_submit = st.form_submit_button(
-                                "Guardar el estado de revisión de este bloque"
-                            )
-                        if object_review_submit:
-                            _run_action(
-                                st,
-                                lambda: _database_action(
-                                    db_path,
-                                    lambda session: set_object_review_status(
-                                        session,
-                                        object_id=selected.object_id,
-                                        status=object_review_status,
-                                        changed_by=reviewer or "local_user",
-                                    ),
-                                ),
-                                selection_key=object_state_key,
-                                fallback_selection=selected.object_id,
-                            )
-
-                        st.write("**Etiquetas**")
-                        if selected.tags:
-                            for tag in selected.tags:
-                                tag_col, remove_col = st.columns([5, 1])
-                                tag_col.write(
-                                    f"**{_TAG_KIND_LABELS.get(tag.tag_kind, tag.tag_kind)}:** "
-                                    f"`{tag.tag}`"
-                                )
-                                if remove_col.button(
-                                    "Quitar esta etiqueta",
-                                    key=f"remove_tag_{selected.object_id}_{tag.tag_id}",
-                                    help="Quitar esta etiqueta del bloque de texto",
-                                ):
-                                    _run_action(
-                                        st,
-                                        lambda tag_id=tag.tag_id: _database_action(
-                                            db_path,
-                                            lambda session: remove_object_tag(
-                                                session,
-                                                object_id=selected.object_id,
-                                                tag_id=tag_id,
-                                            ),
-                                        ),
-                                        selection_key=object_state_key,
-                                        fallback_selection=selected.object_id,
-                                    )
-                        else:
-                            st.caption("El bloque de texto seleccionado no tiene etiquetas.")
-                        with st.form(
-                            f"add_tag_{selected.object_id}",
-                            clear_on_submit=True,
-                            enter_to_submit=False,
-                        ):
-                            tag_kind = st.selectbox(
-                                "Categoría de la etiqueta",
-                                options=list(TAG_KINDS),
-                                format_func=lambda value: _TAG_KIND_LABELS[value],
-                            )
-                            new_tag = st.text_input("Texto de la nueva etiqueta")
-                            tag_submit = st.form_submit_button(
-                                "Agregar esta etiqueta al bloque de texto"
-                            )
-                        if tag_submit:
-
-                            def add_tag_callback(session):
-                                add_object_tag(
-                                    session,
-                                    object_id=selected.object_id,
-                                    tag=new_tag,
-                                    tag_kind=tag_kind,
-                                    created_by=reviewer or "local_user",
-                                )
-                                return selected.object_id
-
-                            _run_action(
-                                st,
-                                lambda: _database_action(db_path, add_tag_callback),
-                                selection_key=object_state_key,
-                                fallback_selection=selected.object_id,
-                            )
-
-                        st.write("**Comentarios**")
-                        # Los comentarios se leen en una sesión separada para mantener la UI simple.
-                        comments_engine = create_sqlite_engine(db_path)
-                        try:
-                            with session_scope(comments_engine) as comments_session:
-                                comment_rows = object_comment_rows(
-                                    comments_session, object_id=selected.object_id
-                                )
-                        finally:
-                            comments_engine.dispose()
-                        if comment_rows:
-                            for comment in reversed(comment_rows):
-                                st.markdown(
-                                    f"**{comment.created_by}** · {comment.created_at.isoformat(timespec='minutes')}"
-                                )
-                                st.write(comment.body)
-                        else:
-                            st.caption("El bloque de texto seleccionado no tiene comentarios.")
-                        with st.form(
-                            f"comment_{selected.object_id}",
-                            clear_on_submit=True,
-                            enter_to_submit=False,
-                        ):
-                            comment_body = st.text_area(
-                                "Nuevo comentario sobre este bloque de texto", height=100
-                            )
-                            comment_submit = st.form_submit_button(
-                                "Agregar este comentario al bloque de texto"
-                            )
-                        if comment_submit:
-
-                            def add_comment_callback(session):
-                                add_object_comment(
-                                    session,
-                                    object_id=selected.object_id,
-                                    body=comment_body,
-                                    created_by=reviewer or "local_user",
-                                )
-                                return selected.object_id
-
-                            _run_action(
-                                st,
-                                lambda: _database_action(db_path, add_comment_callback),
-                                selection_key=object_state_key,
-                                fallback_selection=selected.object_id,
-                            )
-
                     with attributes_tab:
                         if selected.attributes:
                             st.metric("Datos adicionales de este bloque", len(selected.attributes))
@@ -6055,211 +6228,6 @@ def main() -> None:
                             st.info(
                                 "El bloque de texto seleccionado no tiene datos adicionales vigentes."
                             )
-
-                    with entities_tab:
-                        entities_engine = create_sqlite_engine(db_path)
-                        try:
-                            with session_scope(entities_engine) as entities_session:
-                                object_mentions = mention_rows(
-                                    entities_session, object_id=selected.object_id
-                                )
-                                available_authorities = authority_rows(
-                                    entities_session,
-                                    project_id=decisions.project_id,
-                                    lifecycle_statuses=("active",),
-                                )
-                        finally:
-                            entities_engine.dispose()
-                        authority_map = {row.authority_id: row for row in available_authorities}
-                        authority_options = [None, *authority_map]
-
-                        st.write("**Menciones de entidades vinculadas a este bloque de texto**")
-                        if object_mentions:
-                            for mention in object_mentions:
-                                with st.container(border=True):
-                                    mention_header, mention_state = st.columns([4, 2])
-                                    mention_header.write(
-                                        f"**{mention.mention_text}** · "
-                                        f"{mention.authority_name or 'sin entidad vinculada'}"
-                                    )
-                                    mention_header.caption(
-                                        f"offsets {mention.start_offset}:{mention.end_offset} · "
-                                        f"origen {mention.source} · revisión textual "
-                                        f"{mention.object_revision_number}"
-                                    )
-                                    if mention.is_stale:
-                                        mention_header.warning(
-                                            "El texto fue editado después de crear esta mención. "
-                                            "Verificá los offsets antes de aceptarla."
-                                        )
-                                    with mention_state.form(
-                                        f"mention_update_{mention.mention_id}_{mention.revision}",
-                                        enter_to_submit=False,
-                                    ):
-                                        status_choice = st.selectbox(
-                                            "Estado de la mención",
-                                            options=list(MENTION_STATUSES),
-                                            index=list(MENTION_STATUSES).index(mention.status),
-                                            format_func=lambda value: _MENTION_STATUS_LABELS[value],
-                                        )
-                                        authority_choice = st.selectbox(
-                                            "Entidad vinculada a esta mención",
-                                            options=authority_options,
-                                            index=(
-                                                authority_options.index(mention.authority_id)
-                                                if mention.authority_id in authority_options
-                                                else 0
-                                            ),
-                                            format_func=lambda value: (
-                                                "Sin vincular"
-                                                if value is None
-                                                else (
-                                                    f"{authority_map[value].preferred_name} · "
-                                                    f"{_AUTHORITY_TYPE_LABELS[authority_map[value].entity_type]}"
-                                                )
-                                            ),
-                                        )
-                                        mention_note = st.text_input(
-                                            "Nota sobre esta mención (opcional)",
-                                            value=mention.note or "",
-                                        )
-                                        mention_submit = st.form_submit_button(
-                                            "Guardar cambios de la mención"
-                                        )
-                                    if mention_submit:
-                                        if (
-                                            authority_choice is None
-                                            and status_choice in LINKED_MENTION_STATUSES
-                                        ):
-                                            st.error(
-                                                "Una mención aceptada o modificada debe estar "
-                                                "vinculada a una entidad."
-                                            )
-                                        else:
-                                            _run_action(
-                                                st,
-                                                lambda mention=mention, status_choice=status_choice, authority_choice=authority_choice, mention_note=mention_note: (
-                                                    _database_action(
-                                                        db_path,
-                                                        lambda session: update_mention(
-                                                            session,
-                                                            mention_id=mention.mention_id,
-                                                            expected_revision=mention.revision,
-                                                            status=status_choice,
-                                                            authority_id=authority_choice,
-                                                            note=mention_note,
-                                                            changed_by=reviewer or "local_user",
-                                                        ),
-                                                    )
-                                                ),
-                                                selection_key=object_state_key,
-                                                fallback_selection=selected.object_id,
-                                            )
-                        else:
-                            st.caption("Sin menciones registradas")
-
-                        scan_col, note_col = st.columns([2, 3])
-                        with scan_col:
-                            scan_dictionary = st.button(
-                                "Buscar posibles menciones de entidades en este bloque",
-                                use_container_width=True,
-                                key=f"entity_scan_{selected.object_id}_{selected.revision_number}",
-                            )
-                        with note_col:
-                            st.caption(
-                                "Busca en este bloque de texto nombres que ya figuran en las fichas de entidades del proyecto y propone posibles menciones para que las revises antes de guardarlas."
-                            )
-                        if scan_dictionary:
-                            result_holder: dict[str, object] = {}
-
-                            def scan_callback(session):
-                                summary = suggest_dictionary_mentions(
-                                    session,
-                                    object_id=selected.object_id,
-                                    created_by=reviewer or "local_user",
-                                    quality_scope_source="ui",
-                                )
-                                result_holder["summary"] = summary
-                                return selected.object_id
-
-                            _run_action(
-                                st,
-                                lambda: _database_action(db_path, scan_callback),
-                                selection_key=object_state_key,
-                                fallback_selection=selected.object_id,
-                            )
-
-                        st.divider()
-                        st.write("**Agregar una mención manual**")
-                        if not available_authorities:
-                            st.info(
-                                "Primero creá un registro en la vista Entidades. "
-                                "También podés registrar una mención sin vincular."
-                            )
-                        with st.form(
-                            f"mention_create_{selected.object_id}_{selected.revision_number}",
-                            clear_on_submit=True,
-                            enter_to_submit=False,
-                        ):
-                            manual_text = st.text_input(
-                                "Texto exacto de la mención que querés registrar",
-                                placeholder="Debe aparecer en el texto corregido actual",
-                            )
-                            manual_occurrence = st.number_input(
-                                "Qué aparición de ese texto querés registrar",
-                                min_value=1,
-                                value=1,
-                                step=1,
-                                help="Usá 2, 3, etc. cuando el mismo texto aparece varias veces.",
-                            )
-                            manual_authority = st.selectbox(
-                                "Entidad con la que querés vincular esta mención",
-                                options=authority_options,
-                                format_func=lambda value: (
-                                    "Sin vincular"
-                                    if value is None
-                                    else (
-                                        f"{authority_map[value].preferred_name} · "
-                                        f"{_AUTHORITY_TYPE_LABELS[authority_map[value].entity_type]}"
-                                    )
-                                ),
-                            )
-                            manual_status = st.selectbox(
-                                "Estado de la mención",
-                                options=list(MENTION_STATUSES),
-                                index=list(MENTION_STATUSES).index("accepted"),
-                                format_func=lambda value: _MENTION_STATUS_LABELS[value],
-                            )
-                            manual_note = st.text_input("Nota sobre este registro (opcional)")
-                            manual_submit = st.form_submit_button("Agregar esta mención de entidad")
-                        if manual_submit:
-                            if (
-                                manual_authority is None
-                                and manual_status in LINKED_MENTION_STATUSES
-                            ):
-                                st.error(
-                                    "Una mención aceptada o modificada debe estar vinculada a una ficha de entidad. Usá Pendiente o Rechazada si todavía no querés vincularla."
-                                )
-                            else:
-                                _run_action(
-                                    st,
-                                    lambda: _database_action(
-                                        db_path,
-                                        lambda session: create_mention(
-                                            session,
-                                            object_id=selected.object_id,
-                                            mention_text=manual_text,
-                                            occurrence=int(manual_occurrence),
-                                            authority_id=manual_authority,
-                                            status=manual_status,
-                                            source="manual",
-                                            note=manual_note,
-                                            created_by=reviewer or "local_user",
-                                        ),
-                                    ),
-                                    selection_key=object_state_key,
-                                    fallback_selection=selected.object_id,
-                                )
 
                     with history_tab:
                         history_engine = create_sqlite_engine(db_path)

@@ -184,7 +184,7 @@ def _navigate_node(st, node: GraphNode) -> None:
     if node.kind in {"digital_object", "document_part"} and node.source_key:
         request_app_view(
             st,
-            mode="review",
+            mode="annotation",
             source_key=node.source_key,
             page=node.page_number or 1,
             object_id=node.object_id,
@@ -196,7 +196,7 @@ def _navigate_edge_evidence(st, edge: GraphEdge) -> None:
     if edge.source_key:
         request_app_view(
             st,
-            mode="review",
+            mode="annotation",
             source_key=edge.source_key,
             page=edge.page_number or 1,
             object_id=edge.object_id,
@@ -1185,7 +1185,7 @@ def render_graph_view(
                 ):
                     request_app_view(
                         st,
-                        mode="review",
+                        mode="annotation",
                         source_key=case.source_key,
                         page=case.page_number,
                         object_id=case.object_id,

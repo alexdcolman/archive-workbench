@@ -17,9 +17,10 @@ text{font-family:Arial,sans-serif;fill:#20211f}.phase{fill:#fbf9f3;stroke:#6d2f2
 <rect class="phase" x="365" y="70" width="280" height="285"/>
 <text class="n" x="390" y="105">2</text><text class="head" x="418" y="105">Organizar y revisar</text>
 <text class="item" x="390" y="170">Organizar trabajo</text>
-<text class="item" x="390" y="213">Revisar documentos</text>
-<text class="note" x="390" y="272">Asignaciones, correcciones,</text>
-<text class="note" x="390" y="298">estructura e historial.</text>
+<text class="item" x="390" y="205">Revisión estructural</text>
+<text class="item" x="390" y="235">Edición y anotación</text>
+<text class="note" x="390" y="285">Asignaciones, correcciones,</text>
+<text class="note" x="390" y="311">estructura e historial.</text>
 
 <rect class="phase" x="695" y="45" width="390" height="335"/>
 <text class="n" x="720" y="82">3</text><text class="head" x="748" y="82">Explorar y describir</text>

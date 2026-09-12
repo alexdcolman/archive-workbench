@@ -88,6 +88,34 @@ def object_comment_rows(session: Session, *, object_id: str) -> list[CommentRow]
     ]
 
 
+
+def object_comment_rows_for_objects(
+    session: Session, *, object_ids: list[str]
+) -> dict[str, list[CommentRow]]:
+    selected = list(dict.fromkeys(object_ids))
+    if not selected:
+        return {}
+    rows = session.scalars(
+        select(EditableObjectComment)
+        .where(EditableObjectComment.editable_object_id.in_(selected))
+        .order_by(
+            EditableObjectComment.editable_object_id,
+            EditableObjectComment.created_at,
+            EditableObjectComment.id,
+        )
+    ).all()
+    result: dict[str, list[CommentRow]] = {object_id: [] for object_id in selected}
+    for item in rows:
+        result.setdefault(item.editable_object_id, []).append(
+            CommentRow(
+                comment_id=item.id,
+                body=item.body,
+                created_by=item.created_by,
+                created_at=item.created_at,
+            )
+        )
+    return result
+
 def add_object_tag(
     session: Session,
     *,

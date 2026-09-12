@@ -163,7 +163,7 @@ def test_audiovisual_migration_adds_temporal_tables(tmp_path: Path) -> None:
     upgrade_database(root, revision="0044_layout_structure_review")
     assert current_revision(root) == "0044_layout_structure_review"
     upgrade_database(root)
-    assert current_revision(root) == "0047_authority_relation_profiles"
+    assert current_revision(root) == "0048_catalog_document_components"
     engine = create_sqlite_engine(database_path(root))
     try:
         tables = set(inspect(engine).get_table_names())

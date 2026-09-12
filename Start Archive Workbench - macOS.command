@@ -1,7 +1,7 @@
 #!/bin/bash
 set -u
 cd "$(dirname "$0")"
-IMAGE="${ARCHIVE_WORKBENCH_CPU_IMAGE:-ghcr.io/alexdcolman/archive-workbench:1.0.0-cpu}"
+IMAGE="${ARCHIVE_WORKBENCH_CPU_IMAGE:-ghcr.io/alexdcolman/archive-workbench:1.1.0-cpu}"
 export ARCHIVE_WORKBENCH_CPU_IMAGE="$IMAGE"
 
 if ! command -v docker >/dev/null 2>&1; then

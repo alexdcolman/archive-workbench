@@ -17,7 +17,7 @@ from archive_workbench.transcription_evaluation import (
     reviewed_reference_run_id,
 )
 
-EXPECTED_REVISION = "0047_authority_relation_profiles"
+EXPECTED_REVISION = "0048_catalog_document_components"
 QUALITY_PROFILE = "av03_quality_gpu_large_v3_v1"
 EXPECTED_TERMS = ("Trelew", "Horacio Bau", "Centro Cultural por la Memoria")
 

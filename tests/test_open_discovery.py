@@ -600,7 +600,7 @@ def test_open_discovery_validation_script_prepares_disposable_copy(
         source_engine.dispose()
 
     result = create_validation_copy(source, destination, force=False)
-    assert result["revision"] == "0047_authority_relation_profiles"
+    assert result["revision"] == "0048_catalog_document_components"
     assert result["expected_candidate_count"] == 7
     assert Path(result["validation_path"]).is_file()
 
@@ -1004,10 +1004,9 @@ def test_discovery_review_ui_offers_explicit_append_only_actions() -> None:
     assert '"grouping": "Duplicados y cambios de texto"' in source
     assert 'key="open_discovery_task"' in source
     assert 'key="open_discovery_tasks"' not in source
-    assert (
-        '["Revisar posibles referencias repetidas", "Actualizar referencias después de corregir el texto"]'
-        in source
-    )
+    assert '"Revisar posibles referencias repetidas"' in source
+    assert '"Actualizar referencias después de corregir el texto"' in source
+    assert 'key="open_discovery_grouping_tasks"' in source
     assert 'key="open_discovery_grouping_tasks"' in source
     assert 'key="open_discovery_grouping_continuity_panel"' not in source
     assert '"Aceptar esta referencia"' in source
@@ -1080,7 +1079,7 @@ def test_open_discovery_review_validation_preparation_preserves_existing_run(
     (destination / "validation").mkdir(exist_ok=True)
     (destination / "validation" / "disc01a.json").write_text(json.dumps(payload), encoding="utf-8")
     result = prepare_review_validation(destination)
-    assert result["revision"] == "0047_authority_relation_profiles"
+    assert result["revision"] == "0048_catalog_document_components"
     assert result["run_id"] == run.run_id
     assert len(result["candidate_ids_by_text"]) == 7
     engine = create_sqlite_engine(database_path(destination))

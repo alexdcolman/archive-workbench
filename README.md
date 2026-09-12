@@ -2,7 +2,7 @@
 
 Archive Workbench es una aplicación local para describir unidades archivísticas, incorporar documentos digitalizados, extraer y revisar texto, trabajar con audio y video, registrar entidades y relaciones, buscar en los textos y transcripciones del proyecto y preparar resultados exportables. Está orientada a archivos, bibliotecas y equipos de investigación que necesitan conservar la procedencia de los materiales y de las decisiones realizadas durante el trabajo.
 
-Versión actual: 1.0.0, versión estable.
+Versión pública estable: 1.1.0.
 
 [Documentación pública](docs/index.html) · [Instalación](docs/instalacion.html) · [Tutorial](docs/tutorial.html) · [Conceptos](docs/conceptos.html) · [Referencia técnica](docs/referencia.html) · [Desarrollo](docs/desarrollo.html) · [Problemas frecuentes](docs/problemas.html)
 
@@ -13,7 +13,7 @@ Versión actual: 1.0.0, versión estable.
 El recorrido de la interfaz se organiza en cinco fases visibles. En esta documentación, *corpus* significa el conjunto de documentos, textos, transcripciones y otros materiales reunidos para el trabajo del proyecto.
 
 1. Preparación del corpus: [Catálogo](docs/catalogo.html) describe unidades y vincula archivos digitales; [Audio y video](docs/audiovisual.html) incorpora medios y administra transcripciones; [Procesar documentos](docs/procesamiento.html) prepara imágenes, ejecuta extracción de texto y permite elegir qué extracción completa pasará a revisión.
-2. Organización y revisión: [Organizar trabajo](docs/trabajo.html) distribuye tareas entre personas; [Revisar documentos](docs/revision.html) muestra la imagen de una página junto al texto editable y conserva revisiones de texto, orden, estructura, formularios, anotaciones y menciones.
+2. Organización y revisión: [Organizar trabajo](docs/trabajo.html) distribuye tareas entre personas; [Revisión estructural y Edición y anotación](docs/revision.html) separan la constitución y geometría documental del trabajo con texto, clases de bloque, estado de página, etiquetas, comentarios y menciones.
 3. Exploración y descripción: [Búsquedas](docs/busquedas.html) reúne búsqueda textual y semántica; [Entidades y menciones](docs/entidades.html) registra referentes reutilizables del corpus; [Explorar relaciones](docs/relaciones.html) muestra las conexiones registradas en un grafo derivado.
 4. Preparación de resultados: [Exportar corpus](docs/exportacion.html) crea archivos JSONL o CSV y la salida «Exportar texto e imágenes (ZIP)» con una configuración registrada y huellas de verificación.
 5. Intercambio y preservación: [Intercambiar cambios](docs/intercambio.html) transporta trabajo entre copias locales del mismo proyecto mediante ZIP revisables; [Administrar y recuperar](docs/resguardo.html) comprueba integridad, crea copias de seguridad y prueba su recuperación.
@@ -24,20 +24,24 @@ La [documentación pública](docs/index.html) dedica una página a cada sección
 
 ## Instalación rápida con Docker
 
-La forma principal de ejecución usa una imagen preparada de Docker. No instala Python ni las dependencias internas de Archive Workbench en el sistema anfitrión.
+La forma principal de ejecución usa una imagen preparada de Docker. No hace falta instalar Git ni Python para usarla.
+
+[**Descargar Archive Workbench (ZIP)**](https://github.com/alexdcolman/archive-workbench/releases/latest/download/Archive-Workbench.zip) · [SHA-256](https://github.com/alexdcolman/archive-workbench/releases/latest/download/Archive-Workbench.zip.sha256) · [Instalación detallada](docs/instalacion.html)
+
+El ZIP contiene los lanzadores para Windows, Linux y macOS. Extraelo en una carpeta local antes de iniciar la aplicación.
 
 ### Windows
 
 1. Instalá y abrí [Docker Desktop](https://docs.docker.com/desktop/).
-2. Descargá o cloná este repositorio.
-3. Hacé doble clic en `Start Archive Workbench - Windows.bat`.
+2. Descargá y extraé el ZIP de Archive Workbench.
+3. Abrí la carpeta `Archive Workbench` y hacé doble clic en `Start Archive Workbench - Windows.bat`.
 4. Elegí un proyecto existente o abrí el inicio general.
 
-Con una GPU NVIDIA compatible y [Docker Desktop](https://docs.docker.com/desktop/) sobre WSL2 puede utilizarse `Start Archive Workbench - GPU - Windows.bat`.
+Con una GPU NVIDIA compatible y Docker Desktop sobre WSL2 puede utilizarse `Start Archive Workbench - GPU - Windows.bat`.
 
 ### Linux
 
-Con [Docker Desktop](https://docs.docker.com/desktop/) o Docker Engine + Compose instalado:
+Con Docker Desktop o Docker Engine + Compose instalado, descargá y extraé el ZIP y ejecutá desde la carpeta `Archive Workbench`:
 
 ```bash
 ./Start\ Archive\ Workbench\ -\ Linux.sh
@@ -51,9 +55,9 @@ Para NVIDIA GPU, con NVIDIA Container Toolkit configurado:
 
 ### macOS
 
-Con [Docker Desktop](https://docs.docker.com/desktop/) abierto, ejecutá `Start Archive Workbench - macOS.command`. La distribución administrada de macOS utiliza la imagen CPU.
+Con [Docker Desktop](https://docs.docker.com/desktop/) abierto, descargá y extraé el ZIP y ejecutá `Start Archive Workbench - macOS.command` dentro de la carpeta `Archive Workbench`. La distribución administrada de macOS utiliza la imagen CPU.
 
-La guía de [Instalación](docs/instalacion.html) explica `ArchiveWorkbenchData`, CPU/GPU, apertura de proyectos existentes y la ruta técnica desde terminal.
+La guía de [Instalación](docs/instalacion.html) explica `ArchiveWorkbenchData`, CPU/GPU, apertura de proyectos existentes y la ruta técnica desde terminal. La clonación del repositorio queda reservada para desarrollo o diagnóstico.
 
 ## Abrir o crear un proyecto
 
@@ -77,9 +81,12 @@ Actualizar o reemplazar la imagen Docker no reemplaza esa carpeta.
 
 El catálogo distingue la descripción archivística de la ubicación física de los archivos en la computadora. Una unidad del catálogo puede representar un fondo, una sección, una serie, una unidad documental u otro nivel habilitado por el proyecto. Los objetos digitales se vinculan con esas unidades mediante relaciones registradas.
 
+`Organizar archivos en documentos` permite recorrer archivos ya incorporados mediante miniaturas o vista individual, conservar una selección entre conjuntos, agrupar varias imágenes, editar títulos, ordenar componentes y crear unidades `Documento` sin asumir que cada archivo digital constituye un documento. Las miniaturas se muestran de a seis y la organización sólo modifica el catálogo después de una confirmación explícita.
+
 Entre las funciones disponibles se encuentran:
 
 - Incorporación individual y por lote de archivos digitales;
+- organización posterior de archivos ya incorporados en unidades `Documento`, con agrupación de uno o varios objetos, orden explícito, rangos de página y títulos editables antes de confirmar;
 - Productores y responsables de gestión vinculados con unidades del catálogo, con período, evidencia e historial;
 - importación y exportación de planillas XLSX, el formato de hoja de cálculo de Excel, con simulación previa;
 - registro de ubicación, tipo e historial de cada unidad.
@@ -88,13 +95,11 @@ Entre las funciones disponibles se encuentran:
 
 ## Procesamiento y revisión de documentos
 
-La preparación de imágenes produce derivados vinculados con el archivo original. Una corrida de OCR produce una extracción de texto con su perfil y procedencia. Si hay varias extracciones disponibles para una página, «Elegir texto» determina cuál se utilizará como base en «Revisar documentos».
+La preparación de imágenes produce derivados vinculados con el archivo original. Una corrida de OCR produce una extracción de texto con su perfil y procedencia. Si hay varias extracciones disponibles para una página, «Elegir texto» determina cuál se utilizará como base en las vistas de revisión.
 
-[![Revisar documentos con una página, un marco de texto seleccionado y el editor de texto.](docs/assets/screenshots/REV-01-revisar-documentos.png)](docs/assets/screenshots/REV-01-revisar-documentos.png)
+`Revisión estructural` conserva orden de lectura, columnas, casilleros, campos, datos adicionales e historial. `Edición y anotación` muestra la imagen y todos los bloques de la página en una estación continua; el bloque activo permite corregir texto, cambiar su clase, registrar menciones, etiquetas y comentarios y modificar el mismo estado de revisión de página que utiliza la vista estructural. Guardar una corrección crea una revisión nueva y el historial anterior permanece disponible.
 
-Guardar una corrección crea una revisión nueva. El historial anterior permanece disponible. La misma sección permite revisar orden de lectura, columnas, casilleros y campos, etiquetas, comentarios, menciones de entidades y datos adicionales de procedencia.
-
-[Procesar documentos](docs/procesamiento.html) · [Revisar documentos](docs/revision.html) · [Tutorial](docs/tutorial.html)
+[Procesar documentos](docs/procesamiento.html) · [Revisión estructural y Edición y anotación](docs/revision.html) · [Tutorial](docs/tutorial.html)
 
 ## Audio y video
 
@@ -221,6 +226,6 @@ Desarrollo: Alex Colman, en el marco del Grupo de Investigación en Archivos de 
 
 Cita sugerida:
 
-> Colman, Alex, y Grupo de Investigación en Archivos de la Represión (GIAR). 2026. *Archive Workbench* (versión 1.0.0) [software]. https://github.com/alexdcolman/archive-workbench
+> Colman, Alex, y Grupo de Investigación en Archivos de la Represión (GIAR). 2026. *Archive Workbench* (versión 1.1.0) [software]. https://github.com/alexdcolman/archive-workbench
 
 [`CITATION.cff`](CITATION.cff) contiene los metadatos de cita para GitHub y gestores bibliográficos.

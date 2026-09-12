@@ -647,7 +647,7 @@ def _execute_batch(
 
 
 def _open_review(st, *, source_key: str, page: int) -> None:
-    request_app_view(st, mode="review", source_key=source_key, page=page)
+    request_app_view(st, mode="annotation", source_key=source_key, page=page)
     rerun_app(st)
 
 

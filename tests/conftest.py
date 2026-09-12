@@ -23,6 +23,7 @@ TEST_LEVELS: dict[str, frozenset[str]] = {
             "test_temporal.py",
             "test_test_corpus.py",
             "test_ui_navigation.py",
+            "test_ux05_annotation_station.py",
         }
     ),
     "integration": frozenset(

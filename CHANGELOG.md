@@ -1,3 +1,117 @@
+## 1.1.0 - versión estable - 2026-09-12
+
+- Separa `Revisión estructural` de `Edición y anotación`, con una estación dedicada para corrección textual, clases de bloque, estado de página, menciones, etiquetas y comentarios.
+- Agrega `Catálogo > Organizar archivos en documentos`, con agrupación provisional, orden natural, miniaturas, navegación rápida, composición multiarcivo y rangos de página persistidos mediante `ArchivalDocumentComponent`.
+- Incorpora la migración SQLite `0048_catalog_document_components`.
+- Actualiza las capturas y la documentación pública para las nuevas superficies de Catálogo y revisión.
+- Simplifica la distribución pública mediante `Archive-Workbench.zip`, sin exigir Git ni Python para la ruta normal de uso.
+- Publica identificadores de contenedor `1.1.0-cpu` y `1.1.0-gpu`; los proyectos continúan fuera del contenedor.
+- Mantiene sin cambios los contratos públicos congelados de 1.0 (`stable_v1.py`).
+- Conserva compatibilidad de intercambio con bases históricas anteriores a `0048`: el estado editable sólo consulta `ArchivalDocumentComponent` cuando esa tabla existe.
+
+## 1.1.0 RC14 - descarga administrada WEB-02 - 2026-09-12
+
+- agrega un ZIP administrado mínimo y multiplataforma para GitHub Releases, con checksum SHA-256 y permisos ejecutables preservados;
+- automatiza la publicación del ZIP en releases y permite completar releases existentes mediante `workflow_dispatch`;
+- reemplaza en sitio y README la clonación como ruta normal por una descarga directa, conservando `git clone` sólo para desarrollo/diagnóstico;
+- no modifica base de datos ni contratos funcionales.
+
+## 1.1.0 RC13 - capturas WEB-02 - 2026-09-12
+
+- Incorpora capturas reales actuales de `Organizar archivos en documentos`, `Revisión estructural` y `Edición y anotación`, y reemplaza la captura de Productores y responsables de Catálogo.
+- Retira del sitio las capturas que todavía representaban la antigua sección `Revisar documentos`; las copias se preservan en el histórico privado.
+- Actualiza navegación, README, conceptos, búsqueda textual y el diagrama general para usar los nombres actuales de `Revisión estructural` y `Edición y anotación`.
+- Conserva las capturas de subsistemas no modificados: WEB-02 deja de exigir una reconstrucción integral cuando no existe un cambio material de interfaz.
+- No modifica código funcional ni esquema de base; continúa `0048_catalog_document_components`.
+
+## 1.1.0 RC12 - inventario WEB-02 - 2026-09-11
+
+- Audita el conjunto público de capturas y fija una tanda coherente de reconstrucción para WEB-02.
+- No modifica la aplicación ni la base de datos.
+
+## 1.1.0 RC11 - orden de trabajo y entrega limpia - 2026-09-11
+
+- Activa `WEB-02` como siguiente bloque de trabajo; difiere `PILOT-01N` hasta nuevo aviso y `AI-01`/`AI-02` hasta el final.
+- Mueve los artefactos transitorios de entrega de candidatas a `delivery/`; el repositorio instalado ya no conserva instalador ni `PACKAGE_MANIFEST.json` en raíz.
+- No cambia comportamiento funcional ni revisión de base (`0048_catalog_document_components`).
+
+## 1.1.0 RC10 - continuidad documental y WEB-02 diferido - 2026-09-11
+
+- Agrega `WEB-02` como pendiente posterior al bloque actual para renovar capturas/imágenes de GitHub, actualizar el sitio con nuevas secciones y funcionalidades y simplificar descarga/instalación.
+- No cambia comportamiento funcional ni base de datos; continúa `0048_catalog_document_components`.
+
+## 1.1.0 RC9 - cierre material de CAT-DOC-01 - 2026-09-11
+
+- Cierra `CAT-DOC-01` después de la validación material satisfactoria sobre el corpus real.
+- Confirma miniaturas y navegación, persistencia de selección, agrupación multiarcivo, títulos/orden editables, varios documentos provisionales y creación correcta de unidades `Documento` conservando procedencia.
+- Mantiene cobertura automatizada específica para dividir un archivo multipágina en rangos distintos.
+- No cambia funcionalidad ni esquema; continúa `0048_catalog_document_components`.
+
+## 1.1.0 RC8 - saneamiento final de la raíz local - 2026-09-11
+
+- Completa la reorganización documental detectada en la instalación real de RC7.
+- Reubica por SHA-256 los residuos conocidos de UX-05 RC2 y los instaladores sustituidos hacia `.assistant/project_docs/historico/actualizaciones/`.
+- Archiva de forma conservadora el relevo local `RELEVO_NUEVA_CONVERSACION_20260908.md` en `.assistant/project_docs/historico/relevos/recuperados_locales/`, preservando sus bytes y registrando su SHA-256, por autorización explícita de Alex.
+- Amplía el control estructural de raíz para detectar guías `.txt` e instaladores históricos que no siguen el patrón `INSTALAR_RC*.sh`.
+- No cambia funcionalidad, contratos ni SQLite; continúa `0048_catalog_document_components`.
+
+## 1.1.0 RC7 - reconciliación segura de residuos documentales - 2026-09-11
+
+- Corrige el saneamiento de raíz cuando sobrevive un relevo/checkpoint/estado/guía con un nombre fechado no cubierto por una reubicación exacta.
+- Retira esos residuos sólo si su SHA-256 coincide con una copia histórica canónica del paquete; una copia desconocida o modificada bloquea la actualización antes de escribir.
+- No cambia funcionalidad, contratos públicos ni la revisión SQLite `0048_catalog_document_components`.
+
+## 1.1.0 RC6 - reorganización documental interna - 2026-09-11
+
+- No modifica comportamiento funcional, esquema SQLite ni contratos públicos; continúa `0048_catalog_document_components`.
+- Restaura la política documental: `operativos/` conserva sólo sus cinco documentos canónicos.
+- Archiva diseños cerrados de UX-05/CAT-DOC-01, evidencia cerrada de WEB-01, relevos y checkpoints antiguos bajo `.assistant/project_docs/historico/`.
+- Retira de la raíz documentos internos de candidatas y relevos que habían vuelto a mezclarse con piezas públicas/distributivas.
+- Sincroniza `PENDIENTES_ACTIVOS`, `ACTUALIZACION_ACTUAL`, relevo, historial y manifiestos con la candidata vigente.
+- Cierra 37 pruebas documentales/empaquetado/operacionales; la colección reconoce 720 pruebas y se construye el wheel `archive_workbench-1.1.0rc6-py3-none-any.whl`.
+
+## 1.1.0 RC5 - rendimiento y lectura visual en CAT-DOC-01 - 2026-09-11
+
+- Mantiene el orden natural y la navegación directa incorporados en RC4.
+- Reduce la vista de miniaturas a seis archivos por conjunto y aumenta su superficie para reconocer mejor el texto y la composición de cada imagen.
+- Separa visualmente la grilla de miniaturas de las acciones `Vaciar selección` y `Crear grupo provisional con la selección`.
+- Encierra únicamente la mesa de exploración de CAT-DOC-01 en un `st.fragment` autocontenido: cambiar vista, pasar de archivo y solicitar otro conjunto ya no reconstruye toda la pantalla de Catálogo.
+- Reutiliza el derivado `preview` vigente cuando está disponible y evita volver al TIFF/PDF original para cada miniatura.
+- Agrega caché acotada de miniaturas y vistas previas, invalidada por ruta, tamaño y fecha de modificación del archivo.
+- Mantiene la selección de miniaturas en `sessionStorage`; sólo crear un grupo provisional vuelve a ser una acción semántica de aplicación completa.
+- No agrega migraciones; continúa `0048_catalog_document_components`.
+- Cierra 215 pruebas focales/transversales; la colección reconoce 718 pruebas y se construye el wheel `archive_workbench-1.1.0rc5-py3-none-any.whl`.
+
+## 1.1.0 RC4 - navegación visual de CAT-DOC-01 - 2026-09-11
+
+- Ordena nombres con tramos numéricos en orden natural (`1, 2, 3, 10, 100`).
+- Agrega navegación anterior/siguiente en la vista de archivo individual.
+- Agrega selección por miniaturas paginadas con persistencia provisional entre conjuntos.
+- Mantiene la confirmación explícita antes de crear un grupo provisional.
+- No agrega migraciones; continúa `0048_catalog_document_components`.
+
+## 1.1.0 RC3 - candidata local CAT-DOC-01 - 2026-09-11
+
+- Incorpora `Organizar archivos en documentos` como tarea independiente de Catálogo, debajo de `Incorporar archivos`.
+- Permite agrupar objetos digitales, marcar cortes en secuencias, editar títulos sugeridos y crear varios documentos hijos en una confirmación explícita.
+- Persiste el orden interno y los rangos de página mediante `ArchivalDocumentComponent`.
+- Agrega la migración `0048_catalog_document_components`.
+- Cierra gates focales/transversales de RC3 (211 pruebas), `pytest --collect-only -q` sobre 714 pruebas y wheel `archive_workbench-1.1.0rc3-py3-none-any.whl`; la validación material queda pendiente.
+
+## 1.1.0 RC2 - candidata local UX-05 - 2026-09-11
+
+- Expone en `Edición y anotación` el mismo estado de revisión de página que utiliza `Revisión estructural` y guarda ambos cambios sobre `EditablePage`.
+- Mantiene `approved` como filtro predeterminado para sugerencias automáticas de menciones y muestra el estado bloqueante con un rótulo legible.
+- Documenta `CAT-DOC-01`, diseño pendiente para organizar objetos digitales ya incorporados en unidades hijas `Documento` con agrupación controlada de uno o varios archivos.
+- Sin migración; continúa `0047_authority_relation_profiles`.
+
+## 1.1.0 RC1 - candidata local UX-05 - 2026-09-11
+
+- Separa `Revisión estructural` de `Edición y anotación`.
+- Incorpora una estación dedicada con imagen y todos los bloques de la página, foco local, corrección textual, paleta de tipos, menciones, etiquetas y comentarios.
+- Retira de `Revisión estructural` las herramientas de edición textual y anotación que pertenecen a la nueva estación.
+- Sin migración; continúa `0047_authority_relation_profiles`.
+
 ## 1.0.0 - versión estable - 2026-09-09
 
 - Publica la primera versión estable de Archive Workbench a partir de la candidata `1.0.0 RC1`, sin cambios funcionales ni de esquema de base de datos.

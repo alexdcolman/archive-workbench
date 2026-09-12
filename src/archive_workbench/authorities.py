@@ -51,6 +51,12 @@ ALIAS_TYPES = (
 MENTION_STATUSES = ("pending", "accepted", "rejected", "modified")
 LINKED_MENTION_STATUSES = ("accepted", "modified")
 MENTION_SOURCES = ("manual", "dictionary", "automatic")
+_PAGE_REVIEW_LABELS = {
+    "unreviewed": "Sin revisar",
+    "needs_review": "Requiere revisión",
+    "reviewed": "Revisada",
+    "approved": "Aprobada",
+}
 _UNSET = object()
 
 
@@ -1084,6 +1090,7 @@ def mention_rows(
     *,
     project_id: str | None = None,
     object_id: str | None = None,
+    object_ids: tuple[str, ...] = (),
     authority_id: str | None = None,
     statuses: Iterable[str] = (),
 ) -> list[MentionRow]:
@@ -1103,6 +1110,9 @@ def mention_rows(
         statement = statement.where(DigitalObject.project_id == project_id)
     if object_id is not None:
         statement = statement.where(EntityMention.editable_object_id == object_id)
+    selected_object_ids = tuple(dict.fromkeys(object_ids))
+    if selected_object_ids:
+        statement = statement.where(EntityMention.editable_object_id.in_(selected_object_ids))
     if authority_id is not None:
         statement = statement.where(EntityMention.authority_id == authority_id)
     selected_statuses = tuple(dict.fromkeys(statuses))
@@ -2452,9 +2462,10 @@ def suggest_dictionary_mentions(
         page is None or page.review_status not in selected_page_statuses
     ):
         current = page.review_status if page is not None else "desconocido"
+        current_label = _PAGE_REVIEW_LABELS.get(current, current)
         raise ValueError(
             "La página no cumple el filtro de calidad para sugerencias automáticas "
-            f"(estado actual: {current})"
+            f"(estado actual: {current_label})"
         )
     authorities = session.scalars(
         select(AuthorityRecord)

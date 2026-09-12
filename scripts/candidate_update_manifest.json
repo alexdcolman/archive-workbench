@@ -1,12 +1,12 @@
 {
   "schema_version": 1,
-  "candidate": "1.0.0 estable 2026-09-09",
+  "candidate": "Archive Workbench 1.1.0 — preparación de publicación",
   "relocations": [
     {
       "from": "docs/HISTORIAL_DE_CAMBIOS.md",
       "to": ".assistant/project_docs/HISTORIAL_DE_CAMBIOS.md",
       "from_sha256": "bc8c734969380581a3f6a0911943f8ab79a503973c7010a9defcca6eb972804a",
-      "to_sha256": "309fbfb433d40875c6e776926789da2ce75d726d5a2db20273306898eb8f9321"
+      "to_sha256": "b8db4984cf60838130201e2a24ddde9f79339669e1ba7e65699e1b61ad5a9a30"
     },
     {
       "from": "docs/historico/actualizaciones/ACTUALIZACION_Y_PRUEBA_0.46.0.md",
@@ -762,7 +762,7 @@
       "from": "docs/operativos/ACTUALIZACION_ACTUAL.md",
       "to": ".assistant/project_docs/operativos/ACTUALIZACION_ACTUAL.md",
       "from_sha256": "52d0486e27a2bec74b7e00758ea2ac84fe207b257246e11797f041f7d27dd834",
-      "to_sha256": "68785ebd892fab531b5850a8c274ea90046f244bb9519f6831aa9b6cf5a923c9"
+      "to_sha256": "fbc87f4dbc2af397c7fcea0104babede3e5174e4740be1ef3e74a46fabfa3cc5"
     },
     {
       "from": "docs/operativos/ESTRATEGIA_DE_PRUEBAS.md",
@@ -786,19 +786,19 @@
       "from": "docs/operativos/IMPLEMENTACIONES_REALIZADAS.md",
       "to": ".assistant/project_docs/operativos/IMPLEMENTACIONES_REALIZADAS.md",
       "from_sha256": "f502c275f3a3725ad3c15307c6e75dd0fe2a40cbaa905b02099d2661239f269d",
-      "to_sha256": "606e2a5b844713b3a9a71ab40745126acafcf01ce827dea9c0a55f1bf777a52d"
+      "to_sha256": "89a379db61662f152c0f12ae931b5ccb260468ce6c5bb4f9c9c926442031fc7f"
     },
     {
       "from": "docs/operativos/PENDIENTES_ACTIVOS.md",
       "to": ".assistant/project_docs/operativos/PENDIENTES_ACTIVOS.md",
       "from_sha256": "29d397c22105c1edf23a1024cdeeb6282ad47fc1633e71940bc9d59030ed77f1",
-      "to_sha256": "1c0fed41ad543e0f7368e9f4030fb599e26899c3cce34c83186c65ee4957b0ba"
+      "to_sha256": "352186b26cd716c47551b4507fb4aaee0d749cd144852168f3b834437c903fe6"
     },
     {
       "from": "docs/referencia/ARQUITECTURA_Y_MODELO_ACTUAL.md",
       "to": ".assistant/project_docs/referencia/ARQUITECTURA_Y_MODELO_ACTUAL.md",
       "from_sha256": "41d5482a700b090e6b13d0610be82be71aa3cdcc075ca0c726d2463960064433",
-      "to_sha256": "07df71561b68a900086ae77189ba5ae11a56e47759324472c902063b4b620211"
+      "to_sha256": "14cf47fd556e4e5d7a7a5b9f581b81689bc61573382046c8da6f52ed63c89a75"
     },
     {
       "from": "docs/referencia/BENCHMARK_OCR_VERDAD_TERRENO.md",
@@ -862,237 +862,953 @@
     },
     {
       "from": "docs/assets/screenshots/ADM-04-restaurar.png",
-      "to": ".assistant/project_docs/operativos/WEB01_CAPTURAS/lote_09/ADM-04-restaurar.png",
+      "to": ".assistant/project_docs/historico/web01/capturas/lote_09/ADM-04-restaurar.png",
       "from_sha256": "bfd9886e4741b43c1294723bfcb25e6986b5bc17fcf73569a38689902022893c",
       "to_sha256": "bfd9886e4741b43c1294723bfcb25e6986b5bc17fcf73569a38689902022893c"
     },
     {
       "from": "docs/assets/screenshots/ADM-05-autorizaciones-analisis.png",
-      "to": ".assistant/project_docs/operativos/WEB01_CAPTURAS/lote_09/ADM-05-autorizaciones-analisis.png",
+      "to": ".assistant/project_docs/historico/web01/capturas/lote_09/ADM-05-autorizaciones-analisis.png",
       "from_sha256": "c4244044114d3714df7c3d6830f9a76cfe54e0af9a073c438e6c0b190bddd1f0",
       "to_sha256": "c4244044114d3714df7c3d6830f9a76cfe54e0af9a073c438e6c0b190bddd1f0"
     },
     {
       "from": "docs/assets/screenshots/BS-02-configurar-indice.png",
-      "to": ".assistant/project_docs/operativos/WEB01_CAPTURAS/lote_04/BS-02-configurar-indice.png",
+      "to": ".assistant/project_docs/historico/web01/capturas/lote_04/BS-02-configurar-indice.png",
       "from_sha256": "8416ed089f63c86c0eca1179431096206f373b5693e2232f10c83ed71470cd31",
       "to_sha256": "8416ed089f63c86c0eca1179431096206f373b5693e2232f10c83ed71470cd31"
     },
     {
       "from": "docs/assets/screenshots/BT-03-transcripciones.png",
-      "to": ".assistant/project_docs/operativos/WEB01_CAPTURAS/lote_04/BT-03-transcripciones.png",
+      "to": ".assistant/project_docs/historico/web01/capturas/lote_04/BT-03-transcripciones.png",
       "from_sha256": "a47b05939934c8df72c919cb5f01ac27730a7025616565a0f642e82735575823",
       "to_sha256": "a47b05939934c8df72c919cb5f01ac27730a7025616565a0f642e82735575823"
     },
     {
       "from": "docs/assets/screenshots/CAT-04-archivos-vinculados.png",
-      "to": ".assistant/project_docs/operativos/WEB01_CAPTURAS/lote_01/CAT-04-archivos-vinculados.png",
+      "to": ".assistant/project_docs/historico/web01/capturas/lote_01/CAT-04-archivos-vinculados.png",
       "from_sha256": "01a38322a3d2e90bc5c276cfab1bcd2a65468853a52ff782fc2ac7a54251b438",
       "to_sha256": "01a38322a3d2e90bc5c276cfab1bcd2a65468853a52ff782fc2ac7a54251b438"
     },
     {
       "from": "docs/assets/screenshots/CAT-05-ubicacion-tipo.png",
-      "to": ".assistant/project_docs/operativos/WEB01_CAPTURAS/lote_01/CAT-05-ubicacion-tipo.png",
+      "to": ".assistant/project_docs/historico/web01/capturas/lote_01/CAT-05-ubicacion-tipo.png",
       "from_sha256": "094363f6bac9c574b2ebf0448bbe61be60b77bd6497da417b866c6b29582eea1",
       "to_sha256": "094363f6bac9c574b2ebf0448bbe61be60b77bd6497da417b866c6b29582eea1"
     },
     {
       "from": "docs/assets/screenshots/CAT-06-historial-unidad.png",
-      "to": ".assistant/project_docs/operativos/WEB01_CAPTURAS/lote_01/CAT-06-historial-unidad.png",
+      "to": ".assistant/project_docs/historico/web01/capturas/lote_01/CAT-06-historial-unidad.png",
       "from_sha256": "67907a15aa389695b26b065a34e71cfcc4e0f34340b95ac335219bf836f9da1b",
       "to_sha256": "67907a15aa389695b26b065a34e71cfcc4e0f34340b95ac335219bf836f9da1b"
     },
     {
       "from": "docs/assets/screenshots/CAT-07-planilla-catalogo.png",
-      "to": ".assistant/project_docs/operativos/WEB01_CAPTURAS/lote_01/CAT-07-planilla-catalogo.png",
+      "to": ".assistant/project_docs/historico/web01/capturas/lote_01/CAT-07-planilla-catalogo.png",
       "from_sha256": "43264fdddf2de82612058a106d4bbf4a6c762bc794f4f9c4107c198e6f7c9e22",
       "to_sha256": "43264fdddf2de82612058a106d4bbf4a6c762bc794f4f9c4107c198e6f7c9e22"
     },
     {
       "from": "docs/assets/screenshots/CAT-08-crear-unidad.png",
-      "to": ".assistant/project_docs/operativos/WEB01_CAPTURAS/lote_01/CAT-08-crear-unidad.png",
+      "to": ".assistant/project_docs/historico/web01/capturas/lote_01/CAT-08-crear-unidad.png",
       "from_sha256": "dfeed7528714ec8cd6884ade83dca6b09627ffd6e84bbf64f1d80ec1cc8d4ad6",
       "to_sha256": "dfeed7528714ec8cd6884ade83dca6b09627ffd6e84bbf64f1d80ec1cc8d4ad6"
     },
     {
       "from": "docs/assets/screenshots/ENT-03-relaciones.png",
-      "to": ".assistant/project_docs/operativos/WEB01_CAPTURAS/lote_05/ENT-03-relaciones.png",
+      "to": ".assistant/project_docs/historico/web01/capturas/lote_05/ENT-03-relaciones.png",
       "from_sha256": "f9b6529f7e663dc1fd879712d792257e72577d0dcd7c9e04632ff0e447415569",
       "to_sha256": "f9b6529f7e663dc1fd879712d792257e72577d0dcd7c9e04632ff0e447415569"
     },
     {
       "from": "docs/assets/screenshots/ENT-04-historial.png",
-      "to": ".assistant/project_docs/operativos/WEB01_CAPTURAS/lote_05/ENT-04-historial.png",
+      "to": ".assistant/project_docs/historico/web01/capturas/lote_05/ENT-04-historial.png",
       "from_sha256": "1220e0c85bac8387528a7b192dd2ec61a040265f4607639b58f81ce0b36b8dcf",
       "to_sha256": "1220e0c85bac8387528a7b192dd2ec61a040265f4607639b58f81ce0b36b8dcf"
     },
     {
       "from": "docs/assets/screenshots/ENT-05-crear-ficha.png",
-      "to": ".assistant/project_docs/operativos/WEB01_CAPTURAS/lote_05/ENT-05-crear-ficha.png",
+      "to": ".assistant/project_docs/historico/web01/capturas/lote_05/ENT-05-crear-ficha.png",
       "from_sha256": "f606282e95a536ec58078c33a334fa2d26afca231e51bddf445211e554057885",
       "to_sha256": "f606282e95a536ec58078c33a334fa2d26afca231e51bddf445211e554057885"
     },
     {
       "from": "docs/assets/screenshots/ENT-06-importar-exportar.png",
-      "to": ".assistant/project_docs/operativos/WEB01_CAPTURAS/lote_05/ENT-06-importar-exportar.png",
+      "to": ".assistant/project_docs/historico/web01/capturas/lote_05/ENT-06-importar-exportar.png",
       "from_sha256": "d0dd926954e170c0230b79d7d0653c2c0517db51121ab0e3c0451218182769a4",
       "to_sha256": "d0dd926954e170c0230b79d7d0653c2c0517db51121ab0e3c0451218182769a4"
     },
     {
       "from": "docs/assets/screenshots/ENT-08-revisar-una-por-una.png",
-      "to": ".assistant/project_docs/operativos/WEB01_CAPTURAS/lote_05/ENT-08-revisar-una-por-una.png",
+      "to": ".assistant/project_docs/historico/web01/capturas/lote_05/ENT-08-revisar-una-por-una.png",
       "from_sha256": "65f2956852be9742df7e0a7e509472452b5b3c3249d97c95bbdff12f31cfa5a6",
       "to_sha256": "65f2956852be9742df7e0a7e509472452b5b3c3249d97c95bbdff12f31cfa5a6"
     },
     {
       "from": "docs/assets/screenshots/ENT-10-referencias-descartadas.png",
-      "to": ".assistant/project_docs/operativos/WEB01_CAPTURAS/lote_05/ENT-10-referencias-descartadas.png",
+      "to": ".assistant/project_docs/historico/web01/capturas/lote_05/ENT-10-referencias-descartadas.png",
       "from_sha256": "2657cf8d003f0057e64e793f32c3b6663e6e8057bf70033d757c1d00c63c8733",
       "to_sha256": "2657cf8d003f0057e64e793f32c3b6663e6e8057bf70033d757c1d00c63c8733"
     },
     {
       "from": "docs/assets/screenshots/ENT-12-actualizar-referencias.png",
-      "to": ".assistant/project_docs/operativos/WEB01_CAPTURAS/lote_05/ENT-12-actualizar-referencias.png",
+      "to": ".assistant/project_docs/historico/web01/capturas/lote_05/ENT-12-actualizar-referencias.png",
       "from_sha256": "cfedf06b0ac5ac1c9c5ea15ed96aaac29890ea78adf86b346cd89dfbf7ab367a",
       "to_sha256": "cfedf06b0ac5ac1c9c5ea15ed96aaac29890ea78adf86b346cd89dfbf7ab367a"
     },
     {
       "from": "docs/assets/screenshots/EXP-02-revisar-documentos.png",
-      "to": ".assistant/project_docs/operativos/WEB01_CAPTURAS/lote_07/EXP-02-revisar-documentos.png",
+      "to": ".assistant/project_docs/historico/web01/capturas/lote_07/EXP-02-revisar-documentos.png",
       "from_sha256": "8f6d2d8b5b1388f863a2fce2b3ef295a07e6c55e713d50967d7819c472424aa6",
       "to_sha256": "8f6d2d8b5b1388f863a2fce2b3ef295a07e6c55e713d50967d7819c472424aa6"
     },
     {
       "from": "docs/assets/screenshots/EXP-03-crear-documentos.png",
-      "to": ".assistant/project_docs/operativos/WEB01_CAPTURAS/lote_07/EXP-03-crear-documentos.png",
+      "to": ".assistant/project_docs/historico/web01/capturas/lote_07/EXP-03-crear-documentos.png",
       "from_sha256": "d11b6fe1244157389f2acb051941cb2693123a6f1401088b7cf31b25f8aa09e2",
       "to_sha256": "d11b6fe1244157389f2acb051941cb2693123a6f1401088b7cf31b25f8aa09e2"
     },
     {
       "from": "docs/assets/screenshots/EXP-06-revisar-audiovisual.png",
-      "to": ".assistant/project_docs/operativos/WEB01_CAPTURAS/lote_07/EXP-06-revisar-audiovisual.png",
+      "to": ".assistant/project_docs/historico/web01/capturas/lote_07/EXP-06-revisar-audiovisual.png",
       "from_sha256": "36716579c153df9b87480e88887ef6402be00cd703ab49525e1e83531d20d606",
       "to_sha256": "36716579c153df9b87480e88887ef6402be00cd703ab49525e1e83531d20d606"
     },
     {
       "from": "docs/assets/screenshots/EXP-07-crear-audiovisual.png",
-      "to": ".assistant/project_docs/operativos/WEB01_CAPTURAS/lote_07/EXP-07-crear-audiovisual.png",
+      "to": ".assistant/project_docs/historico/web01/capturas/lote_07/EXP-07-crear-audiovisual.png",
       "from_sha256": "33b4ab4c245cc453b41a42be6b37554cfb30ede6bab56440e185f9222de6c5fc",
       "to_sha256": "33b4ab4c245cc453b41a42be6b37554cfb30ede6bab56440e185f9222de6c5fc"
     },
     {
       "from": "docs/assets/screenshots/EXP-08-historial-audiovisual.png",
-      "to": ".assistant/project_docs/operativos/WEB01_CAPTURAS/lote_07/EXP-08-historial-audiovisual.png",
+      "to": ".assistant/project_docs/historico/web01/capturas/lote_07/EXP-08-historial-audiovisual.png",
       "from_sha256": "27373e60b7b1db8b4e13a4f8c63be79e35e037a5b795e34bea610d48acf1b2fb",
       "to_sha256": "27373e60b7b1db8b4e13a4f8c63be79e35e037a5b795e34bea610d48acf1b2fb"
     },
     {
       "from": "docs/assets/screenshots/INT-01-enviar-cambios.png",
-      "to": ".assistant/project_docs/operativos/WEB01_CAPTURAS/lote_08/INT-01-enviar-cambios.png",
+      "to": ".assistant/project_docs/historico/web01/capturas/lote_08/INT-01-enviar-cambios.png",
       "from_sha256": "19d7b247f7c582844ae40c6e75ce082fbd597382000baa376435b7d40d7510ca",
       "to_sha256": "19d7b247f7c582844ae40c6e75ce082fbd597382000baa376435b7d40d7510ca"
     },
     {
       "from": "docs/assets/screenshots/PRO-02-preparar-extraer.png",
-      "to": ".assistant/project_docs/operativos/WEB01_CAPTURAS/lote_02/PRO-02-preparar-extraer.png",
+      "to": ".assistant/project_docs/historico/web01/capturas/lote_02/PRO-02-preparar-extraer.png",
       "from_sha256": "919bf3dc317d74a31e0a1d6ad8848d17a5a7c0aad7a7bec4cd9d03e240f82092",
       "to_sha256": "919bf3dc317d74a31e0a1d6ad8848d17a5a7c0aad7a7bec4cd9d03e240f82092"
     },
     {
       "from": "docs/assets/screenshots/PRO-04-elegir-texto.png",
-      "to": ".assistant/project_docs/operativos/WEB01_CAPTURAS/lote_02/PRO-04-elegir-texto.png",
+      "to": ".assistant/project_docs/historico/web01/capturas/lote_02/PRO-04-elegir-texto.png",
       "from_sha256": "768f7d557a8afe6de9b88e5548983f9b886ab9f6a7bfdddbc3724cdd2639eb9b",
       "to_sha256": "768f7d557a8afe6de9b88e5548983f9b886ab9f6a7bfdddbc3724cdd2639eb9b"
     },
     {
       "from": "docs/assets/screenshots/PRO-06-enviar-revision.png",
-      "to": ".assistant/project_docs/operativos/WEB01_CAPTURAS/lote_02/PRO-06-enviar-revision.png",
+      "to": ".assistant/project_docs/historico/web01/capturas/lote_02/PRO-06-enviar-revision.png",
       "from_sha256": "e9ad19155c3eac58fcd285176ee20f6b5df003c7fce8068b1d69786a69004e28",
       "to_sha256": "e9ad19155c3eac58fcd285176ee20f6b5df003c7fce8068b1d69786a69004e28"
     },
     {
       "from": "docs/assets/screenshots/PRO-07-historial.png",
-      "to": ".assistant/project_docs/operativos/WEB01_CAPTURAS/lote_02/PRO-07-historial.png",
+      "to": ".assistant/project_docs/historico/web01/capturas/lote_02/PRO-07-historial.png",
       "from_sha256": "9e8aa1b6414b8d1978e305979f2acfb75ffe134a3b7154b26f22b59b211b07fc",
       "to_sha256": "9e8aa1b6414b8d1978e305979f2acfb75ffe134a3b7154b26f22b59b211b07fc"
     },
     {
       "from": "docs/assets/screenshots/PRO-08-control-calidad.png",
-      "to": ".assistant/project_docs/operativos/WEB01_CAPTURAS/lote_02/PRO-08-control-calidad.png",
+      "to": ".assistant/project_docs/historico/web01/capturas/lote_02/PRO-08-control-calidad.png",
       "from_sha256": "67be9128fe73848974ac3ba0c5aa7e80baf9c36c25bc93632890d84d3ca7baf1",
       "to_sha256": "67be9128fe73848974ac3ba0c5aa7e80baf9c36c25bc93632890d84d3ca7baf1"
     },
     {
       "from": "docs/assets/screenshots/REL-03-problemas.png",
-      "to": ".assistant/project_docs/operativos/WEB01_CAPTURAS/lote_06/REL-03-problemas.png",
+      "to": ".assistant/project_docs/historico/web01/capturas/lote_06/REL-03-problemas.png",
       "from_sha256": "3db025bcbb0f2d16ca3a44efd769b1a671132764932e34438d3369384cbd79dc",
       "to_sha256": "3db025bcbb0f2d16ca3a44efd769b1a671132764932e34438d3369384cbd79dc"
     },
     {
       "from": "docs/assets/screenshots/REL-04-exportar.png",
-      "to": ".assistant/project_docs/operativos/WEB01_CAPTURAS/lote_06/REL-04-exportar.png",
+      "to": ".assistant/project_docs/historico/web01/capturas/lote_06/REL-04-exportar.png",
       "from_sha256": "7a4752bd6b2911818da813977f3259ce0486980bc3eefbbf020b6fea78086f6a",
       "to_sha256": "7a4752bd6b2911818da813977f3259ce0486980bc3eefbbf020b6fea78086f6a"
     },
     {
       "from": "docs/assets/screenshots/REV-04-casilleros-campos.png",
-      "to": ".assistant/project_docs/operativos/WEB01_CAPTURAS/lote_03/REV-04-casilleros-campos.png",
+      "to": ".assistant/project_docs/historico/web01/capturas/lote_03/REV-04-casilleros-campos.png",
       "from_sha256": "6d91097bc7442bf115201997e764469cdf7414347aa6a2b49796ebce8b022f2f",
       "to_sha256": "6d91097bc7442bf115201997e764469cdf7414347aa6a2b49796ebce8b022f2f"
     },
     {
       "from": "docs/assets/screenshots/REV-05-estado-anotaciones.png",
-      "to": ".assistant/project_docs/operativos/WEB01_CAPTURAS/lote_03/REV-05-estado-anotaciones.png",
+      "to": ".assistant/project_docs/historico/web01/capturas/lote_03/REV-05-estado-anotaciones.png",
       "from_sha256": "e9f9b47f9f87f1f9aa8fac747d292684038c2ef7b31f8b2e9d9f58647820e850",
       "to_sha256": "e9f9b47f9f87f1f9aa8fac747d292684038c2ef7b31f8b2e9d9f58647820e850"
     },
     {
       "from": "docs/assets/screenshots/REV-07-datos-adicionales.png",
-      "to": ".assistant/project_docs/operativos/WEB01_CAPTURAS/lote_03/REV-07-datos-adicionales.png",
+      "to": ".assistant/project_docs/historico/web01/capturas/lote_03/REV-07-datos-adicionales.png",
       "from_sha256": "cdc69ab82175a2e49f6fdc13a73fd0270d14e124f5f63328973c24a2f06cceb9",
       "to_sha256": "cdc69ab82175a2e49f6fdc13a73fd0270d14e124f5f63328973c24a2f06cceb9"
     },
     {
       "from": "docs/assets/screenshots/REV-08-historial-general.png",
-      "to": ".assistant/project_docs/operativos/WEB01_CAPTURAS/lote_03/REV-08-historial-general.png",
+      "to": ".assistant/project_docs/historico/web01/capturas/lote_03/REV-08-historial-general.png",
       "from_sha256": "5b2d5345752ab034931dff35b1e0c91b35f4b33c2b45233a337e48f30a362254",
       "to_sha256": "5b2d5345752ab034931dff35b1e0c91b35f4b33c2b45233a337e48f30a362254"
     },
     {
       "from": "docs/assets/screenshots/TRA-02-crear-asignacion.png",
-      "to": ".assistant/project_docs/operativos/WEB01_CAPTURAS/lote_03/TRA-02-crear-asignacion.png",
+      "to": ".assistant/project_docs/historico/web01/capturas/lote_03/TRA-02-crear-asignacion.png",
       "from_sha256": "815130024ae5327caaaa3d641a3569b52f1289a4b6787aa9e50fa58b3cb7734a",
       "to_sha256": "815130024ae5327caaaa3d641a3569b52f1289a4b6787aa9e50fa58b3cb7734a"
     },
     {
       "from": "docs/assets/screenshots/TRA-05-asignacion-existente.png",
-      "to": ".assistant/project_docs/operativos/WEB01_CAPTURAS/lote_03/TRA-05-asignacion-existente.png",
+      "to": ".assistant/project_docs/historico/web01/capturas/lote_03/TRA-05-asignacion-existente.png",
       "from_sha256": "b56f6a2e334254385d715b7e0611af8fbeae6b6d687cbedb6b95a97caee9f199",
       "to_sha256": "b56f6a2e334254385d715b7e0611af8fbeae6b6d687cbedb6b95a97caee9f199"
     },
     {
       "from": "docs/assets/screenshots/CAT-02-descripcion-unidad.png",
-      "to": ".assistant/project_docs/operativos/WEB01_CAPTURAS/lote_01/CAT-02-descripcion-unidad.png",
+      "to": ".assistant/project_docs/historico/web01/capturas/lote_01/CAT-02-descripcion-unidad.png",
       "from_sha256": "61357e5ce9af3e94ce6766f5d919e9d03f1b43b5ca6a0ee743a733563bebf49a",
       "to_sha256": "61357e5ce9af3e94ce6766f5d919e9d03f1b43b5ca6a0ee743a733563bebf49a"
     },
     {
       "from": "docs/assets/screenshots/PRO-03-leer-zona.png",
-      "to": ".assistant/project_docs/operativos/WEB01_CAPTURAS/lote_02/PRO-03-leer-zona.png",
+      "to": ".assistant/project_docs/historico/web01/capturas/lote_02/PRO-03-leer-zona.png",
       "from_sha256": "e8022831f1cf1c66ff6c35c45d030d7d7d88a2ae7d05469b8b3b7a365f6d4c09",
       "to_sha256": "e8022831f1cf1c66ff6c35c45d030d7d7d88a2ae7d05469b8b3b7a365f6d4c09"
     },
     {
       "from": "docs/assets/screenshots/REV-06-menciones-entidades.png",
-      "to": ".assistant/project_docs/operativos/WEB01_CAPTURAS/lote_03/REV-06-menciones-entidades.png",
+      "to": ".assistant/project_docs/historico/web01/capturas/lote_03/REV-06-menciones-entidades.png",
       "from_sha256": "ca98db9c4f05f352a48cca763ae929e4f1bdd648a0ccff2c83fe04981f15124f",
       "to_sha256": "ca98db9c4f05f352a48cca763ae929e4f1bdd648a0ccff2c83fe04981f15124f"
     },
     {
       "from": "docs/assets/screenshots/ENT-11-posibles-repetidas.png",
-      "to": ".assistant/project_docs/operativos/WEB01_CAPTURAS/lote_05/ENT-11-posibles-repetidas.png",
+      "to": ".assistant/project_docs/historico/web01/capturas/lote_05/ENT-11-posibles-repetidas.png",
       "from_sha256": "c3491b6887d2f51a818e45e6acf090a03cde0cf99f8ae26171a49222402df13e",
       "to_sha256": "c3491b6887d2f51a818e45e6acf090a03cde0cf99f8ae26171a49222402df13e"
+    },
+    {
+      "from": "CAT_DOC_RC3_INSTALACION_Y_PRUEBA.md",
+      "to": ".assistant/project_docs/historico/actualizaciones/CAT_DOC_RC5_INSTALACION_Y_PRUEBA.md",
+      "from_sha256": "db7e4c095f52d252b147baadf7f51c9c250296b4aa56c68032f050757cb52e1c",
+      "to_sha256": "90e0d127925761013f1ef6a83d50b0491e6ef016d20ca9fcf3c2dab4ebeba3f5"
+    },
+    {
+      "from": "CAT_DOC_RC4_INSTALACION_Y_PRUEBA.md",
+      "to": ".assistant/project_docs/historico/actualizaciones/CAT_DOC_RC5_INSTALACION_Y_PRUEBA.md",
+      "from_sha256": "014a92fda0fde967c12876cfbc716cc9eee97191a2f6039afa003a46bbe8bc36",
+      "to_sha256": "90e0d127925761013f1ef6a83d50b0491e6ef016d20ca9fcf3c2dab4ebeba3f5"
+    },
+    {
+      "from": "INSTALAR_CAT_DOC_RC3.sh",
+      "to": ".assistant/project_docs/historico/actualizaciones/INSTALAR_CAT_DOC_RC5.sh",
+      "from_sha256": "515981309a2c160bd974d0e6ace7367494590063460853eab904941b8d7299bd",
+      "to_sha256": "6551f40c4668eac7ce1217a829098ca21db0aa2a862522542ab0916d46f81651"
+    },
+    {
+      "from": "INSTALAR_CAT_DOC_RC4.sh",
+      "to": ".assistant/project_docs/historico/actualizaciones/INSTALAR_CAT_DOC_RC5.sh",
+      "from_sha256": "5423c65c15b7bf1d3fcacfde6173c1d146cc97cbac5093770e44b74084b495c2",
+      "to_sha256": "6551f40c4668eac7ce1217a829098ca21db0aa2a862522542ab0916d46f81651"
+    },
+    {
+      "from": "CAT_DOC_RC5_INSTALACION_Y_PRUEBA.md",
+      "to": ".assistant/project_docs/historico/actualizaciones/CAT_DOC_RC5_INSTALACION_Y_PRUEBA.md",
+      "from_sha256": "90e0d127925761013f1ef6a83d50b0491e6ef016d20ca9fcf3c2dab4ebeba3f5",
+      "to_sha256": "90e0d127925761013f1ef6a83d50b0491e6ef016d20ca9fcf3c2dab4ebeba3f5"
+    },
+    {
+      "from": "CONTINUITY_STATE.txt",
+      "to": ".assistant/project_docs/historico/relevos/CONTINUITY_STATE_20260911_RC4.txt",
+      "from_sha256": "1654562656ac3221511bac40a6685ed2c7a8fd38132e1567b4ce504a30494f1d",
+      "to_sha256": "1654562656ac3221511bac40a6685ed2c7a8fd38132e1567b4ce504a30494f1d"
+    },
+    {
+      "from": "PUBLICATION_CHECKPOINT_20260909_1418.txt",
+      "to": ".assistant/project_docs/historico/relevos/PUBLICATION_CHECKPOINT_20260909_1418.txt",
+      "from_sha256": "0ab1f13a87e5f7e508f9de5687097b52ee5f8621e42366ef3d47bbb37bed3f4d",
+      "to_sha256": "0ab1f13a87e5f7e508f9de5687097b52ee5f8621e42366ef3d47bbb37bed3f4d"
+    },
+    {
+      "from": "PUBLICATION_CHECKPOINT_20260909_1445.txt",
+      "to": ".assistant/project_docs/historico/relevos/PUBLICATION_CHECKPOINT_20260909_1445.txt",
+      "from_sha256": "a265ae6ced2028a094ad2c482b7917561abdeb37dcd14ade8685248e92307d74",
+      "to_sha256": "a265ae6ced2028a094ad2c482b7917561abdeb37dcd14ade8685248e92307d74"
+    },
+    {
+      "from": "RELEVO_NUEVA_CONVERSACION_20260909.md",
+      "to": ".assistant/project_docs/historico/relevos/RELEVO_NUEVA_CONVERSACION_20260909.md",
+      "from_sha256": "d1bbc843081a5f2e654e83611700f8074518fd697668a5fb79fd2b7e3185ee65",
+      "to_sha256": "d1bbc843081a5f2e654e83611700f8074518fd697668a5fb79fd2b7e3185ee65"
+    },
+    {
+      "from": "RELEVO_NUEVA_CONVERSACION_20260911.md",
+      "to": ".assistant/project_docs/historico/relevos/RELEVO_NUEVA_CONVERSACION_20260911_RC4.md",
+      "from_sha256": "999951fca3acbf41fecb73543fb467b67546354c5c42077ebe35f4453a2c2a7c",
+      "to_sha256": "999951fca3acbf41fecb73543fb467b67546354c5c42077ebe35f4453a2c2a7c"
+    },
+    {
+      "from": "INSTALAR_CAT_DOC_RC5.sh",
+      "to": ".assistant/project_docs/historico/actualizaciones/INSTALAR_CAT_DOC_RC5.sh",
+      "from_sha256": "6551f40c4668eac7ce1217a829098ca21db0aa2a862522542ab0916d46f81651",
+      "to_sha256": "6551f40c4668eac7ce1217a829098ca21db0aa2a862522542ab0916d46f81651"
+    },
+    {
+      "from": ".assistant/project_docs/REORGANIZACION_DOCUMENTAL_20260905.md",
+      "to": ".assistant/project_docs/historico/decisiones_tecnicas/REORGANIZACION_DOCUMENTAL_20260905.md",
+      "from_sha256": "94825622c180dbae21bbd8b0c879a3260907ca4697d5de8c715ae70f81d7db23",
+      "to_sha256": "94825622c180dbae21bbd8b0c879a3260907ca4697d5de8c715ae70f81d7db23"
+    },
+    {
+      "from": ".assistant/project_docs/operativos/CAT_DOC_01_ORGANIZACION_ARCHIVOS_DOCUMENTOS.md",
+      "to": ".assistant/project_docs/historico/decisiones_tecnicas/CAT_DOC_01_ORGANIZACION_ARCHIVOS_DOCUMENTOS.md",
+      "from_sha256": "04a9417b2af2dfcc6c38d518f6ea8abfd272f00fd9fe8a0ab26cfdb87b623b88",
+      "to_sha256": "04a9417b2af2dfcc6c38d518f6ea8abfd272f00fd9fe8a0ab26cfdb87b623b88"
+    },
+    {
+      "from": ".assistant/project_docs/operativos/UX05_CORRECCION_ANOTACIONES_20260910.md",
+      "to": ".assistant/project_docs/historico/decisiones_tecnicas/UX05_CORRECCION_ANOTACIONES_20260910.md",
+      "from_sha256": "55ee6600759525c69f46e61e4a1eb13ef685970e5573ebc2e3af4164c29a85ff",
+      "to_sha256": "55ee6600759525c69f46e61e4a1eb13ef685970e5573ebc2e3af4164c29a85ff"
+    },
+    {
+      "from": ".assistant/project_docs/operativos/UX05_DISENO_EDICION_Y_ANOTACION_20260910.md",
+      "to": ".assistant/project_docs/historico/decisiones_tecnicas/UX05_DISENO_EDICION_Y_ANOTACION_20260910.md",
+      "from_sha256": "f145763dff1e1ee801f5969a5a3e7f93cf19ee11e602491466e4d3e25062e6cd",
+      "to_sha256": "f145763dff1e1ee801f5969a5a3e7f93cf19ee11e602491466e4d3e25062e6cd"
+    },
+    {
+      "from": ".assistant/project_docs/operativos/WEB01_CAPTURAS/ESTRUCTURA_PUBLICA.md",
+      "to": ".assistant/project_docs/historico/web01/capturas/ESTRUCTURA_PUBLICA.md",
+      "from_sha256": "7c8d610dabcb9ea9c3087053d5f5cd0b515fc9b436e94d7b0d9605c5808b374e",
+      "to_sha256": "7c8d610dabcb9ea9c3087053d5f5cd0b515fc9b436e94d7b0d9605c5808b374e"
+    },
+    {
+      "from": ".assistant/project_docs/operativos/WEB01_CAPTURAS/INVENTARIO.md",
+      "to": ".assistant/project_docs/historico/web01/capturas/INVENTARIO.md",
+      "from_sha256": "e7ec535c7559373b0a4474be9231a7daac9523a557253730398a1602086e5bf5",
+      "to_sha256": "e7ec535c7559373b0a4474be9231a7daac9523a557253730398a1602086e5bf5"
+    },
+    {
+      "from": ".assistant/project_docs/operativos/WEB01_CAPTURAS/MATRIZ.md",
+      "to": ".assistant/project_docs/historico/web01/capturas/MATRIZ.md",
+      "from_sha256": "b982d63ec96db926c7e79c5d6af9002d71deed297e697edb8e9e39db66b9d611",
+      "to_sha256": "b982d63ec96db926c7e79c5d6af9002d71deed297e697edb8e9e39db66b9d611"
+    },
+    {
+      "from": ".assistant/project_docs/operativos/WEB01_CAPTURAS/REGISTRO_TRABAJO.md",
+      "to": ".assistant/project_docs/historico/web01/capturas/REGISTRO_TRABAJO.md",
+      "from_sha256": "48c3bcb9305cc24bb0f68a4963058df1e32747b1cdacb2bde15a34143c5a77ba",
+      "to_sha256": "48c3bcb9305cc24bb0f68a4963058df1e32747b1cdacb2bde15a34143c5a77ba"
+    },
+    {
+      "from": ".assistant/project_docs/operativos/WEB01_CAPTURAS/SHA256SUMS.txt",
+      "to": ".assistant/project_docs/historico/web01/capturas/SHA256SUMS.txt",
+      "from_sha256": "e41f3d46b1f165484ec4dab5ddf5a69f18658ad8c795d54fbc4e840f599a632e",
+      "to_sha256": "e41f3d46b1f165484ec4dab5ddf5a69f18658ad8c795d54fbc4e840f599a632e"
+    },
+    {
+      "from": ".assistant/project_docs/operativos/WEB01_CAPTURAS/diagnosticos/ENT-11-repeticion-entre-corridas.png",
+      "to": ".assistant/project_docs/historico/web01/capturas/diagnosticos/ENT-11-repeticion-entre-corridas.png",
+      "from_sha256": "87c6f8ff71edef29ccc0f65f022a79d88272b591e926867ab063f9e281171df1",
+      "to_sha256": "87c6f8ff71edef29ccc0f65f022a79d88272b591e926867ab063f9e281171df1"
+    },
+    {
+      "from": ".assistant/project_docs/operativos/WEB01_CAPTURAS/lote_01/CAT-01-estado-catalogo.png",
+      "to": ".assistant/project_docs/historico/web01/capturas/lote_01/CAT-01-estado-catalogo.png",
+      "from_sha256": "fbdde20075b20a87f5481587dff29fcf9fc8037f5e364b3f403233414255fda1",
+      "to_sha256": "fbdde20075b20a87f5481587dff29fcf9fc8037f5e364b3f403233414255fda1"
+    },
+    {
+      "from": ".assistant/project_docs/operativos/WEB01_CAPTURAS/lote_01/CAT-02-descripcion-unidad.png",
+      "to": ".assistant/project_docs/historico/web01/capturas/lote_01/CAT-02-descripcion-unidad.png",
+      "from_sha256": "61357e5ce9af3e94ce6766f5d919e9d03f1b43b5ca6a0ee743a733563bebf49a",
+      "to_sha256": "61357e5ce9af3e94ce6766f5d919e9d03f1b43b5ca6a0ee743a733563bebf49a"
+    },
+    {
+      "from": ".assistant/project_docs/operativos/WEB01_CAPTURAS/lote_01/CAT-03-productores-responsables.png",
+      "to": ".assistant/project_docs/historico/web01/capturas/lote_01/CAT-03-productores-responsables.png",
+      "from_sha256": "35ec9ec10cc2bdc7e7119ca57b2c857bdd19730bba3db51bc29fd743a6e03f75",
+      "to_sha256": "35ec9ec10cc2bdc7e7119ca57b2c857bdd19730bba3db51bc29fd743a6e03f75"
+    },
+    {
+      "from": ".assistant/project_docs/operativos/WEB01_CAPTURAS/lote_01/CAT-04-archivos-vinculados.png",
+      "to": ".assistant/project_docs/historico/web01/capturas/lote_01/CAT-04-archivos-vinculados.png",
+      "from_sha256": "01a38322a3d2e90bc5c276cfab1bcd2a65468853a52ff782fc2ac7a54251b438",
+      "to_sha256": "01a38322a3d2e90bc5c276cfab1bcd2a65468853a52ff782fc2ac7a54251b438"
+    },
+    {
+      "from": ".assistant/project_docs/operativos/WEB01_CAPTURAS/lote_01/CAT-05-ubicacion-tipo.png",
+      "to": ".assistant/project_docs/historico/web01/capturas/lote_01/CAT-05-ubicacion-tipo.png",
+      "from_sha256": "094363f6bac9c574b2ebf0448bbe61be60b77bd6497da417b866c6b29582eea1",
+      "to_sha256": "094363f6bac9c574b2ebf0448bbe61be60b77bd6497da417b866c6b29582eea1"
+    },
+    {
+      "from": ".assistant/project_docs/operativos/WEB01_CAPTURAS/lote_01/CAT-06-historial-unidad.png",
+      "to": ".assistant/project_docs/historico/web01/capturas/lote_01/CAT-06-historial-unidad.png",
+      "from_sha256": "67907a15aa389695b26b065a34e71cfcc4e0f34340b95ac335219bf836f9da1b",
+      "to_sha256": "67907a15aa389695b26b065a34e71cfcc4e0f34340b95ac335219bf836f9da1b"
+    },
+    {
+      "from": ".assistant/project_docs/operativos/WEB01_CAPTURAS/lote_01/CAT-07-planilla-catalogo.png",
+      "to": ".assistant/project_docs/historico/web01/capturas/lote_01/CAT-07-planilla-catalogo.png",
+      "from_sha256": "43264fdddf2de82612058a106d4bbf4a6c762bc794f4f9c4107c198e6f7c9e22",
+      "to_sha256": "43264fdddf2de82612058a106d4bbf4a6c762bc794f4f9c4107c198e6f7c9e22"
+    },
+    {
+      "from": ".assistant/project_docs/operativos/WEB01_CAPTURAS/lote_01/CAT-08-crear-unidad.png",
+      "to": ".assistant/project_docs/historico/web01/capturas/lote_01/CAT-08-crear-unidad.png",
+      "from_sha256": "dfeed7528714ec8cd6884ade83dca6b09627ffd6e84bbf64f1d80ec1cc8d4ad6",
+      "to_sha256": "dfeed7528714ec8cd6884ade83dca6b09627ffd6e84bbf64f1d80ec1cc8d4ad6"
+    },
+    {
+      "from": ".assistant/project_docs/operativos/WEB01_CAPTURAS/lote_01/CAT-09-incorporar-archivos.png",
+      "to": ".assistant/project_docs/historico/web01/capturas/lote_01/CAT-09-incorporar-archivos.png",
+      "from_sha256": "30b88f3c8573ce4d9d2091a36bb133f407d10bb77a57877096c40d35e71589ee",
+      "to_sha256": "30b88f3c8573ce4d9d2091a36bb133f407d10bb77a57877096c40d35e71589ee"
+    },
+    {
+      "from": ".assistant/project_docs/operativos/WEB01_CAPTURAS/lote_01/INI-01-estado-proyecto.png",
+      "to": ".assistant/project_docs/historico/web01/capturas/lote_01/INI-01-estado-proyecto.png",
+      "from_sha256": "c90fc95af17d8a985d04d82e8e96d1bb3fa4684baee1fac9ad83697b1c63329a",
+      "to_sha256": "c90fc95af17d8a985d04d82e8e96d1bb3fa4684baee1fac9ad83697b1c63329a"
+    },
+    {
+      "from": ".assistant/project_docs/operativos/WEB01_CAPTURAS/lote_01/INS-01-abrir-proyecto.png",
+      "to": ".assistant/project_docs/historico/web01/capturas/lote_01/INS-01-abrir-proyecto.png",
+      "from_sha256": "7b296f4f2c0e8d23a59df4731c7fe1c20b5f1771150f007bc6658b586d08257d",
+      "to_sha256": "7b296f4f2c0e8d23a59df4731c7fe1c20b5f1771150f007bc6658b586d08257d"
+    },
+    {
+      "from": ".assistant/project_docs/operativos/WEB01_CAPTURAS/lote_01/INS-02-crear-proyecto.png",
+      "to": ".assistant/project_docs/historico/web01/capturas/lote_01/INS-02-crear-proyecto.png",
+      "from_sha256": "319c55084ea1cd0a4fbeec63315aa6ca01e873d299122e02caf001ddfb50e9e8",
+      "to_sha256": "319c55084ea1cd0a4fbeec63315aa6ca01e873d299122e02caf001ddfb50e9e8"
+    },
+    {
+      "from": ".assistant/project_docs/operativos/WEB01_CAPTURAS/lote_02/AV-01-incorporar-audio-video.png",
+      "to": ".assistant/project_docs/historico/web01/capturas/lote_02/AV-01-incorporar-audio-video.png",
+      "from_sha256": "6a4772006995847be3a1b1310737e2792bff09725dcf9390685756a94161b67d",
+      "to_sha256": "6a4772006995847be3a1b1310737e2792bff09725dcf9390685756a94161b67d"
+    },
+    {
+      "from": ".assistant/project_docs/operativos/WEB01_CAPTURAS/lote_02/AV-02-transcribir-revisar.png",
+      "to": ".assistant/project_docs/historico/web01/capturas/lote_02/AV-02-transcribir-revisar.png",
+      "from_sha256": "72d582ea99754121b6826e2f33764bdeb136f430ddeca7d4873a6a7fd4ede38d",
+      "to_sha256": "72d582ea99754121b6826e2f33764bdeb136f430ddeca7d4873a6a7fd4ede38d"
+    },
+    {
+      "from": ".assistant/project_docs/operativos/WEB01_CAPTURAS/lote_02/PRO-01-estado.png",
+      "to": ".assistant/project_docs/historico/web01/capturas/lote_02/PRO-01-estado.png",
+      "from_sha256": "0d45e2f888a99539dfb119328244f38c8a2200e9b3693aaefd651e61b3e3e541",
+      "to_sha256": "0d45e2f888a99539dfb119328244f38c8a2200e9b3693aaefd651e61b3e3e541"
+    },
+    {
+      "from": ".assistant/project_docs/operativos/WEB01_CAPTURAS/lote_02/PRO-02-preparar-extraer-2.png",
+      "to": ".assistant/project_docs/historico/web01/capturas/lote_02/PRO-02-preparar-extraer-2.png",
+      "from_sha256": "9a81bb4f11fd7d0d7f873da5930bace9d517f086ba7c5055a9629c81f2623f85",
+      "to_sha256": "9a81bb4f11fd7d0d7f873da5930bace9d517f086ba7c5055a9629c81f2623f85"
+    },
+    {
+      "from": ".assistant/project_docs/operativos/WEB01_CAPTURAS/lote_02/PRO-02-preparar-extraer.png",
+      "to": ".assistant/project_docs/historico/web01/capturas/lote_02/PRO-02-preparar-extraer.png",
+      "from_sha256": "919bf3dc317d74a31e0a1d6ad8848d17a5a7c0aad7a7bec4cd9d03e240f82092",
+      "to_sha256": "919bf3dc317d74a31e0a1d6ad8848d17a5a7c0aad7a7bec4cd9d03e240f82092"
+    },
+    {
+      "from": ".assistant/project_docs/operativos/WEB01_CAPTURAS/lote_02/PRO-03-leer-zona.png",
+      "to": ".assistant/project_docs/historico/web01/capturas/lote_02/PRO-03-leer-zona.png",
+      "from_sha256": "e8022831f1cf1c66ff6c35c45d030d7d7d88a2ae7d05469b8b3b7a365f6d4c09",
+      "to_sha256": "e8022831f1cf1c66ff6c35c45d030d7d7d88a2ae7d05469b8b3b7a365f6d4c09"
+    },
+    {
+      "from": ".assistant/project_docs/operativos/WEB01_CAPTURAS/lote_02/PRO-04-elegir-texto.png",
+      "to": ".assistant/project_docs/historico/web01/capturas/lote_02/PRO-04-elegir-texto.png",
+      "from_sha256": "768f7d557a8afe6de9b88e5548983f9b886ab9f6a7bfdddbc3724cdd2639eb9b",
+      "to_sha256": "768f7d557a8afe6de9b88e5548983f9b886ab9f6a7bfdddbc3724cdd2639eb9b"
+    },
+    {
+      "from": ".assistant/project_docs/operativos/WEB01_CAPTURAS/lote_02/PRO-05-corregir-agregar.png",
+      "to": ".assistant/project_docs/historico/web01/capturas/lote_02/PRO-05-corregir-agregar.png",
+      "from_sha256": "96aa0037cb8417afdf5deb074200e8b09154deae5ae1bd0b04cf9a17e6e42426",
+      "to_sha256": "96aa0037cb8417afdf5deb074200e8b09154deae5ae1bd0b04cf9a17e6e42426"
+    },
+    {
+      "from": ".assistant/project_docs/operativos/WEB01_CAPTURAS/lote_02/PRO-06-enviar-revision.png",
+      "to": ".assistant/project_docs/historico/web01/capturas/lote_02/PRO-06-enviar-revision.png",
+      "from_sha256": "e9ad19155c3eac58fcd285176ee20f6b5df003c7fce8068b1d69786a69004e28",
+      "to_sha256": "e9ad19155c3eac58fcd285176ee20f6b5df003c7fce8068b1d69786a69004e28"
+    },
+    {
+      "from": ".assistant/project_docs/operativos/WEB01_CAPTURAS/lote_02/PRO-07-historial.png",
+      "to": ".assistant/project_docs/historico/web01/capturas/lote_02/PRO-07-historial.png",
+      "from_sha256": "9e8aa1b6414b8d1978e305979f2acfb75ffe134a3b7154b26f22b59b211b07fc",
+      "to_sha256": "9e8aa1b6414b8d1978e305979f2acfb75ffe134a3b7154b26f22b59b211b07fc"
+    },
+    {
+      "from": ".assistant/project_docs/operativos/WEB01_CAPTURAS/lote_02/PRO-08-control-calidad.png",
+      "to": ".assistant/project_docs/historico/web01/capturas/lote_02/PRO-08-control-calidad.png",
+      "from_sha256": "67be9128fe73848974ac3ba0c5aa7e80baf9c36c25bc93632890d84d3ca7baf1",
+      "to_sha256": "67be9128fe73848974ac3ba0c5aa7e80baf9c36c25bc93632890d84d3ca7baf1"
+    },
+    {
+      "from": ".assistant/project_docs/operativos/WEB01_CAPTURAS/lote_03/REV-01-revisar-documentos.png",
+      "to": ".assistant/project_docs/historico/web01/capturas/lote_03/REV-01-revisar-documentos.png",
+      "from_sha256": "3b78b61dacc0be820e018e8962c66913cb326394824f1bcf42dcd99c7de75239",
+      "to_sha256": "3b78b61dacc0be820e018e8962c66913cb326394824f1bcf42dcd99c7de75239"
+    },
+    {
+      "from": ".assistant/project_docs/operativos/WEB01_CAPTURAS/lote_03/REV-03-orden-estructura.png",
+      "to": ".assistant/project_docs/historico/web01/capturas/lote_03/REV-03-orden-estructura.png",
+      "from_sha256": "d96069ae0f25a7224b4d56f93ba8640242ffea3d1a814f172e51d09db6f1fb5a",
+      "to_sha256": "d96069ae0f25a7224b4d56f93ba8640242ffea3d1a814f172e51d09db6f1fb5a"
+    },
+    {
+      "from": ".assistant/project_docs/operativos/WEB01_CAPTURAS/lote_03/REV-04-casilleros-campos.png",
+      "to": ".assistant/project_docs/historico/web01/capturas/lote_03/REV-04-casilleros-campos.png",
+      "from_sha256": "6d91097bc7442bf115201997e764469cdf7414347aa6a2b49796ebce8b022f2f",
+      "to_sha256": "6d91097bc7442bf115201997e764469cdf7414347aa6a2b49796ebce8b022f2f"
+    },
+    {
+      "from": ".assistant/project_docs/operativos/WEB01_CAPTURAS/lote_03/REV-05-estado-anotaciones.png",
+      "to": ".assistant/project_docs/historico/web01/capturas/lote_03/REV-05-estado-anotaciones.png",
+      "from_sha256": "e9f9b47f9f87f1f9aa8fac747d292684038c2ef7b31f8b2e9d9f58647820e850",
+      "to_sha256": "e9f9b47f9f87f1f9aa8fac747d292684038c2ef7b31f8b2e9d9f58647820e850"
+    },
+    {
+      "from": ".assistant/project_docs/operativos/WEB01_CAPTURAS/lote_03/REV-06-menciones-entidades.png",
+      "to": ".assistant/project_docs/historico/web01/capturas/lote_03/REV-06-menciones-entidades.png",
+      "from_sha256": "ca98db9c4f05f352a48cca763ae929e4f1bdd648a0ccff2c83fe04981f15124f",
+      "to_sha256": "ca98db9c4f05f352a48cca763ae929e4f1bdd648a0ccff2c83fe04981f15124f"
+    },
+    {
+      "from": ".assistant/project_docs/operativos/WEB01_CAPTURAS/lote_03/REV-07-datos-adicionales.png",
+      "to": ".assistant/project_docs/historico/web01/capturas/lote_03/REV-07-datos-adicionales.png",
+      "from_sha256": "cdc69ab82175a2e49f6fdc13a73fd0270d14e124f5f63328973c24a2f06cceb9",
+      "to_sha256": "cdc69ab82175a2e49f6fdc13a73fd0270d14e124f5f63328973c24a2f06cceb9"
+    },
+    {
+      "from": ".assistant/project_docs/operativos/WEB01_CAPTURAS/lote_03/REV-08-historial-general.png",
+      "to": ".assistant/project_docs/historico/web01/capturas/lote_03/REV-08-historial-general.png",
+      "from_sha256": "5b2d5345752ab034931dff35b1e0c91b35f4b33c2b45233a337e48f30a362254",
+      "to_sha256": "5b2d5345752ab034931dff35b1e0c91b35f4b33c2b45233a337e48f30a362254"
+    },
+    {
+      "from": ".assistant/project_docs/operativos/WEB01_CAPTURAS/lote_03/TRA-01-estado-tareas.png",
+      "to": ".assistant/project_docs/historico/web01/capturas/lote_03/TRA-01-estado-tareas.png",
+      "from_sha256": "72900e2bb92c3b2721bf000892a6085cf336b37e7a7ffdb002a6c735b1c071b1",
+      "to_sha256": "72900e2bb92c3b2721bf000892a6085cf336b37e7a7ffdb002a6c735b1c071b1"
+    },
+    {
+      "from": ".assistant/project_docs/operativos/WEB01_CAPTURAS/lote_03/TRA-02-crear-asignacion.png",
+      "to": ".assistant/project_docs/historico/web01/capturas/lote_03/TRA-02-crear-asignacion.png",
+      "from_sha256": "815130024ae5327caaaa3d641a3569b52f1289a4b6787aa9e50fa58b3cb7734a",
+      "to_sha256": "815130024ae5327caaaa3d641a3569b52f1289a4b6787aa9e50fa58b3cb7734a"
+    },
+    {
+      "from": ".assistant/project_docs/operativos/WEB01_CAPTURAS/lote_03/TRA-03-tareas-persona-actual.png",
+      "to": ".assistant/project_docs/historico/web01/capturas/lote_03/TRA-03-tareas-persona-actual.png",
+      "from_sha256": "6ad0415fac7c6619ce73cb448e5b89c4ae5a104ff8536f9eb63732f2e595c112",
+      "to_sha256": "6ad0415fac7c6619ce73cb448e5b89c4ae5a104ff8536f9eb63732f2e595c112"
+    },
+    {
+      "from": ".assistant/project_docs/operativos/WEB01_CAPTURAS/lote_03/TRA-04-segunda-revision.png",
+      "to": ".assistant/project_docs/historico/web01/capturas/lote_03/TRA-04-segunda-revision.png",
+      "from_sha256": "b7e7198cb79de7ab3c147da5d6c7deb123a62909ea6604e19e64ffd519877055",
+      "to_sha256": "b7e7198cb79de7ab3c147da5d6c7deb123a62909ea6604e19e64ffd519877055"
+    },
+    {
+      "from": ".assistant/project_docs/operativos/WEB01_CAPTURAS/lote_03/TRA-05-asignacion-existente.png",
+      "to": ".assistant/project_docs/historico/web01/capturas/lote_03/TRA-05-asignacion-existente.png",
+      "from_sha256": "b56f6a2e334254385d715b7e0611af8fbeae6b6d687cbedb6b95a97caee9f199",
+      "to_sha256": "b56f6a2e334254385d715b7e0611af8fbeae6b6d687cbedb6b95a97caee9f199"
+    },
+    {
+      "from": ".assistant/project_docs/operativos/WEB01_CAPTURAS/lote_04/BS-01-busqueda-semantica.png",
+      "to": ".assistant/project_docs/historico/web01/capturas/lote_04/BS-01-busqueda-semantica.png",
+      "from_sha256": "98d0b2aa4eac9b1ef31393cec3b6c82621dbd325f79be4090f0e9fe418d9f343",
+      "to_sha256": "98d0b2aa4eac9b1ef31393cec3b6c82621dbd325f79be4090f0e9fe418d9f343"
+    },
+    {
+      "from": ".assistant/project_docs/operativos/WEB01_CAPTURAS/lote_04/BS-02-configurar-indice.png",
+      "to": ".assistant/project_docs/historico/web01/capturas/lote_04/BS-02-configurar-indice.png",
+      "from_sha256": "8416ed089f63c86c0eca1179431096206f373b5693e2232f10c83ed71470cd31",
+      "to_sha256": "8416ed089f63c86c0eca1179431096206f373b5693e2232f10c83ed71470cd31"
+    },
+    {
+      "from": ".assistant/project_docs/operativos/WEB01_CAPTURAS/lote_04/BT-01-documentos-tarjetas.png",
+      "to": ".assistant/project_docs/historico/web01/capturas/lote_04/BT-01-documentos-tarjetas.png",
+      "from_sha256": "713af3ed4012579a48740d91040d28e64549c66179660d1fe3e94b8fbcc6d645",
+      "to_sha256": "713af3ed4012579a48740d91040d28e64549c66179660d1fe3e94b8fbcc6d645"
+    },
+    {
+      "from": ".assistant/project_docs/operativos/WEB01_CAPTURAS/lote_04/BT-02-concordancias.png",
+      "to": ".assistant/project_docs/historico/web01/capturas/lote_04/BT-02-concordancias.png",
+      "from_sha256": "d12d402c63877aae53d621c944714aa75c7d52b015a24b071b61e029c57ab673",
+      "to_sha256": "d12d402c63877aae53d621c944714aa75c7d52b015a24b071b61e029c57ab673"
+    },
+    {
+      "from": ".assistant/project_docs/operativos/WEB01_CAPTURAS/lote_04/BT-03-transcripciones.png",
+      "to": ".assistant/project_docs/historico/web01/capturas/lote_04/BT-03-transcripciones.png",
+      "from_sha256": "a47b05939934c8df72c919cb5f01ac27730a7025616565a0f642e82735575823",
+      "to_sha256": "a47b05939934c8df72c919cb5f01ac27730a7025616565a0f642e82735575823"
+    },
+    {
+      "from": ".assistant/project_docs/operativos/WEB01_CAPTURAS/lote_05/ENT-01-ficha.png",
+      "to": ".assistant/project_docs/historico/web01/capturas/lote_05/ENT-01-ficha.png",
+      "from_sha256": "4613e0ab6e57405d08c298a344f7249e357b6e9d2179e372c78c8ee9abb91b25",
+      "to_sha256": "4613e0ab6e57405d08c298a344f7249e357b6e9d2179e372c78c8ee9abb91b25"
+    },
+    {
+      "from": ".assistant/project_docs/operativos/WEB01_CAPTURAS/lote_05/ENT-02-menciones.png",
+      "to": ".assistant/project_docs/historico/web01/capturas/lote_05/ENT-02-menciones.png",
+      "from_sha256": "508d819246b64fc6861b41332e10ae55190bb04cfe51f03ca2010c99970c8ef6",
+      "to_sha256": "508d819246b64fc6861b41332e10ae55190bb04cfe51f03ca2010c99970c8ef6"
+    },
+    {
+      "from": ".assistant/project_docs/operativos/WEB01_CAPTURAS/lote_05/ENT-03-relaciones.png",
+      "to": ".assistant/project_docs/historico/web01/capturas/lote_05/ENT-03-relaciones.png",
+      "from_sha256": "f9b6529f7e663dc1fd879712d792257e72577d0dcd7c9e04632ff0e447415569",
+      "to_sha256": "f9b6529f7e663dc1fd879712d792257e72577d0dcd7c9e04632ff0e447415569"
+    },
+    {
+      "from": ".assistant/project_docs/operativos/WEB01_CAPTURAS/lote_05/ENT-04-historial.png",
+      "to": ".assistant/project_docs/historico/web01/capturas/lote_05/ENT-04-historial.png",
+      "from_sha256": "1220e0c85bac8387528a7b192dd2ec61a040265f4607639b58f81ce0b36b8dcf",
+      "to_sha256": "1220e0c85bac8387528a7b192dd2ec61a040265f4607639b58f81ce0b36b8dcf"
+    },
+    {
+      "from": ".assistant/project_docs/operativos/WEB01_CAPTURAS/lote_05/ENT-05-crear-ficha.png",
+      "to": ".assistant/project_docs/historico/web01/capturas/lote_05/ENT-05-crear-ficha.png",
+      "from_sha256": "f606282e95a536ec58078c33a334fa2d26afca231e51bddf445211e554057885",
+      "to_sha256": "f606282e95a536ec58078c33a334fa2d26afca231e51bddf445211e554057885"
+    },
+    {
+      "from": ".assistant/project_docs/operativos/WEB01_CAPTURAS/lote_05/ENT-06-importar-exportar.png",
+      "to": ".assistant/project_docs/historico/web01/capturas/lote_05/ENT-06-importar-exportar.png",
+      "from_sha256": "d0dd926954e170c0230b79d7d0653c2c0517db51121ab0e3c0451218182769a4",
+      "to_sha256": "d0dd926954e170c0230b79d7d0653c2c0517db51121ab0e3c0451218182769a4"
+    },
+    {
+      "from": ".assistant/project_docs/operativos/WEB01_CAPTURAS/lote_05/ENT-07-ejecutar-busqueda.png",
+      "to": ".assistant/project_docs/historico/web01/capturas/lote_05/ENT-07-ejecutar-busqueda.png",
+      "from_sha256": "e3ec4e3f9de7f22411ebbbc1f63fb3dc0bc2521cb6ab8257f7f25fe8b0b11225",
+      "to_sha256": "e3ec4e3f9de7f22411ebbbc1f63fb3dc0bc2521cb6ab8257f7f25fe8b0b11225"
+    },
+    {
+      "from": ".assistant/project_docs/operativos/WEB01_CAPTURAS/lote_05/ENT-08-revisar-una-por-una.png",
+      "to": ".assistant/project_docs/historico/web01/capturas/lote_05/ENT-08-revisar-una-por-una.png",
+      "from_sha256": "65f2956852be9742df7e0a7e509472452b5b3c3249d97c95bbdff12f31cfa5a6",
+      "to_sha256": "65f2956852be9742df7e0a7e509472452b5b3c3249d97c95bbdff12f31cfa5a6"
+    },
+    {
+      "from": ".assistant/project_docs/operativos/WEB01_CAPTURAS/lote_05/ENT-09-trabajar-varias.png",
+      "to": ".assistant/project_docs/historico/web01/capturas/lote_05/ENT-09-trabajar-varias.png",
+      "from_sha256": "47c6521a5956eb2445e9ec676c86c5efd191b57070556e9d5e549a21457bcbfd",
+      "to_sha256": "47c6521a5956eb2445e9ec676c86c5efd191b57070556e9d5e549a21457bcbfd"
+    },
+    {
+      "from": ".assistant/project_docs/operativos/WEB01_CAPTURAS/lote_05/ENT-10-referencias-descartadas.png",
+      "to": ".assistant/project_docs/historico/web01/capturas/lote_05/ENT-10-referencias-descartadas.png",
+      "from_sha256": "2657cf8d003f0057e64e793f32c3b6663e6e8057bf70033d757c1d00c63c8733",
+      "to_sha256": "2657cf8d003f0057e64e793f32c3b6663e6e8057bf70033d757c1d00c63c8733"
+    },
+    {
+      "from": ".assistant/project_docs/operativos/WEB01_CAPTURAS/lote_05/ENT-11-posibles-repetidas.png",
+      "to": ".assistant/project_docs/historico/web01/capturas/lote_05/ENT-11-posibles-repetidas.png",
+      "from_sha256": "c3491b6887d2f51a818e45e6acf090a03cde0cf99f8ae26171a49222402df13e",
+      "to_sha256": "c3491b6887d2f51a818e45e6acf090a03cde0cf99f8ae26171a49222402df13e"
+    },
+    {
+      "from": ".assistant/project_docs/operativos/WEB01_CAPTURAS/lote_05/ENT-12-actualizar-referencias.png",
+      "to": ".assistant/project_docs/historico/web01/capturas/lote_05/ENT-12-actualizar-referencias.png",
+      "from_sha256": "cfedf06b0ac5ac1c9c5ea15ed96aaac29890ea78adf86b346cd89dfbf7ab367a",
+      "to_sha256": "cfedf06b0ac5ac1c9c5ea15ed96aaac29890ea78adf86b346cd89dfbf7ab367a"
+    },
+    {
+      "from": ".assistant/project_docs/operativos/WEB01_CAPTURAS/lote_06/REL-01-explorar-relaciones.png",
+      "to": ".assistant/project_docs/historico/web01/capturas/lote_06/REL-01-explorar-relaciones.png",
+      "from_sha256": "0422891beb4bd17fdba7621b9f4d0f7d168c52e926bbf958e04a07d2bbc61361",
+      "to_sha256": "0422891beb4bd17fdba7621b9f4d0f7d168c52e926bbf958e04a07d2bbc61361"
+    },
+    {
+      "from": ".assistant/project_docs/operativos/WEB01_CAPTURAS/lote_06/REL-02-seleccion.png",
+      "to": ".assistant/project_docs/historico/web01/capturas/lote_06/REL-02-seleccion.png",
+      "from_sha256": "df63a0dc7f90057b353967abb3c01799e050f74978121affdb417aaa3cd48e58",
+      "to_sha256": "df63a0dc7f90057b353967abb3c01799e050f74978121affdb417aaa3cd48e58"
+    },
+    {
+      "from": ".assistant/project_docs/operativos/WEB01_CAPTURAS/lote_06/REL-03-problemas.png",
+      "to": ".assistant/project_docs/historico/web01/capturas/lote_06/REL-03-problemas.png",
+      "from_sha256": "3db025bcbb0f2d16ca3a44efd769b1a671132764932e34438d3369384cbd79dc",
+      "to_sha256": "3db025bcbb0f2d16ca3a44efd769b1a671132764932e34438d3369384cbd79dc"
+    },
+    {
+      "from": ".assistant/project_docs/operativos/WEB01_CAPTURAS/lote_06/REL-04-exportar.png",
+      "to": ".assistant/project_docs/historico/web01/capturas/lote_06/REL-04-exportar.png",
+      "from_sha256": "7a4752bd6b2911818da813977f3259ce0486980bc3eefbbf020b6fea78086f6a",
+      "to_sha256": "7a4752bd6b2911818da813977f3259ce0486980bc3eefbbf020b6fea78086f6a"
+    },
+    {
+      "from": ".assistant/project_docs/operativos/WEB01_CAPTURAS/lote_07/EXP-01-configurar-documentos.png",
+      "to": ".assistant/project_docs/historico/web01/capturas/lote_07/EXP-01-configurar-documentos.png",
+      "from_sha256": "df935a4fc8994b793bd522cd7077cce25a576f437b5464cabdbc2ec046641365",
+      "to_sha256": "df935a4fc8994b793bd522cd7077cce25a576f437b5464cabdbc2ec046641365"
+    },
+    {
+      "from": ".assistant/project_docs/operativos/WEB01_CAPTURAS/lote_07/EXP-02-revisar-documentos.png",
+      "to": ".assistant/project_docs/historico/web01/capturas/lote_07/EXP-02-revisar-documentos.png",
+      "from_sha256": "8f6d2d8b5b1388f863a2fce2b3ef295a07e6c55e713d50967d7819c472424aa6",
+      "to_sha256": "8f6d2d8b5b1388f863a2fce2b3ef295a07e6c55e713d50967d7819c472424aa6"
+    },
+    {
+      "from": ".assistant/project_docs/operativos/WEB01_CAPTURAS/lote_07/EXP-03-crear-documentos.png",
+      "to": ".assistant/project_docs/historico/web01/capturas/lote_07/EXP-03-crear-documentos.png",
+      "from_sha256": "d11b6fe1244157389f2acb051941cb2693123a6f1401088b7cf31b25f8aa09e2",
+      "to_sha256": "d11b6fe1244157389f2acb051941cb2693123a6f1401088b7cf31b25f8aa09e2"
+    },
+    {
+      "from": ".assistant/project_docs/operativos/WEB01_CAPTURAS/lote_07/EXP-04-historial-documentos.png",
+      "to": ".assistant/project_docs/historico/web01/capturas/lote_07/EXP-04-historial-documentos.png",
+      "from_sha256": "145fed22275d39d442f112a8655662ffb0384ca62efb6ad0003ec5029e8b337f",
+      "to_sha256": "145fed22275d39d442f112a8655662ffb0384ca62efb6ad0003ec5029e8b337f"
+    },
+    {
+      "from": ".assistant/project_docs/operativos/WEB01_CAPTURAS/lote_07/EXP-05-configurar-audiovisual.png",
+      "to": ".assistant/project_docs/historico/web01/capturas/lote_07/EXP-05-configurar-audiovisual.png",
+      "from_sha256": "d738b69188f11a7f45cecebcd63726e7111882162e5b652e3a59bbbe9e086141",
+      "to_sha256": "d738b69188f11a7f45cecebcd63726e7111882162e5b652e3a59bbbe9e086141"
+    },
+    {
+      "from": ".assistant/project_docs/operativos/WEB01_CAPTURAS/lote_07/EXP-06-revisar-audiovisual.png",
+      "to": ".assistant/project_docs/historico/web01/capturas/lote_07/EXP-06-revisar-audiovisual.png",
+      "from_sha256": "36716579c153df9b87480e88887ef6402be00cd703ab49525e1e83531d20d606",
+      "to_sha256": "36716579c153df9b87480e88887ef6402be00cd703ab49525e1e83531d20d606"
+    },
+    {
+      "from": ".assistant/project_docs/operativos/WEB01_CAPTURAS/lote_07/EXP-07-crear-audiovisual.png",
+      "to": ".assistant/project_docs/historico/web01/capturas/lote_07/EXP-07-crear-audiovisual.png",
+      "from_sha256": "33b4ab4c245cc453b41a42be6b37554cfb30ede6bab56440e185f9222de6c5fc",
+      "to_sha256": "33b4ab4c245cc453b41a42be6b37554cfb30ede6bab56440e185f9222de6c5fc"
+    },
+    {
+      "from": ".assistant/project_docs/operativos/WEB01_CAPTURAS/lote_07/EXP-08-historial-audiovisual.png",
+      "to": ".assistant/project_docs/historico/web01/capturas/lote_07/EXP-08-historial-audiovisual.png",
+      "from_sha256": "27373e60b7b1db8b4e13a4f8c63be79e35e037a5b795e34bea610d48acf1b2fb",
+      "to_sha256": "27373e60b7b1db8b4e13a4f8c63be79e35e037a5b795e34bea610d48acf1b2fb"
+    },
+    {
+      "from": ".assistant/project_docs/operativos/WEB01_CAPTURAS/lote_08/INT-01-enviar-cambios.png",
+      "to": ".assistant/project_docs/historico/web01/capturas/lote_08/INT-01-enviar-cambios.png",
+      "from_sha256": "19d7b247f7c582844ae40c6e75ce082fbd597382000baa376435b7d40d7510ca",
+      "to_sha256": "19d7b247f7c582844ae40c6e75ce082fbd597382000baa376435b7d40d7510ca"
+    },
+    {
+      "from": ".assistant/project_docs/operativos/WEB01_CAPTURAS/lote_08/INT-02-recibir-cambios.png",
+      "to": ".assistant/project_docs/historico/web01/capturas/lote_08/INT-02-recibir-cambios.png",
+      "from_sha256": "f0bb39627f794b41a7caaaa9e588518e8931f7111624691dedf1c075be076b4a",
+      "to_sha256": "f0bb39627f794b41a7caaaa9e588518e8931f7111624691dedf1c075be076b4a"
+    },
+    {
+      "from": ".assistant/project_docs/operativos/WEB01_CAPTURAS/lote_08/INT-05-preparar-copia.png",
+      "to": ".assistant/project_docs/historico/web01/capturas/lote_08/INT-05-preparar-copia.png",
+      "from_sha256": "fd43081b0631368c33f2b2199776f17080c095a0edfce58fa5e8ecc95eb64513",
+      "to_sha256": "fd43081b0631368c33f2b2199776f17080c095a0edfce58fa5e8ecc95eb64513"
+    },
+    {
+      "from": ".assistant/project_docs/operativos/WEB01_CAPTURAS/lote_09/ADM-01-integridad.png",
+      "to": ".assistant/project_docs/historico/web01/capturas/lote_09/ADM-01-integridad.png",
+      "from_sha256": "82ed34ff7063dd379f86728e70b2df2fc970ee555142288c5cf323c1aa174397",
+      "to_sha256": "82ed34ff7063dd379f86728e70b2df2fc970ee555142288c5cf323c1aa174397"
+    },
+    {
+      "from": ".assistant/project_docs/operativos/WEB01_CAPTURAS/lote_09/ADM-02-copias-seguridad.png",
+      "to": ".assistant/project_docs/historico/web01/capturas/lote_09/ADM-02-copias-seguridad.png",
+      "from_sha256": "c191872501b6ed79da80b628fc6f678dd57ffcaa8f1503f6a17405a3201b427f",
+      "to_sha256": "c191872501b6ed79da80b628fc6f678dd57ffcaa8f1503f6a17405a3201b427f"
+    },
+    {
+      "from": ".assistant/project_docs/operativos/WEB01_CAPTURAS/lote_09/ADM-03-probar-recuperacion.png",
+      "to": ".assistant/project_docs/historico/web01/capturas/lote_09/ADM-03-probar-recuperacion.png",
+      "from_sha256": "bdf62f6bf7d0a627d3a689ee39dc773824526628e756970d17104900bfaf0a3a",
+      "to_sha256": "bdf62f6bf7d0a627d3a689ee39dc773824526628e756970d17104900bfaf0a3a"
+    },
+    {
+      "from": ".assistant/project_docs/operativos/WEB01_CAPTURAS/lote_09/ADM-04-restaurar.png",
+      "to": ".assistant/project_docs/historico/web01/capturas/lote_09/ADM-04-restaurar.png",
+      "from_sha256": "bfd9886e4741b43c1294723bfcb25e6986b5bc17fcf73569a38689902022893c",
+      "to_sha256": "bfd9886e4741b43c1294723bfcb25e6986b5bc17fcf73569a38689902022893c"
+    },
+    {
+      "from": ".assistant/project_docs/operativos/WEB01_CAPTURAS/lote_09/ADM-05-autorizaciones-analisis.png",
+      "to": ".assistant/project_docs/historico/web01/capturas/lote_09/ADM-05-autorizaciones-analisis.png",
+      "from_sha256": "c4244044114d3714df7c3d6830f9a76cfe54e0af9a073c438e6c0b190bddd1f0",
+      "to_sha256": "c4244044114d3714df7c3d6830f9a76cfe54e0af9a073c438e6c0b190bddd1f0"
+    },
+    {
+      "from": ".assistant/project_docs/operativos/WEB01_SITIO/INVESTIGACION_Y_PLAN_DE_REDISENO_20260907.md",
+      "to": ".assistant/project_docs/historico/web01/sitio/INVESTIGACION_Y_PLAN_DE_REDISENO_20260907.md",
+      "from_sha256": "80bda4b01bf1fc0d2d7916ff21d6a8d1215e75d265cea03e6c61db817f70118b",
+      "to_sha256": "80bda4b01bf1fc0d2d7916ff21d6a8d1215e75d265cea03e6c61db817f70118b"
+    },
+    {
+      "from": ".assistant/project_docs/operativos/WEB01_SITIO/PROPUESTA_MESA_DE_CONSULTA_20260907.md",
+      "to": ".assistant/project_docs/historico/web01/sitio/PROPUESTA_MESA_DE_CONSULTA_20260907.md",
+      "from_sha256": "755f8c750b6e515bae15a512b77c0ea5af9b117e438831aeba962b050c8fa927",
+      "to_sha256": "755f8c750b6e515bae15a512b77c0ea5af9b117e438831aeba962b050c8fa927"
+    },
+    {
+      "from": "dist/archive_workbench-1.1.0rc5-py3-none-any.whl",
+      "to": "dist/archive_workbench-1.1.0-py3-none-any.whl",
+      "from_sha256": "07f06d71cf5a4f4941a0041d6fdeddac23b033bf7e8a005fb52142dfdbf38d9a",
+      "to_sha256": "b5d18c3f942a844840184a207d8c6c1076f5317c9e5338cdffe38c171d3c7c06"
+    },
+    {
+      "from": "INSTALAR_RC6_REORDEN_DOCUMENTAL.sh",
+      "to": ".assistant/project_docs/historico/actualizaciones/INSTALAR_RC6_REORDEN_DOCUMENTAL.sh",
+      "from_sha256": "e86f4071336712544a616fe2f053e80726326de4075027973026e21206b634e3",
+      "to_sha256": "e86f4071336712544a616fe2f053e80726326de4075027973026e21206b634e3"
+    },
+    {
+      "from": "dist/archive_workbench-1.1.0rc6-py3-none-any.whl",
+      "to": "dist/archive_workbench-1.1.0-py3-none-any.whl",
+      "from_sha256": "2aedb380073eefb01740aac5245ad775d61756bf0783cea7ae12abd0c154cbbd",
+      "to_sha256": "b5d18c3f942a844840184a207d8c6c1076f5317c9e5338cdffe38c171d3c7c06"
+    },
+    {
+      "from": "INSTALAR_UX05_RC2.sh",
+      "to": ".assistant/project_docs/historico/actualizaciones/INSTALAR_UX05_RC2.sh",
+      "from_sha256": "4c4a6f4e5e40d67274c9bd0ff5f5ebcd0040ff40279b9bc79f56ebb9e627a2c1",
+      "to_sha256": "4c4a6f4e5e40d67274c9bd0ff5f5ebcd0040ff40279b9bc79f56ebb9e627a2c1"
+    },
+    {
+      "from": "UX05_RC2_INSTALACION_Y_PRUEBA.txt",
+      "to": ".assistant/project_docs/historico/actualizaciones/UX05_RC2_INSTALACION_Y_PRUEBA.txt",
+      "from_sha256": "a147bf2198b2102b3cb5dcc66c19336030015001ef03b9acd04d0c1410b9d8a2",
+      "to_sha256": "a147bf2198b2102b3cb5dcc66c19336030015001ef03b9acd04d0c1410b9d8a2"
+    },
+    {
+      "from": "INSTALAR_RC7_REPARACION_RESIDUOS.sh",
+      "to": ".assistant/project_docs/historico/actualizaciones/INSTALAR_RC7_REPARACION_RESIDUOS.sh",
+      "from_sha256": "58d01f2601d2802660ac18d1363c0ee95b0079022f33280f8bdf8aea630122d5",
+      "to_sha256": "58d01f2601d2802660ac18d1363c0ee95b0079022f33280f8bdf8aea630122d5"
+    },
+    {
+      "from": "dist/archive_workbench-1.1.0rc7-py3-none-any.whl",
+      "to": "dist/archive_workbench-1.1.0-py3-none-any.whl",
+      "from_sha256": "37a083b74896bcd3f56df481a8116a9249c48d250697869fe817ecca570f0f9e",
+      "to_sha256": "b5d18c3f942a844840184a207d8c6c1076f5317c9e5338cdffe38c171d3c7c06"
+    },
+    {
+      "from": "dist/archive_workbench-1.1.0rc8-py3-none-any.whl",
+      "to": "dist/archive_workbench-1.1.0-py3-none-any.whl",
+      "from_sha256": "f80774617f733466d7748c9e9dcc6b408f8f6da85bfeb0d63009a3785527edba",
+      "to_sha256": "b5d18c3f942a844840184a207d8c6c1076f5317c9e5338cdffe38c171d3c7c06"
+    },
+    {
+      "from": "INSTALAR_RC9_CIERRE_CAT_DOC.sh",
+      "to": ".assistant/project_docs/historico/actualizaciones/INSTALAR_RC9_CIERRE_CAT_DOC.sh",
+      "from_sha256": "323309b2a1f0b9891d016d0a51676504e78c7313cb5cf8ba3ca7db948558e777",
+      "to_sha256": "323309b2a1f0b9891d016d0a51676504e78c7313cb5cf8ba3ca7db948558e777"
+    },
+    {
+      "from": "dist/archive_workbench-1.1.0rc9-py3-none-any.whl",
+      "to": "dist/archive_workbench-1.1.0-py3-none-any.whl",
+      "from_sha256": "6182d26ac7ddd20b88767e8224d3b68803de621da456eab18414b222a8fde76b",
+      "to_sha256": "b5d18c3f942a844840184a207d8c6c1076f5317c9e5338cdffe38c171d3c7c06"
+    },
+    {
+      "from": "PACKAGE_MANIFEST.json",
+      "to": ".assistant/project_docs/historico/actualizaciones/PACKAGE_MANIFEST_1.1.0_RC10.json",
+      "from_sha256": "2e60f83f544bce4e96d3ed4e65923d32b9bd01985d6297a564b85f43b58a014f",
+      "to_sha256": "2e60f83f544bce4e96d3ed4e65923d32b9bd01985d6297a564b85f43b58a014f"
+    },
+    {
+      "from": "dist/archive_workbench-1.1.0rc10-py3-none-any.whl",
+      "to": "dist/archive_workbench-1.1.0-py3-none-any.whl",
+      "from_sha256": "200c7d044d7ac0c15bf154534180066eb565e6ae742fc30cbc3149edd37c0356",
+      "to_sha256": "b5d18c3f942a844840184a207d8c6c1076f5317c9e5338cdffe38c171d3c7c06"
+    },
+    {
+      "from": "dist/archive_workbench-1.1.0rc11-py3-none-any.whl",
+      "to": "dist/archive_workbench-1.1.0-py3-none-any.whl",
+      "from_sha256": "fe85b3d8e2136f4c0299ce99fba490c63759200444b4adf6c6e1ad113309154c",
+      "to_sha256": "b5d18c3f942a844840184a207d8c6c1076f5317c9e5338cdffe38c171d3c7c06"
+    },
+    {
+      "from": "dist/archive_workbench-1.1.0rc12-py3-none-any.whl",
+      "to": "dist/archive_workbench-1.1.0-py3-none-any.whl",
+      "from_sha256": "bac59ff61119e8a9da532ecf39c9ccde1dba93fdb2b65a55728562cc2e79354e",
+      "to_sha256": "b5d18c3f942a844840184a207d8c6c1076f5317c9e5338cdffe38c171d3c7c06"
+    },
+    {
+      "from": "docs/assets/screenshots/REV-01-revisar-documentos.png",
+      "to": ".assistant/project_docs/historico/web02/capturas_reemplazadas/REV-01-revisar-documentos.png",
+      "from_sha256": "3b78b61dacc0be820e018e8962c66913cb326394824f1bcf42dcd99c7de75239",
+      "to_sha256": "3b78b61dacc0be820e018e8962c66913cb326394824f1bcf42dcd99c7de75239"
+    },
+    {
+      "from": "docs/assets/screenshots/REV-03-orden-estructura.png",
+      "to": ".assistant/project_docs/historico/web02/capturas_reemplazadas/REV-03-orden-estructura.png",
+      "from_sha256": "d96069ae0f25a7224b4d56f93ba8640242ffea3d1a814f172e51d09db6f1fb5a",
+      "to_sha256": "d96069ae0f25a7224b4d56f93ba8640242ffea3d1a814f172e51d09db6f1fb5a"
+    },
+    {
+      "from": "dist/archive_workbench-1.1.0rc13-py3-none-any.whl",
+      "to": "dist/archive_workbench-1.1.0-py3-none-any.whl",
+      "from_sha256": "f15d4a09511a16b58e0a1af9a29dec486bc6277144f3fd55f6a9831d58d40651",
+      "to_sha256": "b5d18c3f942a844840184a207d8c6c1076f5317c9e5338cdffe38c171d3c7c06"
+    },
+    {
+      "from": "dist/archive_workbench-1.1.0rc14-py3-none-any.whl",
+      "to": "dist/archive_workbench-1.1.0-py3-none-any.whl",
+      "from_sha256": "4a5880aa1edc283441e9c4b20dd38776640e1328b17e5fdd8dd6a7bd459ae12f",
+      "to_sha256": "b5d18c3f942a844840184a207d8c6c1076f5317c9e5338cdffe38c171d3c7c06"
+    }
+  ],
+  "verified_root_residue_rules": [
+    {
+      "pattern": "RELEVO_NUEVA_CONVERSACION_*.md",
+      "archive_dir": ".assistant/project_docs/historico/relevos"
+    },
+    {
+      "pattern": "PUBLICATION_CHECKPOINT_*.txt",
+      "archive_dir": ".assistant/project_docs/historico/relevos"
+    },
+    {
+      "pattern": "CONTINUITY_STATE*.txt",
+      "archive_dir": ".assistant/project_docs/historico/relevos"
+    },
+    {
+      "pattern": "*_INSTALACION_Y_PRUEBA.md",
+      "archive_dir": ".assistant/project_docs/historico/actualizaciones"
+    },
+    {
+      "pattern": "INSTALAR_RC*.sh",
+      "archive_dir": ".assistant/project_docs/historico/actualizaciones"
+    },
+    {
+      "pattern": "*_INSTALACION_Y_PRUEBA.txt",
+      "archive_dir": ".assistant/project_docs/historico/actualizaciones"
+    },
+    {
+      "pattern": "INSTALAR_UX*.sh",
+      "archive_dir": ".assistant/project_docs/historico/actualizaciones"
+    }
+  ],
+  "authorized_local_archivals": [
+    {
+      "from": "RELEVO_NUEVA_CONVERSACION_20260908.md",
+      "archive_dir": ".assistant/project_docs/historico/relevos/recuperados_locales",
+      "authorized_by": "Alex",
+      "authorized_at": "2026-09-11"
     }
   ]
 }

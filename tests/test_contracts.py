@@ -50,7 +50,7 @@ def test_normalized_geometry_range() -> None:
         PageGeometry(page=1, polygon=[(0, 0), (2, 0), (2, 1), (0, 1)])
 
 
-def test_public_contracts_and_database_revision_are_frozen_for_v1() -> None:
+def test_public_contracts_remain_frozen_and_v1_database_revision_stays_in_chain() -> None:
     from scripts.verify_release_contracts import verify
 
     verify()

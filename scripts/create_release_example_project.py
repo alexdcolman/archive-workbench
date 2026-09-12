@@ -37,7 +37,7 @@ from archive_workbench.identity import new_id
 from archive_workbench.project_setup import create_ready_project
 from archive_workbench.relations import create_entity_relation
 
-EXPECTED_REVISION = "0047_authority_relation_profiles"
+EXPECTED_REVISION = "0048_catalog_document_components"
 PROJECT_NAME = "Proyecto de ejemplo Archive Workbench"
 PROJECT_ID = "archive_workbench_ejemplo"
 ACTOR = "archive-workbench-release-example"

@@ -222,8 +222,18 @@ def test_contact_sheets_and_plan_execution_manifest(tmp_path: Path, monkeypatch)
 
         monkeypatch.setattr(
             module,
-            "extraction_doctor",
-            lambda profile: type("Report", (), {"checks": [ToolCheck("Tesseract", True, "ok")]})(),
+            "resolve_extraction_profile",
+            lambda _root, _profile: type(
+                "Resolution",
+                (),
+                {
+                    "effective_report": type(
+                        "Report",
+                        (),
+                        {"checks": [ToolCheck("Tesseract", True, "ok")]},
+                    )()
+                },
+            )(),
         )
         monkeypatch.setattr(
             module,

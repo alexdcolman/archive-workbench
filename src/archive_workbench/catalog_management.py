@@ -13,6 +13,7 @@ from sqlalchemy.orm import Session
 
 from archive_workbench.contracts.decisions import ProjectDecisions
 from archive_workbench.db.models import (
+    ArchivalDocumentComponent,
     ArchivalFieldValue,
     ArchivalUnit,
     ArchivalUnitRevision,
@@ -1436,7 +1437,37 @@ def unlink_digital_object_from_unit(
         registration.registered_by = actor
         registration.registered_at = _utc_now()
     session.flush()
+    linked_components = session.scalars(
+        select(ArchivalDocumentComponent).where(
+            ArchivalDocumentComponent.archival_unit_id == unit.id,
+            ArchivalDocumentComponent.digital_object_id == digital.id,
+            ArchivalDocumentComponent.page_start.is_(None)
+            if link.page_start is None
+            else ArchivalDocumentComponent.page_start == link.page_start,
+            ArchivalDocumentComponent.page_end.is_(None)
+            if link.page_end is None
+            else ArchivalDocumentComponent.page_end == link.page_end,
+        )
+    ).all()
+    for component in linked_components:
+        component.updated_by = actor
+        component.updated_at = _utc_now()
+        session.delete(component)
     session.delete(link)
+    session.flush()
+    remaining_components = session.scalars(
+        select(ArchivalDocumentComponent)
+        .where(ArchivalDocumentComponent.archival_unit_id == unit.id)
+        .order_by(
+            ArchivalDocumentComponent.sequence_position,
+            ArchivalDocumentComponent.id,
+        )
+    ).all()
+    for position, component in enumerate(remaining_components, start=1):
+        if component.sequence_position != position:
+            component.sequence_position = position
+            component.updated_by = actor
+            component.updated_at = _utc_now()
     session.flush()
     remaining = session.scalars(
         select(DigitalObjectUnitLink)

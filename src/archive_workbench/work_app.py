@@ -83,7 +83,7 @@ def _load_all(*, db_path: Path, project_root: Path, project_id: str):
 
 
 def _go_to_review(st, *, source_key: str, page: int | None) -> None:
-    request_app_view(st, mode="review", source_key=source_key, page=page or 1)
+    request_app_view(st, mode="annotation", source_key=source_key, page=page or 1)
     rerun_app(st)
 
 
@@ -396,7 +396,7 @@ def render_work_view(
                             st.success("Asignación actualizada.")
                             rerun_view(st)
                     if st.button(
-                        "Abrir este documento en Revisar documentos",
+                        "Abrir este documento en Edición y anotación",
                         key=f"assignment_open_{row.assignment_id}",
                     ):
                         _go_to_review(st, source_key=row.source_key, page=row.page_start)

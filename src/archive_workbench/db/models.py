@@ -203,6 +203,63 @@ class DigitalObjectUnitLink(Base):
     page_end: Mapped[int | None] = mapped_column(Integer, nullable=True)
 
 
+class ArchivalDocumentComponent(Base):
+    """Orden explícito de objetos digitales dentro de una unidad documental del catálogo."""
+
+    __tablename__ = "archival_document_components"
+    __table_args__ = (
+        UniqueConstraint(
+            "archival_unit_id",
+            "sequence_position",
+            name="uq_archival_document_component_position",
+        ),
+        CheckConstraint(
+            "sequence_position >= 1",
+            name="ck_archival_document_component_position_positive",
+        ),
+        CheckConstraint(
+            "page_start IS NULL OR page_start >= 1",
+            name="ck_archival_document_component_page_start_positive",
+        ),
+        CheckConstraint(
+            "page_end IS NULL OR page_end >= 1",
+            name="ck_archival_document_component_page_end_positive",
+        ),
+        CheckConstraint(
+            "page_start IS NULL OR page_end IS NULL OR page_end >= page_start",
+            name="ck_archival_document_component_page_order",
+        ),
+        Index(
+            "ix_archival_document_components_unit",
+            "archival_unit_id",
+            "sequence_position",
+        ),
+        Index(
+            "ix_archival_document_components_digital",
+            "digital_object_id",
+        ),
+    )
+
+    id: Mapped[str] = mapped_column(String(36), primary_key=True)
+    archival_unit_id: Mapped[str] = mapped_column(
+        ForeignKey("archival_units.id", ondelete="CASCADE"), nullable=False
+    )
+    digital_object_id: Mapped[str] = mapped_column(
+        ForeignKey("digital_objects.id", ondelete="CASCADE"), nullable=False
+    )
+    sequence_position: Mapped[int] = mapped_column(Integer, nullable=False)
+    page_start: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    page_end: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    created_by: Mapped[str] = mapped_column(String(200), nullable=False)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), default=utc_now, nullable=False
+    )
+    updated_by: Mapped[str] = mapped_column(String(200), nullable=False)
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), default=utc_now, onupdate=utc_now, nullable=False
+    )
+
+
 class SourceRegistration(Base):
     __tablename__ = "source_registrations"
     __table_args__ = (

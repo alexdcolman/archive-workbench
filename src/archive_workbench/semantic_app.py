@@ -100,7 +100,7 @@ def queue_similar_semantic_search(
 def _open_result(st, row, *, results, query: str, profile_id: str) -> None:
     if not row.source_key or not row.object_ids:
         st.warning(
-            "Este resultado no está vinculado con un bloque de texto que pueda abrirse en Revisar documentos."
+            "Este resultado no está vinculado con un bloque de texto que pueda abrirse en Edición y anotación."
         )
         return
     entries = _semantic_navigation_entries(results)
@@ -119,7 +119,7 @@ def _open_result(st, row, *, results, query: str, profile_id: str) -> None:
     }
     request_app_view(
         st,
-        mode="review",
+        mode="annotation",
         source_key=row.source_key,
         page=row.page_start,
         object_id=row.object_ids[0],

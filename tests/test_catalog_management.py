@@ -3,10 +3,23 @@ from __future__ import annotations
 from pathlib import Path
 
 import fitz
+from PIL import Image
 import pytest
 from sqlalchemy import select
 
 from archive_workbench.catalog import ensure_project
+from archive_workbench.catalog_app import (
+    _catalog_document_cached_thumbnail_data_url,
+    _catalog_document_thumbnail_data_url,
+)
+from archive_workbench.catalog_documents import (
+    DocumentComponentDraft,
+    DocumentGroupDraft,
+    create_document_groups,
+    natural_filename_key,
+    organization_source_rows,
+    record_level_options,
+)
 from archive_workbench.catalog_management import (
     archival_field_rows,
     archival_revision_rows,
@@ -35,12 +48,18 @@ from archive_workbench.db import (
 )
 from archive_workbench.decisions import load_decisions
 from archive_workbench.extraction import _selected_registrations
+from archive_workbench.identity import new_id
+from archive_workbench.exchange import ensure_exchange_workspace
 from archive_workbench.db.models import (
+    ArchivalDocumentComponent,
     ArchivalUnit,
     DigitalObject,
     DigitalObjectUnitLink,
+    ExchangeChangeEvent,
     FileInstance,
     SourceRegistration,
+    DerivativeAsset,
+    PreprocessingRun,
 )
 
 
@@ -61,6 +80,24 @@ def _setup(tmp_path: Path):
     with session_scope(engine) as session:
         ensure_project(session, decisions)
     return root, decisions, engine
+
+
+
+def test_catalog_document_source_names_use_natural_numeric_order() -> None:
+    names = [
+        "legajo n° 15 A.C.1.tiff",
+        "legajo n° 15 A.C.10.tiff",
+        "legajo n° 15 A.C.100.tiff",
+        "legajo n° 15 A.C.2.tiff",
+        "legajo n° 15 A.C.11.tiff",
+    ]
+    assert sorted(names, key=natural_filename_key) == [
+        "legajo n° 15 A.C.1.tiff",
+        "legajo n° 15 A.C.2.tiff",
+        "legajo n° 15 A.C.10.tiff",
+        "legajo n° 15 A.C.11.tiff",
+        "legajo n° 15 A.C.100.tiff",
+    ]
 
 
 def test_create_update_move_and_history(tmp_path: Path) -> None:
@@ -782,5 +819,315 @@ def test_delete_archival_unit_rejects_children_and_digital_links(tmp_path: Path)
             assert any("contenidos digitales" in item for item in blockers)
             with pytest.raises(ValueError, match="no puede eliminarse"):
                 delete_archival_unit(session, unit_id=fondo.id, deleted_by="Alex")
+    finally:
+        engine.dispose()
+
+
+def test_organization_source_rows_exposes_current_preview_derivative(tmp_path: Path) -> None:
+    root, decisions, engine = _setup(tmp_path)
+    source_path = root / "corpus" / "001.tiff"
+    source_path.parent.mkdir(parents=True, exist_ok=True)
+    Image.new("RGB", (80, 120), "white").save(source_path, format="TIFF")
+    try:
+        with session_scope(engine) as session:
+            archivo = create_archival_unit(session, decisions=decisions, project_id=decisions.project_id, parent_id=None, level_key="archivo", title="Archivo", created_by="Alex")
+            fondo = create_archival_unit(session, decisions=decisions, project_id=decisions.project_id, parent_id=archivo.id, level_key="fondo", title="Fondo", created_by="Alex")
+            caja = create_archival_unit(session, decisions=decisions, project_id=decisions.project_id, parent_id=fondo.id, level_key="caja", title="Caja", created_by="Alex")
+            legajo = create_archival_unit(session, decisions=decisions, project_id=decisions.project_id, parent_id=caja.id, level_key="legajo", title="Legajo", created_by="Alex")
+            registered = register_local_file(
+                session,
+                project_root=root,
+                project_id=decisions.project_id,
+                archival_unit_id=legajo.id,
+                relative_path="corpus/001.tiff",
+                registered_by="Alex",
+            )
+            run_id = new_id()
+            session.add(
+                PreprocessingRun(
+                    id=run_id,
+                    digital_object_id=registered.digital_object_id,
+                    source_sha256="0" * 64,
+                    profile_key="test",
+                    options_json={},
+                    options_hash="1" * 64,
+                    backend="test",
+                    status="completed",
+                    is_current=True,
+                    output_root="derivatives/test",
+                )
+            )
+            session.flush()
+            session.add(
+                DerivativeAsset(
+                    id=new_id(),
+                    preprocessing_run_id=run_id,
+                    digital_object_id=registered.digital_object_id,
+                    page_number=1,
+                    kind="preview",
+                    relative_path="derivatives/test/page_0001_preview.jpg",
+                    mime_type="image/jpeg",
+                    sha256="2" * 64,
+                    byte_size=123,
+                    width=600,
+                    height=900,
+                    backend="test",
+                )
+            )
+            session.flush()
+            rows = organization_source_rows(
+                session, project_id=decisions.project_id, parent_unit_id=legajo.id
+            )
+        assert len(rows) == 1
+        assert rows[0].preview_relative_path == "derivatives/test/page_0001_preview.jpg"
+    finally:
+        engine.dispose()
+
+
+def test_catalog_document_thumbnail_cache_reuses_unchanged_file_and_invalidates_change(
+    tmp_path: Path,
+) -> None:
+    root = tmp_path / "project"
+    path = root / "derivatives" / "preview.png"
+    path.parent.mkdir(parents=True, exist_ok=True)
+    Image.new("RGB", (120, 180), "white").save(path)
+    _catalog_document_cached_thumbnail_data_url.cache_clear()
+
+    first = _catalog_document_thumbnail_data_url(root, "derivatives/preview.png")
+    second = _catalog_document_thumbnail_data_url(root, "derivatives/preview.png")
+    warm = _catalog_document_cached_thumbnail_data_url.cache_info()
+
+    assert first is not None
+    assert second == first
+    assert warm.misses == 1
+    assert warm.hits == 1
+
+    Image.new("RGB", (140, 200), "black").save(path)
+    changed = _catalog_document_thumbnail_data_url(root, "derivatives/preview.png")
+    refreshed = _catalog_document_cached_thumbnail_data_url.cache_info()
+
+    assert changed is not None
+    assert changed != first
+    assert refreshed.misses == 2
+
+
+def test_organize_linked_files_into_ordered_document_units(tmp_path: Path) -> None:
+    root, decisions, engine = _setup(tmp_path)
+    first_path = root / "corpus" / "001_programa.pdf"
+    second_path = root / "corpus" / "002_programa.pdf"
+    _write_pdf(first_path, "PROGRAMA DE ACTIVIDADES")
+    _write_pdf(second_path, "Continuación")
+    try:
+        with session_scope(engine) as session:
+            archivo = create_archival_unit(
+                session,
+                decisions=decisions,
+                project_id=decisions.project_id,
+                parent_id=None,
+                level_key="archivo",
+                title="Archivo",
+                created_by="Alex",
+            )
+            fondo = create_archival_unit(
+                session,
+                decisions=decisions,
+                project_id=decisions.project_id,
+                parent_id=archivo.id,
+                level_key="fondo",
+                title="Fondo",
+                created_by="Alex",
+            )
+            caja = create_archival_unit(
+                session,
+                decisions=decisions,
+                project_id=decisions.project_id,
+                parent_id=fondo.id,
+                level_key="caja",
+                title="Caja",
+                created_by="Alex",
+            )
+            legajo = create_archival_unit(
+                session,
+                decisions=decisions,
+                project_id=decisions.project_id,
+                parent_id=caja.id,
+                level_key="legajo",
+                title="15 - Actividades culturales",
+                created_by="Alex",
+            )
+            first = register_local_file(
+                session,
+                project_root=root,
+                project_id=decisions.project_id,
+                archival_unit_id=legajo.id,
+                relative_path="corpus/001_programa.pdf",
+                registered_by="Alex",
+            )
+            second = register_local_file(
+                session,
+                project_root=root,
+                project_id=decisions.project_id,
+                archival_unit_id=legajo.id,
+                relative_path="corpus/002_programa.pdf",
+                registered_by="Alex",
+            )
+
+            rows = organization_source_rows(
+                session,
+                project_id=decisions.project_id,
+                parent_unit_id=legajo.id,
+            )
+            assert [row.original_filename for row in rows] == [
+                "001_programa.pdf",
+                "002_programa.pdf",
+            ]
+            assert rows[0].suggested_title == "001 programa"
+            assert rows[0].preview_relative_path is None
+            assert rows[0].organized_count == 0
+            assert "documento" in record_level_options(decisions, legajo.level_key)
+
+            result = create_document_groups(
+                session,
+                decisions=decisions,
+                project_id=decisions.project_id,
+                parent_unit_id=legajo.id,
+                document_level_key="documento",
+                groups=[
+                    DocumentGroupDraft(
+                        title="Programa de actividades culturales",
+                        components=(
+                            DocumentComponentDraft(first.digital_object_id),
+                            DocumentComponentDraft(second.digital_object_id),
+                        ),
+                    )
+                ],
+                created_by="Alex",
+            )
+            created_id = result.created[0].archival_unit_id
+            created = session.get(ArchivalUnit, created_id)
+            components = session.scalars(
+                select(ArchivalDocumentComponent)
+                .where(ArchivalDocumentComponent.archival_unit_id == created_id)
+                .order_by(ArchivalDocumentComponent.sequence_position)
+            ).all()
+            links = session.scalars(
+                select(DigitalObjectUnitLink).where(
+                    DigitalObjectUnitLink.archival_unit_id == created_id
+                )
+            ).all()
+
+            assert created is not None
+            assert created.parent_id == legajo.id
+            assert created.level_key == "documento"
+            assert [row.digital_object_id for row in components] == [
+                first.digital_object_id,
+                second.digital_object_id,
+            ]
+            assert [row.sequence_position for row in components] == [1, 2]
+            assert {row.relation_type for row in links} == {"is_part_of"}
+
+            rows_after = organization_source_rows(
+                session,
+                project_id=decisions.project_id,
+                parent_unit_id=legajo.id,
+            )
+            assert [row.organized_count for row in rows_after] == [1, 1]
+    finally:
+        engine.dispose()
+
+
+def test_one_multipage_file_can_be_split_into_multiple_catalog_documents(tmp_path: Path) -> None:
+    root, decisions, engine = _setup(tmp_path)
+    pdf_path = root / "corpus" / "boletin.pdf"
+    pdf_path.parent.mkdir(parents=True, exist_ok=True)
+    document = fitz.open()
+    for index in range(1, 5):
+        page = document.new_page(width=500, height=400)
+        page.insert_text((50, 80), f"Documento página {index}")
+    document.save(pdf_path)
+    document.close()
+    try:
+        with session_scope(engine) as session:
+            archivo = create_archival_unit(session, decisions=decisions, project_id=decisions.project_id, parent_id=None, level_key="archivo", title="Archivo", created_by="Alex")
+            fondo = create_archival_unit(session, decisions=decisions, project_id=decisions.project_id, parent_id=archivo.id, level_key="fondo", title="Fondo", created_by="Alex")
+            caja = create_archival_unit(session, decisions=decisions, project_id=decisions.project_id, parent_id=fondo.id, level_key="caja", title="Caja", created_by="Alex")
+            legajo = create_archival_unit(session, decisions=decisions, project_id=decisions.project_id, parent_id=caja.id, level_key="legajo", title="Legajo", created_by="Alex")
+            registered = register_local_file(
+                session,
+                project_root=root,
+                project_id=decisions.project_id,
+                archival_unit_id=legajo.id,
+                relative_path="corpus/boletin.pdf",
+                registered_by="Alex",
+            )
+            result = create_document_groups(
+                session,
+                decisions=decisions,
+                project_id=decisions.project_id,
+                parent_unit_id=legajo.id,
+                document_level_key="documento",
+                groups=(
+                    DocumentGroupDraft(
+                        title="Documento A",
+                        components=(DocumentComponentDraft(registered.digital_object_id, 1, 2),),
+                    ),
+                    DocumentGroupDraft(
+                        title="Documento B",
+                        components=(DocumentComponentDraft(registered.digital_object_id, 3, 4),),
+                    ),
+                ),
+                created_by="Alex",
+            )
+            assert len(result.created) == 2
+            components = session.scalars(
+                select(ArchivalDocumentComponent)
+                .where(
+                    ArchivalDocumentComponent.archival_unit_id.in_(
+                        [row.archival_unit_id for row in result.created]
+                    )
+                )
+                .order_by(ArchivalDocumentComponent.page_start)
+            ).all()
+            assert [(row.page_start, row.page_end) for row in components] == [(1, 2), (3, 4)]
+            links = session.scalars(
+                select(DigitalObjectUnitLink).where(
+                    DigitalObjectUnitLink.archival_unit_id.in_(
+                        [row.archival_unit_id for row in result.created]
+                    )
+                )
+            ).all()
+            assert {row.relation_type for row in links} == {"contains"}
+    finally:
+        engine.dispose()
+
+
+def test_document_component_creation_is_recorded_for_exchange(tmp_path: Path) -> None:
+    root, decisions, engine = _setup(tmp_path)
+    _write_pdf(root / "corpus" / "doc.pdf", "Documento")
+    try:
+        with session_scope(engine) as session:
+            archivo = create_archival_unit(session, decisions=decisions, project_id=decisions.project_id, parent_id=None, level_key="archivo", title="Archivo", created_by="Alex")
+            fondo = create_archival_unit(session, decisions=decisions, project_id=decisions.project_id, parent_id=archivo.id, level_key="fondo", title="Fondo", created_by="Alex")
+            caja = create_archival_unit(session, decisions=decisions, project_id=decisions.project_id, parent_id=fondo.id, level_key="caja", title="Caja", created_by="Alex")
+            legajo = create_archival_unit(session, decisions=decisions, project_id=decisions.project_id, parent_id=caja.id, level_key="legajo", title="Legajo", created_by="Alex")
+            registered = register_local_file(session, project_root=root, project_id=decisions.project_id, archival_unit_id=legajo.id, relative_path="corpus/doc.pdf", registered_by="Alex")
+            ensure_exchange_workspace(session, workspace_name="tests", changed_by="Alex")
+            create_document_groups(
+                session,
+                decisions=decisions,
+                project_id=decisions.project_id,
+                parent_unit_id=legajo.id,
+                document_level_key="documento",
+                groups=(DocumentGroupDraft(title="Documento", components=(DocumentComponentDraft(registered.digital_object_id),)),),
+                created_by="Alex",
+            )
+            event = session.scalar(
+                select(ExchangeChangeEvent)
+                .where(ExchangeChangeEvent.entity_type == "archival_document_component")
+                .order_by(ExchangeChangeEvent.sequence_number.desc())
+            )
+            assert event is not None
+            assert event.operation == "create"
+            assert event.changed_fields_json["sequence_position"] == [None, 1]
     finally:
         engine.dispose()

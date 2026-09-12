@@ -822,6 +822,19 @@ def rerun_view(st) -> None:
         st.rerun(scope="app")
 
 
+def rerun_fragment(st) -> None:
+    """Reconstruye sólo el fragmento activo; cae a app si el contexto no lo admite."""
+
+    try:
+        st.rerun(scope="fragment")
+    except TypeError:  # dobles de prueba o adaptadores anteriores sin parámetro scope
+        st.rerun()
+    except Exception as exc:  # pragma: no cover - depende del contexto interno de Streamlit
+        if exc.__class__.__name__ not in {"StreamlitAPIException", "StreamlitFragmentError"}:
+            raise
+        st.rerun(scope="app")
+
+
 def rerun_app(st) -> None:
     """Solicita un rerun completo para una navegación entre vistas."""
 

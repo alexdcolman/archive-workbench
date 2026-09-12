@@ -15,6 +15,7 @@ from sqlalchemy.orm import Session
 from archive_workbench.db import create_sqlite_engine, database_path, session_scope
 from archive_workbench.db.migrations import current_revision, require_current_database
 from archive_workbench.db.models import (
+    ArchivalDocumentComponent,
     ArchivalFieldValue,
     ArchivalUnit,
     AudiovisualMedia,
@@ -64,8 +65,8 @@ from archive_workbench.project_admin import (
 from archive_workbench.version import __version__
 
 
-STATE_ADOPTION_SCHEMA_VERSION = "1.2"
-BASE_STATE_SECTIONS = (
+STATE_ADOPTION_SCHEMA_VERSION = "1.3"
+LEGACY_BASE_STATE_SECTIONS = (
     "selections",
     "pages",
     "objects",
@@ -79,6 +80,7 @@ BASE_STATE_SECTIONS = (
     "catalog_units",
     "digital_links",
 )
+BASE_STATE_SECTIONS = LEGACY_BASE_STATE_SECTIONS + ("document_components",)
 AUDIOVISUAL_STATE_SECTIONS = (
     "audiovisual_media",
     "transcription_runs",
@@ -90,31 +92,39 @@ TIMELINE_STATE_SECTIONS = (
     "audiovisual_timeline_annotations",
     "audiovisual_timeline_annotation_revisions",
 )
-STATE_SECTIONS_V11 = BASE_STATE_SECTIONS + AUDIOVISUAL_STATE_SECTIONS
+STATE_SECTIONS_V10 = LEGACY_BASE_STATE_SECTIONS
+STATE_SECTIONS_V11 = LEGACY_BASE_STATE_SECTIONS + AUDIOVISUAL_STATE_SECTIONS
 STATE_SECTIONS_V12 = STATE_SECTIONS_V11 + TIMELINE_STATE_SECTIONS
-STATE_SECTIONS = STATE_SECTIONS_V12
+STATE_SECTIONS_V13 = BASE_STATE_SECTIONS + AUDIOVISUAL_STATE_SECTIONS + TIMELINE_STATE_SECTIONS
+STATE_SECTIONS = STATE_SECTIONS_V13
 
 
 def _sections_for_state(state: dict[str, Any]) -> tuple[str, ...]:
-    if any(section in state for section in TIMELINE_STATE_SECTIONS):
-        return STATE_SECTIONS_V12
+    base = BASE_STATE_SECTIONS if "document_components" in state else LEGACY_BASE_STATE_SECTIONS
+    sections = base
     if any(section in state for section in AUDIOVISUAL_STATE_SECTIONS):
-        return STATE_SECTIONS_V11
-    return BASE_STATE_SECTIONS
+        sections += AUDIOVISUAL_STATE_SECTIONS
+    if any(section in state for section in TIMELINE_STATE_SECTIONS):
+        sections += TIMELINE_STATE_SECTIONS
+    return sections
 
 
-def _sections_for_schema(schema_version: str) -> tuple[str, ...]:
+def _sections_for_schema(schema_version: str, state: dict[str, Any] | None = None) -> tuple[str, ...]:
+    if schema_version == "1.3":
+        if state is None:
+            return BASE_STATE_SECTIONS
+        return _sections_for_state(state)
     if schema_version == "1.2":
         return STATE_SECTIONS_V12
     if schema_version == "1.1":
         return STATE_SECTIONS_V11
-    return BASE_STATE_SECTIONS
+    return STATE_SECTIONS_V10
 
 
 class StateAdoptionManifest(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
-    schema_version: Literal["1.0", "1.1", "1.2"] = STATE_ADOPTION_SCHEMA_VERSION
+    schema_version: Literal["1.0", "1.1", "1.2", "1.3"] = STATE_ADOPTION_SCHEMA_VERSION
     artifact_type: Literal["state_adoption_package"] = "state_adoption_package"
     adoption_id: str = Field(min_length=36, max_length=36)
     project_id: str
@@ -317,7 +327,7 @@ def _read_verified_package(
         raise ValueError("El paquete no cumple el contrato de estado 1.0") from exc
     if not isinstance(state, dict):
         raise ValueError("state.json debe contener un objeto JSON")
-    sections = _sections_for_schema(manifest.schema_version)
+    sections = _sections_for_schema(manifest.schema_version, state)
     if set(state) != {"project_id", *sections}:
         raise ValueError("state.json no contiene exactamente las secciones esperadas")
     if state.get("project_id") != manifest.project_id:
@@ -386,6 +396,8 @@ def _referenced_ids(state: dict[str, Any]) -> dict[str, set[str]]:
         if row.get("document_part_id"):
             part_ids.add(row["document_part_id"])
     for row in state["digital_links"]:
+        digital_ids.add(row["digital_object_id"])
+    for row in state.get("document_components", []):
         digital_ids.add(row["digital_object_id"])
     for row in state.get("audiovisual_media", []):
         digital_ids.add(row["digital_object_id"])
@@ -535,7 +547,9 @@ def create_state_adoption_package(
     sequence = _current_sequence(session, workspace.id)
     sections = _sections_for_state(state)
     schema_version = (
-        "1.2"
+        "1.3"
+        if "document_components" in state
+        else "1.2"
         if sections == STATE_SECTIONS_V12
         else "1.1"
         if sections == STATE_SECTIONS_V11
@@ -1214,6 +1228,26 @@ def _synchronize_editable_state(
             },
         )
 
+    component_ids = {row["id"] for row in state.get("document_components", [])}
+    for item in state.get("document_components", []):
+        existing = session.get(ArchivalDocumentComponent, item["id"])
+        _upsert(
+            session,
+            ArchivalDocumentComponent,
+            item["id"],
+            {
+                "archival_unit_id": item["archival_unit_id"],
+                "digital_object_id": item["digital_object_id"],
+                "sequence_position": item["sequence_position"],
+                "page_start": item.get("page_start"),
+                "page_end": item.get("page_end"),
+                "created_by": existing.created_by if existing else actor,
+                "created_at": existing.created_at if existing else now,
+                "updated_by": actor,
+                "updated_at": now,
+            },
+        )
+
     # Los valores descriptivos no exponen un ID en la huella canónica; se reemplazan
     # dentro de las unidades del proyecto y se recrean con IDs locales nuevos.
     existing_units = session.scalars(
@@ -1406,6 +1440,22 @@ def _synchronize_editable_state(
         if project_page_ids
         else [],
         action_ids,
+    )
+    project_unit_ids = {
+        row.id
+        for row in session.scalars(
+            select(ArchivalUnit).where(ArchivalUnit.project_id == project_id)
+        ).all()
+    }
+    _delete_missing(
+        session.scalars(
+            select(ArchivalDocumentComponent).where(
+                ArchivalDocumentComponent.archival_unit_id.in_(project_unit_ids)
+            )
+        ).all()
+        if project_unit_ids
+        else [],
+        component_ids,
     )
     _delete_missing(
         session.scalars(

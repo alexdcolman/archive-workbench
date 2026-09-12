@@ -173,7 +173,7 @@ def test_release_example_project_tools_are_packaged() -> None:
 
     creator_source = creator.read_text(encoding="utf-8")
     assert "Proyecto de ejemplo Archive Workbench" in creator_source
-    assert "0047_authority_relation_profiles" in creator_source
+    assert "0048_catalog_document_components" in creator_source
     assert "create_ready_project" in creator_source
     assert "register_test_corpus" in creator_source
     assert "bootstrap_editable_layer" in creator_source
@@ -183,7 +183,7 @@ def test_release_example_project_tools_are_packaged() -> None:
     assert "pilot_data no fue leído ni modificado" in creator_source
 
     verifier_source = verifier.read_text(encoding="utf-8")
-    assert "0047_authority_relation_profiles" in verifier_source
+    assert "0048_catalog_document_components" in verifier_source
     assert "synthetic_data_only" in verifier_source
     assert "verified_sha256" in verifier_source
     assert "ZIP PORTABLE: OK" in verifier_source
@@ -224,14 +224,27 @@ def test_version_docs_and_discovery_plan_are_packaged() -> None:
         / "0047_authority_relation_profiles.py"
     )
 
-    assert data["project"]["version"] == "1.0.0"
-    assert '__version__ = "1.0.0"' in version_source
+    assert data["project"]["version"] == "1.1.0"
+    assert '__version__ = "1.1.0"' in version_source
     assert migration.is_file()
     assert 'down_revision = "0044_layout_structure_review"' in migration.read_text(encoding="utf-8")
     assert timeline_migration.is_file()
     assert (
         'down_revision = "0046_audiovisual_timeline_annotations"'
         in timeline_migration.read_text(encoding="utf-8")
+    )
+    document_components_migration = (
+        root
+        / "src"
+        / "archive_workbench"
+        / "migrations"
+        / "versions"
+        / "0048_catalog_document_components.py"
+    )
+    assert document_components_migration.is_file()
+    assert (
+        'down_revision = "0047_authority_relation_profiles"'
+        in document_components_migration.read_text(encoding="utf-8")
     )
     assert (root / "src" / "archive_workbench" / "audiovisual.py").is_file()
     assert (root / "src" / "archive_workbench" / "audiovisual_app.py").is_file()
@@ -437,7 +450,8 @@ def test_common_base_validation_project_generator_is_packaged() -> None:
     assert "--counterpart-destination" in source
     assert "ex01c-iniciadora" in source
     assert "ex01c-contraparte" in source
-    assert "current_editable_state_sha256" in source
+    assert "fork_exchange_workspace" in source
+    assert "state_sha256" in source
     assert "El proyecto fuente no fue modificado" in source
 
 
@@ -550,6 +564,14 @@ def test_candidate_update_never_copies_local_only_top_level_paths(tmp_path: Path
     for dirname in module.LOCAL_ONLY_TOP_LEVEL:
         assert (target / dirname / "marker.txt").read_text(encoding="utf-8") == "local"
 
+    for dirname in module.PACKAGE_ONLY_TOP_LEVEL:
+        source_dir = source / dirname
+        source_dir.mkdir(parents=True, exist_ok=True)
+        (source_dir / "package-only.txt").write_text("transport", encoding="utf-8")
+    module.copy_candidate(source, target)
+    for dirname in module.PACKAGE_ONLY_TOP_LEVEL:
+        assert not (target / dirname).exists()
+
 
 def test_candidate_update_reconciles_only_known_relocations(tmp_path: Path) -> None:
     import json
@@ -565,7 +587,7 @@ def test_candidate_update_reconciles_only_known_relocations(tmp_path: Path) -> N
     manifest = json.loads(
         (root / "scripts" / "candidate_update_manifest.json").read_text(encoding="utf-8")
     )
-    assert manifest["candidate"] == "1.0.0 estable 2026-09-09"
+    assert manifest["candidate"] == "Archive Workbench 1.1.0 — preparación de publicación"
     assert len(manifest["relocations"]) > 100
     for item in manifest["relocations"]:
         assert item["from_sha256"]
@@ -656,6 +678,137 @@ def test_candidate_update_aborts_before_copy_if_known_old_file_was_modified(tmp_
     assert old.read_text(encoding="utf-8") == "contenido local modificado"
     assert not (target / "src" / "archive_workbench").exists()
 
+
+
+def test_candidate_update_reconciles_verified_root_residue_by_hash(tmp_path: Path) -> None:
+    import shutil
+    import subprocess
+    import sys
+
+    root = Path(__file__).parents[1]
+    target = tmp_path / "repo"
+    target.mkdir()
+    shutil.copy2(root / "pyproject.toml", target / "pyproject.toml")
+
+    historical = (
+        root
+        / ".assistant"
+        / "project_docs"
+        / "historico"
+        / "relevos"
+        / "RELEVO_NUEVA_CONVERSACION_20260909.md"
+    )
+    residue = target / "RELEVO_NUEVA_CONVERSACION_20991231_VARIANTE.md"
+    shutil.copy2(historical, residue)
+
+    result = subprocess.run(
+        [
+            sys.executable,
+            str(root / "scripts" / "apply_candidate_update.py"),
+            "--source",
+            str(root),
+            "--target",
+            str(target),
+        ],
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    assert result.returncode == 0, result.stdout + result.stderr
+    assert not residue.exists()
+    copied = (
+        target
+        / ".assistant"
+        / "project_docs"
+        / "historico"
+        / "relevos"
+        / historical.name
+    )
+    assert copied.is_file()
+    assert "Residuo documental verificado" in result.stdout
+
+
+
+def test_candidate_update_archives_exact_user_authorized_local_file(tmp_path: Path) -> None:
+    import hashlib
+    import shutil
+    import subprocess
+    import sys
+
+    root = Path(__file__).parents[1]
+    target = tmp_path / "repo"
+    target.mkdir()
+    shutil.copy2(root / "pyproject.toml", target / "pyproject.toml")
+    residue = target / "RELEVO_NUEVA_CONVERSACION_20260908.md"
+    payload = b"relevo local recuperado\ncontenido no distribuido\n"
+    residue.write_bytes(payload)
+
+    result = subprocess.run(
+        [
+            sys.executable,
+            str(root / "scripts" / "apply_candidate_update.py"),
+            "--source",
+            str(root),
+            "--target",
+            str(target),
+        ],
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    assert result.returncode == 0, result.stdout + result.stderr
+    assert not residue.exists()
+    archive_root = (
+        target
+        / ".assistant"
+        / "project_docs"
+        / "historico"
+        / "relevos"
+        / "recuperados_locales"
+    )
+    archived_candidates = [
+        path
+        for path in archive_root.glob(f"{residue.stem}*{residue.suffix}")
+        if path.is_file() and path.read_bytes() == payload
+    ]
+    assert len(archived_candidates) == 1
+    archived = archived_candidates[0]
+    assert hashlib.sha256(archived.read_bytes()).hexdigest() in result.stdout
+
+
+def test_candidate_update_aborts_before_copy_for_unknown_root_residue(tmp_path: Path) -> None:
+    import shutil
+    import subprocess
+    import sys
+
+    root = Path(__file__).parents[1]
+    target = tmp_path / "repo"
+    target.mkdir()
+    shutil.copy2(root / "pyproject.toml", target / "pyproject.toml")
+    marker = target / "src" / "do_not_overwrite.txt"
+    marker.parent.mkdir(parents=True)
+    marker.write_text("antes", encoding="utf-8")
+    residue = target / "RELEVO_NUEVA_CONVERSACION_20991231_DESCONOCIDO.md"
+    residue.write_text("contenido local no distribuido", encoding="utf-8")
+
+    result = subprocess.run(
+        [
+            sys.executable,
+            str(root / "scripts" / "apply_candidate_update.py"),
+            "--source",
+            str(root),
+            "--target",
+            str(target),
+        ],
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    assert result.returncode == 2
+    assert residue.name in result.stderr
+    assert residue.read_text(encoding="utf-8") == "contenido local no distribuido"
+    assert marker.read_text(encoding="utf-8") == "antes"
+    assert not (target / "src" / "archive_workbench").exists()
 
 def test_quality_tooling_is_declared_gradually() -> None:
     root = Path(__file__).parents[1]

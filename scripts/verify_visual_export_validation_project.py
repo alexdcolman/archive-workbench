@@ -15,7 +15,7 @@ from sqlalchemy import select
 from archive_workbench.db import create_sqlite_engine, current_revision, database_path, session_scope
 from archive_workbench.db.models import CorpusExportRun
 
-EXPECTED_REVISION = "0047_authority_relation_profiles"
+EXPECTED_REVISION = "0048_catalog_document_components"
 VALIDATION_FILE = Path("exports/exp01_validation.json")
 
 

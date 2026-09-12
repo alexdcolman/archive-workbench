@@ -17,6 +17,7 @@ from archive_workbench.ui_navigation import (
     request_app_view,
     request_tab,
     rerun_app,
+    rerun_fragment,
     rerun_view,
     tracked_tabs,
 )
@@ -457,6 +458,7 @@ def test_local_and_cross_view_reruns_have_explicit_scopes() -> None:
 
     rerun_view(st)
     rerun_app(st)
+    rerun_fragment(st)
 
     assert st.calls.count({"rerun": "app"}) == 2
 
@@ -677,7 +679,7 @@ def test_sidebar_uses_task_oriented_sections_and_context_help() -> None:
 
     assert '"Sección"' in source
     assert '"Procesar documentos"' in source
-    assert '"Revisar documentos"' in source
+    assert '"Revisión estructural"' in source
     assert '"Entidades y menciones"' in source
     assert '"Exportar corpus"' in source
     assert 'st.title("Archive Workbench")' in source
@@ -1248,19 +1250,16 @@ def test_review_uses_progressive_task_oriented_hierarchy() -> None:
     source = (Path(__file__).parents[1] / "src" / "archive_workbench" / "review_app.py").read_text(
         encoding="utf-8"
     )
-    view = source[source.index('section_heading(st, "Revisar documentos")') :]
+    view = source[source.index('section_heading(st, "Revisión estructural")') :]
     for phrase in (
         "Opciones de visualización",
         "Herramientas de edición de las páginas",
         "Estado de revisión de la página",
         "Deshacer o rehacer cambios",
-        "Revisar texto y estructura de la página",
+        "Revisar estructura de la página",
         "Datos del bloque de texto seleccionado",
-        "Editar texto",
         "Orden y estructura",
         "Casilleros y campos",
-        "Estado y anotaciones",
-        "Menciones de entidades",
         "Datos adicionales",
         "Historial general",
     ):
@@ -2097,14 +2096,9 @@ def test_review_tabs_and_processing_tasks_are_exposed_clearly() -> None:
         "páginas que funcionan como formularios"
         in TAB_HELP["review_object_tabs"]["Casilleros y campos"]
     )
-    assert (
-        "vincular una parte del bloque de texto"
-        in TAB_HELP["review_object_tabs"]["Menciones de entidades"]
-    )
-    assert (
-        "nombres detectados automáticamente"
-        in TAB_HELP["review_object_tabs"]["Menciones de entidades"]
-    )
+    assert "Menciones de entidades" not in TAB_HELP["review_object_tabs"]
+    assert "Estado y anotaciones" not in TAB_HELP["review_object_tabs"]
+    assert "Editar texto" not in TAB_HELP["review_object_tabs"]
     assert '"Elegir texto"' in processing
     assert '"Leer una zona"' in processing
     assert '"Corregir o agregar"' in processing
@@ -2392,7 +2386,7 @@ def test_rc40_review_navigation_has_local_fragment_and_no_failed_generation_stra
     assert "@st.fragment" in review_source
     assert "if commit_on_click and selection_state_key:" in canvas_source
 
-    candidate_start = authority_source.index('"Abrir este fragmento en Revisar documentos"')
+    candidate_start = authority_source.index('"Abrir este fragmento en Edición y anotación"')
     candidate_block = authority_source[candidate_start : candidate_start + 850]
     assert "request_app_view(" in candidate_block
     assert "rerun_app(st)" in candidate_block
@@ -2939,7 +2933,54 @@ def test_review_app_loads_review_documents_only_for_views_that_need_them() -> No
     )
     main_source = source[source.index("def main() -> None:") :]
     assert "def load_review_documents() -> None:" in main_source
-    assert 'if app_mode in {"review", "search"}:' in main_source
+    assert 'if app_mode in {"review", "annotation", "search"}:' in main_source
     assert 'if isinstance(st.session_state.get("review_pending_navigation"), dict):' in main_source
     prefix = main_source[: main_source.index("def load_review_documents() -> None:")]
     assert "review_document_rows(session)" not in prefix
+
+
+def test_catalog_document_organizer_supports_natural_navigation_and_thumbnail_selection() -> None:
+    root = Path(__file__).parents[1]
+    app_source = (root / "src" / "archive_workbench" / "catalog_app.py").read_text(
+        encoding="utf-8"
+    )
+    browser_source = (
+        root / "src" / "archive_workbench" / "catalog_document_browser.py"
+    ).read_text(encoding="utf-8")
+    documents_source = (
+        root / "src" / "archive_workbench" / "catalog_documents.py"
+    ).read_text(encoding="utf-8")
+
+    assert "natural_filename_key" in documents_source
+    assert "← Archivo anterior" in app_source
+    assert "Archivo siguiente →" in app_source
+    assert "Seleccionar archivos por miniaturas" in app_source
+    assert "catalog_document_thumbnail_browser" in app_source
+    assert "Conjunto anterior" in browser_source
+    assert "Conjunto siguiente" in browser_source
+    assert "Crear grupo provisional con la selección" in browser_source
+    assert "window.sessionStorage" in browser_source
+    assert 'class="aw-thumb-panel"' in browser_source
+    assert browser_source.index('class="aw-thumb-panel"') < browser_source.index('class="aw-doc-browser-footer"')
+    assert "grid-template-columns: repeat(3" in browser_source
+    assert "page_size = 6" in app_source
+    assert "@st.fragment" in app_source
+    assert '_rerun_catalog_document_fragment' in app_source
+    assert '_catalog_document_cached_thumbnail_data_url' in app_source
+    assert '_catalog_document_best_preview_path' in app_source
+
+
+def test_catalog_document_organizer_is_a_first_class_catalog_task() -> None:
+    root = Path(__file__).parents[1]
+    source = (root / "src" / "archive_workbench" / "catalog_app.py").read_text(encoding="utf-8")
+
+    batch = source.index('"batch": "Incorporar archivos"')
+    organizer = source.index('"organize_documents": "Organizar archivos en documentos"')
+    assert organizer > batch
+    assert "Agrupar archivos" in source
+    assert "Recorrer una secuencia y cortar" in source
+    assert "Crear grupo provisional" in source
+    assert "Cortar antes de estos archivos" in source
+    assert "Crear estos {len(drafts)} documentos en el catálogo" in source
+    assert "organization_source_rows" in source
+    assert "create_document_groups" in source

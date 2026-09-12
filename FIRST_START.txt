@@ -1,4 +1,4 @@
-ARCHIVE WORKBENCH 1.0.0 - PRIMER INICIO
+ARCHIVE WORKBENCH 1.1.0 - PRIMER INICIO
 
 Archive Workbench se ejecuta dentro de una imagen preparada de Docker. No instala Python ni las dependencias del programa en tu sistema.
 

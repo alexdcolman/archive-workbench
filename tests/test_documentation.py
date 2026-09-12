@@ -52,14 +52,38 @@ def test_assistant_continuity_documents_exist() -> None:
 
 
 def test_operational_docs_contain_only_canonical_documents() -> None:
-    actual = {path.name for path in OPERATIVE.iterdir() if path.is_file() or path.is_dir()}
-    assert {
+    actual_files = {path.name for path in OPERATIVE.iterdir() if path.is_file()}
+    assert actual_files == {
         "PENDIENTES_ACTIVOS.md",
         "IMPLEMENTACIONES_REALIZADAS.md",
         "ACTUALIZACION_ACTUAL.md",
         "ESTRATEGIA_DE_PRUEBAS.md",
         "HOJA_DE_RUTA_PRE_RELEASE.md",
-    }.issubset(actual)
+    }
+
+
+def test_private_project_docs_root_has_only_history_map_as_file() -> None:
+    actual_files = {path.name for path in PRIVATE_DOCS.iterdir() if path.is_file()}
+    assert actual_files == {"HISTORIAL_DE_CAMBIOS.md"}
+
+
+def test_repository_root_has_no_private_continuity_documents() -> None:
+    forbidden = [
+        *ROOT.glob("RELEVO_NUEVA_CONVERSACION_*.md"),
+        *ROOT.glob("PUBLICATION_CHECKPOINT_*.txt"),
+        *ROOT.glob("CONTINUITY_STATE*.txt"),
+        *ROOT.glob("*_INSTALACION_Y_PRUEBA.md"),
+        *ROOT.glob("*_INSTALACION_Y_PRUEBA.txt"),
+    ]
+    assert not forbidden
+    assert not list(ROOT.glob("INSTALAR_*.sh"))
+    assert not (ROOT / "PACKAGE_MANIFEST.json").exists()
+    delivery = ROOT / "delivery"
+    if (ROOT / ".git").exists():
+        assert not delivery.exists()
+    elif delivery.exists():
+        assert (delivery / "INSTALL_1_1_0.sh").is_file()
+        assert (delivery / "PACKAGE_MANIFEST.json").is_file()
 
 
 def test_public_documentation_does_not_contain_private_directories() -> None:
@@ -78,6 +102,14 @@ def test_public_site_required_pages_exist() -> None:
     }
     assert required.issubset({path.name for path in DOCS.glob("*.html")})
 
+
+
+
+def test_public_download_links_use_managed_release_asset() -> None:
+    expected = "https://github.com/alexdcolman/archive-workbench/releases/latest/download/Archive-Workbench.zip"
+    assert expected in (DOCS / "index.html").read_text(encoding="utf-8")
+    assert expected in (DOCS / "instalacion.html").read_text(encoding="utf-8")
+    assert expected in (ROOT / "README.md").read_text(encoding="utf-8")
 
 def test_public_site_local_resources_resolve() -> None:
     for html in DOCS.glob("*.html"):
@@ -100,3 +132,18 @@ def test_public_diagram_files_exist() -> None:
         "intercambio.svg",
     }
     assert required.issubset({path.name for path in diagrams.glob("*.svg")})
+
+
+def test_web02_current_review_and_catalog_screenshots_are_canonical() -> None:
+    screenshots = DOCS / "assets" / "screenshots"
+    required = {
+        "CAT-03-productores-responsables.png",
+        "CAT-10-organizar-documentos.png",
+        "REV-01-revision-estructural.png",
+        "ANN-01-edicion-anotacion.png",
+        "ANN-02-anotaciones.png",
+    }
+    assert required <= {path.name for path in screenshots.glob("*.png")}
+    assert not (screenshots / "REV-01-revisar-documentos.png").exists()
+    assert not (screenshots / "REV-03-orden-estructura.png").exists()
+

@@ -20,6 +20,8 @@ LOCAL_ONLY_TOP_LEVEL = {
     "ArchiveWorkbenchData",
 }
 
+PACKAGE_ONLY_TOP_LEVEL = {"delivery"}
+
 
 def sha256_file(path: Path) -> str:
     digest = hashlib.sha256()
@@ -36,6 +38,12 @@ def load_manifest(source: Path) -> dict:
         raise RuntimeError(f"Esquema de actualización no soportado: {payload.get('schema_version')!r}")
     if not isinstance(payload.get("relocations"), list):
         raise RuntimeError("El manifiesto de actualización no contiene relocations válidas.")
+    rules = payload.get("verified_root_residue_rules", [])
+    if not isinstance(rules, list):
+        raise RuntimeError("El manifiesto de actualización no contiene reglas de residuos válidas.")
+    authorized = payload.get("authorized_local_archivals", [])
+    if not isinstance(authorized, list):
+        raise RuntimeError("El manifiesto de actualización no contiene archivos locales autorizados válidos.")
     return payload
 
 
@@ -92,9 +100,126 @@ def preflight_relocations(source: Path, target: Path, relocations: list[dict]) -
     return actions
 
 
+
+def preflight_authorized_local_archivals(target: Path, items: list[dict]) -> list[dict]:
+    """Prepara movimientos locales exactos autorizados expresamente, sin globs ni borrado previo."""
+
+    actions: list[dict] = []
+    problems: list[str] = []
+    for item in items:
+        old_rel = Path(str(item.get("from") or ""))
+        archive_rel = Path(str(item.get("archive_dir") or ""))
+        if len(old_rel.parts) != 1 or not old_rel.name or any(ch in old_rel.name for ch in "*?[]"):
+            problems.append(f"La ruta local autorizada debe ser un nombre exacto de raíz: {old_rel}")
+            continue
+        if not archive_rel.parts or archive_rel.is_absolute() or ".." in archive_rel.parts:
+            problems.append(f"Destino histórico inválido para {old_rel}: {archive_rel}")
+            continue
+        if archive_rel.parts[:3] != (".assistant", "project_docs", "historico"):
+            problems.append(f"El archivo local autorizado sólo puede archivarse bajo historico/: {archive_rel}")
+            continue
+        local_old = target / old_rel
+        if not local_old.exists():
+            continue
+        if not local_old.is_file():
+            problems.append(f"La ruta local autorizada existe pero no es un archivo: {old_rel}")
+            continue
+        actions.append({
+            "from": old_rel,
+            "archive_dir": archive_rel,
+            "sha256": sha256_file(local_old),
+        })
+    if problems:
+        raise RuntimeError("\n".join(problems))
+    return actions
+
+
+def preflight_verified_root_residues(
+    source: Path, target: Path, rules: list[dict], *, excluded_names: set[str] | None = None
+) -> list[dict]:
+    """Reconcilia residuos documentales de raíz sólo si coinciden por SHA con copias históricas."""
+
+    actions: list[dict] = []
+    problems: list[str] = []
+    excluded_names = excluded_names or set()
+    for rule in rules:
+        pattern = str(rule.get("pattern") or "")
+        archive_rel = Path(str(rule.get("archive_dir") or ""))
+        if not pattern or not archive_rel.parts:
+            problems.append(f"Regla de residuo incompleta: {rule!r}")
+            continue
+        if "/" in pattern or "\\" in pattern:
+            problems.append(f"El patrón de residuo debe limitarse a la raíz: {pattern!r}")
+            continue
+        archive_root = source / archive_rel
+        if not archive_root.is_dir():
+            problems.append(f"Falta el archivo histórico declarado para residuos: {archive_rel}")
+            continue
+        known_by_hash: dict[str, list[Path]] = {}
+        for canonical in archive_root.rglob("*"):
+            if canonical.is_file():
+                known_by_hash.setdefault(sha256_file(canonical), []).append(canonical.relative_to(source))
+        for local_old in sorted(target.glob(pattern)):
+            if local_old.name in excluded_names:
+                continue
+            if not local_old.is_file():
+                problems.append(f"La ruta residual existe pero no es un archivo: {local_old.name}")
+                continue
+            local_hash = sha256_file(local_old)
+            matches = known_by_hash.get(local_hash, [])
+            if not matches:
+                problems.append(
+                    f"No se tocará {local_old.name}: su contenido no coincide con ninguna copia histórica conocida."
+                )
+                continue
+            canonical_rel = sorted(matches, key=lambda path: path.as_posix())[0]
+            actions.append({
+                "from": Path(local_old.name),
+                "to": canonical_rel,
+                "sha256": local_hash,
+            })
+    if problems:
+        raise RuntimeError("\n".join(problems))
+    return actions
+
+
+def reconcile_verified_root_residues(target: Path, actions: list[dict]) -> None:
+    for item in actions:
+        old_path = target / item["from"]
+        canonical_path = target / item["to"]
+        expected = item["sha256"]
+        if not canonical_path.is_file() or sha256_file(canonical_path) != expected:
+            raise RuntimeError(
+                f"No se retira {item['from']}: no se pudo verificar la copia histórica en {item['to']}."
+            )
+        if old_path.is_file() and sha256_file(old_path) == expected:
+            old_path.unlink()
+            print(f"Residuo documental verificado: {item['from']} -> {item['to']}")
+
+
+def archive_authorized_local_files(target: Path, actions: list[dict]) -> None:
+    for item in actions:
+        old_path = target / item["from"]
+        if not old_path.is_file():
+            continue
+        expected = item["sha256"]
+        if sha256_file(old_path) != expected:
+            raise RuntimeError(f"No se archivó {item['from']}: cambió después del preflight.")
+        archive_root = target / item["archive_dir"]
+        archive_root.mkdir(parents=True, exist_ok=True)
+        destination = archive_root / old_path.name
+        if destination.exists() and (not destination.is_file() or sha256_file(destination) != expected):
+            destination = archive_root / f"{old_path.stem}.local-{expected[:12]}{old_path.suffix}"
+        if not destination.exists():
+            shutil.copy2(old_path, destination)
+        if not destination.is_file() or sha256_file(destination) != expected:
+            raise RuntimeError(f"No se pudo verificar la copia histórica local de {item['from']}.")
+        old_path.unlink()
+        print(f"Archivo local autorizado archivado: {item['from']} -> {destination.relative_to(target)} [sha256={expected}]")
+
 def copy_candidate(source: Path, target: Path) -> None:
     for child in source.iterdir():
-        if child.name in LOCAL_ONLY_TOP_LEVEL:
+        if child.name in LOCAL_ONLY_TOP_LEVEL or child.name in PACKAGE_ONLY_TOP_LEVEL:
             continue
         destination = target / child.name
         if child.is_dir():
@@ -121,7 +246,13 @@ def reconcile_relocations(target: Path, actions: list[dict]) -> None:
 def prune_known_empty_directories(target: Path) -> None:
     """Retira sólo directorios obsoletos autorizados cuando ya quedaron vacíos."""
 
-    for rel in (Path("docs/historico"), Path("docs/operativos"), Path("docs/referencia")):
+    for rel in (
+        Path("docs/historico"),
+        Path("docs/operativos"),
+        Path("docs/referencia"),
+        Path(".assistant/project_docs/operativos/WEB01_CAPTURAS"),
+        Path(".assistant/project_docs/operativos/WEB01_SITIO"),
+    ):
         root = target / rel
         if not root.is_dir():
             continue
@@ -144,13 +275,26 @@ def apply_update(source: Path, target: Path) -> None:
     validate_roots(source, target)
     manifest = load_manifest(source)
     actions = preflight_relocations(source, target, manifest["relocations"])
+    authorized_actions = preflight_authorized_local_archivals(
+        target, manifest.get("authorized_local_archivals", [])
+    )
+    residue_actions = preflight_verified_root_residues(
+        source,
+        target,
+        manifest.get("verified_root_residue_rules", []),
+        excluded_names={item["from"].name for item in authorized_actions},
+    )
     print(f"Candidata: {manifest.get('candidate', 'sin identificar')}")
     print(f"Destino: {target}")
     print(f"Reubicaciones conocidas a reconciliar: {len(actions)}")
+    print(f"Residuos documentales verificados a reconciliar: {len(residue_actions)}")
+    print(f"Archivos locales autorizados a archivar: {len(authorized_actions)}")
     copy_candidate(source, target)
     reconcile_relocations(target, actions)
+    reconcile_verified_root_residues(target, residue_actions)
+    archive_authorized_local_files(target, authorized_actions)
     prune_known_empty_directories(target)
-    print("Actualización aplicada. No se modificaron archivos locales ajenos al paquete ni otras rutas.")
+    print("Actualización aplicada. Sólo se archivaron además las rutas locales exactas autorizadas en el manifiesto.")
 
 
 def main() -> int:

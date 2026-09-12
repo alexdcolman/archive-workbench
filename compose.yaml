@@ -34,7 +34,7 @@ x-app-common: &app-common
 services:
   app-cpu:
     <<: *app-common
-    image: ${ARCHIVE_WORKBENCH_CPU_IMAGE:-ghcr.io/alexdcolman/archive-workbench:1.0.0-cpu}
+    image: ${ARCHIVE_WORKBENCH_CPU_IMAGE:-ghcr.io/alexdcolman/archive-workbench:1.1.0-cpu}
     build:
       context: .
       dockerfile: Dockerfile
@@ -46,7 +46,7 @@ services:
 
   app-gpu:
     <<: *app-common
-    image: ${ARCHIVE_WORKBENCH_GPU_IMAGE:-ghcr.io/alexdcolman/archive-workbench:1.0.0-gpu}
+    image: ${ARCHIVE_WORKBENCH_GPU_IMAGE:-ghcr.io/alexdcolman/archive-workbench:1.1.0-gpu}
     build:
       context: .
       dockerfile: Dockerfile.gpu

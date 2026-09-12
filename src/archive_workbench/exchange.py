@@ -31,6 +31,7 @@ from archive_workbench.db.models import (
     SegmentEntityMention,
     EntityRelation,
     DocumentPart,
+    ArchivalDocumentComponent,
     ArchivalFieldValue,
     ArchivalUnit,
     AudiovisualMedia,
@@ -435,6 +436,21 @@ def _editable_state_payload(session: Session, project_id: str) -> dict[str, Any]
         .where(DigitalObject.project_id == project_id)
         .order_by(DigitalObjectUnitLink.id)
     ).all()
+    has_document_components_schema = inspect(bind).has_table("archival_document_components")
+    document_components = (
+        session.scalars(
+            select(ArchivalDocumentComponent)
+            .join(ArchivalUnit, ArchivalUnit.id == ArchivalDocumentComponent.archival_unit_id)
+            .where(ArchivalUnit.project_id == project_id)
+            .order_by(
+                ArchivalDocumentComponent.archival_unit_id,
+                ArchivalDocumentComponent.sequence_position,
+                ArchivalDocumentComponent.id,
+            )
+        ).all()
+        if has_document_components_schema
+        else []
+    )
     payload = {
         "project_id": project_id,
         "selections": [
@@ -658,6 +674,21 @@ def _editable_state_payload(session: Session, project_id: str) -> dict[str, Any]
             for link, digital in links
         ],
     }
+    # Mantener idéntica la huella histórica cuando todavía no existe composición
+    # documental. La sección nueva aparece sólo cuando CAT-DOC-01 tiene datos.
+    if document_components:
+        payload["document_components"] = [
+            {
+                "id": row.id,
+                "archival_unit_id": row.archival_unit_id,
+                "digital_object_id": row.digital_object_id,
+                "sequence_position": row.sequence_position,
+                "page_start": row.page_start,
+                "page_end": row.page_end,
+            }
+            for row in document_components
+        ]
+
     # Mantener idéntica la huella histórica cuando el proyecto no contiene AV.
     if audiovisual_media:
         payload.update(
@@ -1571,6 +1602,7 @@ def _entity_exists(session: Session, entity_type: str, entity_id: str) -> bool:
         "editable_object_tag": EditableObjectTag,
         "archival_unit": ArchivalUnit,
         "digital_object_unit_link": DigitalObjectUnitLink,
+        "archival_document_component": ArchivalDocumentComponent,
         "authority_record": AuthorityRecord,
         "entity_mention": EntityMention,
         "entity_relation": EntityRelation,
@@ -1680,6 +1712,16 @@ def _digital_link_values(session: Session, link: DigitalObjectUnitLink) -> dict[
         "sha256": digital.sha256 if digital else None,
         "byte_size": digital.byte_size if digital else None,
         "page_count": digital.page_count if digital else None,
+    }
+
+
+def _document_component_values(row: ArchivalDocumentComponent) -> dict[str, Any]:
+    return {
+        "archival_unit_id": row.archival_unit_id,
+        "digital_object_id": row.digital_object_id,
+        "sequence_position": row.sequence_position,
+        "page_start": row.page_start,
+        "page_end": row.page_end,
     }
 
 
@@ -2373,6 +2415,59 @@ def _assess_current_state(
             )
         else:
             return MergeDisposition.REVIEW.value, "Operación de vínculo digital no admitida.", []
+    elif event.entity_type == "archival_document_component":
+        row = session.get(ArchivalDocumentComponent, event.entity_id)
+        if event.operation.value == "create":
+            if row is None:
+                return MergeDisposition.APPLY.value, "El componente documental no existe localmente.", []
+            current_values = _document_component_values(row)
+            comparable = [
+                (field, current_values.get(field), _new_value(event.changed_fields, field))
+                for field in event.changed_fields
+                if field in current_values
+            ]
+            if comparable and all(
+                _exchange_values_equal(current, new) for _field, current, new in comparable
+            ):
+                return (
+                    MergeDisposition.DUPLICATE.value,
+                    "El componente documental ya existe localmente.",
+                    [],
+                )
+            return (
+                MergeDisposition.REVIEW.value,
+                "El ID del componente documental ya existe con otros valores.",
+                [
+                    field
+                    for field, current, new in comparable
+                    if not _exchange_values_equal(current, new)
+                ],
+            )
+        if event.operation.value == "delete":
+            if row is None:
+                return (
+                    MergeDisposition.DUPLICATE.value,
+                    "El componente documental ya está ausente localmente.",
+                    [],
+                )
+        elif event.operation.value != "update":
+            return (
+                MergeDisposition.REVIEW.value,
+                "Operación de componente documental no admitida.",
+                [],
+            )
+        if row is None:
+            return (
+                MergeDisposition.REVIEW.value,
+                "El componente documental no existe localmente.",
+                [],
+            )
+        current_values = _document_component_values(row)
+        pairs = []
+        for field, current in current_values.items():
+            pair = _changed_pair(event, field)
+            if pair is not None:
+                pairs.append((field, current, pair[0], pair[1]))
     elif event.entity_type == "authority_record":
         authority = session.get(AuthorityRecord, event.entity_id)
         if event.operation.value == "create":
@@ -2650,6 +2745,21 @@ def _parent_reference_problem(
         if ("archival_unit", str(unit_id)) in incoming_creations:
             return None
         return "El vínculo digital apunta a una unidad archivística inexistente."
+    if event.entity_type == "archival_document_component":
+        unit_id = _new_value(event.changed_fields, "archival_unit_id")
+        digital_id = _new_value(event.changed_fields, "digital_object_id")
+        if not isinstance(unit_id, str) or (
+            session.get(ArchivalUnit, unit_id) is None
+            and ("archival_unit", unit_id) not in incoming_creations
+        ):
+            return "El componente documental apunta a una unidad archivística inexistente."
+        # El objeto digital puede materializarse al aplicar, inmediatamente antes,
+        # el vínculo digital incluido en el mismo bundle. Aquí sólo validamos que
+        # la referencia tenga un identificador utilizable; la aplicación vuelve a
+        # comprobar que el objeto exista y pertenezca al proyecto.
+        if not isinstance(digital_id, str) or not digital_id:
+            return "El componente documental no identifica un objeto digital."
+        return None
     if event.entity_type == "entity_mention":
         object_id = _new_value(event.changed_fields, "editable_object_id")
         authority_id = _new_value(event.changed_fields, "authority_id")
@@ -3582,6 +3692,11 @@ def _current_field_value(session: Session, event: ChangeEvent, field: str) -> An
         if row is None:
             return None
         return _digital_link_values(session, row).get(field)
+    if event.entity_type == "archival_document_component":
+        row = session.get(ArchivalDocumentComponent, event.entity_id)
+        if row is None:
+            return None
+        return _document_component_values(row).get(field)
     if event.entity_type == "authority_record":
         row = session.get(AuthorityRecord, event.entity_id)
         if row is None:
@@ -5124,6 +5239,119 @@ def _apply_digital_link_event(
     session.flush()
 
 
+def _apply_document_component_event(
+    session: Session,
+    *,
+    event: ChangeEvent,
+    applied_by: str,
+    source_workspace_name: str,
+) -> None:
+    actor = f"{applied_by} [bundle de {source_workspace_name}]"
+    row = session.get(ArchivalDocumentComponent, event.entity_id)
+    fields = (
+        "archival_unit_id",
+        "digital_object_id",
+        "sequence_position",
+        "page_start",
+        "page_end",
+    )
+
+    if event.operation.value == "create":
+        if row is not None:
+            raise ValueError(f"El componente documental {event.entity_id} ya existe")
+        values = {field: _new_value(event.changed_fields, field) for field in fields}
+        unit = session.get(ArchivalUnit, values["archival_unit_id"])
+        if unit is None or unit.project_id != event.project_id:
+            raise ValueError("La unidad del componente documental no existe en el proyecto")
+        digital = session.get(DigitalObject, values["digital_object_id"])
+        if digital is None or digital.project_id != event.project_id:
+            raise ValueError("El objeto digital del componente no existe en el proyecto")
+        sequence_position = int(values["sequence_position"] or 0)
+        if sequence_position < 1:
+            raise ValueError("La posición del componente documental debe ser mayor o igual que 1")
+        page_start = values["page_start"]
+        page_end = values["page_end"]
+        if (page_start is None) != (page_end is None):
+            raise ValueError("El rango del componente debe indicar inicio y fin")
+        if page_start is not None:
+            page_start = int(page_start)
+            page_end = int(page_end)
+            if page_start < 1 or page_end < page_start:
+                raise ValueError("El rango de páginas del componente documental es inválido")
+            if digital.page_count is not None and page_end > int(digital.page_count):
+                raise ValueError("El rango del componente excede las páginas del objeto digital")
+        session.add(
+            ArchivalDocumentComponent(
+                id=event.entity_id,
+                archival_unit_id=unit.id,
+                digital_object_id=digital.id,
+                sequence_position=sequence_position,
+                page_start=page_start,
+                page_end=page_end,
+                created_by=actor,
+                created_at=event.timestamp,
+                updated_by=actor,
+                updated_at=utc_now(),
+            )
+        )
+        session.flush()
+        return
+
+    if row is None:
+        raise ValueError(f"Componente documental inexistente: {event.entity_id}")
+    current = _document_component_values(row)
+    if event.operation.value == "delete":
+        for field in event.changed_fields:
+            pair = _changed_pair(event, field)
+            if pair is not None:
+                _assert_expected(current.get(field), pair[0], event=event, field=field)
+        session.delete(row)
+        session.flush()
+        return
+    if event.operation.value != "update":
+        raise ValueError("Operación de componente documental no admitida")
+
+    prospective = dict(current)
+    changed = False
+    for field in fields:
+        pair = _changed_pair(event, field)
+        if pair is None:
+            continue
+        _assert_expected(current.get(field), pair[0], event=event, field=field)
+        prospective[field] = pair[1]
+        changed = True
+    if not changed:
+        raise ValueError(f"El evento {event.event_id} no contiene cambios de componente documental")
+    unit = session.get(ArchivalUnit, prospective["archival_unit_id"])
+    if unit is None or unit.project_id != event.project_id:
+        raise ValueError("La unidad del componente documental no existe en el proyecto")
+    digital = session.get(DigitalObject, prospective["digital_object_id"])
+    if digital is None or digital.project_id != event.project_id:
+        raise ValueError("El objeto digital del componente no existe en el proyecto")
+    sequence_position = int(prospective["sequence_position"] or 0)
+    if sequence_position < 1:
+        raise ValueError("La posición del componente documental debe ser mayor o igual que 1")
+    page_start = prospective["page_start"]
+    page_end = prospective["page_end"]
+    if (page_start is None) != (page_end is None):
+        raise ValueError("El rango del componente debe indicar inicio y fin")
+    if page_start is not None:
+        page_start = int(page_start)
+        page_end = int(page_end)
+        if page_start < 1 or page_end < page_start:
+            raise ValueError("El rango de páginas del componente documental es inválido")
+        if digital.page_count is not None and page_end > int(digital.page_count):
+            raise ValueError("El rango del componente excede las páginas del objeto digital")
+    row.archival_unit_id = unit.id
+    row.digital_object_id = digital.id
+    row.sequence_position = sequence_position
+    row.page_start = page_start
+    row.page_end = page_end
+    row.updated_by = actor
+    row.updated_at = utc_now()
+    session.flush()
+
+
 def _replace_authority_aliases(
     session: Session,
     *,
@@ -5961,6 +6189,13 @@ def _apply_incoming_event(
         )
     elif event.entity_type == "digital_object_unit_link":
         _apply_digital_link_event(
+            session,
+            event=event,
+            applied_by=applied_by,
+            source_workspace_name=source_workspace_name,
+        )
+    elif event.entity_type == "archival_document_component":
+        _apply_document_component_event(
             session,
             event=event,
             applied_by=applied_by,

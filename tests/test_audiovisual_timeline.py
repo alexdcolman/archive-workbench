@@ -48,7 +48,7 @@ def test_0046_adds_timeline_annotation_tables(tmp_path: Path) -> None:
     assert current_revision(root) == "0045_audiovisual_transcription"
 
     upgrade_database(root)
-    assert current_revision(root) == "0047_authority_relation_profiles"
+    assert current_revision(root) == "0048_catalog_document_components"
 
     engine = create_sqlite_engine(database_path(root))
     try:

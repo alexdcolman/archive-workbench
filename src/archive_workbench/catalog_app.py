@@ -2,8 +2,14 @@ from __future__ import annotations
 
 from archive_workbench.ui_help import TAB_HELP, TASK_HELP
 from collections import Counter, defaultdict
+from functools import lru_cache
+import base64
+from io import BytesIO
 from pathlib import Path
 import tempfile
+
+import fitz
+from PIL import Image
 
 from typing import Callable
 
@@ -11,9 +17,11 @@ from archive_workbench.authorities import authority_rows, create_authority
 from archive_workbench.local_picker import choose_local_directory
 from archive_workbench.runtime_environment import managed_workspace, workspace_display_path
 from archive_workbench.catalog_tree import catalog_tree_select
+from archive_workbench.catalog_document_browser import catalog_document_thumbnail_browser
 from archive_workbench.ui_navigation import (
     mount_choice_help,
     rerun_app,
+    rerun_fragment,
     rerun_view,
     request_app_view,
     section_heading,
@@ -21,6 +29,13 @@ from archive_workbench.ui_navigation import (
 )
 
 from archive_workbench.catalog import ensure_project, scan_file_instances
+from archive_workbench.catalog_documents import (
+    DocumentComponentDraft,
+    DocumentGroupDraft,
+    create_document_groups,
+    organization_source_rows,
+    record_level_options,
+)
 from archive_workbench.catalog_management import (
     REGISTRATION_STATUSES,
     RELATION_TYPES,
@@ -860,6 +875,673 @@ def _render_batch_import(
             rerun_view(st)
 
 
+
+def _catalog_document_asset_path(
+    project_root: Path,
+    relative_path: str | None,
+) -> Path | None:
+    if not relative_path:
+        return None
+    root = project_root.resolve()
+    path = (root / relative_path).resolve()
+    try:
+        path.relative_to(root)
+    except ValueError:
+        return None
+    return path if path.is_file() else None
+
+
+def _catalog_document_path_signature(path: Path) -> tuple[str, int, int]:
+    stat = path.stat()
+    return str(path), int(stat.st_mtime_ns), int(stat.st_size)
+
+
+@lru_cache(maxsize=24)
+def _catalog_document_cached_preview_bytes(
+    path_string: str,
+    _mtime_ns: int,
+    _size: int,
+) -> bytes | None:
+    path = Path(path_string)
+    suffix = path.suffix.lower()
+    try:
+        if suffix == ".pdf":
+            with fitz.open(path) as document:
+                if document.page_count < 1:
+                    return None
+                pix = document[0].get_pixmap(matrix=fitz.Matrix(1.25, 1.25), alpha=False)
+                return pix.tobytes("png")
+        with Image.open(path) as image:
+            image.seek(0)
+            preview = image.convert("RGB")
+            preview.thumbnail((1200, 1600), Image.Resampling.LANCZOS)
+            payload = BytesIO()
+            preview.save(payload, format="PNG")
+            return payload.getvalue()
+    except (OSError, ValueError, RuntimeError, fitz.FileDataError):
+        return None
+
+
+def _catalog_document_preview_bytes(
+    project_root: Path,
+    relative_path: str | None,
+) -> bytes | None:
+    path = _catalog_document_asset_path(project_root, relative_path)
+    if path is None:
+        return None
+    try:
+        return _catalog_document_cached_preview_bytes(*_catalog_document_path_signature(path))
+    except OSError:
+        return None
+
+
+@lru_cache(maxsize=256)
+def _catalog_document_cached_thumbnail_data_url(
+    path_string: str,
+    _mtime_ns: int,
+    _size: int,
+) -> str | None:
+    path = Path(path_string)
+    suffix = path.suffix.lower()
+    try:
+        if suffix == ".pdf":
+            with fitz.open(path) as document:
+                if document.page_count < 1:
+                    return None
+                pix = document[0].get_pixmap(matrix=fitz.Matrix(0.9, 0.9), alpha=False)
+                image = Image.open(BytesIO(pix.tobytes("png"))).convert("RGB")
+        else:
+            with Image.open(path) as source:
+                source.seek(0)
+                image = source.convert("RGB")
+        image.thumbnail((640, 860), Image.Resampling.LANCZOS)
+        payload = BytesIO()
+        image.save(payload, format="JPEG", quality=78, optimize=True)
+        encoded = base64.b64encode(payload.getvalue()).decode("ascii")
+        return f"data:image/jpeg;base64,{encoded}"
+    except (OSError, ValueError, RuntimeError, fitz.FileDataError):
+        return None
+
+
+def _catalog_document_thumbnail_data_url(
+    project_root: Path,
+    relative_path: str | None,
+) -> str | None:
+    path = _catalog_document_asset_path(project_root, relative_path)
+    if path is None:
+        return None
+    try:
+        return _catalog_document_cached_thumbnail_data_url(
+            *_catalog_document_path_signature(path)
+        )
+    except OSError:
+        return None
+
+
+def _catalog_document_best_preview_path(row) -> str | None:
+    return row.preview_relative_path or row.relative_path
+
+
+def _catalog_document_event_is_new(st, event_name: str, payload) -> bool:
+    if not isinstance(payload, dict):
+        return False
+    nonce = str(payload.get("nonce") or "")
+    if not nonce:
+        return False
+    key = f"catalog_document_last_event_nonce_{event_name}"
+    if st.session_state.get(key) == nonce:
+        return False
+    st.session_state[key] = nonce
+    return True
+
+
+def _rerun_catalog_document_fragment(st) -> None:
+    rerun_fragment(st)
+
+
+def _catalog_document_drafts(st, parent_unit_id: str) -> list[dict]:
+    by_parent = st.session_state.get("catalog_document_drafts_by_parent")
+    if not isinstance(by_parent, dict):
+        by_parent = {}
+        st.session_state["catalog_document_drafts_by_parent"] = by_parent
+    drafts = by_parent.get(parent_unit_id)
+    if not isinstance(drafts, list):
+        drafts = []
+        by_parent[parent_unit_id] = drafts
+    return drafts
+
+
+def _new_catalog_document_draft(
+    st,
+    *,
+    parent_unit_id: str,
+    title: str,
+    digital_ids: list[str],
+) -> None:
+    counter = int(st.session_state.get("catalog_document_draft_counter", 0)) + 1
+    st.session_state["catalog_document_draft_counter"] = counter
+    _catalog_document_drafts(st, parent_unit_id).append(
+        {
+            "draft_id": f"doc_{counter}",
+            "title": title,
+            "components": [
+                {"digital_object_id": digital_id, "page_start": None, "page_end": None}
+                for digital_id in digital_ids
+            ],
+        }
+    )
+
+
+def _render_catalog_document_single_preview(
+    st,
+    *,
+    project_root: Path,
+    visible_sources,
+    source_by_id: dict,
+    labels: dict[str, str],
+    fragment_navigation: bool = False,
+) -> None:
+    preview_options = [row.digital_object_id for row in visible_sources]
+    current_preview_value = st.session_state.get("catalog_document_preview_source")
+    if current_preview_value not in preview_options:
+        st.session_state.pop("catalog_document_preview_source", None)
+    preview_id = st.selectbox(
+        "Ir a un archivo digital",
+        options=preview_options,
+        format_func=lambda value: labels[value],
+        key="catalog_document_preview_source",
+    )
+    preview_index = preview_options.index(preview_id)
+    nav_cols = st.columns([1, 1.1, 1])
+    if nav_cols[0].button(
+        "← Archivo anterior",
+        key="catalog_document_preview_previous",
+        disabled=preview_index == 0,
+        use_container_width=True,
+    ):
+        st.session_state["catalog_document_preview_source__pending"] = preview_options[
+            preview_index - 1
+        ]
+        if fragment_navigation:
+            _rerun_catalog_document_fragment(st)
+        else:
+            rerun_view(st)
+    nav_cols[1].markdown(
+        f"<div style='text-align:center;padding:.45rem 0'><strong>Archivo {preview_index + 1} de {len(preview_options)}</strong></div>",
+        unsafe_allow_html=True,
+    )
+    if nav_cols[2].button(
+        "Archivo siguiente →",
+        key="catalog_document_preview_next",
+        disabled=preview_index == len(preview_options) - 1,
+        use_container_width=True,
+    ):
+        st.session_state["catalog_document_preview_source__pending"] = preview_options[
+            preview_index + 1
+        ]
+        if fragment_navigation:
+            _rerun_catalog_document_fragment(st)
+        else:
+            rerun_view(st)
+
+    preview_row = source_by_id[preview_id]
+    image_col, text_col = st.columns([1, 1], gap="large")
+    with image_col:
+        image_bytes = _catalog_document_preview_bytes(
+            project_root, _catalog_document_best_preview_path(preview_row)
+        )
+        if image_bytes is not None:
+            st.image(image_bytes, caption=preview_row.original_filename, use_container_width=True)
+        else:
+            st.info("No hay una vista previa de imagen disponible para este archivo digital.")
+    with text_col:
+        st.write("**Texto disponible del archivo digital**")
+        st.write(preview_row.text_preview or "Todavía no hay texto editable o extraído disponible.")
+        st.caption(f"Título sugerido para un documento nuevo: {preview_row.suggested_title}")
+
+
+def _render_catalog_document_organizer(
+    st,
+    *,
+    project_root: Path,
+    db_path: Path,
+    decisions,
+    actor: str,
+    all_rows,
+    level_labels: dict[str, str],
+    level_map: dict,
+) -> None:
+    for widget_key in (
+        "catalog_document_group_selection",
+        "catalog_document_cut_before",
+        "catalog_document_preview_source",
+        "catalog_document_file_view",
+    ):
+        pending = st.session_state.pop(f"{widget_key}__pending", None)
+        if pending is not None:
+            st.session_state[widget_key] = pending
+
+    eligible = [
+        row
+        for row in all_rows
+        if row.digital_object_count
+        and record_level_options(decisions, row.level_key)
+    ]
+    if not eligible:
+        st.info(
+            "No hay unidades con archivos vinculados que admitan unidades documentales hijas. "
+            "Primero incorporá archivos en una unidad del catálogo compatible."
+        )
+        return
+
+    st.markdown("### Organizar archivos en documentos")
+    st.caption(
+        "Agrupá los archivos ya incorporados antes de crear unidades Documento. Los grupos son "
+        "provisionales hasta confirmar; ninguna unidad se crea automáticamente."
+    )
+    eligible_by_id = {row.id: row for row in eligible}
+    selected_parent_id = st.selectbox(
+        "Unidad del catálogo que contiene los archivos",
+        options=list(eligible_by_id),
+        format_func=lambda value: eligible_by_id[value].path,
+        key="catalog_document_parent_unit",
+    )
+    parent_row = eligible_by_id[selected_parent_id]
+    record_levels = record_level_options(decisions, parent_row.level_key)
+    document_level_key = st.selectbox(
+        "Tipo de unidad documental que se va a crear",
+        options=record_levels,
+        format_func=lambda value: level_labels.get(value, value),
+        key="catalog_document_level_key",
+    )
+
+    engine = create_sqlite_engine(db_path)
+    try:
+        with session_scope(engine) as session:
+            source_rows = organization_source_rows(
+                session,
+                project_id=decisions.project_id,
+                parent_unit_id=selected_parent_id,
+            )
+    finally:
+        engine.dispose()
+
+    if not source_rows:
+        st.info("La unidad seleccionada no tiene archivos digitales vinculados directamente.")
+        return
+    source_by_id = {row.digital_object_id: row for row in source_rows}
+    total = len(source_rows)
+    organized = sum(1 for row in source_rows if row.organized_count)
+    pending = total - organized
+    metrics = st.columns(3)
+    metrics[0].metric("Archivos vinculados", total)
+    metrics[1].metric("Sin organizar", pending)
+    metrics[2].metric("Ya usados en documentos", organized)
+
+    show_organized = st.checkbox(
+        "Mostrar también archivos ya usados en documentos",
+        value=False,
+        key="catalog_document_show_organized",
+    )
+    visible_sources = [row for row in source_rows if show_organized or not row.organized_count]
+    if not visible_sources:
+        st.success("Todos los archivos de esta unidad ya están usados en al menos un documento.")
+        visible_sources = source_rows
+
+    ordinal_by_id = {
+        row.digital_object_id: index
+        for index, row in enumerate(visible_sources, start=1)
+    }
+    labels = {
+        row.digital_object_id: (
+            f"{ordinal_by_id[row.digital_object_id]} · {row.original_filename}"
+            + (f" · {row.page_count} pág." if row.page_count else "")
+            + (f" · usado {row.organized_count} vez/veces" if row.organized_count else "")
+        )
+        for row in visible_sources
+    }
+
+    @st.fragment
+    def _render_catalog_document_workspace_fragment() -> None:
+        # Navegación de vista, paginación y selección provisional pertenecen a esta
+        # región autocontenida. Sólo crear grupos vuelve al rerun completo porque
+        # modifica el estado de trabajo que se renderiza debajo del fragmento.
+        for widget_key in (
+            "catalog_document_group_selection",
+            "catalog_document_cut_before",
+            "catalog_document_preview_source",
+            "catalog_document_file_view",
+        ):
+            pending_value = st.session_state.pop(f"{widget_key}__pending", None)
+            if pending_value is not None:
+                st.session_state[widget_key] = pending_value
+
+        mode = st.radio(
+            "Forma de organizar los archivos digitales",
+            options=["group", "cut"],
+            format_func=lambda value: (
+                "Agrupar archivos" if value == "group" else "Recorrer una secuencia y cortar"
+            ),
+            horizontal=True,
+            key="catalog_document_organize_mode",
+        )
+
+        if mode == "group":
+            view_mode = st.radio(
+                "Vista de los archivos digitales",
+                options=["thumbnails", "single", "list"],
+                format_func=lambda value: {
+                    "thumbnails": "Miniaturas",
+                    "single": "Archivo individual",
+                    "list": "Lista",
+                }[value],
+                horizontal=True,
+                key="catalog_document_file_view",
+            )
+            if view_mode == "single":
+                _render_catalog_document_single_preview(
+                    st,
+                    project_root=project_root,
+                    visible_sources=visible_sources,
+                    source_by_id=source_by_id,
+                    labels=labels,
+                    fragment_navigation=True,
+                )
+            elif view_mode == "thumbnails":
+                st.markdown("#### Seleccionar archivos por miniaturas")
+                st.caption(
+                    "Hacé clic en las miniaturas para seleccionar archivos digitales. La selección se "
+                    "conserva al pasar de un conjunto al siguiente; cada conjunto muestra seis archivos "
+                    "para que la imagen sea suficientemente grande como para reconocer el contenido."
+                )
+                page_size = 6
+                page_count = max(1, (len(visible_sources) + page_size - 1) // page_size)
+                page_state = st.session_state.setdefault(
+                    "catalog_document_thumbnail_page_by_parent", {}
+                )
+                thumbnail_page = int(page_state.get(selected_parent_id, 0))
+                thumbnail_page = min(max(thumbnail_page, 0), page_count - 1)
+                page_state[selected_parent_id] = thumbnail_page
+                page_start = thumbnail_page * page_size
+                page_rows = visible_sources[page_start : page_start + page_size]
+                thumbnail_items = [
+                    {
+                        "id": row.digital_object_id,
+                        "ordinal": ordinal_by_id[row.digital_object_id],
+                        "filename": row.original_filename,
+                        "page_count": row.page_count or 0,
+                        "organized_count": row.organized_count,
+                        "thumbnail": _catalog_document_thumbnail_data_url(
+                            project_root, _catalog_document_best_preview_path(row)
+                        ),
+                    }
+                    for row in page_rows
+                ]
+                clear_tokens = st.session_state.setdefault(
+                    "catalog_document_thumbnail_clear_tokens", {}
+                )
+                browser_result = catalog_document_thumbnail_browser(
+                    st,
+                    items=thumbnail_items,
+                    page=thumbnail_page,
+                    page_count=page_count,
+                    total=len(visible_sources),
+                    key="catalog_document_thumbnail_browser",
+                    selection_key=f"{decisions.project_id}:{selected_parent_id}",
+                    clear_token=int(clear_tokens.get(selected_parent_id, 0)),
+                )
+                page_event = browser_result.get("page_commit")
+                if _catalog_document_event_is_new(st, "thumbnail_page", page_event):
+                    requested_page = int(page_event.get("page", thumbnail_page))
+                    page_state[selected_parent_id] = min(
+                        max(requested_page, 0), page_count - 1
+                    )
+                    _rerun_catalog_document_fragment(st)
+                preview_event = browser_result.get("preview_commit")
+                if _catalog_document_event_is_new(st, "thumbnail_preview", preview_event):
+                    requested_preview = str(preview_event.get("id") or "")
+                    if requested_preview in source_by_id:
+                        st.session_state[
+                            "catalog_document_preview_source__pending"
+                        ] = requested_preview
+                        st.session_state[
+                            "catalog_document_file_view__pending"
+                        ] = "single"
+                        _rerun_catalog_document_fragment(st)
+                create_event = browser_result.get("create_group_commit")
+                if _catalog_document_event_is_new(st, "thumbnail_group", create_event):
+                    visible_id_set = {row.digital_object_id for row in visible_sources}
+                    requested_ids = [
+                        str(value)
+                        for value in create_event.get("ids", [])
+                        if str(value) in visible_id_set
+                    ]
+                    requested_ids.sort(key=lambda value: ordinal_by_id[value])
+                    if requested_ids:
+                        first = source_by_id[requested_ids[0]]
+                        _new_catalog_document_draft(
+                            st,
+                            parent_unit_id=selected_parent_id,
+                            title=first.suggested_title,
+                            digital_ids=requested_ids,
+                        )
+                        clear_tokens[selected_parent_id] = (
+                            int(clear_tokens.get(selected_parent_id, 0)) + 1
+                        )
+                        rerun_view(st)
+
+            if view_mode == "list":
+                selected_ids = st.multiselect(
+                    "Archivos digitales que forman un documento",
+                    options=[row.digital_object_id for row in visible_sources],
+                    format_func=lambda value: labels[value],
+                    key="catalog_document_group_selection",
+                    placeholder="Elegir uno o varios archivos digitales",
+                )
+                if st.button(
+                    "Crear grupo provisional con los archivos de la lista",
+                    key="catalog_document_add_group",
+                    disabled=not selected_ids,
+                ):
+                    selected_ids = sorted(
+                        selected_ids, key=lambda value: ordinal_by_id[value]
+                    )
+                    first = source_by_id[selected_ids[0]]
+                    _new_catalog_document_draft(
+                        st,
+                        parent_unit_id=selected_parent_id,
+                        title=first.suggested_title,
+                        digital_ids=list(selected_ids),
+                    )
+                    st.session_state["catalog_document_group_selection__pending"] = []
+                    rerun_view(st)
+        else:
+            _render_catalog_document_single_preview(
+                st,
+                project_root=project_root,
+                visible_sources=visible_sources,
+                source_by_id=source_by_id,
+                labels=labels,
+                fragment_navigation=True,
+            )
+            sequence_ids = [row.digital_object_id for row in visible_sources]
+            if len(sequence_ids) < 2:
+                st.info("Se necesitan al menos dos archivos para crear cortes en una secuencia.")
+            else:
+                cut_ids = st.multiselect(
+                    "Cortar antes de estos archivos digitales",
+                    options=sequence_ids[1:],
+                    format_func=lambda value: labels[value],
+                    key="catalog_document_cut_before",
+                    help=(
+                        "Cada archivo elegido inicia un documento provisional nuevo. El primer archivo "
+                        "de la secuencia siempre inicia el primer documento."
+                    ),
+                )
+                if st.button(
+                    "Crear grupos provisionales según estos cortes",
+                    key="catalog_document_apply_cuts",
+                    disabled=not cut_ids,
+                ):
+                    cut_set = set(cut_ids)
+                    groups: list[list[str]] = []
+                    current: list[str] = []
+                    for digital_id in sequence_ids:
+                        if current and digital_id in cut_set:
+                            groups.append(current)
+                            current = []
+                        current.append(digital_id)
+                    if current:
+                        groups.append(current)
+                    for digital_ids in groups:
+                        first = source_by_id[digital_ids[0]]
+                        _new_catalog_document_draft(
+                            st,
+                            parent_unit_id=selected_parent_id,
+                            title=first.suggested_title,
+                            digital_ids=digital_ids,
+                        )
+                    st.session_state["catalog_document_cut_before__pending"] = []
+                    rerun_view(st)
+
+    _render_catalog_document_workspace_fragment()
+
+    drafts = _catalog_document_drafts(st, selected_parent_id)
+    if not drafts:
+        st.caption("Todavía no hay documentos provisionales.")
+        return
+
+    st.markdown("### Documentos provisionales")
+    for draft_index, draft in enumerate(list(drafts)):
+        draft_id = str(draft["draft_id"])
+        with st.container(border=True):
+            header_cols = st.columns([5, 1])
+            title = header_cols[0].text_input(
+                "Título",
+                value=str(draft.get("title") or ""),
+                key=f"catalog_document_title_{draft_id}",
+                label_visibility="collapsed",
+            )
+            draft["title"] = title
+            if header_cols[1].button(
+                "Eliminar grupo",
+                key=f"catalog_document_delete_{draft_id}",
+            ):
+                drafts.pop(draft_index)
+                rerun_view(st)
+
+            components = draft.get("components", [])
+            for component_index, component in enumerate(list(components)):
+                digital_id = str(component["digital_object_id"])
+                row = source_by_id.get(digital_id)
+                if row is None:
+                    st.warning("Uno de los archivos del grupo ya no está disponible en esta unidad.")
+                    continue
+                cols = st.columns([0.45, 4.2, 0.7, 0.7, 0.8])
+                cols[0].write(f"{component_index + 1}.")
+                cols[1].write(row.original_filename)
+                if cols[2].button(
+                    "↑",
+                    key=f"catalog_document_up_{draft_id}_{component_index}",
+                    disabled=component_index == 0,
+                    help="Mover este archivo una posición hacia arriba",
+                ):
+                    components[component_index - 1], components[component_index] = (
+                        components[component_index],
+                        components[component_index - 1],
+                    )
+                    rerun_view(st)
+                if cols[3].button(
+                    "↓",
+                    key=f"catalog_document_down_{draft_id}_{component_index}",
+                    disabled=component_index == len(components) - 1,
+                    help="Mover este archivo una posición hacia abajo",
+                ):
+                    components[component_index + 1], components[component_index] = (
+                        components[component_index],
+                        components[component_index + 1],
+                    )
+                    rerun_view(st)
+                if cols[4].button(
+                    "Quitar archivo",
+                    key=f"catalog_document_remove_{draft_id}_{component_index}",
+                ):
+                    components.pop(component_index)
+                    rerun_view(st)
+
+                if row.page_count and row.page_count > 1:
+                    use_range = st.checkbox(
+                        f"Usar sólo un rango de páginas de {row.original_filename}",
+                        value=component.get("page_start") is not None,
+                        key=f"catalog_document_range_{draft_id}_{component_index}",
+                    )
+                    if use_range:
+                        range_cols = st.columns(2)
+                        start = range_cols[0].number_input(
+                            "Página inicial",
+                            min_value=1,
+                            max_value=int(row.page_count),
+                            value=int(component.get("page_start") or 1),
+                            step=1,
+                            key=f"catalog_document_start_{draft_id}_{component_index}",
+                        )
+                        end = range_cols[1].number_input(
+                            "Página final",
+                            min_value=1,
+                            max_value=int(row.page_count),
+                            value=int(component.get("page_end") or row.page_count),
+                            step=1,
+                            key=f"catalog_document_end_{draft_id}_{component_index}",
+                        )
+                        component["page_start"] = int(start)
+                        component["page_end"] = int(end)
+                    else:
+                        component["page_start"] = None
+                        component["page_end"] = None
+                if row.text_preview:
+                    st.caption(row.text_preview)
+
+    create_label = (
+        "Crear este documento en el catálogo"
+        if len(drafts) == 1
+        else f"Crear estos {len(drafts)} documentos en el catálogo"
+    )
+    if st.button(create_label, type="primary", key="catalog_document_commit"):
+        group_payload: list[DocumentGroupDraft] = []
+        for draft in drafts:
+            group_payload.append(
+                DocumentGroupDraft(
+                    title=str(draft.get("title") or ""),
+                    components=tuple(
+                        DocumentComponentDraft(
+                            digital_object_id=str(component["digital_object_id"]),
+                            page_start=component.get("page_start"),
+                            page_end=component.get("page_end"),
+                        )
+                        for component in draft.get("components", [])
+                    ),
+                )
+            )
+
+        def callback(session):
+            result = create_document_groups(
+                session,
+                decisions=decisions,
+                project_id=decisions.project_id,
+                parent_unit_id=selected_parent_id,
+                document_level_key=document_level_key,
+                groups=group_payload,
+                created_by=actor or "local_user",
+            )
+            _catalog_document_drafts(st, selected_parent_id).clear()
+            count = len(result.created)
+            return (
+                f"Se crearon {count} unidad(es) documental(es) bajo {parent_row.title}."
+            )
+
+        _run_catalog_action(st, db_path=db_path, callback=callback)
+
+
 def render_catalog_view(st, *, project_root: Path, db_path: Path, decisions, actor: str) -> None:
     section_heading(st, "Catálogo")
     flash = st.session_state.pop("catalog_flash", None)
@@ -889,6 +1571,7 @@ def render_catalog_view(st, *, project_root: Path, db_path: Path, decisions, act
         "template": "Planilla del catálogo",
         "create": "Crear una unidad",
         "batch": "Incorporar archivos",
+        "organize_documents": "Organizar archivos en documentos",
     }
     catalog_task = st.selectbox(
         "Tarea del catálogo",
@@ -1118,6 +1801,18 @@ def render_catalog_view(st, *, project_root: Path, db_path: Path, decisions, act
             decisions=decisions,
             actor=actor,
             all_rows=all_rows,
+        )
+
+    if catalog_task == "organize_documents":
+        _render_catalog_document_organizer(
+            st,
+            project_root=project_root,
+            db_path=db_path,
+            decisions=decisions,
+            actor=actor,
+            all_rows=all_rows,
+            level_labels=level_labels,
+            level_map=level_map,
         )
 
     if catalog_task == "units":
@@ -2025,7 +2720,7 @@ def render_catalog_view(st, *, project_root: Path, db_path: Path, decisions, act
                                     f"El documento ya tiene {item.editable_pages} páginas disponibles para revisión."
                                 )
                                 if item.source_key and st.button(
-                                    "Abrir este documento en Revisar documentos",
+                                    "Abrir este documento en Revisión estructural",
                                     key=f"catalog_open_review_{item.link_id}",
                                 ):
                                     request_app_view(

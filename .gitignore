@@ -79,3 +79,7 @@ Thumbs.db
 
 # Datos persistentes de la distribución con contenedor
 /ArchiveWorkbenchData/
+
+# Artefactos de entrega privados/locales
+/delivery/
+/release-assets/

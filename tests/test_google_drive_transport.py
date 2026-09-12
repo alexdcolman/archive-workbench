@@ -105,7 +105,7 @@ def _bundle(
         source_workspace_id=source_workspace_id,
         source_workspace_name="Remota",
         app_version="0.87.0",
-        database_revision="0047_authority_relation_profiles",
+        database_revision="0048_catalog_document_components",
         created_by="tests",
         base_checkpoint_id="remote-base",
         base_checkpoint_label="base",
@@ -685,4 +685,4 @@ def test_validation_generator_creates_review_app_compatible_projects(tmp_path: P
         assert decisions.project_id == "int01-google-drive-validation"
         assert decisions.project_name == "Validación INT-01 Google Drive"
         assert database_path(root).is_file()
-        assert current_revision(root) == "0047_authority_relation_profiles"
+        assert current_revision(root) == "0048_catalog_document_components"

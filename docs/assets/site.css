@@ -740,3 +740,37 @@ pre code { font-size: inherit; }
   html { scroll-behavior: auto; }
   *, *::before, *::after { transition: none !important; animation: none !important; }
 }
+
+/* Descarga preparada: bloque funcional, alineado con la documentación. */
+.download-panel {
+  margin: 1.5rem 0 2.4rem;
+  padding: 1.15rem 1.25rem;
+  border: 1px solid var(--line-strong);
+  border-left: 4px solid var(--accent);
+  background: var(--paper-2);
+}
+.download-panel h2 { margin-top: 0; }
+.download-actions,
+.download-inline {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: .65rem 1rem;
+}
+.download-primary {
+  display: inline-block;
+  padding: .58rem .82rem;
+  border: 1px solid var(--accent);
+  background: var(--accent);
+  color: #fff;
+  text-decoration: none;
+  font-weight: 650;
+  border-radius: var(--radius);
+}
+.download-primary:hover { color: #fff; filter: brightness(.92); }
+.download-note,
+.download-inline span {
+  color: var(--muted);
+  font-size: .9rem;
+}
+.download-inline { margin: 1.15rem 0 1.35rem; }

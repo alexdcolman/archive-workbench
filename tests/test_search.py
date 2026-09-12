@@ -297,7 +297,7 @@ def test_database_triggers_mark_search_index_dirty(tmp_path: Path) -> None:
         engine.dispose()
 
 
-def test_pending_search_navigation_sets_review_document_page_and_object() -> None:
+def test_pending_search_navigation_opens_annotation_document_page_and_object() -> None:
     class Document:
         editable_pages = [1, 2]
 
@@ -313,7 +313,7 @@ def test_pending_search_navigation_sets_review_document_page_and_object() -> Non
 
     st = FakeStreamlit()
     _apply_pending_navigation(st, {"doc": Document()})
-    assert st.session_state["review_app_mode"] == "review"
+    assert st.session_state["review_app_mode"] == "annotation"
     assert st.session_state["review_source_key"] == "doc"
     assert st.session_state["review_page_source"] == "doc"
     assert st.session_state["review_page_number"] == 2
@@ -700,8 +700,9 @@ def test_automatic_mention_suggestions_require_approved_pages_by_default(
             )
             page.review_status = "needs_review"
 
-            with pytest.raises(ValueError, match="no cumple el filtro de calidad"):
+            with pytest.raises(ValueError, match="no cumple el filtro de calidad") as exc_info:
                 suggest_dictionary_mentions(session, object_id=object_id, created_by="tests")
+            assert "estado actual: Requiere revisión" in str(exc_info.value)
             blocked = suggest_dictionary_mentions_all(
                 session, project_id="search_project", created_by="tests"
             )

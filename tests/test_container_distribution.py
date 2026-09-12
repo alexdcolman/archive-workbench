@@ -409,3 +409,62 @@ def test_linux_project_picker_can_open_general_start(tmp_path: Path) -> None:
 
     assert result.returncode == 2
     assert result.stdout == ""
+
+
+def test_managed_release_bundle_builder_outputs_minimal_runtime(tmp_path: Path) -> None:
+    import hashlib
+    import zipfile
+
+    cpu_tag = (ROOT / "docker" / "image-tag.txt").read_text(encoding="utf-8").strip()
+    version = cpu_tag.removesuffix("-cpu")
+    script = ROOT / "scripts" / "build_managed_release_bundle.py"
+    result = subprocess.run(
+        [
+            "python",
+            str(script),
+            "--output-dir",
+            str(tmp_path),
+            "--release-tag",
+            f"v{version}",
+        ],
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    assert result.returncode == 0, result.stderr
+
+    bundle = tmp_path / "Archive-Workbench.zip"
+    checksum = tmp_path / "Archive-Workbench.zip.sha256"
+    assert bundle.is_file()
+    assert checksum.is_file()
+    digest = hashlib.sha256(bundle.read_bytes()).hexdigest()
+    assert checksum.read_text(encoding="utf-8").strip() == f"{digest}  Archive-Workbench.zip"
+
+    with zipfile.ZipFile(bundle) as archive:
+        names = set(archive.namelist())
+        assert "Archive Workbench/VERSION.txt" in names
+        assert "Archive Workbench/compose.yaml" in names
+        assert "Archive Workbench/Start Archive Workbench - Windows.bat" in names
+        assert "Archive Workbench/Start Archive Workbench - Linux.sh" in names
+        assert "Archive Workbench/Start Archive Workbench - macOS.command" in names
+        assert "Archive Workbench/docker/windows-runtime.ps1" in names
+        assert not any("/.assistant/" in name for name in names)
+        assert not any("/src/" in name for name in names)
+        assert not any("/tests/" in name for name in names)
+        linux_info = archive.getinfo("Archive Workbench/Start Archive Workbench - Linux.sh")
+        linux_mode = (linux_info.external_attr >> 16) & 0o777
+        assert linux_mode & 0o111
+
+
+def test_release_bundle_workflow_attaches_static_latest_download_asset() -> None:
+    workflow_path = ROOT / ".github" / "workflows" / "publish-release-bundle.yml"
+    workflow_text = workflow_path.read_text(encoding="utf-8")
+    workflow = yaml.safe_load(workflow_text)
+
+    assert "release" in workflow[True]
+    assert "workflow_dispatch" in workflow[True]
+    assert "contents: write" in workflow_text
+    assert "scripts/build_managed_release_bundle.py" in workflow_text
+    assert "Archive-Workbench.zip" in workflow_text
+    assert "Archive-Workbench.zip.sha256" in workflow_text
+    assert "gh release upload" in workflow_text

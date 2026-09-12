@@ -19,7 +19,7 @@ from archive_workbench.db.models import (
 )
 from archive_workbench.identity import sha256_file
 
-EXPECTED_REVISION = "0047_authority_relation_profiles"
+EXPECTED_REVISION = "0048_catalog_document_components"
 EXPECTED_CHANNEL_ID = "UCsZG_7l0cYIEtJNhajrFPYg"
 EXPECTED_ACCESS_CONDITIONS = "Material autorizado para prueba AV-02."
 

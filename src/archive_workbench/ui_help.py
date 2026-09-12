@@ -155,21 +155,12 @@ TAB_HELP = {
         ),
     },
     "review_object_tabs": {
-        "Editar texto": (
-            "Permite corregir el contenido del bloque de texto seleccionado y cambiar su clase cuando corresponde. Cada guardado crea una nueva revisión y conserva el texto anterior y el OCR original."
-        ),
         "Orden y estructura": (
             "Permite revisar cómo se organizan y se leen los bloques de texto de la página. Desde esta pestaña se puede revisar el orden propuesto, trabajar con columnas y partes internas del documento, "
             "mover, combinar o dividir textos, resolver fragmentaciones o duplicados y consultar el historial estructural."
         ),
         "Casilleros y campos": (
             "Permite describir la estructura de páginas que funcionan como formularios. Se pueden confirmar casilleros detectados, agregar casilleros que no fueron detectados y agrupar opciones que pertenecen a una misma pregunta o campo."
-        ),
-        "Estado y anotaciones": (
-            "Permite registrar el estado de revisión del bloque de texto seleccionado y agregar etiquetas o comentarios de revisión. Estas anotaciones quedan vinculadas con el bloque y se conservan en su historial."
-        ),
-        "Menciones de entidades": (
-            "Permite vincular una parte del bloque de texto seleccionado con una entidad registrada en el proyecto. También permite revisar nombres detectados automáticamente y decidir si corresponden o no a una entidad."
         ),
         "Datos adicionales": (
             "Muestra información adicional asociada con el bloque de texto seleccionado, incluida información de procedencia, clasificación u otros datos conservados durante la extracción y el procesamiento."
@@ -270,6 +261,7 @@ TASK_HELP = {
         "Planilla del catálogo": "Permite descargar el catálogo como planilla XLSX o importar una planilla para crear y actualizar unidades. Archive Workbench muestra primero qué cambios produciría la planilla y sólo los guarda después de una confirmación explícita.",
         "Crear una unidad": "Permite crear manualmente una nueva unidad según las relaciones de custodia, jerarquía documental o ubicación física permitidas por el proyecto.",
         "Incorporar archivos": "Permite registrar archivos digitales y vincularlos con las unidades del catálogo que representan o de las que forman parte.",
+        "Organizar archivos en documentos": "Permite agrupar uno o varios archivos ya incorporados para crear unidades Documento hijas, ordenar sus componentes, limitar rangos de páginas cuando un archivo contiene más de un documento y revisar títulos sugeridos antes de guardar.",
     },
     "audiovisual_import_method": {
         "Desde esta computadora": (
