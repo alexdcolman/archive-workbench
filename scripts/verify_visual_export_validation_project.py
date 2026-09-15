@@ -77,6 +77,7 @@ def verify(project_root: Path) -> dict[str, object]:
     package_path = None
     asset_summary: dict[str, int] = {}
     context_only_found = False
+    context_geometry_verified = False
     if run is None:
         failures.append("No se encontró una exportación 'Exportar texto e imágenes (ZIP)'.")
     else:
@@ -106,6 +107,16 @@ def verify(project_root: Path) -> dict[str, object]:
                     manifest = json.loads(archive.read("manifest.json"))
                     if manifest.get("package_type") != "archive_workbench_text_and_images":
                         failures.append("El manifest no identifica el tipo de paquete esperado.")
+                    if manifest.get("schema_version") != "1.1":
+                        failures.append("El manifest no declara EXP-01 visual schema 1.1.")
+                    geometry_meta = (manifest.get("context") or {}).get("object_geometry") or {}
+                    if geometry_meta != {
+                        "geometry_field": "geometry",
+                        "bbox_field": "bbox",
+                        "bbox_format": "x_y_width_height",
+                        "coordinate_space": "normalized",
+                    }:
+                        failures.append("El manifest no declara el contrato espacial de objetos textuales.")
                     if manifest.get("project_id") != expected["project_id"]:
                         failures.append("El manifest no conserva el proyecto esperado.")
                     text_meta = manifest.get("text") or {}
@@ -141,6 +152,19 @@ def verify(project_root: Path) -> dict[str, object]:
                         and row.get("included_in_primary_export") is False
                         for row in context_rows
                     )
+                    context_row = next(
+                        (
+                            row
+                            for row in context_rows
+                            if row.get("object_id") == expected["context_object_id"]
+                        ),
+                        None,
+                    )
+                    context_geometry_verified = bool(
+                        context_row
+                        and context_row.get("geometry") == expected["context_object_geometry"]
+                        and context_row.get("bbox") == expected["context_object_bbox"]
+                    )
             except (OSError, ValueError, zipfile.BadZipFile, KeyError, json.JSONDecodeError) as exc:
                 failures.append(f"No se pudo verificar el ZIP: {exc}")
 
@@ -159,6 +183,8 @@ def verify(project_root: Path) -> dict[str, object]:
             failures.append(f"Recursos visuales inesperados: {asset_summary!r}.")
         if not context_only_found:
             failures.append("El objeto de contexto no quedó separado del contenido principal.")
+        if not context_geometry_verified:
+            failures.append("El objeto textual de contexto no conserva geometría y bbox esperados.")
 
     return {
         "ok": not failures,
@@ -181,6 +207,7 @@ def verify(project_root: Path) -> dict[str, object]:
         ),
         "assets": asset_summary,
         "context_only_object_verified": context_only_found,
+        "context_geometry_verified": context_geometry_verified,
         "failures": failures,
     }
 

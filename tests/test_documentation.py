@@ -82,7 +82,7 @@ def test_repository_root_has_no_private_continuity_documents() -> None:
     if (ROOT / ".git").exists():
         assert not delivery.exists()
     elif delivery.exists():
-        assert (delivery / "INSTALL_1_1_0.sh").is_file()
+        assert (delivery / "INSTALL_1_2_0_RC1.sh").is_file()
         assert (delivery / "PACKAGE_MANIFEST.json").is_file()
 
 
@@ -94,15 +94,27 @@ def test_public_documentation_does_not_contain_private_directories() -> None:
 
 def test_public_site_required_pages_exist() -> None:
     required = {
-        "index.html", "instalacion.html", "tutorial.html", "catalogo.html",
-        "procesamiento.html", "trabajo.html", "revision.html", "entidades.html",
-        "busquedas.html", "relaciones.html", "audiovisual.html", "exportacion.html",
-        "intercambio.html", "resguardo.html", "conceptos.html", "referencia.html",
-        "desarrollo.html", "problemas.html", "404.html",
+        "index.html",
+        "instalacion.html",
+        "tutorial.html",
+        "catalogo.html",
+        "procesamiento.html",
+        "trabajo.html",
+        "revision.html",
+        "entidades.html",
+        "busquedas.html",
+        "relaciones.html",
+        "audiovisual.html",
+        "exportacion.html",
+        "intercambio.html",
+        "resguardo.html",
+        "conceptos.html",
+        "referencia.html",
+        "desarrollo.html",
+        "problemas.html",
+        "404.html",
     }
     assert required.issubset({path.name for path in DOCS.glob("*.html")})
-
-
 
 
 def test_public_download_links_use_managed_release_asset() -> None:
@@ -110,6 +122,7 @@ def test_public_download_links_use_managed_release_asset() -> None:
     assert expected in (DOCS / "index.html").read_text(encoding="utf-8")
     assert expected in (DOCS / "instalacion.html").read_text(encoding="utf-8")
     assert expected in (ROOT / "README.md").read_text(encoding="utf-8")
+
 
 def test_public_site_local_resources_resolve() -> None:
     for html in DOCS.glob("*.html"):
@@ -146,4 +159,3 @@ def test_web02_current_review_and_catalog_screenshots_are_canonical() -> None:
     assert required <= {path.name for path in screenshots.glob("*.png")}
     assert not (screenshots / "REV-01-revisar-documentos.png").exists()
     assert not (screenshots / "REV-03-orden-estructura.png").exists()
-

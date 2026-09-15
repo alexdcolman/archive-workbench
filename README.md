@@ -2,7 +2,7 @@
 
 Archive Workbench es una aplicación local para describir unidades archivísticas, incorporar documentos digitalizados, extraer y revisar texto, trabajar con audio y video, registrar entidades y relaciones, buscar en los textos y transcripciones del proyecto y preparar resultados exportables. Está orientada a archivos, bibliotecas y equipos de investigación que necesitan conservar la procedencia de los materiales y de las decisiones realizadas durante el trabajo.
 
-Versión pública estable: 1.1.0.
+Versión candidata: 1.2.0 RC1. Versión pública estable anterior: 1.1.0.
 
 [Documentación pública](docs/index.html) · [Instalación](docs/instalacion.html) · [Tutorial](docs/tutorial.html) · [Conceptos](docs/conceptos.html) · [Referencia técnica](docs/referencia.html) · [Desarrollo](docs/desarrollo.html) · [Problemas frecuentes](docs/problemas.html)
 
@@ -226,6 +226,6 @@ Desarrollo: Alex Colman, en el marco del Grupo de Investigación en Archivos de 
 
 Cita sugerida:
 
-> Colman, Alex, y Grupo de Investigación en Archivos de la Represión (GIAR). 2026. *Archive Workbench* (versión 1.1.0) [software]. https://github.com/alexdcolman/archive-workbench
+> Colman, Alex, y Grupo de Investigación en Archivos de la Represión (GIAR). 2026. *Archive Workbench* (versión 1.2.0 RC1) [software]. https://github.com/alexdcolman/archive-workbench
 
 [`CITATION.cff`](CITATION.cff) contiene los metadatos de cita para GitHub y gestores bibliográficos.

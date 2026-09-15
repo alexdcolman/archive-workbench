@@ -82,7 +82,6 @@ def _setup(tmp_path: Path):
     return root, decisions, engine
 
 
-
 def test_catalog_document_source_names_use_natural_numeric_order() -> None:
     names = [
         "legajo n° 15 A.C.1.tiff",
@@ -830,10 +829,42 @@ def test_organization_source_rows_exposes_current_preview_derivative(tmp_path: P
     Image.new("RGB", (80, 120), "white").save(source_path, format="TIFF")
     try:
         with session_scope(engine) as session:
-            archivo = create_archival_unit(session, decisions=decisions, project_id=decisions.project_id, parent_id=None, level_key="archivo", title="Archivo", created_by="Alex")
-            fondo = create_archival_unit(session, decisions=decisions, project_id=decisions.project_id, parent_id=archivo.id, level_key="fondo", title="Fondo", created_by="Alex")
-            caja = create_archival_unit(session, decisions=decisions, project_id=decisions.project_id, parent_id=fondo.id, level_key="caja", title="Caja", created_by="Alex")
-            legajo = create_archival_unit(session, decisions=decisions, project_id=decisions.project_id, parent_id=caja.id, level_key="legajo", title="Legajo", created_by="Alex")
+            archivo = create_archival_unit(
+                session,
+                decisions=decisions,
+                project_id=decisions.project_id,
+                parent_id=None,
+                level_key="archivo",
+                title="Archivo",
+                created_by="Alex",
+            )
+            fondo = create_archival_unit(
+                session,
+                decisions=decisions,
+                project_id=decisions.project_id,
+                parent_id=archivo.id,
+                level_key="fondo",
+                title="Fondo",
+                created_by="Alex",
+            )
+            caja = create_archival_unit(
+                session,
+                decisions=decisions,
+                project_id=decisions.project_id,
+                parent_id=fondo.id,
+                level_key="caja",
+                title="Caja",
+                created_by="Alex",
+            )
+            legajo = create_archival_unit(
+                session,
+                decisions=decisions,
+                project_id=decisions.project_id,
+                parent_id=caja.id,
+                level_key="legajo",
+                title="Legajo",
+                created_by="Alex",
+            )
             registered = register_local_file(
                 session,
                 project_root=root,
@@ -1048,10 +1079,42 @@ def test_one_multipage_file_can_be_split_into_multiple_catalog_documents(tmp_pat
     document.close()
     try:
         with session_scope(engine) as session:
-            archivo = create_archival_unit(session, decisions=decisions, project_id=decisions.project_id, parent_id=None, level_key="archivo", title="Archivo", created_by="Alex")
-            fondo = create_archival_unit(session, decisions=decisions, project_id=decisions.project_id, parent_id=archivo.id, level_key="fondo", title="Fondo", created_by="Alex")
-            caja = create_archival_unit(session, decisions=decisions, project_id=decisions.project_id, parent_id=fondo.id, level_key="caja", title="Caja", created_by="Alex")
-            legajo = create_archival_unit(session, decisions=decisions, project_id=decisions.project_id, parent_id=caja.id, level_key="legajo", title="Legajo", created_by="Alex")
+            archivo = create_archival_unit(
+                session,
+                decisions=decisions,
+                project_id=decisions.project_id,
+                parent_id=None,
+                level_key="archivo",
+                title="Archivo",
+                created_by="Alex",
+            )
+            fondo = create_archival_unit(
+                session,
+                decisions=decisions,
+                project_id=decisions.project_id,
+                parent_id=archivo.id,
+                level_key="fondo",
+                title="Fondo",
+                created_by="Alex",
+            )
+            caja = create_archival_unit(
+                session,
+                decisions=decisions,
+                project_id=decisions.project_id,
+                parent_id=fondo.id,
+                level_key="caja",
+                title="Caja",
+                created_by="Alex",
+            )
+            legajo = create_archival_unit(
+                session,
+                decisions=decisions,
+                project_id=decisions.project_id,
+                parent_id=caja.id,
+                level_key="legajo",
+                title="Legajo",
+                created_by="Alex",
+            )
             registered = register_local_file(
                 session,
                 project_root=root,
@@ -1106,11 +1169,50 @@ def test_document_component_creation_is_recorded_for_exchange(tmp_path: Path) ->
     _write_pdf(root / "corpus" / "doc.pdf", "Documento")
     try:
         with session_scope(engine) as session:
-            archivo = create_archival_unit(session, decisions=decisions, project_id=decisions.project_id, parent_id=None, level_key="archivo", title="Archivo", created_by="Alex")
-            fondo = create_archival_unit(session, decisions=decisions, project_id=decisions.project_id, parent_id=archivo.id, level_key="fondo", title="Fondo", created_by="Alex")
-            caja = create_archival_unit(session, decisions=decisions, project_id=decisions.project_id, parent_id=fondo.id, level_key="caja", title="Caja", created_by="Alex")
-            legajo = create_archival_unit(session, decisions=decisions, project_id=decisions.project_id, parent_id=caja.id, level_key="legajo", title="Legajo", created_by="Alex")
-            registered = register_local_file(session, project_root=root, project_id=decisions.project_id, archival_unit_id=legajo.id, relative_path="corpus/doc.pdf", registered_by="Alex")
+            archivo = create_archival_unit(
+                session,
+                decisions=decisions,
+                project_id=decisions.project_id,
+                parent_id=None,
+                level_key="archivo",
+                title="Archivo",
+                created_by="Alex",
+            )
+            fondo = create_archival_unit(
+                session,
+                decisions=decisions,
+                project_id=decisions.project_id,
+                parent_id=archivo.id,
+                level_key="fondo",
+                title="Fondo",
+                created_by="Alex",
+            )
+            caja = create_archival_unit(
+                session,
+                decisions=decisions,
+                project_id=decisions.project_id,
+                parent_id=fondo.id,
+                level_key="caja",
+                title="Caja",
+                created_by="Alex",
+            )
+            legajo = create_archival_unit(
+                session,
+                decisions=decisions,
+                project_id=decisions.project_id,
+                parent_id=caja.id,
+                level_key="legajo",
+                title="Legajo",
+                created_by="Alex",
+            )
+            registered = register_local_file(
+                session,
+                project_root=root,
+                project_id=decisions.project_id,
+                archival_unit_id=legajo.id,
+                relative_path="corpus/doc.pdf",
+                registered_by="Alex",
+            )
             ensure_exchange_workspace(session, workspace_name="tests", changed_by="Alex")
             create_document_groups(
                 session,
@@ -1118,7 +1220,12 @@ def test_document_component_creation_is_recorded_for_exchange(tmp_path: Path) ->
                 project_id=decisions.project_id,
                 parent_unit_id=legajo.id,
                 document_level_key="documento",
-                groups=(DocumentGroupDraft(title="Documento", components=(DocumentComponentDraft(registered.digital_object_id),)),),
+                groups=(
+                    DocumentGroupDraft(
+                        title="Documento",
+                        components=(DocumentComponentDraft(registered.digital_object_id),),
+                    ),
+                ),
                 created_by="Alex",
             )
             event = session.scalar(

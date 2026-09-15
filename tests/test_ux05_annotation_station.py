@@ -28,7 +28,10 @@ def test_ux05_navigation_separates_structural_review_and_annotation() -> None:
     assert '"annotation": "Edición y anotación"' in source
     assert 'if app_mode == "annotation"' in source
     assert 'st.subheader("Revisar estructura de la página")' in source
-    structural = source[source.index('key="review_object_tabs"') - 700 : source.index('key="review_object_tabs"') + 400]
+    structural = source[
+        source.index('key="review_object_tabs"') - 700 : source.index('key="review_object_tabs"')
+        + 400
+    ]
     assert '"Estado y anotaciones"' not in structural
     assert '"Menciones de entidades"' not in structural
     assert '"Editar texto"' not in structural
@@ -65,5 +68,5 @@ def test_ux05_dictionary_quality_error_uses_human_page_status_label() -> None:
 def test_ux05_candidate_version_is_visible() -> None:
     version = (ROOT / "src/archive_workbench/version.py").read_text()
     review = (ROOT / "src/archive_workbench/review_app.py").read_text()
-    assert '__version__ = "1.1.0"' in version
-    assert 'Versión {__version__' in review
+    assert '__version__ = "1.2.0rc1"' in version
+    assert "Versión {__version__" in review

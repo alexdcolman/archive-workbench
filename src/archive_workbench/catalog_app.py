@@ -875,7 +875,6 @@ def _render_batch_import(
             rerun_view(st)
 
 
-
 def _catalog_document_asset_path(
     project_root: Path,
     relative_path: str | None,
@@ -971,9 +970,7 @@ def _catalog_document_thumbnail_data_url(
     if path is None:
         return None
     try:
-        return _catalog_document_cached_thumbnail_data_url(
-            *_catalog_document_path_signature(path)
-        )
+        return _catalog_document_cached_thumbnail_data_url(*_catalog_document_path_signature(path))
     except OSError:
         return None
 
@@ -1124,8 +1121,7 @@ def _render_catalog_document_organizer(
     eligible = [
         row
         for row in all_rows
-        if row.digital_object_count
-        and record_level_options(decisions, row.level_key)
+        if row.digital_object_count and record_level_options(decisions, row.level_key)
     ]
     if not eligible:
         st.info(
@@ -1189,8 +1185,7 @@ def _render_catalog_document_organizer(
         visible_sources = source_rows
 
     ordinal_by_id = {
-        row.digital_object_id: index
-        for index, row in enumerate(visible_sources, start=1)
+        row.digital_object_id: index for index, row in enumerate(visible_sources, start=1)
     }
     labels = {
         row.digital_object_id: (
@@ -1293,20 +1288,16 @@ def _render_catalog_document_organizer(
                 page_event = browser_result.get("page_commit")
                 if _catalog_document_event_is_new(st, "thumbnail_page", page_event):
                     requested_page = int(page_event.get("page", thumbnail_page))
-                    page_state[selected_parent_id] = min(
-                        max(requested_page, 0), page_count - 1
-                    )
+                    page_state[selected_parent_id] = min(max(requested_page, 0), page_count - 1)
                     _rerun_catalog_document_fragment(st)
                 preview_event = browser_result.get("preview_commit")
                 if _catalog_document_event_is_new(st, "thumbnail_preview", preview_event):
                     requested_preview = str(preview_event.get("id") or "")
                     if requested_preview in source_by_id:
-                        st.session_state[
-                            "catalog_document_preview_source__pending"
-                        ] = requested_preview
-                        st.session_state[
-                            "catalog_document_file_view__pending"
-                        ] = "single"
+                        st.session_state["catalog_document_preview_source__pending"] = (
+                            requested_preview
+                        )
+                        st.session_state["catalog_document_file_view__pending"] = "single"
                         _rerun_catalog_document_fragment(st)
                 create_event = browser_result.get("create_group_commit")
                 if _catalog_document_event_is_new(st, "thumbnail_group", create_event):
@@ -1343,9 +1334,7 @@ def _render_catalog_document_organizer(
                     key="catalog_document_add_group",
                     disabled=not selected_ids,
                 ):
-                    selected_ids = sorted(
-                        selected_ids, key=lambda value: ordinal_by_id[value]
-                    )
+                    selected_ids = sorted(selected_ids, key=lambda value: ordinal_by_id[value])
                     first = source_by_id[selected_ids[0]]
                     _new_catalog_document_draft(
                         st,
@@ -1435,7 +1424,9 @@ def _render_catalog_document_organizer(
                 digital_id = str(component["digital_object_id"])
                 row = source_by_id.get(digital_id)
                 if row is None:
-                    st.warning("Uno de los archivos del grupo ya no está disponible en esta unidad.")
+                    st.warning(
+                        "Uno de los archivos del grupo ya no está disponible en esta unidad."
+                    )
                     continue
                 cols = st.columns([0.45, 4.2, 0.7, 0.7, 0.8])
                 cols[0].write(f"{component_index + 1}.")
@@ -1535,9 +1526,7 @@ def _render_catalog_document_organizer(
             )
             _catalog_document_drafts(st, selected_parent_id).clear()
             count = len(result.created)
-            return (
-                f"Se crearon {count} unidad(es) documental(es) bajo {parent_row.title}."
-            )
+            return f"Se crearon {count} unidad(es) documental(es) bajo {parent_row.title}."
 
         _run_catalog_action(st, db_path=db_path, callback=callback)
 
