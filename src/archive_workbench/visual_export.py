@@ -38,6 +38,7 @@ class VisualExportOptions:
     include_regions: bool = True
     include_figures: bool = True
     include_context: bool = True
+    selected_pages: tuple[tuple[str, int], ...] | None = None
 
 
 @dataclass(slots=True)
@@ -307,6 +308,15 @@ def build_text_image_package(
     context_ids_by_page: dict[tuple[str, int], str] = {}
     document_context_ids: dict[str, str] = {}
 
+    explicit_selected_pages = (
+        {
+            (str(digital_object_id), int(page_number))
+            for digital_object_id, page_number in options.selected_pages
+        }
+        if options.selected_pages is not None
+        else None
+    )
+
     if options.include_context:
         all_context_rows = session.execute(
             select(EditableObject, EditablePage, ExtractedObject, DocumentPart)
@@ -328,6 +338,12 @@ def build_text_image_package(
         ).all()
         by_page: dict[tuple[str, int], list[dict[str, Any]]] = {}
         for editable, page, original, part in all_context_rows:
+            if (
+                explicit_selected_pages is not None
+                and (editable.digital_object_id, editable.page_number)
+                not in explicit_selected_pages
+            ):
+                continue
             if allowed_page_statuses and page.review_status not in allowed_page_statuses:
                 continue
             text = _select_context_text(

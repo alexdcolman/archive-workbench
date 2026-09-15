@@ -224,8 +224,8 @@ def test_version_docs_and_discovery_plan_are_packaged() -> None:
         / "0047_authority_relation_profiles.py"
     )
 
-    assert data["project"]["version"] == "1.2.0rc1"
-    assert '__version__ = "1.2.0rc1"' in version_source
+    assert data["project"]["version"] == "1.2.0"
+    assert '__version__ = "1.2.0"' in version_source
     assert migration.is_file()
     assert 'down_revision = "0044_layout_structure_review"' in migration.read_text(encoding="utf-8")
     assert timeline_migration.is_file()

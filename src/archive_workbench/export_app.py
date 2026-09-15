@@ -26,6 +26,7 @@ from archive_workbench.corpus_export import (
     ExportProfileValues,
     default_export_filename,
     delete_export_profile,
+    export_page_candidates,
     export_profile_rows,
     export_run_rows,
     preview_export,
@@ -1044,6 +1045,49 @@ def render_export_view(
                     "El ZIP reúne el texto exportado con las imágenes relacionadas y un manifiesto "
                     "que conserva su origen, relaciones y huellas de verificación."
                 )
+                selected_pages: tuple[tuple[str, int], ...] | None = None
+                choose_specific_pages = st.toggle(
+                    "Elegir páginas específicas para esta exportación",
+                    value=False,
+                    key=f"export_visual_specific_pages_{selected.id}",
+                    help=(
+                        "Limita únicamente esta ejecución. No cambia estados de revisión "
+                        "ni modifica la configuración guardada."
+                    ),
+                )
+                if choose_specific_pages:
+                    engine = create_sqlite_engine(db_path)
+                    try:
+                        with session_scope(engine) as page_session:
+                            page_candidates = export_page_candidates(
+                                page_session,
+                                project_id=project_id,
+                                profile=selected,
+                            )
+                    finally:
+                        engine.dispose()
+
+                    page_by_key = {candidate.key: candidate for candidate in page_candidates}
+                    chosen_page_keys = st.multiselect(
+                        "Páginas que querés incluir",
+                        options=list(page_by_key),
+                        format_func=lambda key: page_by_key[key].label,
+                        key=f"export_visual_specific_page_values_{selected.id}",
+                    )
+                    selected_pages = tuple(
+                        (
+                            page_by_key[key].digital_object_id,
+                            page_by_key[key].page_number,
+                        )
+                        for key in chosen_page_keys
+                    )
+                    st.caption(
+                        "Esta selección sólo estrecha la ejecución actual y no cambia "
+                        "el estado de ninguna página."
+                    )
+                    if not selected_pages:
+                        st.warning("Elegí al menos una página para crear esta exportación.")
+
                 customize_visual = st.toggle(
                     "Elegir qué imágenes incluir",
                     value=False,
@@ -1075,6 +1119,7 @@ def render_export_view(
                     include_regions=include_regions,
                     include_figures=include_figures,
                     include_context=True,
+                    selected_pages=selected_pages,
                 )
                 st.caption(
                     "También puede incluirse como contexto el texto de otros bloques de las páginas y documentos seleccionados. Ese texto se identifica por separado para no confundirlo con el contenido principal exportado."

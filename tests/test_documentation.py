@@ -82,7 +82,7 @@ def test_repository_root_has_no_private_continuity_documents() -> None:
     if (ROOT / ".git").exists():
         assert not delivery.exists()
     elif delivery.exists():
-        assert (delivery / "INSTALL_1_2_0_RC1.sh").is_file()
+        assert (delivery / "INSTALL_1_2_0.sh").is_file()
         assert (delivery / "PACKAGE_MANIFEST.json").is_file()
 
 

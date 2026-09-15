@@ -1,6 +1,6 @@
 {
   "schema_version": 1,
-  "candidate": "Archive Workbench 1.2.0 RC1 — EXP-01 schema 1.1",
+  "candidate": "Archive Workbench 1.2.0 — EXP-01 schema 1.1 + EXP-SEL-01",
   "base_release": "1.1.0",
   "base_public_head": "3510932ce364263ff4fe40694f78a787421b64d0",
   "database_revision": "0048_catalog_document_components",

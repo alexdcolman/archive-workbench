@@ -7,6 +7,7 @@ from pathlib import Path
 from archive_workbench.corpus_export import (
     ExportProfileValues,
     build_export_rows,
+    export_page_candidates,
     export_run_rows,
     preview_export,
     run_export,
@@ -630,5 +631,44 @@ def test_visual_zip_rejects_modified_registered_page_asset(tmp_path: Path) -> No
                     output_format="visual_zip",
                     created_by="tests",
                 )
+    finally:
+        engine.dispose()
+
+
+def test_exp_sel_01_explicit_page_selection_is_run_scoped(tmp_path: Path) -> None:
+    root = tmp_path / "project"
+    _seed_search_project(root)
+    engine = create_sqlite_engine(database_path(root))
+    try:
+        with session_scope(engine) as session:
+            profile = _profile(session, aggregation="object")
+            original_statuses = list(profile.include_page_review_statuses_json or [])
+
+            candidates = export_page_candidates(
+                session,
+                project_id="search_project",
+                profile=profile,
+            )
+            assert len(candidates) == 1
+            candidate = candidates[0]
+            page_key = {(candidate.digital_object_id, candidate.page_number)}
+
+            selected = build_export_rows(
+                session,
+                project_id="search_project",
+                profile=profile,
+                selected_page_keys=page_key,
+            )
+            excluded = build_export_rows(
+                session,
+                project_id="search_project",
+                profile=profile,
+                selected_page_keys={("not-selected", 999)},
+            )
+
+            assert len(selected) == 1
+            assert selected[0].page_numbers == [candidate.page_number]
+            assert excluded == []
+            assert list(profile.include_page_review_statuses_json or []) == original_statuses
     finally:
         engine.dispose()

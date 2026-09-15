@@ -125,6 +125,28 @@ class ExportPreview:
     records: list[ExportRecord]
 
 
+@dataclass(slots=True, frozen=True)
+class ExportPageCandidate:
+    digital_object_id: str
+    page_number: int
+    original_filename: str
+    source_key: str | None
+    object_count: int
+
+    @property
+    def key(self) -> str:
+        return f"{self.digital_object_id}:{self.page_number}"
+
+    @property
+    def label(self) -> str:
+        source = f"{self.source_key} · " if self.source_key else ""
+        blocks = "bloque" if self.object_count == 1 else "bloques"
+        return (
+            f"{source}{self.original_filename} · página {self.page_number} · "
+            f"{self.object_count} {blocks}"
+        )
+
+
 @dataclass(slots=True)
 class ExportRunResult:
     run_id: str
@@ -737,6 +759,68 @@ def _load_atoms(session: Session, *, project_id: str, values: ExportProfileValue
     return atoms
 
 
+def export_page_candidates(
+    session: Session,
+    *,
+    project_id: str,
+    profile: CorpusExportProfile,
+) -> list[ExportPageCandidate]:
+    # La selección explícita nunca amplía el perfil: sólo estrecha su alcance.
+    _require_export_profile_authorization(
+        session,
+        project_id=project_id,
+        profile=profile,
+    )
+    atoms = _load_atoms(
+        session,
+        project_id=project_id,
+        values=profile_values(profile),
+    )
+    grouped: dict[tuple[str, int], list[_Atom]] = {}
+    for atom in atoms:
+        grouped.setdefault((atom.digital_object_id, atom.page_number), []).append(atom)
+
+    result: list[ExportPageCandidate] = []
+    for (digital_object_id, page_number), members in sorted(
+        grouped.items(),
+        key=lambda item: (
+            item[1][0].original_filename.casefold(),
+            item[0][1],
+            item[0][0],
+        ),
+    ):
+        first = members[0]
+        result.append(
+            ExportPageCandidate(
+                digital_object_id=digital_object_id,
+                page_number=page_number,
+                original_filename=first.original_filename,
+                source_key=first.source_key,
+                object_count=len(members),
+            )
+        )
+    return result
+
+
+def _run_profile_snapshot(
+    profile: CorpusExportProfile,
+    *,
+    selected_page_keys: set[tuple[str, int]] | None,
+) -> dict[str, Any]:
+    snapshot = profile_snapshot(profile)
+    if selected_page_keys is None:
+        snapshot["execution_scope"] = {"mode": "profile_scope"}
+    else:
+        snapshot["execution_scope"] = {
+            "mode": "explicit_pages",
+            "pages": [
+                {"digital_object_id": digital_object_id, "page_number": page_number}
+                for digital_object_id, page_number in sorted(selected_page_keys)
+            ],
+        }
+    return snapshot
+
+
 def _group_key(atom: _Atom, level: str) -> tuple[str, ...]:
     if level == "object":
         return (atom.object_id,)
@@ -766,10 +850,24 @@ def _combine_text(atoms: list[_Atom], values: ExportProfileValues) -> str:
 
 
 def build_export_rows(
-    session: Session, *, project_id: str, profile: CorpusExportProfile
+    session: Session,
+    *,
+    project_id: str,
+    profile: CorpusExportProfile,
+    selected_page_keys: set[tuple[str, int]] | None = None,
 ) -> list[ExportRecord]:
     values = profile_values(profile)
     atoms = _load_atoms(session, project_id=project_id, values=values)
+    if selected_page_keys is not None:
+        normalized_page_keys = {
+            (str(digital_object_id), int(page_number))
+            for digital_object_id, page_number in selected_page_keys
+        }
+        atoms = [
+            atom
+            for atom in atoms
+            if (atom.digital_object_id, atom.page_number) in normalized_page_keys
+        ]
     groups: dict[tuple[str, ...], list[_Atom]] = {}
     for atom in atoms:
         groups.setdefault(_group_key(atom, values.aggregation_level), []).append(atom)
@@ -1018,7 +1116,20 @@ def run_export(
     selected_format = output_format or profile.output_format
     if selected_format not in RUN_OUTPUT_FORMATS:
         raise ValueError("Formato de salida inválido")
-    rows = build_export_rows(session, project_id=project_id, profile=profile)
+    selected_page_keys: set[tuple[str, int]] | None = None
+    if visual_options is not None:
+        raw_selected_pages = getattr(visual_options, "selected_pages", None)
+        if raw_selected_pages is not None:
+            selected_page_keys = {
+                (str(digital_object_id), int(page_number))
+                for digital_object_id, page_number in raw_selected_pages
+            }
+    rows = build_export_rows(
+        session,
+        project_id=project_id,
+        profile=profile,
+        selected_page_keys=selected_page_keys,
+    )
     output_path, relative = _safe_output_path(project_root, output_relative_path, selected_format)
     if output_path.exists() and not overwrite:
         raise ValueError(
@@ -1042,7 +1153,7 @@ def run_export(
             project_root=project_root,
             project_id=project_id,
             records=[_jsonable_record(row) for row in rows],
-            profile_snapshot=profile_snapshot(profile),
+            profile_snapshot=_run_profile_snapshot(profile, selected_page_keys=selected_page_keys),
             corpus_state_sha256=state_digest,
             destination=output_path,
             options=selected_visual_options,
@@ -1058,7 +1169,7 @@ def run_export(
         finally:
             temporary.unlink(missing_ok=True)
     digest = hashlib.sha256(output_path.read_bytes()).hexdigest()
-    snapshot = profile_snapshot(profile)
+    snapshot = _run_profile_snapshot(profile, selected_page_keys=selected_page_keys)
     if visual_result is not None:
         snapshot["execution"] = {
             "format": "visual_zip",

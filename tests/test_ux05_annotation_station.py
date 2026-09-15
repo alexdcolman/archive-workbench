@@ -68,5 +68,5 @@ def test_ux05_dictionary_quality_error_uses_human_page_status_label() -> None:
 def test_ux05_candidate_version_is_visible() -> None:
     version = (ROOT / "src/archive_workbench/version.py").read_text()
     review = (ROOT / "src/archive_workbench/review_app.py").read_text()
-    assert '__version__ = "1.2.0rc1"' in version
+    assert '__version__ = "1.2.0"' in version
     assert "Versión {__version__" in review
