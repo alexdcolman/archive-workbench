@@ -40,7 +40,6 @@ from archive_workbench.authority_app import render_authorities_view
 from archive_workbench.decisions import load_decisions
 from archive_workbench.authorities import (
     LINKED_MENTION_STATUSES,
-    MENTION_STATUSES,
     authority_rows,
     create_mention,
     mention_rows,
@@ -99,7 +98,6 @@ from archive_workbench.review_annotations import (
     TAG_KINDS,
     add_object_comment,
     add_object_tag,
-    object_comment_rows,
     object_comment_rows_for_objects,
     remove_object_tag,
     set_object_review_status,
@@ -2156,7 +2154,9 @@ def _apply_pending_navigation(st, document_map: dict[str, object]) -> None:
         page = page_options[0]
 
     target_mode = st.session_state.get("review_app_mode")
-    st.session_state["review_app_mode"] = target_mode if target_mode in {"review", "annotation"} else "annotation"
+    st.session_state["review_app_mode"] = (
+        target_mode if target_mode in {"review", "annotation"} else "annotation"
+    )
     st.session_state["review_source_key"] = source_key
     st.session_state["review_page_source"] = source_key
     st.session_state["review_page_number"] = page
@@ -2165,13 +2165,12 @@ def _apply_pending_navigation(st, document_map: dict[str, object]) -> None:
         st.session_state["review_pending_object_id"] = str(object_id)
 
 
-
 def _set_annotation_focus(st, object_id: str | None) -> None:
     if object_id:
         st.session_state["annotation_focus_object_id"] = str(object_id)
-    st.session_state["annotation_focus_token"] = int(
-        st.session_state.get("annotation_focus_token", 0)
-    ) + 1
+    st.session_state["annotation_focus_token"] = (
+        int(st.session_state.get("annotation_focus_token", 0)) + 1
+    )
 
 
 def _render_annotation_view(
@@ -2221,14 +2220,16 @@ def _render_annotation_view(
                 page=page,
                 include_deleted=False,
             )
-            object_ids = [item.object_id for item in view.objects if item.lifecycle_status == "active"]
+            object_ids = [
+                item.object_id for item in view.objects if item.lifecycle_status == "active"
+            ]
             mentions = mention_rows(session, object_ids=tuple(object_ids))
-            mentions_by_object: dict[str, list[object]] = {object_id: [] for object_id in object_ids}
+            mentions_by_object: dict[str, list[object]] = {
+                object_id: [] for object_id in object_ids
+            }
             for row in mentions:
                 mentions_by_object.setdefault(row.object_id, []).append(row)
-            comments_by_object = object_comment_rows_for_objects(
-                session, object_ids=object_ids
-            )
+            comments_by_object = object_comment_rows_for_objects(session, object_ids=object_ids)
             available_authorities = authority_rows(
                 session,
                 project_id=decisions.project_id,
@@ -2377,7 +2378,8 @@ def _render_annotation_view(
             advance = str(action.get("advance") or "none")
             active_objects = [item for item in view.objects if item.lifecycle_status == "active"]
             current_index = next(
-                (index for index, item in enumerate(active_objects) if item.object_id == object_id), 0
+                (index for index, item in enumerate(active_objects) if item.object_id == object_id),
+                0,
             )
             if advance == "block" and current_index + 1 < len(active_objects):
                 _set_annotation_focus(st, active_objects[current_index + 1].object_id)
@@ -5561,7 +5563,9 @@ def main() -> None:
         _apply_pending_navigation(st, document_map)
     with st.sidebar:
         st.title("Archive Workbench")
-        st.caption(f"Versión {__version__.replace('rc', ' RC').upper() if 'rc' in __version__ else __version__}")
+        st.caption(
+            f"Versión {__version__.replace('rc', ' RC').upper() if 'rc' in __version__ else __version__}"
+        )
         reviewer, active_palette = _render_preferences(
             st,
             current_actor=preferences.actor,

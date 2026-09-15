@@ -88,7 +88,6 @@ def object_comment_rows(session: Session, *, object_id: str) -> list[CommentRow]
     ]
 
 
-
 def object_comment_rows_for_objects(
     session: Session, *, object_ids: list[str]
 ) -> dict[str, list[CommentRow]]:
@@ -115,6 +114,7 @@ def object_comment_rows_for_objects(
             )
         )
     return result
+
 
 def add_object_tag(
     session: Session,

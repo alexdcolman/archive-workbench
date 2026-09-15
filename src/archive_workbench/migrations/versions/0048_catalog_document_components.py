@@ -28,10 +28,12 @@ def _event_insert_sql(*, operation: str, actor: str, timestamp: str) -> str:
     source = "OLD" if operation == "delete" else "NEW"
     old = "OLD" if operation != "create" else None
     new = "NEW" if operation != "delete" else None
+
     def pair(field: str) -> str:
         before = f"{old}.{field}" if old else "NULL"
         after = f"{new}.{field}" if new else "NULL"
         return f"json_array({before}, {after})"
+
     return f"""
         INSERT INTO exchange_change_events (
             id, workspace_id, project_id, sequence_number, transaction_id,
@@ -49,11 +51,11 @@ def _event_insert_sql(*, operation: str, actor: str, timestamp: str) -> str:
             {_uuid_sql()}, 'archival_document_component', {source}.id, '{operation}',
             NULL, NULL,
             json_object(
-                'archival_unit_id', {pair('archival_unit_id')},
-                'digital_object_id', {pair('digital_object_id')},
-                'sequence_position', {pair('sequence_position')},
-                'page_start', {pair('page_start')},
-                'page_end', {pair('page_end')}
+                'archival_unit_id', {pair("archival_unit_id")},
+                'digital_object_id', {pair("digital_object_id")},
+                'sequence_position', {pair("sequence_position")},
+                'page_start', {pair("page_start")},
+                'page_end', {pair("page_end")}
             ),
             {actor}, {timestamp}
         FROM exchange_workspaces w
@@ -90,12 +92,8 @@ def upgrade() -> None:
             "page_start IS NULL OR page_end IS NULL OR page_end >= page_start",
             name="ck_archival_document_component_page_order",
         ),
-        sa.ForeignKeyConstraint(
-            ["archival_unit_id"], ["archival_units.id"], ondelete="CASCADE"
-        ),
-        sa.ForeignKeyConstraint(
-            ["digital_object_id"], ["digital_objects.id"], ondelete="CASCADE"
-        ),
+        sa.ForeignKeyConstraint(["archival_unit_id"], ["archival_units.id"], ondelete="CASCADE"),
+        sa.ForeignKeyConstraint(["digital_object_id"], ["digital_objects.id"], ondelete="CASCADE"),
         sa.PrimaryKeyConstraint("id"),
         sa.UniqueConstraint(
             "archival_unit_id",
@@ -119,7 +117,7 @@ def upgrade() -> None:
         CREATE TRIGGER trg_exchange_archival_document_component_ai
         AFTER INSERT ON archival_document_components
         BEGIN
-            {_event_insert_sql(operation='create', actor='NEW.created_by', timestamp='NEW.created_at')}
+            {_event_insert_sql(operation="create", actor="NEW.created_by", timestamp="NEW.created_at")}
         END
         """
     )
@@ -128,7 +126,7 @@ def upgrade() -> None:
         CREATE TRIGGER trg_exchange_archival_document_component_au
         AFTER UPDATE ON archival_document_components
         BEGIN
-            {_event_insert_sql(operation='update', actor='NEW.updated_by', timestamp='NEW.updated_at')}
+            {_event_insert_sql(operation="update", actor="NEW.updated_by", timestamp="NEW.updated_at")}
         END
         """
     )
@@ -137,7 +135,7 @@ def upgrade() -> None:
         CREATE TRIGGER trg_exchange_archival_document_component_ad
         AFTER DELETE ON archival_document_components
         BEGIN
-            {_event_insert_sql(operation='delete', actor='OLD.updated_by', timestamp='OLD.updated_at')}
+            {_event_insert_sql(operation="delete", actor="OLD.updated_by", timestamp="OLD.updated_at")}
         END
         """
     )
@@ -150,7 +148,5 @@ def downgrade() -> None:
     op.drop_index(
         "ix_archival_document_components_digital", table_name="archival_document_components"
     )
-    op.drop_index(
-        "ix_archival_document_components_unit", table_name="archival_document_components"
-    )
+    op.drop_index("ix_archival_document_components_unit", table_name="archival_document_components")
     op.drop_table("archival_document_components")

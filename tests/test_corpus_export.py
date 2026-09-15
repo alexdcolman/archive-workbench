@@ -506,7 +506,13 @@ def _seed_visual_export_material(root: Path) -> tuple[str, str]:
                     current_text="Texto adicional que sirve solamente como contexto.",
                     current_object_type="paragraph",
                     current_order_index=2,
-                    current_geometry_json=[],
+                    current_geometry_json=[
+                        {
+                            "page": 1,
+                            "polygon": [[0.12, 0.74], [0.80, 0.74], [0.80, 0.88], [0.12, 0.88]],
+                            "coordinate_space": "normalized",
+                        }
+                    ],
                     current_attributes_json={},
                     lifecycle_status="active",
                     review_status="needs_review",
@@ -567,6 +573,13 @@ def test_visual_zip_exports_pages_regions_figures_and_structured_context(tmp_pat
         ]
 
     assert manifest["package_type"] == "archive_workbench_text_and_images"
+    assert manifest["schema_version"] == "1.1"
+    assert manifest["context"]["object_geometry"] == {
+        "geometry_field": "geometry",
+        "bbox_field": "bbox",
+        "bbox_format": "x_y_width_height",
+        "coordinate_space": "normalized",
+    }
     assert manifest["asset_counts"] == {"figures": 1, "pages": 1, "regions": 1}
     assert manifest["text"]["record_count"] == 1
     assert manifest["context"]["object_count"] == 2
@@ -577,6 +590,19 @@ def test_visual_zip_exports_pages_regions_figures_and_structured_context(tmp_pat
     extra = next(item for item in context_rows if "Texto adicional" in item["text"])
     assert extra["included_in_primary_export"] is False
     assert extra["primary_record_ids"] == []
+    assert extra["geometry"] == [
+        {
+            "page": 1,
+            "polygon": [[0.12, 0.74], [0.80, 0.74], [0.80, 0.88], [0.12, 0.88]],
+            "coordinate_space": "normalized",
+        }
+    ]
+    assert extra["bbox"]["page"] == 1
+    assert extra["bbox"]["coordinate_space"] == "normalized"
+    assert extra["bbox"]["x"] == 0.12
+    assert extra["bbox"]["y"] == 0.74
+    assert extra["bbox"]["width"] == 0.68
+    assert extra["bbox"]["height"] == 0.14
 
 
 def test_visual_zip_rejects_modified_registered_page_asset(tmp_path: Path) -> None:

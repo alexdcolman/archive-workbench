@@ -1,3 +1,12 @@
+## 1.2.0 RC1 - EXP-01 schema 1.1 - 2026-09-15
+
+- Amplía **Exportar texto e imágenes (ZIP)** a EXP-01 schema 1.1.
+- `context/objects.jsonl` conserva `geometry` y un `bbox` normalizado por objeto textual.
+- `manifest.context.object_geometry` declara campos, formato y espacio de coordenadas.
+- Mantiene SQLite `0048_catalog_document_components`; no requiere migración ni cambia la interfaz.
+- El ajuste prepara AI-01 para relacionar imagen, texto canónico y posición espacial sin convertir `vision_describe` en un OCR redundante.
+- Validación focal y proyecto descartable EXP-01 verdes; la suite completa queda reservada a la validación local de Alex.
+
 ## 1.1.0 - versión estable - 2026-09-12
 
 - Separa `Revisión estructural` de `Edición y anotación`, con una estación dedicada para corrección textual, clases de bloque, estado de página, menciones, etiquetas y comentarios.

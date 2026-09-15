@@ -8,7 +8,7 @@ from typing import Any, Mapping
 
 from archive_workbench.review import ReviewPageView, _normalized_polygons
 
-_COMPONENT_HTML = r'''
+_COMPONENT_HTML = r"""
 <div class="aw-annotation-shell">
   <div class="aw-topbar">
     <div class="aw-nav-group aw-doc-nav">
@@ -69,9 +69,9 @@ _COMPONENT_HTML = r'''
     </section>
   </div>
 </div>
-'''
+"""
 
-_COMPONENT_CSS = r'''
+_COMPONENT_CSS = r"""
 .aw-annotation-shell { font-family:var(--st-font,sans-serif); color:var(--st-text-color); font-size:12.5px; }
 .aw-topbar { position:sticky; top:0; z-index:30; display:flex; align-items:center; gap:.55rem; flex-wrap:wrap; padding:.42rem .5rem; margin-bottom:.48rem; background:var(--st-background-color); border:1px solid color-mix(in srgb,var(--st-text-color) 14%,transparent); border-radius:.48rem; box-shadow:0 1px 4px rgba(0,0,0,.08); }
 .aw-nav-group { display:flex; align-items:center; gap:.34rem; min-width:0; }
@@ -162,9 +162,9 @@ button:disabled { opacity:.42; cursor:default; }
 .aw-editor-actions { position:sticky; bottom:0; display:flex; gap:.35rem; margin-top:.5rem; padding:.45rem 0 .1rem; background:linear-gradient(transparent,var(--st-background-color) 28%); }
 .aw-editor-actions .primary { border-color:var(--st-primary-color); background:var(--st-primary-color); color:white; font-weight:700; }
 @media (max-width:900px) { .aw-body { grid-template-columns:1fr; height:auto; } .aw-image-panel { height:55vh; } .aw-text-panel { height:64vh; } .aw-doc-title { max-width:16rem; } }
-'''
+"""
 
-_COMPONENT_JS = r'''
+_COMPONENT_JS = r"""
 export default function(component) {
   const { parentElement, data, setTriggerValue } = component;
   const pageKey = String(data.page_key || 'page');
@@ -480,7 +480,7 @@ export default function(component) {
   jump.hidden=!state.jumpOpen;
   renderPageReview(); renderBlocks(); renderOverlay(); updateHeader();
 }
-'''
+"""
 
 
 def _image_data_url(path: Path | None) -> str | None:

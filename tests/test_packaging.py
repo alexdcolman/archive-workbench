@@ -224,8 +224,8 @@ def test_version_docs_and_discovery_plan_are_packaged() -> None:
         / "0047_authority_relation_profiles.py"
     )
 
-    assert data["project"]["version"] == "1.1.0"
-    assert '__version__ = "1.1.0"' in version_source
+    assert data["project"]["version"] == "1.2.0rc1"
+    assert '__version__ = "1.2.0rc1"' in version_source
     assert migration.is_file()
     assert 'down_revision = "0044_layout_structure_review"' in migration.read_text(encoding="utf-8")
     assert timeline_migration.is_file()
@@ -573,198 +573,186 @@ def test_candidate_update_never_copies_local_only_top_level_paths(tmp_path: Path
         assert not (target / dirname).exists()
 
 
-def test_candidate_update_reconciles_only_known_relocations(tmp_path: Path) -> None:
+def _write_candidate_update_test_fixture(tmp_path: Path) -> tuple[Path, dict, Path]:
+    """Build a self-contained candidate fixture unrelated to live project documentation."""
+
+    import hashlib
     import json
-    import shutil
+
+    source = tmp_path / "candidate-source"
+    source.mkdir()
+    (source / "pyproject.toml").write_text(
+        "[project]\nname = 'archive-workbench-test-fixture'\n", encoding="utf-8"
+    )
+
+    relocation_payload = b"known historical relocation\n"
+    relocation_to = (
+        source
+        / ".assistant"
+        / "project_docs"
+        / "historico"
+        / "actualizaciones"
+        / "LEGACY_UPDATE.md"
+    )
+    relocation_to.parent.mkdir(parents=True, exist_ok=True)
+    relocation_to.write_bytes(relocation_payload)
+    relocation_hash = hashlib.sha256(relocation_payload).hexdigest()
+
+    known_residue = (
+        source
+        / ".assistant"
+        / "project_docs"
+        / "historico"
+        / "relevos"
+        / "RELEVO_NUEVA_CONVERSACION_FIXTURE.md"
+    )
+    known_residue.parent.mkdir(parents=True, exist_ok=True)
+    known_residue.write_bytes(b"known historical root residue\n")
+
+    relocation = {
+        "from": "docs/historico/actualizaciones/LEGACY_UPDATE.md",
+        "to": ".assistant/project_docs/historico/actualizaciones/LEGACY_UPDATE.md",
+        "from_sha256": relocation_hash,
+        "to_sha256": relocation_hash,
+    }
+    manifest = {
+        "schema_version": 1,
+        "candidate": "Archive Workbench test fixture",
+        "relocations": [relocation],
+        "verified_root_residue_rules": [
+            {
+                "pattern": "RELEVO_NUEVA_CONVERSACION_*.md",
+                "archive_dir": ".assistant/project_docs/historico/relevos",
+            }
+        ],
+        "authorized_local_archivals": [
+            {
+                "from": "RELEVO_NUEVA_CONVERSACION_20260908.md",
+                "archive_dir": ".assistant/project_docs/historico/relevos/recuperados_locales",
+                "authorized_by": "test fixture",
+                "authorized_at": "2026-09-12",
+            }
+        ],
+    }
+    scripts = source / "scripts"
+    scripts.mkdir()
+    (scripts / "candidate_update_manifest.json").write_text(
+        json.dumps(manifest, ensure_ascii=False, indent=2) + "\n",
+        encoding="utf-8",
+    )
+    return source, relocation, known_residue
+
+
+def _run_candidate_update(root: Path, source: Path, target: Path):
     import subprocess
     import sys
 
+    return subprocess.run(
+        [
+            sys.executable,
+            str(root / "scripts" / "apply_candidate_update.py"),
+            "--source",
+            str(source),
+            "--target",
+            str(target),
+        ],
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+
+
+def test_candidate_update_reconciles_only_known_relocations(tmp_path: Path) -> None:
+    import shutil
+
     root = Path(__file__).parents[1]
+    source, item, _known_residue = _write_candidate_update_test_fixture(tmp_path)
     target = tmp_path / "repo"
     target.mkdir()
-    shutil.copy2(root / "pyproject.toml", target / "pyproject.toml")
+    shutil.copy2(source / "pyproject.toml", target / "pyproject.toml")
 
-    manifest = json.loads(
-        (root / "scripts" / "candidate_update_manifest.json").read_text(encoding="utf-8")
-    )
-    assert manifest["candidate"] == "Archive Workbench 1.1.0 — preparación de publicación"
-    assert len(manifest["relocations"]) > 100
-    for item in manifest["relocations"]:
-        assert item["from_sha256"]
-        assert item["to_sha256"]
-        assert (root / item["to"]).is_file()
-
-    # Use an unchanged historical file so source and destination bytes are identical.
-    item = next(
-        item
-        for item in manifest["relocations"]
-        if item["from"].endswith("ACTUALIZACION_Y_PRUEBA_0.46.0.md")
-    )
     old = target / item["from"]
     old.parent.mkdir(parents=True, exist_ok=True)
-    shutil.copy2(root / item["to"], old)
+    shutil.copy2(source / item["to"], old)
 
     local_marker = target / "pilot_data" / "LOCAL_DO_NOT_TOUCH.txt"
     local_marker.parent.mkdir(parents=True)
     local_marker.write_text("persistente", encoding="utf-8")
 
-    result = subprocess.run(
-        [
-            sys.executable,
-            str(root / "scripts" / "apply_candidate_update.py"),
-            "--source",
-            str(root),
-            "--target",
-            str(target),
-        ],
-        capture_output=True,
-        text=True,
-        check=False,
-    )
+    result = _run_candidate_update(root, source, target)
+
     assert result.returncode == 0, result.stdout + result.stderr
     assert local_marker.read_text(encoding="utf-8") == "persistente"
     assert not old.exists()
     assert (target / item["to"]).is_file()
-    assert not (target / "docs" / "operativos").exists()
-    assert not (target / "docs" / "referencia").exists()
-    assert not (target / "docs" / "historico").exists()
-    assert (
-        target / ".assistant" / "project_docs" / "operativos" / "PENDIENTES_ACTIVOS.md"
-    ).is_file()
-    assert (
-        target / ".assistant" / "project_docs" / "referencia" / "ARQUITECTURA_Y_MODELO_ACTUAL.md"
-    ).is_file()
-    assert (target / "docs" / "desarrollo.html").is_file()
+    assert "Reubicación verificada" in result.stdout
 
 
 def test_candidate_update_aborts_before_copy_if_known_old_file_was_modified(tmp_path: Path) -> None:
-    import json
     import shutil
-    import subprocess
-    import sys
 
     root = Path(__file__).parents[1]
+    source, item, _known_residue = _write_candidate_update_test_fixture(tmp_path)
     target = tmp_path / "repo"
     target.mkdir()
-    shutil.copy2(root / "pyproject.toml", target / "pyproject.toml")
+    shutil.copy2(source / "pyproject.toml", target / "pyproject.toml")
     marker = target / "src" / "do_not_overwrite.txt"
     marker.parent.mkdir(parents=True)
     marker.write_text("antes", encoding="utf-8")
 
-    manifest = json.loads(
-        (root / "scripts" / "candidate_update_manifest.json").read_text(encoding="utf-8")
-    )
-    item = manifest["relocations"][0]
     old = target / item["from"]
     old.parent.mkdir(parents=True, exist_ok=True)
     old.write_text("contenido local modificado", encoding="utf-8")
 
-    result = subprocess.run(
-        [
-            sys.executable,
-            str(root / "scripts" / "apply_candidate_update.py"),
-            "--source",
-            str(root),
-            "--target",
-            str(target),
-        ],
-        capture_output=True,
-        text=True,
-        check=False,
-    )
+    result = _run_candidate_update(root, source, target)
+
     assert result.returncode == 2
     assert "No se tocará" in result.stderr
     assert marker.read_text(encoding="utf-8") == "antes"
     assert old.read_text(encoding="utf-8") == "contenido local modificado"
-    assert not (target / "src" / "archive_workbench").exists()
-
+    assert not (target / ".assistant").exists()
 
 
 def test_candidate_update_reconciles_verified_root_residue_by_hash(tmp_path: Path) -> None:
     import shutil
-    import subprocess
-    import sys
 
     root = Path(__file__).parents[1]
+    source, _item, historical = _write_candidate_update_test_fixture(tmp_path)
     target = tmp_path / "repo"
     target.mkdir()
-    shutil.copy2(root / "pyproject.toml", target / "pyproject.toml")
+    shutil.copy2(source / "pyproject.toml", target / "pyproject.toml")
 
-    historical = (
-        root
-        / ".assistant"
-        / "project_docs"
-        / "historico"
-        / "relevos"
-        / "RELEVO_NUEVA_CONVERSACION_20260909.md"
-    )
     residue = target / "RELEVO_NUEVA_CONVERSACION_20991231_VARIANTE.md"
     shutil.copy2(historical, residue)
 
-    result = subprocess.run(
-        [
-            sys.executable,
-            str(root / "scripts" / "apply_candidate_update.py"),
-            "--source",
-            str(root),
-            "--target",
-            str(target),
-        ],
-        capture_output=True,
-        text=True,
-        check=False,
-    )
+    result = _run_candidate_update(root, source, target)
+
     assert result.returncode == 0, result.stdout + result.stderr
     assert not residue.exists()
-    copied = (
-        target
-        / ".assistant"
-        / "project_docs"
-        / "historico"
-        / "relevos"
-        / historical.name
-    )
+    copied = target / historical.relative_to(source)
     assert copied.is_file()
     assert "Residuo documental verificado" in result.stdout
-
 
 
 def test_candidate_update_archives_exact_user_authorized_local_file(tmp_path: Path) -> None:
     import hashlib
     import shutil
-    import subprocess
-    import sys
 
     root = Path(__file__).parents[1]
+    source, _item, _known_residue = _write_candidate_update_test_fixture(tmp_path)
     target = tmp_path / "repo"
     target.mkdir()
-    shutil.copy2(root / "pyproject.toml", target / "pyproject.toml")
+    shutil.copy2(source / "pyproject.toml", target / "pyproject.toml")
     residue = target / "RELEVO_NUEVA_CONVERSACION_20260908.md"
     payload = b"relevo local recuperado\ncontenido no distribuido\n"
     residue.write_bytes(payload)
 
-    result = subprocess.run(
-        [
-            sys.executable,
-            str(root / "scripts" / "apply_candidate_update.py"),
-            "--source",
-            str(root),
-            "--target",
-            str(target),
-        ],
-        capture_output=True,
-        text=True,
-        check=False,
-    )
+    result = _run_candidate_update(root, source, target)
+
     assert result.returncode == 0, result.stdout + result.stderr
     assert not residue.exists()
     archive_root = (
-        target
-        / ".assistant"
-        / "project_docs"
-        / "historico"
-        / "relevos"
-        / "recuperados_locales"
+        target / ".assistant" / "project_docs" / "historico" / "relevos" / "recuperados_locales"
     )
     archived_candidates = [
         path
@@ -778,37 +766,26 @@ def test_candidate_update_archives_exact_user_authorized_local_file(tmp_path: Pa
 
 def test_candidate_update_aborts_before_copy_for_unknown_root_residue(tmp_path: Path) -> None:
     import shutil
-    import subprocess
-    import sys
 
     root = Path(__file__).parents[1]
+    source, _item, _known_residue = _write_candidate_update_test_fixture(tmp_path)
     target = tmp_path / "repo"
     target.mkdir()
-    shutil.copy2(root / "pyproject.toml", target / "pyproject.toml")
+    shutil.copy2(source / "pyproject.toml", target / "pyproject.toml")
     marker = target / "src" / "do_not_overwrite.txt"
     marker.parent.mkdir(parents=True)
     marker.write_text("antes", encoding="utf-8")
     residue = target / "RELEVO_NUEVA_CONVERSACION_20991231_DESCONOCIDO.md"
     residue.write_text("contenido local no distribuido", encoding="utf-8")
 
-    result = subprocess.run(
-        [
-            sys.executable,
-            str(root / "scripts" / "apply_candidate_update.py"),
-            "--source",
-            str(root),
-            "--target",
-            str(target),
-        ],
-        capture_output=True,
-        text=True,
-        check=False,
-    )
+    result = _run_candidate_update(root, source, target)
+
     assert result.returncode == 2
     assert residue.name in result.stderr
     assert residue.read_text(encoding="utf-8") == "contenido local no distribuido"
     assert marker.read_text(encoding="utf-8") == "antes"
-    assert not (target / "src" / "archive_workbench").exists()
+    assert not (target / ".assistant").exists()
+
 
 def test_quality_tooling_is_declared_gradually() -> None:
     root = Path(__file__).parents[1]

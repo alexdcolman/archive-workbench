@@ -29,7 +29,7 @@ from archive_workbench.db.models import (
 from archive_workbench.version import __version__
 
 VISUAL_PACKAGE_FORMAT = "visual_zip"
-VISUAL_PACKAGE_SCHEMA_VERSION = "1.0"
+VISUAL_PACKAGE_SCHEMA_VERSION = "1.1"
 
 
 @dataclass(slots=True, frozen=True)
@@ -171,6 +171,53 @@ def _select_context_text(current: str, original: str | None, policy: str) -> str
     return current.strip() or (original or "").strip()
 
 
+def _normalized_geometry_bbox(
+    geometry: list[dict[str, Any]], *, page: int
+) -> dict[str, Any] | None:
+    """Resume geometría normalizada de un objeto textual en un bbox de página.
+
+    La geometría completa se conserva por separado. El bbox es una ayuda derivada
+    para consumidores de EXP-01 y nunca reemplaza los polígonos editables. Si no
+    existe geometría normalizada utilizable para la página, devuelve ``None`` sin
+    impedir la exportación del texto/contexto.
+    """
+
+    points: list[tuple[float, float]] = []
+    for item in geometry or []:
+        if item.get("page") not in (None, page):
+            continue
+        if item.get("coordinate_space", "normalized") != "normalized":
+            continue
+        for raw in item.get("polygon") or []:
+            if not isinstance(raw, (list, tuple)) or len(raw) < 2:
+                continue
+            try:
+                x = float(raw[0])
+                y = float(raw[1])
+            except (TypeError, ValueError):
+                continue
+            points.append((x, y))
+
+    if not points:
+        return None
+
+    min_x = max(0.0, min(point[0] for point in points))
+    min_y = max(0.0, min(point[1] for point in points))
+    max_x = min(1.0, max(point[0] for point in points))
+    max_y = min(1.0, max(point[1] for point in points))
+    if max_x < min_x or max_y < min_y:
+        return None
+
+    return {
+        "page": page,
+        "coordinate_space": "normalized",
+        "x": round(min_x, 12),
+        "y": round(min_y, 12),
+        "width": round(max_x - min_x, 12),
+        "height": round(max_y - min_y, 12),
+    }
+
+
 def build_text_image_package(
     session: Session,
     *,
@@ -307,6 +354,10 @@ def build_text_image_package(
                 "document_part_key": part.part_key if part else None,
                 "document_part_title": part.title if part else None,
                 "text": text,
+                "geometry": editable.current_geometry_json or [],
+                "bbox": _normalized_geometry_bbox(
+                    editable.current_geometry_json or [], page=editable.page_number
+                ),
                 "included_in_primary_export": editable.id in primary_object_ids,
                 "primary_record_ids": sorted(record_by_object.get(editable.id, [])),
             }
@@ -563,6 +614,12 @@ def build_text_image_package(
                 "documents_path": "context/documents.jsonl",
                 "documents_sha256": hashlib.sha256(document_contexts_bytes).hexdigest(),
                 "document_count": len(document_contexts),
+                "object_geometry": {
+                    "geometry_field": "geometry",
+                    "bbox_field": "bbox",
+                    "bbox_format": "x_y_width_height",
+                    "coordinate_space": "normalized",
+                },
             },
             "assets": visual_assets,
             "asset_counts": {

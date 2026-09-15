@@ -2419,7 +2419,11 @@ def _assess_current_state(
         row = session.get(ArchivalDocumentComponent, event.entity_id)
         if event.operation.value == "create":
             if row is None:
-                return MergeDisposition.APPLY.value, "El componente documental no existe localmente.", []
+                return (
+                    MergeDisposition.APPLY.value,
+                    "El componente documental no existe localmente.",
+                    [],
+                )
             current_values = _document_component_values(row)
             comparable = [
                 (field, current_values.get(field), _new_value(event.changed_fields, field))

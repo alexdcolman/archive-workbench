@@ -109,7 +109,9 @@ def _sections_for_state(state: dict[str, Any]) -> tuple[str, ...]:
     return sections
 
 
-def _sections_for_schema(schema_version: str, state: dict[str, Any] | None = None) -> tuple[str, ...]:
+def _sections_for_schema(
+    schema_version: str, state: dict[str, Any] | None = None
+) -> tuple[str, ...]:
     if schema_version == "1.3":
         if state is None:
             return BASE_STATE_SECTIONS

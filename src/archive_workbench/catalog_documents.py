@@ -77,9 +77,7 @@ def natural_filename_key(value: str) -> tuple[tuple[int, object], ...]:
     """Ordena nombres con tramos numéricos como 1, 2, 3, 10, 100."""
     parts = re.split(r"(\d+)", str(value or ""))
     return tuple(
-        (0, int(part)) if part.isdigit() else (1, part.casefold())
-        for part in parts
-        if part
+        (0, int(part)) if part.isdigit() else (1, part.casefold()) for part in parts if part
     )
 
 
@@ -231,7 +229,9 @@ def organization_source_rows(
                 organized_count=int(component_counts.get(digital.id, 0)),
             )
         )
-    result.sort(key=lambda row: (natural_filename_key(row.original_filename), row.digital_object_id))
+    result.sort(
+        key=lambda row: (natural_filename_key(row.original_filename), row.digital_object_id)
+    )
     return result
 
 

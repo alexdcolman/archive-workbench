@@ -2941,15 +2941,13 @@ def test_review_app_loads_review_documents_only_for_views_that_need_them() -> No
 
 def test_catalog_document_organizer_supports_natural_navigation_and_thumbnail_selection() -> None:
     root = Path(__file__).parents[1]
-    app_source = (root / "src" / "archive_workbench" / "catalog_app.py").read_text(
+    app_source = (root / "src" / "archive_workbench" / "catalog_app.py").read_text(encoding="utf-8")
+    browser_source = (root / "src" / "archive_workbench" / "catalog_document_browser.py").read_text(
         encoding="utf-8"
     )
-    browser_source = (
-        root / "src" / "archive_workbench" / "catalog_document_browser.py"
-    ).read_text(encoding="utf-8")
-    documents_source = (
-        root / "src" / "archive_workbench" / "catalog_documents.py"
-    ).read_text(encoding="utf-8")
+    documents_source = (root / "src" / "archive_workbench" / "catalog_documents.py").read_text(
+        encoding="utf-8"
+    )
 
     assert "natural_filename_key" in documents_source
     assert "← Archivo anterior" in app_source
@@ -2961,13 +2959,15 @@ def test_catalog_document_organizer_supports_natural_navigation_and_thumbnail_se
     assert "Crear grupo provisional con la selección" in browser_source
     assert "window.sessionStorage" in browser_source
     assert 'class="aw-thumb-panel"' in browser_source
-    assert browser_source.index('class="aw-thumb-panel"') < browser_source.index('class="aw-doc-browser-footer"')
+    assert browser_source.index('class="aw-thumb-panel"') < browser_source.index(
+        'class="aw-doc-browser-footer"'
+    )
     assert "grid-template-columns: repeat(3" in browser_source
     assert "page_size = 6" in app_source
     assert "@st.fragment" in app_source
-    assert '_rerun_catalog_document_fragment' in app_source
-    assert '_catalog_document_cached_thumbnail_data_url' in app_source
-    assert '_catalog_document_best_preview_path' in app_source
+    assert "_rerun_catalog_document_fragment" in app_source
+    assert "_catalog_document_cached_thumbnail_data_url" in app_source
+    assert "_catalog_document_best_preview_path" in app_source
 
 
 def test_catalog_document_organizer_is_a_first_class_catalog_task() -> None:

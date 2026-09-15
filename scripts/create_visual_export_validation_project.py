@@ -320,7 +320,13 @@ def create_validation_project(destination: Path, *, force: bool = False) -> dict
                 current_text="Este texto no entra al perfil principal y debe aparecer solamente como contexto.",
                 current_object_type="paragraph",
                 current_order_index=2,
-                current_geometry_json=[],
+                current_geometry_json=[
+                    {
+                        "page": 1,
+                        "polygon": [[0.08, 0.79], [0.58, 0.79], [0.58, 0.91], [0.08, 0.91]],
+                        "coordinate_space": "normalized",
+                    }
+                ],
                 current_attributes_json={},
                 lifecycle_status="active",
                 review_status="needs_review",
@@ -383,6 +389,15 @@ def create_validation_project(destination: Path, *, force: bool = False) -> dict
         "primary_object_id": primary_object.id,
         "figure_object_id": figure_object.id,
         "context_object_id": context_object.id,
+        "context_object_geometry": context_object.current_geometry_json,
+        "context_object_bbox": {
+            "page": 1,
+            "coordinate_space": "normalized",
+            "x": 0.08,
+            "y": 0.79,
+            "width": 0.50,
+            "height": 0.12,
+        },
         "expected": {
             "records": 1,
             "pages": 1,
