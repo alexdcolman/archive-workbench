@@ -4,7 +4,7 @@ Archive Workbench es una aplicación local para describir unidades archivística
 
 Versión pública estable: 1.2.0.
 
-[Documentación pública](docs/index.html) · [Instalación](docs/instalacion.html) · [Tutorial](docs/tutorial.html) · [Conceptos](docs/conceptos.html) · [Referencia técnica](docs/referencia.html) · [Desarrollo](docs/desarrollo.html) · [Problemas frecuentes](docs/problemas.html)
+[Documentación pública](https://alexdcolman.github.io/archive-workbench/) · [Instalación](https://alexdcolman.github.io/archive-workbench/instalacion.html) · [Tutorial](https://alexdcolman.github.io/archive-workbench/tutorial.html) · [Conceptos](https://alexdcolman.github.io/archive-workbench/conceptos.html) · [Referencia técnica](https://alexdcolman.github.io/archive-workbench/referencia.html) · [Desarrollo](https://alexdcolman.github.io/archive-workbench/desarrollo.html) · [Problemas frecuentes](https://alexdcolman.github.io/archive-workbench/problemas.html)
 
 [![Pantalla Inicio de Archive Workbench con el estado general de un proyecto.](docs/assets/screenshots/INI-01-estado-proyecto.png)](docs/assets/screenshots/INI-01-estado-proyecto.png)
 
@@ -12,21 +12,21 @@ Versión pública estable: 1.2.0.
 
 El recorrido de la interfaz se organiza en cinco fases visibles. En esta documentación, *corpus* significa el conjunto de documentos, textos, transcripciones y otros materiales reunidos para el trabajo del proyecto.
 
-1. Preparación del corpus: [Catálogo](docs/catalogo.html) describe unidades y vincula archivos digitales; [Audio y video](docs/audiovisual.html) incorpora medios y administra transcripciones; [Procesar documentos](docs/procesamiento.html) prepara imágenes, ejecuta extracción de texto y permite elegir qué extracción completa pasará a revisión.
-2. Organización y revisión: [Organizar trabajo](docs/trabajo.html) distribuye tareas entre personas; [Revisión estructural y Edición y anotación](docs/revision.html) separan la constitución y geometría documental del trabajo con texto, clases de bloque, estado de página, etiquetas, comentarios y menciones.
-3. Exploración y descripción: [Búsquedas](docs/busquedas.html) reúne búsqueda textual y semántica; [Entidades y menciones](docs/entidades.html) registra referentes reutilizables del corpus; [Explorar relaciones](docs/relaciones.html) muestra las conexiones registradas en un grafo derivado.
-4. Preparación de resultados: [Exportar corpus](docs/exportacion.html) crea archivos JSONL o CSV y la salida «Exportar texto e imágenes (ZIP)» con una configuración registrada y huellas de verificación.
-5. Intercambio y preservación: [Intercambiar cambios](docs/intercambio.html) transporta trabajo entre copias locales del mismo proyecto mediante ZIP revisables; [Administrar y recuperar](docs/resguardo.html) comprueba integridad, crea copias de seguridad y prueba su recuperación.
+1. Preparación del corpus: [Catálogo](https://alexdcolman.github.io/archive-workbench/catalogo.html) describe unidades y vincula archivos digitales; [Audio y video](https://alexdcolman.github.io/archive-workbench/audiovisual.html) incorpora medios y administra transcripciones; [Procesar documentos](https://alexdcolman.github.io/archive-workbench/procesamiento.html) prepara imágenes, ejecuta extracción de texto y permite elegir qué extracción completa pasará a revisión.
+2. Organización y revisión: [Organizar trabajo](https://alexdcolman.github.io/archive-workbench/trabajo.html) distribuye tareas entre personas; [Revisión estructural y Edición y anotación](https://alexdcolman.github.io/archive-workbench/revision.html) separan la constitución y geometría documental del trabajo con texto, clases de bloque, estado de página, etiquetas, comentarios y menciones.
+3. Exploración y descripción: [Búsquedas](https://alexdcolman.github.io/archive-workbench/busquedas.html) reúne búsqueda textual y semántica; [Entidades y menciones](https://alexdcolman.github.io/archive-workbench/entidades.html) registra referentes reutilizables del corpus; [Explorar relaciones](https://alexdcolman.github.io/archive-workbench/relaciones.html) muestra las conexiones registradas en un grafo derivado.
+4. Preparación de resultados: [Exportar corpus](https://alexdcolman.github.io/archive-workbench/exportacion.html) crea archivos JSONL o CSV y la salida «Exportar texto e imágenes (ZIP)» con una configuración registrada y huellas de verificación.
+5. Intercambio y preservación: [Intercambiar cambios](https://alexdcolman.github.io/archive-workbench/intercambio.html) transporta trabajo entre copias locales del mismo proyecto mediante ZIP revisables; [Administrar y recuperar](https://alexdcolman.github.io/archive-workbench/resguardo.html) comprueba integridad, crea copias de seguridad y prueba su recuperación.
 
 ![Recorrido general de Archive Workbench desde la preparación del corpus hasta la preservación del trabajo.](docs/assets/diagrams/flujo-general.svg)
 
-La [documentación pública](docs/index.html) dedica una página a cada sección de la aplicación y utiliza capturas reales. Las capturas del sitio y del README son enlaces al PNG original para poder inspeccionar controles, tablas y recuadros de texto a resolución completa.
+La [documentación pública](https://alexdcolman.github.io/archive-workbench/) dedica una página a cada sección de la aplicación y utiliza capturas reales. Las capturas del sitio y del README son enlaces al PNG original para poder inspeccionar controles, tablas y recuadros de texto a resolución completa.
 
 ## Instalación rápida con Docker
 
 La forma principal de ejecución usa una imagen preparada de Docker. No hace falta instalar Git ni Python para usarla.
 
-[**Descargar Archive Workbench (ZIP)**](https://github.com/alexdcolman/archive-workbench/releases/latest/download/Archive-Workbench.zip) · [SHA-256](https://github.com/alexdcolman/archive-workbench/releases/latest/download/Archive-Workbench.zip.sha256) · [Instalación detallada](docs/instalacion.html)
+[**Descargar Archive Workbench (ZIP)**](https://github.com/alexdcolman/archive-workbench/releases/latest/download/Archive-Workbench.zip) · [SHA-256](https://github.com/alexdcolman/archive-workbench/releases/latest/download/Archive-Workbench.zip.sha256) · [Instalación detallada](https://alexdcolman.github.io/archive-workbench/instalacion.html)
 
 El ZIP contiene los lanzadores para Windows, Linux y macOS. Extraelo en una carpeta local antes de iniciar la aplicación.
 
@@ -57,7 +57,7 @@ Para NVIDIA GPU, con NVIDIA Container Toolkit configurado:
 
 Con [Docker Desktop](https://docs.docker.com/desktop/) abierto, descargá y extraé el ZIP y ejecutá `Start Archive Workbench - macOS.command` dentro de la carpeta `Archive Workbench`. La distribución administrada de macOS utiliza la imagen CPU.
 
-La guía de [Instalación](docs/instalacion.html) explica `ArchiveWorkbenchData`, CPU/GPU, apertura de proyectos existentes y la ruta técnica desde terminal. La clonación del repositorio queda reservada para desarrollo o diagnóstico.
+La guía de [Instalación](https://alexdcolman.github.io/archive-workbench/instalacion.html) explica `ArchiveWorkbenchData`, CPU/GPU, apertura de proyectos existentes y la ruta técnica desde terminal. La clonación del repositorio queda reservada para desarrollo o diagnóstico.
 
 ## Abrir o crear un proyecto
 
@@ -91,7 +91,7 @@ Entre las funciones disponibles se encuentran:
 - importación y exportación de planillas XLSX, el formato de hoja de cálculo de Excel, con simulación previa;
 - registro de ubicación, tipo e historial de cada unidad.
 
-[Ver Catálogo](docs/catalogo.html).
+[Ver Catálogo](https://alexdcolman.github.io/archive-workbench/catalogo.html).
 
 ## Procesamiento y revisión de documentos
 
@@ -99,7 +99,7 @@ La preparación de imágenes produce derivados vinculados con el archivo origina
 
 `Revisión estructural` conserva orden de lectura, columnas, casilleros, campos, datos adicionales e historial. `Edición y anotación` muestra la imagen y todos los bloques de la página en una estación continua; el bloque activo permite corregir texto, cambiar su clase, registrar menciones, etiquetas y comentarios y modificar el mismo estado de revisión de página que utiliza la vista estructural. Guardar una corrección crea una revisión nueva y el historial anterior permanece disponible.
 
-[Procesar documentos](docs/procesamiento.html) · [Revisión estructural y Edición y anotación](docs/revision.html) · [Tutorial](docs/tutorial.html)
+[Procesar documentos](https://alexdcolman.github.io/archive-workbench/procesamiento.html) · [Revisión estructural y Edición y anotación](https://alexdcolman.github.io/archive-workbench/revision.html) · [Tutorial](https://alexdcolman.github.io/archive-workbench/tutorial.html)
 
 ## Audio y video
 
@@ -107,7 +107,7 @@ Los medios pueden incorporarse desde la computadora y, con la extensión opciona
 
 La búsqueda textual puede recuperar segmentos de transcripción y «Exportar corpus» puede producir JSONL o CSV audiovisual.
 
-[Audio y video](docs/audiovisual.html)
+[Audio y video](https://alexdcolman.github.io/archive-workbench/audiovisual.html)
 
 ## Búsquedas, entidades y relaciones
 
@@ -121,7 +121,7 @@ Explorar relaciones deriva un grafo a partir de entidades, unidades archivístic
 
 [![Grafo de Explorar relaciones con nodos y vínculos registrados.](docs/assets/screenshots/REL-01-explorar-relaciones.png)](docs/assets/screenshots/REL-01-explorar-relaciones.png)
 
-[Búsquedas](docs/busquedas.html) · [Entidades y menciones](docs/entidades.html) · [Explorar relaciones](docs/relaciones.html)
+[Búsquedas](https://alexdcolman.github.io/archive-workbench/busquedas.html) · [Entidades y menciones](https://alexdcolman.github.io/archive-workbench/entidades.html) · [Explorar relaciones](https://alexdcolman.github.io/archive-workbench/relaciones.html)
 
 ## Exportaciones
 
@@ -135,7 +135,7 @@ Formatos documentales:
 
 Las transcripciones audiovisuales se exportan como JSONL o CSV por segmento.
 
-[Exportar corpus](docs/exportacion.html)
+[Exportar corpus](https://alexdcolman.github.io/archive-workbench/exportacion.html)
 
 ## Intercambio y copias de seguridad
 
@@ -145,7 +145,7 @@ Las personas que trabajan sobre el mismo proyecto pueden usar copias locales ind
 
 «Administrar y recuperar» permite comprobar la integridad del proyecto, crear copias de seguridad y probar una recuperación en un entorno temporal antes de restaurar.
 
-[Intercambiar cambios](docs/intercambio.html) · [Administrar y recuperar](docs/resguardo.html)
+[Intercambiar cambios](https://alexdcolman.github.io/archive-workbench/intercambio.html) · [Administrar y recuperar](https://alexdcolman.github.io/archive-workbench/resguardo.html)
 
 ## CPU y NVIDIA GPU
 
@@ -200,13 +200,13 @@ Cada proyecto utiliza una base de datos SQLite local y conserva sus materiales d
 - Un paquete de intercambio se inspecciona antes de modificar otra copia del proyecto.
 - Una copia de seguridad puede probarse sin reemplazar el proyecto activo.
 
-La página [Conceptos](docs/conceptos.html) define el vocabulario utilizado en estas capas.
+La página [Conceptos](https://alexdcolman.github.io/archive-workbench/conceptos.html) define el vocabulario utilizado en estas capas.
 
 ## Estado y límites
 
 La versión 1.0.0 es la primera versión estable de Archive Workbench. La calidad del OCR y de la transcripción depende del material, el motor de procesamiento y el perfil utilizados. Los resultados de búsqueda semántica y de detección automática de referencias requieren interpretación dentro del corpus y de su contexto documental.
 
-El estado público del trabajo previo a 1.0 se resume en [Desarrollo](docs/desarrollo.html). Los cambios publicados se registran en [CHANGELOG.md](CHANGELOG.md).
+El estado público del trabajo previo a 1.0 se resume en [Desarrollo](https://alexdcolman.github.io/archive-workbench/desarrollo.html). Los cambios publicados se registran en [CHANGELOG.md](CHANGELOG.md).
 
 ## Desarrollo y pruebas
 
@@ -216,7 +216,7 @@ Instalación de desarrollo:
 pip install -e ".[dev,extraction,streamlit,semantic,tiff,discovery,audiovisual,platform]"
 ```
 
-La suite incluye pruebas de dominio, persistencia, interfaz, intercambio, exportación, documentación y distribución. Las instrucciones para contribuir o revisar contratos técnicos se concentran en la [Referencia técnica](docs/referencia.html) y en el código fuente.
+La suite incluye pruebas de dominio, persistencia, interfaz, intercambio, exportación, documentación y distribución. Las instrucciones para contribuir o revisar contratos técnicos se concentran en la [Referencia técnica](https://alexdcolman.github.io/archive-workbench/referencia.html) y en el código fuente.
 
 ## Licencia y cita
 
@@ -226,6 +226,6 @@ Desarrollo: Alex Colman, en el marco del Grupo de Investigación en Archivos de 
 
 Cita sugerida:
 
-> Colman, Alex, y Grupo de Investigación en Archivos de la Represión (GIAR). 2026. *Archive Workbench* (versión 1.2.0 RC1) [software]. https://github.com/alexdcolman/archive-workbench
+> Colman, Alex, y Grupo de Investigación en Archivos de la Represión (GIAR). 2026. *Archive Workbench* (versión 1.2.0) [software]. https://github.com/alexdcolman/archive-workbench
 
 [`CITATION.cff`](CITATION.cff) contiene los metadatos de cita para GitHub y gestores bibliográficos.
