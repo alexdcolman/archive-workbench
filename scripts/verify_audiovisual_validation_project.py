@@ -21,7 +21,7 @@ from archive_workbench.db.models import (
 )
 from archive_workbench.identity import sha256_file
 
-EXPECTED_REVISION = "0048_catalog_document_components"
+EXPECTED_REVISION = "0050_external_analysis_continuity"
 EXPECTED_CORRECTION = "La memoria conserva voces, documentos y testimonios."
 
 

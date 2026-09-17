@@ -2500,6 +2500,197 @@ class CorpusExportRun(Base):
     )
 
 
+class ExternalAnalysisPackage(Base):
+    """Handoff externo incorporado como fuente inmutable de propuestas."""
+
+    __tablename__ = "external_analysis_packages"
+    __table_args__ = (
+        UniqueConstraint(
+            "project_id", "package_sha256", name="uq_external_analysis_package_sha256"
+        ),
+        CheckConstraint("proposal_count >= 1", name="ck_external_analysis_package_count"),
+        Index("ix_external_analysis_packages_project_imported", "project_id", "imported_at"),
+        Index("ix_external_analysis_packages_exp01", "project_id", "exp01_sha256"),
+    )
+
+    id: Mapped[str] = mapped_column(String(36), primary_key=True)
+    project_id: Mapped[str] = mapped_column(
+        ForeignKey("projects.id", ondelete="CASCADE"), nullable=False
+    )
+    package_sha256: Mapped[str] = mapped_column(String(64), nullable=False)
+    package_type: Mapped[str] = mapped_column(String(120), nullable=False)
+    schema_version: Mapped[str] = mapped_column(String(32), nullable=False)
+    protocol: Mapped[str] = mapped_column(String(120), nullable=False)
+    producer_id: Mapped[str | None] = mapped_column(String(200), nullable=True)
+    producer_version: Mapped[str | None] = mapped_column(String(120), nullable=True)
+    request_id: Mapped[str | None] = mapped_column(String(200), nullable=True)
+    exp01_sha256: Mapped[str] = mapped_column(String(64), nullable=False)
+    result_bundle_sha256: Mapped[str] = mapped_column(String(64), nullable=False)
+    model_json: Mapped[dict[str, Any]] = mapped_column(JSON, nullable=False, default=dict)
+    runtime_json: Mapped[dict[str, Any]] = mapped_column(JSON, nullable=False, default=dict)
+    prompt_json: Mapped[dict[str, Any]] = mapped_column(JSON, nullable=False, default=dict)
+    source_scope_json: Mapped[dict[str, Any]] = mapped_column(JSON, nullable=False, default=dict)
+    proposal_count: Mapped[int] = mapped_column(Integer, nullable=False)
+    manifest_json: Mapped[dict[str, Any]] = mapped_column(JSON, nullable=False)
+    imported_by: Mapped[str] = mapped_column(String(200), nullable=False)
+    imported_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), default=utc_now, nullable=False
+    )
+
+
+class ExternalAnalysisPackageSource(Base):
+    """Resolución local reconstruible entre un handoff y una exportación EXP-01."""
+
+    __tablename__ = "external_analysis_package_sources"
+    __table_args__ = (
+        UniqueConstraint("package_id", "export_run_id", name="uq_external_analysis_package_source"),
+        Index("ix_external_analysis_package_sources_package", "package_id", "export_run_id"),
+    )
+
+    id: Mapped[str] = mapped_column(String(36), primary_key=True)
+    package_id: Mapped[str] = mapped_column(
+        ForeignKey("external_analysis_packages.id", ondelete="CASCADE"), nullable=False
+    )
+    export_run_id: Mapped[str] = mapped_column(
+        ForeignKey("corpus_export_runs.id", ondelete="CASCADE"), nullable=False
+    )
+    match_kind: Mapped[str] = mapped_column(String(32), nullable=False, default="sha256_exact")
+    linked_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), default=utc_now, nullable=False
+    )
+
+
+class ExternalAnalysisProposal(Base):
+    """Output de máquina inmutable recibido desde un proveedor externo."""
+
+    __tablename__ = "external_analysis_proposals"
+    __table_args__ = (
+        UniqueConstraint(
+            "package_id",
+            "external_proposal_id",
+            name="uq_external_analysis_proposal_external_id",
+        ),
+        UniqueConstraint("package_id", "result_id", name="uq_external_analysis_proposal_result_id"),
+        CheckConstraint("page_number >= 1", name="ck_external_analysis_proposal_page"),
+        Index("ix_external_analysis_proposals_package", "package_id", "created_at"),
+        Index(
+            "ix_external_analysis_proposals_target",
+            "digital_object_id",
+            "page_number",
+            "output_schema_id",
+        ),
+    )
+
+    id: Mapped[str] = mapped_column(String(36), primary_key=True)
+    package_id: Mapped[str] = mapped_column(
+        ForeignKey("external_analysis_packages.id", ondelete="CASCADE"), nullable=False
+    )
+    external_proposal_id: Mapped[str] = mapped_column(String(200), nullable=False)
+    result_id: Mapped[str] = mapped_column(String(200), nullable=False)
+    output_schema_id: Mapped[str] = mapped_column(String(120), nullable=False)
+    target_type: Mapped[str] = mapped_column(String(32), nullable=False)
+    target_id: Mapped[str] = mapped_column(String(500), nullable=False)
+    digital_object_id: Mapped[str] = mapped_column(
+        ForeignKey("digital_objects.id", ondelete="RESTRICT"), nullable=False
+    )
+    page_number: Mapped[int] = mapped_column(Integer, nullable=False)
+    source_key: Mapped[str | None] = mapped_column(Text, nullable=True)
+    original_filename: Mapped[str | None] = mapped_column(Text, nullable=True)
+    asset_path: Mapped[str] = mapped_column(Text, nullable=False)
+    source_asset_sha256: Mapped[str] = mapped_column(String(64), nullable=False)
+    output_json: Mapped[dict[str, Any]] = mapped_column(JSON, nullable=False)
+    output_sha256: Mapped[str] = mapped_column(String(64), nullable=False)
+    provenance_json: Mapped[dict[str, Any]] = mapped_column(JSON, nullable=False)
+    warnings_json: Mapped[list[str]] = mapped_column(JSON, nullable=False, default=list)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), default=utc_now, nullable=False
+    )
+
+
+class ExternalAnalysisReview(Base):
+    """Decisión humana append-only sobre una propuesta externa."""
+
+    __tablename__ = "external_analysis_reviews"
+    __table_args__ = (
+        UniqueConstraint("proposal_id", "revision", name="uq_external_analysis_review_revision"),
+        CheckConstraint("revision >= 1", name="ck_external_analysis_review_revision"),
+        CheckConstraint(
+            "decision IN ('accepted', 'rejected')",
+            name="ck_external_analysis_review_decision",
+        ),
+        CheckConstraint(
+            "(decision = 'accepted' AND reviewed_output_json IS NOT NULL) OR "
+            "(decision = 'rejected' AND reviewed_output_json IS NULL)",
+            name="ck_external_analysis_review_output",
+        ),
+        Index("ix_external_analysis_reviews_proposal", "proposal_id", "revision"),
+        Index("ix_external_analysis_reviews_decision", "decision", "reviewed_at"),
+    )
+
+    id: Mapped[str] = mapped_column(String(36), primary_key=True)
+    proposal_id: Mapped[str] = mapped_column(
+        ForeignKey("external_analysis_proposals.id", ondelete="CASCADE"), nullable=False
+    )
+    revision: Mapped[int] = mapped_column(Integer, nullable=False)
+    decision: Mapped[str] = mapped_column(String(16), nullable=False)
+    reviewed_output_json: Mapped[dict[str, Any] | None] = mapped_column(
+        JSON(none_as_null=True), nullable=True
+    )
+    review_note: Mapped[str | None] = mapped_column(Text, nullable=True)
+    reviewed_by: Mapped[str] = mapped_column(String(200), nullable=False)
+    reviewed_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), default=utc_now, nullable=False
+    )
+    source_proposal_sha256: Mapped[str] = mapped_column(String(64), nullable=False)
+
+
+class ExternalAnalysisSelection(Base):
+    """Evento append-only que elige la revisión vigente por target/schema."""
+
+    __tablename__ = "external_analysis_selections"
+    __table_args__ = (
+        CheckConstraint("page_number >= 1", name="ck_external_analysis_selection_page"),
+        CheckConstraint("action IN ('set', 'clear')", name="ck_external_analysis_selection_action"),
+        CheckConstraint(
+            "(action = 'set' AND review_id IS NOT NULL) OR "
+            "(action = 'clear' AND review_id IS NULL)",
+            name="ck_external_analysis_selection_review",
+        ),
+        Index(
+            "ix_external_analysis_selections_target",
+            "project_id",
+            "target_type",
+            "target_id",
+            "output_schema_id",
+            "selected_at",
+        ),
+        Index("ix_external_analysis_selections_review", "review_id"),
+    )
+
+    id: Mapped[str] = mapped_column(String(36), primary_key=True)
+    project_id: Mapped[str] = mapped_column(
+        ForeignKey("projects.id", ondelete="CASCADE"), nullable=False
+    )
+    target_type: Mapped[str] = mapped_column(String(32), nullable=False)
+    target_id: Mapped[str] = mapped_column(String(500), nullable=False)
+    digital_object_id: Mapped[str] = mapped_column(
+        ForeignKey("digital_objects.id", ondelete="RESTRICT"), nullable=False
+    )
+    page_number: Mapped[int] = mapped_column(Integer, nullable=False)
+    output_schema_id: Mapped[str] = mapped_column(String(120), nullable=False)
+    review_id: Mapped[str | None] = mapped_column(
+        ForeignKey("external_analysis_reviews.id", ondelete="RESTRICT"), nullable=True
+    )
+    action: Mapped[str] = mapped_column(String(16), nullable=False)
+    supersedes_selection_id: Mapped[str | None] = mapped_column(
+        ForeignKey("external_analysis_selections.id", ondelete="RESTRICT"), nullable=True
+    )
+    selected_by: Mapped[str] = mapped_column(String(200), nullable=False)
+    selected_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), default=utc_now, nullable=False
+    )
+
+
 class ProcessingJob(Base):
     """Ejecución coordinada desde la vista Procesamiento."""
 

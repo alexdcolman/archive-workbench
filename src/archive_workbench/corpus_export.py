@@ -759,6 +759,11 @@ def _load_atoms(session: Session, *, project_id: str, values: ExportProfileValue
     return atoms
 
 
+def _natural_text_sort_key(value: str) -> tuple[tuple[int, int, str], ...]:
+    parts = re.split(r"(\d+)", value.casefold())
+    return tuple((0, int(part), "") if part.isdigit() else (1, 0, part) for part in parts if part)
+
+
 def export_page_candidates(
     session: Session,
     *,
@@ -784,7 +789,7 @@ def export_page_candidates(
     for (digital_object_id, page_number), members in sorted(
         grouped.items(),
         key=lambda item: (
-            item[1][0].original_filename.casefold(),
+            _natural_text_sort_key(item[1][0].original_filename),
             item[0][1],
             item[0][0],
         ),
@@ -1108,6 +1113,7 @@ def run_export(
     created_by: str,
     output_format: str | None = None,
     overwrite: bool = False,
+    selected_page_keys: set[tuple[str, int]] | None = None,
     visual_options=None,
 ) -> ExportRunResult:
     if profile.lifecycle_status != "active":
@@ -1116,14 +1122,20 @@ def run_export(
     selected_format = output_format or profile.output_format
     if selected_format not in RUN_OUTPUT_FORMATS:
         raise ValueError("Formato de salida inválido")
-    selected_page_keys: set[tuple[str, int]] | None = None
-    if visual_options is not None:
+    if selected_page_keys is None and visual_options is not None:
         raw_selected_pages = getattr(visual_options, "selected_pages", None)
         if raw_selected_pages is not None:
             selected_page_keys = {
                 (str(digital_object_id), int(page_number))
                 for digital_object_id, page_number in raw_selected_pages
             }
+    if selected_page_keys is not None:
+        selected_page_keys = {
+            (str(digital_object_id), int(page_number))
+            for digital_object_id, page_number in selected_page_keys
+        }
+        if not selected_page_keys:
+            raise ValueError("Elegí al menos una página para crear esta exportación")
     rows = build_export_rows(
         session,
         project_id=project_id,

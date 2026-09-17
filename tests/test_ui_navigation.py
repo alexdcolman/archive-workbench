@@ -1306,6 +1306,7 @@ def test_all_navigation_surfaces_have_context_help_contracts() -> None:
         "Entidades y menciones",
         "Explorar relaciones",
         "Exportar corpus",
+        "Análisis asistido",
         "Intercambiar cambios",
         "Administrar y recuperar",
     }
@@ -1325,6 +1326,7 @@ def test_all_navigation_surfaces_have_context_help_contracts() -> None:
         "open_discovery_review_modes",
         "graph_tabs",
         "export_tabs",
+        "assisted_analysis_tabs",
         "admin_tabs",
     }
     assert expected_tab_sets <= set(TAB_HELP)
@@ -1356,6 +1358,7 @@ def test_all_navigation_surfaces_have_context_help_contracts() -> None:
         "catalog_app.py",
         "discovery_app.py",
         "export_app.py",
+        "assisted_analysis_app.py",
         "graph_app.py",
         "semantic_app.py",
         "work_app.py",
@@ -1807,6 +1810,7 @@ def test_user_visible_app_copy_does_not_hardcode_project_data() -> None:
     for name in (
         "catalog_app.py",
         "export_app.py",
+        "assisted_analysis_app.py",
         "graph_app.py",
         "review_app.py",
     ):

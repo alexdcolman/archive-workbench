@@ -685,4 +685,4 @@ def test_validation_generator_creates_review_app_compatible_projects(tmp_path: P
         assert decisions.project_id == "int01-google-drive-validation"
         assert decisions.project_name == "Validación INT-01 Google Drive"
         assert database_path(root).is_file()
-        assert current_revision(root) == "0048_catalog_document_components"
+        assert current_revision(root) == "0050_external_analysis_continuity"

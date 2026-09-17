@@ -59,6 +59,10 @@ from archive_workbench.db.models import (
     ExchangeConflictResolution,
     ExchangeLineageDecision,
     ExchangeWorkspace,
+    ExternalAnalysisPackage,
+    ExternalAnalysisProposal,
+    ExternalAnalysisReview,
+    ExternalAnalysisSelection,
     Project,
     utc_now,
 )
@@ -334,6 +338,57 @@ def _editable_state_payload(session: Session, project_id: str) -> dict[str, Any]
         .where(WorkAssignment.project_id == project_id)
         .order_by(WorkAssignment.id)
     ).all()
+
+    has_external_analysis_schema = inspector.has_table("external_analysis_packages")
+    external_analysis_packages = (
+        session.scalars(
+            select(ExternalAnalysisPackage)
+            .where(ExternalAnalysisPackage.project_id == project_id)
+            .order_by(ExternalAnalysisPackage.imported_at, ExternalAnalysisPackage.id)
+        ).all()
+        if has_external_analysis_schema
+        else []
+    )
+    external_package_ids = [row.id for row in external_analysis_packages]
+    external_analysis_proposals = (
+        session.scalars(
+            select(ExternalAnalysisProposal)
+            .where(ExternalAnalysisProposal.package_id.in_(external_package_ids))
+            .order_by(
+                ExternalAnalysisProposal.package_id,
+                ExternalAnalysisProposal.created_at,
+                ExternalAnalysisProposal.id,
+            )
+        ).all()
+        if external_package_ids
+        else []
+    )
+    external_proposal_ids = [row.id for row in external_analysis_proposals]
+    external_analysis_reviews = (
+        session.scalars(
+            select(ExternalAnalysisReview)
+            .where(ExternalAnalysisReview.proposal_id.in_(external_proposal_ids))
+            .order_by(
+                ExternalAnalysisReview.proposal_id,
+                ExternalAnalysisReview.revision,
+                ExternalAnalysisReview.id,
+            )
+        ).all()
+        if external_proposal_ids
+        else []
+    )
+    external_analysis_selections = (
+        session.scalars(
+            select(ExternalAnalysisSelection)
+            .where(ExternalAnalysisSelection.project_id == project_id)
+            .order_by(
+                ExternalAnalysisSelection.selected_at,
+                ExternalAnalysisSelection.id,
+            )
+        ).all()
+        if has_external_analysis_schema
+        else []
+    )
 
     has_audiovisual_schema = inspector.has_table("audiovisual_media")
     audiovisual_media = (
@@ -822,6 +877,94 @@ def _editable_state_payload(session: Session, project_id: str) -> dict[str, Any]
                         "changed_at": _iso_utc(row.changed_at),
                     }
                     for row in audiovisual_timeline_annotation_revisions
+                ],
+            }
+        )
+    # La capa P3 sólo entra en la huella cuando existe estado de análisis
+    # asistido. Así se conservan las huellas históricas de proyectos que nunca
+    # usaron P3, mientras package/proposal/review/selection pasan a ser estado
+    # canónico cuando efectivamente existen. package_sources queda fuera:
+    # contiene únicamente resolución local reconstruible hacia CorpusExportRun.
+    if external_analysis_packages:
+        payload.update(
+            {
+                "external_analysis_packages": [
+                    {
+                        "id": row.id,
+                        "project_id": row.project_id,
+                        "package_sha256": row.package_sha256,
+                        "package_type": row.package_type,
+                        "schema_version": row.schema_version,
+                        "protocol": row.protocol,
+                        "producer_id": row.producer_id,
+                        "producer_version": row.producer_version,
+                        "request_id": row.request_id,
+                        "exp01_sha256": row.exp01_sha256,
+                        "result_bundle_sha256": row.result_bundle_sha256,
+                        "model_json": row.model_json or {},
+                        "runtime_json": row.runtime_json or {},
+                        "prompt_json": row.prompt_json or {},
+                        "source_scope_json": row.source_scope_json or {},
+                        "proposal_count": row.proposal_count,
+                        "manifest_json": row.manifest_json or {},
+                        "imported_by": row.imported_by,
+                        "imported_at": _iso_utc(row.imported_at),
+                    }
+                    for row in external_analysis_packages
+                ],
+                "external_analysis_proposals": [
+                    {
+                        "id": row.id,
+                        "package_id": row.package_id,
+                        "external_proposal_id": row.external_proposal_id,
+                        "result_id": row.result_id,
+                        "output_schema_id": row.output_schema_id,
+                        "target_type": row.target_type,
+                        "target_id": row.target_id,
+                        "digital_object_id": row.digital_object_id,
+                        "page_number": row.page_number,
+                        "source_key": row.source_key,
+                        "original_filename": row.original_filename,
+                        "asset_path": row.asset_path,
+                        "source_asset_sha256": row.source_asset_sha256,
+                        "output_json": row.output_json or {},
+                        "output_sha256": row.output_sha256,
+                        "provenance_json": row.provenance_json or {},
+                        "warnings_json": row.warnings_json or [],
+                        "created_at": _iso_utc(row.created_at),
+                    }
+                    for row in external_analysis_proposals
+                ],
+                "external_analysis_reviews": [
+                    {
+                        "id": row.id,
+                        "proposal_id": row.proposal_id,
+                        "revision": row.revision,
+                        "decision": row.decision,
+                        "reviewed_output_json": row.reviewed_output_json,
+                        "review_note": row.review_note,
+                        "reviewed_by": row.reviewed_by,
+                        "reviewed_at": _iso_utc(row.reviewed_at),
+                        "source_proposal_sha256": row.source_proposal_sha256,
+                    }
+                    for row in external_analysis_reviews
+                ],
+                "external_analysis_selections": [
+                    {
+                        "id": row.id,
+                        "project_id": row.project_id,
+                        "target_type": row.target_type,
+                        "target_id": row.target_id,
+                        "digital_object_id": row.digital_object_id,
+                        "page_number": row.page_number,
+                        "output_schema_id": row.output_schema_id,
+                        "review_id": row.review_id,
+                        "action": row.action,
+                        "supersedes_selection_id": row.supersedes_selection_id,
+                        "selected_by": row.selected_by,
+                        "selected_at": _iso_utc(row.selected_at),
+                    }
+                    for row in external_analysis_selections
                 ],
             }
         )
@@ -1607,6 +1750,10 @@ def _entity_exists(session: Session, entity_type: str, entity_id: str) -> bool:
         "entity_mention": EntityMention,
         "entity_relation": EntityRelation,
         "work_assignment": WorkAssignment,
+        "external_analysis_package": ExternalAnalysisPackage,
+        "external_analysis_proposal": ExternalAnalysisProposal,
+        "external_analysis_review": ExternalAnalysisReview,
+        "external_analysis_selection": ExternalAnalysisSelection,
     }.get(entity_type)
     return bool(model is not None and session.get(model, entity_id) is not None)
 
@@ -1820,6 +1967,216 @@ def _work_assignment_values(assignment: WorkAssignment) -> dict[str, Any]:
     }
 
 
+def _external_package_for_event(
+    session: Session, event: ChangeEvent
+) -> ExternalAnalysisPackage | None:
+    direct = session.get(ExternalAnalysisPackage, event.entity_id)
+    if direct is not None:
+        return direct
+    package_sha256 = _new_value(event.changed_fields, "package_sha256")
+    if not isinstance(package_sha256, str):
+        return None
+    return session.scalar(
+        select(ExternalAnalysisPackage).where(
+            ExternalAnalysisPackage.project_id == event.project_id,
+            ExternalAnalysisPackage.package_sha256 == package_sha256,
+        )
+    )
+
+
+def _external_proposal_for_event(
+    session: Session, event: ChangeEvent
+) -> ExternalAnalysisProposal | None:
+    direct = session.get(ExternalAnalysisProposal, event.entity_id)
+    if direct is not None:
+        return direct
+    package_sha256 = _new_value(event.changed_fields, "package_sha256")
+    external_proposal_id = _new_value(event.changed_fields, "external_proposal_id")
+    if not isinstance(package_sha256, str) or not isinstance(external_proposal_id, str):
+        return None
+    package = session.scalar(
+        select(ExternalAnalysisPackage).where(
+            ExternalAnalysisPackage.project_id == event.project_id,
+            ExternalAnalysisPackage.package_sha256 == package_sha256,
+        )
+    )
+    if package is None:
+        return None
+    return session.scalar(
+        select(ExternalAnalysisProposal).where(
+            ExternalAnalysisProposal.package_id == package.id,
+            ExternalAnalysisProposal.external_proposal_id == external_proposal_id,
+        )
+    )
+
+
+def _external_review_for_event(
+    session: Session, event: ChangeEvent
+) -> ExternalAnalysisReview | None:
+    direct = session.get(ExternalAnalysisReview, event.entity_id)
+    if direct is not None:
+        return direct
+    package_sha256 = _new_value(event.changed_fields, "package_sha256")
+    external_proposal_id = _new_value(event.changed_fields, "external_proposal_id")
+    revision = _new_value(event.changed_fields, "revision")
+    if (
+        not isinstance(package_sha256, str)
+        or not isinstance(external_proposal_id, str)
+        or not isinstance(revision, int)
+    ):
+        return None
+    package = session.scalar(
+        select(ExternalAnalysisPackage).where(
+            ExternalAnalysisPackage.project_id == event.project_id,
+            ExternalAnalysisPackage.package_sha256 == package_sha256,
+        )
+    )
+    if package is None:
+        return None
+    proposal = session.scalar(
+        select(ExternalAnalysisProposal).where(
+            ExternalAnalysisProposal.package_id == package.id,
+            ExternalAnalysisProposal.external_proposal_id == external_proposal_id,
+        )
+    )
+    if proposal is None:
+        return None
+    return session.scalar(
+        select(ExternalAnalysisReview).where(
+            ExternalAnalysisReview.proposal_id == proposal.id,
+            ExternalAnalysisReview.revision == revision,
+        )
+    )
+
+
+def _external_review_by_context(
+    session: Session,
+    *,
+    project_id: str,
+    package_sha256: Any,
+    external_proposal_id: Any,
+    revision: Any,
+) -> ExternalAnalysisReview | None:
+    if (
+        not isinstance(package_sha256, str)
+        or not isinstance(external_proposal_id, str)
+        or not isinstance(revision, int)
+    ):
+        return None
+    return session.scalar(
+        select(ExternalAnalysisReview)
+        .join(
+            ExternalAnalysisProposal,
+            ExternalAnalysisProposal.id == ExternalAnalysisReview.proposal_id,
+        )
+        .join(
+            ExternalAnalysisPackage,
+            ExternalAnalysisPackage.id == ExternalAnalysisProposal.package_id,
+        )
+        .where(
+            ExternalAnalysisPackage.project_id == project_id,
+            ExternalAnalysisPackage.package_sha256 == package_sha256,
+            ExternalAnalysisProposal.external_proposal_id == external_proposal_id,
+            ExternalAnalysisReview.revision == revision,
+        )
+    )
+
+
+def _external_package_values(row: ExternalAnalysisPackage) -> dict[str, Any]:
+    return {
+        "project_id": row.project_id,
+        "package_sha256": row.package_sha256,
+        "package_type": row.package_type,
+        "schema_version": row.schema_version,
+        "protocol": row.protocol,
+        "producer_id": row.producer_id,
+        "producer_version": row.producer_version,
+        "request_id": row.request_id,
+        "exp01_sha256": row.exp01_sha256,
+        "result_bundle_sha256": row.result_bundle_sha256,
+        "model_json": row.model_json or {},
+        "runtime_json": row.runtime_json or {},
+        "prompt_json": row.prompt_json or {},
+        "source_scope_json": row.source_scope_json or {},
+        "proposal_count": row.proposal_count,
+        "manifest_json": row.manifest_json or {},
+        "imported_by": row.imported_by,
+        "imported_at": row.imported_at,
+    }
+
+
+def _external_proposal_values(row: ExternalAnalysisProposal) -> dict[str, Any]:
+    return {
+        "package_id": row.package_id,
+        "external_proposal_id": row.external_proposal_id,
+        "result_id": row.result_id,
+        "output_schema_id": row.output_schema_id,
+        "target_type": row.target_type,
+        "target_id": row.target_id,
+        "digital_object_id": row.digital_object_id,
+        "page_number": row.page_number,
+        "source_key": row.source_key,
+        "original_filename": row.original_filename,
+        "asset_path": row.asset_path,
+        "source_asset_sha256": row.source_asset_sha256,
+        "output_json": row.output_json or {},
+        "output_sha256": row.output_sha256,
+        "provenance_json": row.provenance_json or {},
+        "warnings_json": row.warnings_json or [],
+        "created_at": row.created_at,
+    }
+
+
+def _external_review_values(row: ExternalAnalysisReview) -> dict[str, Any]:
+    return {
+        "proposal_id": row.proposal_id,
+        "revision": row.revision,
+        "decision": row.decision,
+        "reviewed_output_json": row.reviewed_output_json,
+        "review_note": row.review_note,
+        "reviewed_by": row.reviewed_by,
+        "reviewed_at": row.reviewed_at,
+        "source_proposal_sha256": row.source_proposal_sha256,
+    }
+
+
+def _external_selection_values(row: ExternalAnalysisSelection) -> dict[str, Any]:
+    return {
+        "project_id": row.project_id,
+        "target_type": row.target_type,
+        "target_id": row.target_id,
+        "digital_object_id": row.digital_object_id,
+        "page_number": row.page_number,
+        "output_schema_id": row.output_schema_id,
+        "review_id": row.review_id,
+        "action": row.action,
+        "supersedes_selection_id": row.supersedes_selection_id,
+        "selected_by": row.selected_by,
+        "selected_at": row.selected_at,
+    }
+
+
+def _external_create_comparison(
+    event: ChangeEvent,
+    current_values: dict[str, Any],
+    *,
+    ignored_fields: set[str] | None = None,
+) -> tuple[bool, list[str]]:
+    ignored = ignored_fields or set()
+    mismatches: list[str] = []
+    compared = 0
+    for field, current in current_values.items():
+        if field in ignored or field not in event.changed_fields:
+            continue
+        compared += 1
+        expected = _new_value(event.changed_fields, field)
+        if field.endswith("_at"):
+            expected = _coerce_datetime(expected)
+        if not _exchange_values_equal(current, expected):
+            mismatches.append(field)
+    return compared > 0 and not mismatches, mismatches
+
+
 def _normalize_incoming_event(event: ChangeEvent) -> tuple[ChangeEvent, str | None]:
     """Normaliza eventos históricos defectuosos sin alterar el bundle verificado.
 
@@ -2005,7 +2362,101 @@ def _assess_current_state(
     """
     from archive_workbench.domain.enums import MergeDisposition
 
-    if event.entity_type == "editable_object":
+    if event.entity_type == "external_analysis_package":
+        if event.operation.value != "create":
+            return MergeDisposition.REVIEW.value, "Los paquetes externos son append-only.", []
+        row = _external_package_for_event(session, event)
+        if row is None:
+            return MergeDisposition.APPLY.value, "El paquete externo no existe localmente.", []
+        identical, mismatches = _external_create_comparison(event, _external_package_values(row))
+        if identical:
+            return (
+                MergeDisposition.DUPLICATE.value,
+                "El paquete externo ya está representado localmente por su SHA-256.",
+                [],
+            )
+        return (
+            MergeDisposition.REVIEW.value,
+            "El paquete externo ya existe con metadatos incompatibles.",
+            mismatches,
+        )
+    elif event.entity_type == "external_analysis_proposal":
+        if event.operation.value != "create":
+            return MergeDisposition.REVIEW.value, "Las propuestas externas son inmutables.", []
+        row = _external_proposal_for_event(session, event)
+        if row is None:
+            return MergeDisposition.APPLY.value, "La propuesta externa no existe localmente.", []
+        identical, mismatches = _external_create_comparison(
+            event,
+            _external_proposal_values(row),
+            ignored_fields={"package_id"},
+        )
+        if identical:
+            return (
+                MergeDisposition.DUPLICATE.value,
+                "La propuesta externa ya está representada localmente.",
+                [],
+            )
+        return (
+            MergeDisposition.REVIEW.value,
+            "La propuesta externa ya existe con contenido incompatible.",
+            mismatches,
+        )
+    elif event.entity_type == "external_analysis_review":
+        if event.operation.value != "create":
+            return MergeDisposition.REVIEW.value, "Las revisiones externas son append-only.", []
+        row = _external_review_for_event(session, event)
+        if row is None:
+            return MergeDisposition.APPLY.value, "La revisión humana no existe localmente.", []
+        identical, mismatches = _external_create_comparison(
+            event,
+            _external_review_values(row),
+            ignored_fields={"proposal_id"},
+        )
+        if identical:
+            return (
+                MergeDisposition.DUPLICATE.value,
+                "La revisión humana ya está representada localmente.",
+                [],
+            )
+        return (
+            MergeDisposition.REVIEW.value,
+            "La revisión humana ya existe con contenido incompatible.",
+            mismatches,
+        )
+    elif event.entity_type == "external_analysis_selection":
+        if event.operation.value != "create":
+            return MergeDisposition.REVIEW.value, "La vigencia externa es append-only.", []
+        row = session.get(ExternalAnalysisSelection, event.entity_id)
+        if row is None:
+            return MergeDisposition.APPLY.value, "El evento de vigencia no existe localmente.", []
+        identical, mismatches = _external_create_comparison(
+            event,
+            _external_selection_values(row),
+            ignored_fields={"review_id", "supersedes_selection_id"},
+        )
+        incoming_review = _external_review_by_context(
+            session,
+            project_id=event.project_id,
+            package_sha256=_new_value(event.changed_fields, "review_package_sha256"),
+            external_proposal_id=_new_value(event.changed_fields, "review_external_proposal_id"),
+            revision=_new_value(event.changed_fields, "review_revision"),
+        )
+        if row.action == "set" and (incoming_review is None or row.review_id != incoming_review.id):
+            mismatches.append("review_id")
+            identical = False
+        if identical:
+            return (
+                MergeDisposition.DUPLICATE.value,
+                "El evento de vigencia ya está representado localmente.",
+                [],
+            )
+        return (
+            MergeDisposition.REVIEW.value,
+            "El evento de vigencia ya existe con contenido incompatible.",
+            sorted(set(mismatches)),
+        )
+    elif event.entity_type == "editable_object":
         obj = session.get(EditableObject, event.entity_id)
         if event.operation.value == "create":
             if obj is None:
@@ -2681,6 +3132,112 @@ def _parent_reference_problem(
             return "La acción recibida referencia una página editable inexistente."
         return None
     if event.operation != "create":
+        return None
+    if event.entity_type == "external_analysis_package":
+        project_id = _new_value(event.changed_fields, "project_id")
+        if project_id != event.project_id:
+            return "El paquete externo declara un proyecto diferente al bundle."
+        return None
+    if event.entity_type == "external_analysis_proposal":
+        package_id = _new_value(event.changed_fields, "package_id")
+        package_sha256 = _new_value(event.changed_fields, "package_sha256")
+        package = (
+            session.get(ExternalAnalysisPackage, package_id)
+            if isinstance(package_id, str)
+            else None
+        )
+        if package is None and isinstance(package_sha256, str):
+            package = session.scalar(
+                select(ExternalAnalysisPackage).where(
+                    ExternalAnalysisPackage.project_id == event.project_id,
+                    ExternalAnalysisPackage.package_sha256 == package_sha256,
+                )
+            )
+        if (
+            package is None
+            and ("external_analysis_package", str(package_id)) not in incoming_creations
+        ):
+            return "La propuesta externa apunta a un paquete que no existe en la copia receptora."
+        digital_object_id = _new_value(event.changed_fields, "digital_object_id")
+        digital = (
+            session.get(DigitalObject, digital_object_id)
+            if isinstance(digital_object_id, str)
+            else None
+        )
+        if digital is None or digital.project_id != event.project_id:
+            return "La propuesta externa apunta a un objeto digital inexistente en el proyecto."
+        return None
+    if event.entity_type == "external_analysis_review":
+        proposal_id = _new_value(event.changed_fields, "proposal_id")
+        proposal = (
+            session.get(ExternalAnalysisProposal, proposal_id)
+            if isinstance(proposal_id, str)
+            else None
+        )
+        if proposal is None:
+            proposal = _external_proposal_for_event(session, event)
+        if (
+            proposal is None
+            and ("external_analysis_proposal", str(proposal_id)) not in incoming_creations
+        ):
+            return "La revisión externa apunta a una propuesta que no existe en la copia receptora."
+        return None
+    if event.entity_type == "external_analysis_selection":
+        digital_object_id = _new_value(event.changed_fields, "digital_object_id")
+        digital = (
+            session.get(DigitalObject, digital_object_id)
+            if isinstance(digital_object_id, str)
+            else None
+        )
+        if digital is None or digital.project_id != event.project_id:
+            return "La vigencia externa apunta a un objeto digital inexistente en el proyecto."
+        action = _new_value(event.changed_fields, "action")
+        review_id = _new_value(event.changed_fields, "review_id")
+        if action == "set":
+            review = (
+                session.get(ExternalAnalysisReview, review_id)
+                if isinstance(review_id, str)
+                else None
+            )
+            if review is None:
+                review = _external_review_by_context(
+                    session,
+                    project_id=event.project_id,
+                    package_sha256=_new_value(event.changed_fields, "review_package_sha256"),
+                    external_proposal_id=_new_value(
+                        event.changed_fields, "review_external_proposal_id"
+                    ),
+                    revision=_new_value(event.changed_fields, "review_revision"),
+                )
+            if (
+                review is None
+                and ("external_analysis_review", str(review_id)) not in incoming_creations
+            ):
+                return (
+                    "La vigencia externa apunta a una revisión que no existe en la copia receptora."
+                )
+        supersedes_id = _new_value(event.changed_fields, "supersedes_selection_id")
+        if supersedes_id is not None:
+            superseded = session.get(ExternalAnalysisSelection, supersedes_id)
+            if (
+                superseded is None
+                and ("external_analysis_selection", str(supersedes_id)) not in incoming_creations
+            ):
+                # Si el predecesor llegó a la copia con otro ID por una deduplicación previa,
+                # se validará semánticamente al aplicar mediante el contexto de revisión.
+                semantic_predecessor = _external_review_by_context(
+                    session,
+                    project_id=event.project_id,
+                    package_sha256=_new_value(
+                        event.changed_fields, "supersedes_review_package_sha256"
+                    ),
+                    external_proposal_id=_new_value(
+                        event.changed_fields, "supersedes_review_external_proposal_id"
+                    ),
+                    revision=_new_value(event.changed_fields, "supersedes_review_revision"),
+                )
+                if semantic_predecessor is None:
+                    return "La vigencia externa referencia una selección previa no resoluble."
         return None
     if event.entity_type == "editable_object":
         required = ("editable_page_id", "digital_object_id", "page_number")
@@ -6128,6 +6685,277 @@ def _apply_work_assignment_event(
     )
 
 
+def _apply_external_analysis_event(
+    session: Session,
+    *,
+    event: ChangeEvent,
+) -> None:
+    if event.operation.value != "create":
+        raise ValueError("La capa de análisis asistido sólo admite eventos append-only de creación")
+
+    if event.entity_type == "external_analysis_package":
+        if _external_package_for_event(session, event) is not None:
+            raise ValueError("El paquete externo recibido ya existe")
+        values = {
+            field: _new_value(event.changed_fields, field)
+            for field in (
+                "project_id",
+                "package_sha256",
+                "package_type",
+                "schema_version",
+                "protocol",
+                "producer_id",
+                "producer_version",
+                "request_id",
+                "exp01_sha256",
+                "result_bundle_sha256",
+                "model_json",
+                "runtime_json",
+                "prompt_json",
+                "source_scope_json",
+                "proposal_count",
+                "manifest_json",
+                "imported_by",
+                "imported_at",
+            )
+        }
+        if values["project_id"] != event.project_id:
+            raise ValueError("El paquete externo pertenece a otro proyecto")
+        row = ExternalAnalysisPackage(
+            id=event.entity_id,
+            project_id=event.project_id,
+            package_sha256=str(values["package_sha256"]),
+            package_type=str(values["package_type"]),
+            schema_version=str(values["schema_version"]),
+            protocol=str(values["protocol"]),
+            producer_id=values["producer_id"],
+            producer_version=values["producer_version"],
+            request_id=values["request_id"],
+            exp01_sha256=str(values["exp01_sha256"]),
+            result_bundle_sha256=str(values["result_bundle_sha256"]),
+            model_json=dict(values["model_json"] or {}),
+            runtime_json=dict(values["runtime_json"] or {}),
+            prompt_json=dict(values["prompt_json"] or {}),
+            source_scope_json=dict(values["source_scope_json"] or {}),
+            proposal_count=int(values["proposal_count"]),
+            manifest_json=dict(values["manifest_json"] or {}),
+            imported_by=str(values["imported_by"]),
+            imported_at=_coerce_datetime(values["imported_at"]) or event.timestamp,
+        )
+        session.add(row)
+        session.flush()
+        from archive_workbench.external_analysis import (
+            rebuild_external_analysis_package_sources,
+        )
+
+        rebuild_external_analysis_package_sources(session, package_id=row.id)
+        return
+
+    if event.entity_type == "external_analysis_proposal":
+        if _external_proposal_for_event(session, event) is not None:
+            raise ValueError("La propuesta externa recibida ya existe")
+        package_id = _new_value(event.changed_fields, "package_id")
+        package = (
+            session.get(ExternalAnalysisPackage, package_id)
+            if isinstance(package_id, str)
+            else None
+        )
+        if package is None:
+            package_sha256 = _new_value(event.changed_fields, "package_sha256")
+            if isinstance(package_sha256, str):
+                package = session.scalar(
+                    select(ExternalAnalysisPackage).where(
+                        ExternalAnalysisPackage.project_id == event.project_id,
+                        ExternalAnalysisPackage.package_sha256 == package_sha256,
+                    )
+                )
+        if package is None:
+            raise ValueError("No puede resolverse el paquete padre de la propuesta externa")
+        digital_object_id = _new_value(event.changed_fields, "digital_object_id")
+        digital = (
+            session.get(DigitalObject, digital_object_id)
+            if isinstance(digital_object_id, str)
+            else None
+        )
+        if digital is None or digital.project_id != event.project_id:
+            raise ValueError("El objeto digital de la propuesta externa no existe en el proyecto")
+        values = {
+            field: _new_value(event.changed_fields, field)
+            for field in (
+                "external_proposal_id",
+                "result_id",
+                "output_schema_id",
+                "target_type",
+                "target_id",
+                "page_number",
+                "source_key",
+                "original_filename",
+                "asset_path",
+                "source_asset_sha256",
+                "output_json",
+                "output_sha256",
+                "provenance_json",
+                "warnings_json",
+                "created_at",
+            )
+        }
+        row = ExternalAnalysisProposal(
+            id=event.entity_id,
+            package_id=package.id,
+            external_proposal_id=str(values["external_proposal_id"]),
+            result_id=str(values["result_id"]),
+            output_schema_id=str(values["output_schema_id"]),
+            target_type=str(values["target_type"]),
+            target_id=str(values["target_id"]),
+            digital_object_id=digital.id,
+            page_number=int(values["page_number"]),
+            source_key=values["source_key"],
+            original_filename=values["original_filename"],
+            asset_path=str(values["asset_path"]),
+            source_asset_sha256=str(values["source_asset_sha256"]),
+            output_json=dict(values["output_json"] or {}),
+            output_sha256=str(values["output_sha256"]),
+            provenance_json=dict(values["provenance_json"] or {}),
+            warnings_json=list(values["warnings_json"] or []),
+            created_at=_coerce_datetime(values["created_at"]) or event.timestamp,
+        )
+        session.add(row)
+        session.flush()
+        return
+
+    if event.entity_type == "external_analysis_review":
+        if _external_review_for_event(session, event) is not None:
+            raise ValueError("La revisión externa recibida ya existe")
+        proposal_id = _new_value(event.changed_fields, "proposal_id")
+        proposal = (
+            session.get(ExternalAnalysisProposal, proposal_id)
+            if isinstance(proposal_id, str)
+            else None
+        )
+        if proposal is None:
+            proposal = _external_proposal_for_event(session, event)
+        if proposal is None:
+            raise ValueError("No puede resolverse la propuesta padre de la revisión externa")
+        decision = _new_value(event.changed_fields, "decision")
+        reviewed_output = _new_value(event.changed_fields, "reviewed_output_json")
+        if decision not in {"accepted", "rejected"}:
+            raise ValueError("La revisión externa contiene una decisión inválida")
+        if decision == "accepted" and not isinstance(reviewed_output, dict):
+            raise ValueError("Una revisión aceptada debe conservar su snapshot revisado")
+        if decision == "rejected" and reviewed_output is not None:
+            raise ValueError("Una revisión rechazada no puede contener output revisado")
+        row = ExternalAnalysisReview(
+            id=event.entity_id,
+            proposal_id=proposal.id,
+            revision=int(_new_value(event.changed_fields, "revision")),
+            decision=str(decision),
+            reviewed_output_json=(
+                dict(reviewed_output) if isinstance(reviewed_output, dict) else None
+            ),
+            review_note=_new_value(event.changed_fields, "review_note"),
+            reviewed_by=str(_new_value(event.changed_fields, "reviewed_by")),
+            reviewed_at=(
+                _coerce_datetime(_new_value(event.changed_fields, "reviewed_at")) or event.timestamp
+            ),
+            source_proposal_sha256=str(_new_value(event.changed_fields, "source_proposal_sha256")),
+        )
+        session.add(row)
+        session.flush()
+        return
+
+    if event.entity_type == "external_analysis_selection":
+        if session.get(ExternalAnalysisSelection, event.entity_id) is not None:
+            raise ValueError("El evento de vigencia externa recibido ya existe")
+        action = _new_value(event.changed_fields, "action")
+        if action not in {"set", "clear"}:
+            raise ValueError("El evento de vigencia externa contiene una acción inválida")
+        review_id = _new_value(event.changed_fields, "review_id")
+        review = (
+            session.get(ExternalAnalysisReview, review_id) if isinstance(review_id, str) else None
+        )
+        if review is None and action == "set":
+            review = _external_review_by_context(
+                session,
+                project_id=event.project_id,
+                package_sha256=_new_value(event.changed_fields, "review_package_sha256"),
+                external_proposal_id=_new_value(
+                    event.changed_fields, "review_external_proposal_id"
+                ),
+                revision=_new_value(event.changed_fields, "review_revision"),
+            )
+        if action == "set" and (review is None or review.decision != "accepted"):
+            raise ValueError("La vigencia externa debe apuntar a una revisión aceptada")
+
+        supersedes_id = _new_value(event.changed_fields, "supersedes_selection_id")
+        superseded = (
+            session.get(ExternalAnalysisSelection, supersedes_id)
+            if isinstance(supersedes_id, str)
+            else None
+        )
+        if supersedes_id is not None and superseded is None:
+            predecessor_review = _external_review_by_context(
+                session,
+                project_id=event.project_id,
+                package_sha256=_new_value(event.changed_fields, "supersedes_review_package_sha256"),
+                external_proposal_id=_new_value(
+                    event.changed_fields, "supersedes_review_external_proposal_id"
+                ),
+                revision=_new_value(event.changed_fields, "supersedes_review_revision"),
+            )
+            if predecessor_review is not None:
+                candidates = session.scalars(
+                    select(ExternalAnalysisSelection)
+                    .where(
+                        ExternalAnalysisSelection.project_id == event.project_id,
+                        ExternalAnalysisSelection.target_type
+                        == _new_value(event.changed_fields, "target_type"),
+                        ExternalAnalysisSelection.target_id
+                        == _new_value(event.changed_fields, "target_id"),
+                        ExternalAnalysisSelection.output_schema_id
+                        == _new_value(event.changed_fields, "output_schema_id"),
+                        ExternalAnalysisSelection.review_id == predecessor_review.id,
+                    )
+                    .order_by(
+                        ExternalAnalysisSelection.selected_at.desc(),
+                        ExternalAnalysisSelection.id.desc(),
+                    )
+                ).all()
+                if candidates:
+                    superseded = candidates[0]
+            if superseded is None:
+                raise ValueError("No puede resolverse la selección previa que se reemplaza")
+
+        digital_object_id = _new_value(event.changed_fields, "digital_object_id")
+        digital = (
+            session.get(DigitalObject, digital_object_id)
+            if isinstance(digital_object_id, str)
+            else None
+        )
+        if digital is None or digital.project_id != event.project_id:
+            raise ValueError("El objeto digital de la vigencia externa no existe en el proyecto")
+        row = ExternalAnalysisSelection(
+            id=event.entity_id,
+            project_id=event.project_id,
+            target_type=str(_new_value(event.changed_fields, "target_type")),
+            target_id=str(_new_value(event.changed_fields, "target_id")),
+            digital_object_id=digital.id,
+            page_number=int(_new_value(event.changed_fields, "page_number")),
+            output_schema_id=str(_new_value(event.changed_fields, "output_schema_id")),
+            review_id=review.id if review is not None else None,
+            action=str(action),
+            supersedes_selection_id=superseded.id if superseded is not None else None,
+            selected_by=str(_new_value(event.changed_fields, "selected_by")),
+            selected_at=(
+                _coerce_datetime(_new_value(event.changed_fields, "selected_at")) or event.timestamp
+            ),
+        )
+        session.add(row)
+        session.flush()
+        return
+
+    raise ValueError(f"Tipo de análisis asistido no aplicable: {event.entity_type}")
+
+
 def _apply_incoming_event(
     session: Session,
     *,
@@ -6135,7 +6963,14 @@ def _apply_incoming_event(
     applied_by: str,
     source_workspace_name: str,
 ) -> None:
-    if event.entity_type == "editable_object":
+    if event.entity_type in {
+        "external_analysis_package",
+        "external_analysis_proposal",
+        "external_analysis_review",
+        "external_analysis_selection",
+    }:
+        _apply_external_analysis_event(session, event=event)
+    elif event.entity_type == "editable_object":
         _apply_object_event(
             session,
             event=event,

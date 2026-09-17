@@ -1,3 +1,11 @@
+## Unreleased — AI-01 P3-C — 2026-09-16
+
+- Agrega `0049_external_analysis_layer` para package/proposal/review/selection de análisis asistido.
+- Incorpora handoffs de forma idempotente por SHA sin reescribir el output automático.
+- Separa aceptación de vigencia: la primera aceptación puede quedar vigente; reemplazarla exige una selección explícita append-only.
+- Conserva `external_analysis_package_sources` como resolución local reconstruible; intercambio/adopción quedan para P3-D.
+- No agrega todavía la sección Streamlit `Análisis asistido`; corresponde a P3-C.
+
 ## 1.2.0 - versión estable - 2026-09-15
 
 - Amplía **Exportar texto e imágenes (ZIP)** a EXP-01 schema 1.1.

@@ -11,6 +11,8 @@ import pytest
 TEST_LEVELS: dict[str, frozenset[str]] = {
     "fast": frozenset(
         {
+            "test_ai_handoff.py",
+            "test_assisted_analysis_app.py",
             "test_contracts.py",
             "test_decisions.py",
             "test_documentation.py",
@@ -29,6 +31,7 @@ TEST_LEVELS: dict[str, frozenset[str]] = {
     "integration": frozenset(
         {
             "test_analysis_quality.py",
+            "test_ai_handoff_resolution.py",
             "test_audiovisual.py",
             "test_audiovisual_timeline.py",
             "test_authority_dictionary.py",
@@ -43,6 +46,9 @@ TEST_LEVELS: dict[str, frozenset[str]] = {
             "test_document_plans.py",
             "test_editing.py",
             "test_extraction.py",
+            "test_external_analysis.py",
+            "test_external_analysis_continuity.py",
+            "test_external_analysis_p3d_surfaces.py",
             "test_form_structure.py",
             "test_google_drive_transport.py",
             "test_graph.py",

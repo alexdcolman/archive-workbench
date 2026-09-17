@@ -6,6 +6,7 @@ from pathlib import Path
 
 from archive_workbench.corpus_export import (
     ExportProfileValues,
+    _natural_text_sort_key,
     build_export_rows,
     export_page_candidates,
     export_run_rows,
@@ -670,5 +671,63 @@ def test_exp_sel_01_explicit_page_selection_is_run_scoped(tmp_path: Path) -> Non
             assert selected[0].page_numbers == [candidate.page_number]
             assert excluded == []
             assert list(profile.include_page_review_statuses_json or []) == original_statuses
+    finally:
+        engine.dispose()
+
+
+def test_exp_sel_01_natural_page_order() -> None:
+    filenames = [
+        "legajo n° 15 B 1.tiff",
+        "legajo n° 15 A 10.tiff",
+        "legajo n° 15 C 1.tiff",
+        "legajo n° 15 A 2.tiff",
+        "legajo n° 15 A 1.tiff",
+    ]
+    assert sorted(filenames, key=_natural_text_sort_key) == [
+        "legajo n° 15 A 1.tiff",
+        "legajo n° 15 A 2.tiff",
+        "legajo n° 15 A 10.tiff",
+        "legajo n° 15 B 1.tiff",
+        "legajo n° 15 C 1.tiff",
+    ]
+
+
+def test_exp_sel_01_text_only_run_records_explicit_page_scope(tmp_path: Path) -> None:
+    root = tmp_path / "project"
+    _seed_search_project(root)
+    engine = create_sqlite_engine(database_path(root))
+    try:
+        with session_scope(engine) as session:
+            profile = _profile(session, aggregation="object")
+            candidate = export_page_candidates(
+                session,
+                project_id="search_project",
+                profile=profile,
+            )[0]
+            selected = {(candidate.digital_object_id, candidate.page_number)}
+
+            result = run_export(
+                session,
+                project_root=root,
+                project_id="search_project",
+                profile=profile,
+                output_relative_path="exports/selected.jsonl",
+                output_format="jsonl",
+                created_by="tests",
+                selected_page_keys=selected,
+            )
+            history = export_run_rows(session, project_id="search_project")
+
+            payload = json.loads(result.output_path.read_text(encoding="utf-8").splitlines()[0])
+            assert payload["page_numbers"] == [candidate.page_number]
+            assert history[0].profile_snapshot["execution_scope"] == {
+                "mode": "explicit_pages",
+                "pages": [
+                    {
+                        "digital_object_id": candidate.digital_object_id,
+                        "page_number": candidate.page_number,
+                    }
+                ],
+            }
     finally:
         engine.dispose()

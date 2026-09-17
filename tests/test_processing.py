@@ -401,7 +401,7 @@ def test_processing_migration_upgrades_an_existing_029_database(tmp_path: Path) 
     assert current_revision(root) == "0024_semantic_search"
 
     upgrade_database(root)
-    assert current_revision(root) == "0048_catalog_document_components"
+    assert current_revision(root) == "0050_external_analysis_continuity"
     engine = create_sqlite_engine(database_path(root))
     try:
         tables = set(inspect(engine).get_table_names())

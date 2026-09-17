@@ -400,6 +400,12 @@ def _image_data_url(path: str | Path) -> str:
     return f"data:{mime};base64,{encoded}"
 
 
+def _image_bytes_data_url(payload: bytes, mime_type: str | None) -> str:
+    mime = mime_type or "image/webp"
+    encoded = base64.b64encode(payload).decode("ascii")
+    return f"data:{mime};base64,{encoded}"
+
+
 def build_review_canvas_payload(
     image_path: str | Path,
     objects: list[ReviewObjectRow],
@@ -574,3 +580,36 @@ def review_canvas_with_drawing(
         except (KeyError, TypeError, ValueError):
             drawn_box = None
     return (str(selected) if selected else None), drawn_box
+
+
+def static_image_canvas_bytes(
+    payload: bytes,
+    *,
+    mime_type: str | None,
+    page: int,
+    key: str,
+    height: int = 820,
+) -> bool:
+    """Muestra una imagen con zoom/pan local sin comunicar gestos visuales a Python."""
+
+    renderer = _renderer()
+    if renderer is None:
+        return False
+    renderer(
+        data={
+            "image_data_url": _image_bytes_data_url(payload, mime_type),
+            "page": page,
+            "selected_object_id": None,
+            "boxes": [],
+            "allow_selection": False,
+            "allow_draw": False,
+            "confirmed_box": None,
+            "commit_selection_on_click": False,
+            "browser_state_key": key,
+        },
+        key=key,
+        height=height,
+        width="stretch",
+        on_selection_commit_change=lambda: None,
+    )
+    return True

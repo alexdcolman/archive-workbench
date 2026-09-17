@@ -13,7 +13,7 @@ from archive_workbench.audiovisual import timeline_annotation_rows
 from archive_workbench.db import create_sqlite_engine, current_revision, database_path, session_scope
 from archive_workbench.db.models import AudiovisualMedia, DigitalObject, TranscriptionRun
 
-EXPECTED_REVISION = "0048_catalog_document_components"
+EXPECTED_REVISION = "0050_external_analysis_continuity"
 
 
 def _sha256(path: Path) -> str:

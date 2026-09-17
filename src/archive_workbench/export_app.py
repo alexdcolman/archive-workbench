@@ -35,6 +35,11 @@ from archive_workbench.corpus_export import (
     set_export_profile_archived,
 )
 from archive_workbench.db import create_sqlite_engine, session_scope
+from archive_workbench.external_analysis import external_analysis_reviewed_export_rows
+from archive_workbench.external_analysis_export import (
+    EXTERNAL_ANALYSIS_EXPORT_FORMATS,
+    export_reviewed_external_analysis,
+)
 from archive_workbench.ui_navigation import (
     mount_choice_help,
     rerun_view,
@@ -837,6 +842,84 @@ def _render_audiovisual_export_view(
                     st.write(f"Huella del estado del corpus: `{row.corpus_state_sha256}`")
 
 
+def _render_assisted_analysis_export_view(
+    st,
+    *,
+    project_root: Path,
+    db_path: Path,
+    project_id: str,
+) -> None:
+    st.subheader("Análisis asistido revisado")
+    st.write(
+        "Crea una copia de la capa revisada que está vigente en este momento. "
+        "No modifica las decisiones ni la vigencia registradas en el proyecto."
+    )
+    engine = create_sqlite_engine(db_path)
+    try:
+        with session_scope(engine) as session:
+            row_count = len(external_analysis_reviewed_export_rows(session, project_id=project_id))
+    finally:
+        engine.dispose()
+    st.metric("Páginas/schema con análisis vigente", row_count)
+    output_format = st.selectbox(
+        "Formato del archivo",
+        options=list(EXTERNAL_ANALYSIS_EXPORT_FORMATS),
+        format_func=lambda value: (
+            "JSONL · un registro por línea" if value == "jsonl" else "CSV · tabla"
+        ),
+        key="assisted_analysis_export_format",
+    )
+    create = st.button(
+        "Crear archivo de análisis asistido revisado",
+        type="primary",
+        disabled=row_count == 0,
+        key="assisted_analysis_export_create",
+    )
+    if create:
+        engine = create_sqlite_engine(db_path)
+        try:
+            with session_scope(engine) as session:
+                artifact = export_reviewed_external_analysis(
+                    session,
+                    project_root=project_root,
+                    project_id=project_id,
+                    output_format=output_format,
+                )
+        finally:
+            engine.dispose()
+        st.session_state["assisted_analysis_export_last"] = {
+            "format": artifact.output_format,
+            "relative_path": artifact.relative_path,
+            "row_count": artifact.row_count,
+            "byte_size": artifact.byte_size,
+            "sha256": artifact.sha256,
+        }
+
+    result = st.session_state.get("assisted_analysis_export_last")
+    if not isinstance(result, dict):
+        if row_count == 0:
+            st.info("Todavía no hay análisis revisados vigentes para exportar.")
+        return
+    output_path = project_root / str(result["relative_path"])
+    st.success(f"Archivo creado con {result['row_count']} registro(s).")
+    st.caption(f"Archivo: **{output_path.name}**")
+    with st.expander("Detalles técnicos de esta exportación", expanded=False):
+        st.write(f"Ruta dentro del proyecto: `{result['relative_path']}`")
+        st.write(f"Huella SHA-256: `{result['sha256']}`")
+        st.write(f"Tamaño del archivo: {result['byte_size']} bytes")
+    if output_path.is_file():
+        st.download_button(
+            "Descargar esta exportación",
+            data=output_path.read_bytes(),
+            file_name=output_path.name,
+            mime="application/x-ndjson" if result["format"] == "jsonl" else "text/csv",
+            use_container_width=True,
+            key=f"assisted_analysis_export_download_{result['sha256']}",
+        )
+    else:
+        st.warning("El archivo creado ya no está disponible en la ruta registrada.")
+
+
 def render_export_view(
     st,
     *,
@@ -856,16 +939,20 @@ def render_export_view(
     section_heading(st, "Exportar corpus")
     export_surface = st.radio(
         "Tipo de material que querés exportar",
-        options=("documentos", "audiovisual"),
-        format_func=lambda value: (
-            "Documentos revisados" if value == "documentos" else "Segmentos de audio y video"
-        ),
+        options=("documentos", "audiovisual", "assisted_analysis"),
+        format_func=lambda value: {
+            "documentos": "Documentos revisados",
+            "audiovisual": "Segmentos de audio y video",
+            "assisted_analysis": "Análisis asistido revisado",
+        }[value],
         horizontal=True,
         key="export_surface",
     )
-    export_surface_label = (
-        "Documentos revisados" if export_surface == "documentos" else "Segmentos de audio y video"
-    )
+    export_surface_label = {
+        "documentos": "Documentos revisados",
+        "audiovisual": "Segmentos de audio y video",
+        "assisted_analysis": "Análisis asistido revisado",
+    }[export_surface]
     mount_choice_help(
         st,
         key="export_surface",
@@ -879,6 +966,15 @@ def render_export_view(
             db_path=db_path,
             project_id=project_id,
             actor=actor,
+        )
+        return
+
+    if export_surface == "assisted_analysis":
+        _render_assisted_analysis_export_view(
+            st,
+            project_root=Path(project_root),
+            db_path=Path(db_path),
+            project_id=project_id,
         )
         return
 
@@ -1039,55 +1135,57 @@ def render_export_view(
                 format_func=lambda value: _OUTPUT_FORMAT_LABELS.get(value, value.upper()),
                 key="export_run_format",
             )
+            selected_pages: tuple[tuple[str, int], ...] | None = None
+            selected_page_keys: set[tuple[str, int]] | None = None
+            choose_specific_pages = st.toggle(
+                "Elegir páginas específicas para esta exportación",
+                value=False,
+                key=f"export_specific_pages_{selected.id}",
+                help=(
+                    "Limita únicamente esta ejecución. No cambia estados de revisión "
+                    "ni modifica la configuración guardada."
+                ),
+            )
+            if choose_specific_pages:
+                engine = create_sqlite_engine(db_path)
+                try:
+                    with session_scope(engine) as page_session:
+                        page_candidates = export_page_candidates(
+                            page_session,
+                            project_id=project_id,
+                            profile=selected,
+                        )
+                finally:
+                    engine.dispose()
+
+                page_by_key = {candidate.key: candidate for candidate in page_candidates}
+                chosen_page_keys = st.multiselect(
+                    "Páginas que querés incluir",
+                    options=list(page_by_key),
+                    format_func=lambda key: page_by_key[key].label,
+                    key=f"export_specific_page_values_{selected.id}",
+                )
+                selected_pages = tuple(
+                    (
+                        page_by_key[key].digital_object_id,
+                        page_by_key[key].page_number,
+                    )
+                    for key in chosen_page_keys
+                )
+                selected_page_keys = set(selected_pages)
+                st.caption(
+                    "Esta selección sólo estrecha la ejecución actual y no cambia "
+                    "el estado de ninguna página."
+                )
+                if not selected_pages:
+                    st.warning("Elegí al menos una página para crear esta exportación.")
+
             visual_options = None
             if format_value == "visual_zip":
                 st.caption(
                     "El ZIP reúne el texto exportado con las imágenes relacionadas y un manifiesto "
                     "que conserva su origen, relaciones y huellas de verificación."
                 )
-                selected_pages: tuple[tuple[str, int], ...] | None = None
-                choose_specific_pages = st.toggle(
-                    "Elegir páginas específicas para esta exportación",
-                    value=False,
-                    key=f"export_visual_specific_pages_{selected.id}",
-                    help=(
-                        "Limita únicamente esta ejecución. No cambia estados de revisión "
-                        "ni modifica la configuración guardada."
-                    ),
-                )
-                if choose_specific_pages:
-                    engine = create_sqlite_engine(db_path)
-                    try:
-                        with session_scope(engine) as page_session:
-                            page_candidates = export_page_candidates(
-                                page_session,
-                                project_id=project_id,
-                                profile=selected,
-                            )
-                    finally:
-                        engine.dispose()
-
-                    page_by_key = {candidate.key: candidate for candidate in page_candidates}
-                    chosen_page_keys = st.multiselect(
-                        "Páginas que querés incluir",
-                        options=list(page_by_key),
-                        format_func=lambda key: page_by_key[key].label,
-                        key=f"export_visual_specific_page_values_{selected.id}",
-                    )
-                    selected_pages = tuple(
-                        (
-                            page_by_key[key].digital_object_id,
-                            page_by_key[key].page_number,
-                        )
-                        for key in chosen_page_keys
-                    )
-                    st.caption(
-                        "Esta selección sólo estrecha la ejecución actual y no cambia "
-                        "el estado de ninguna página."
-                    )
-                    if not selected_pages:
-                        st.warning("Elegí al menos una página para crear esta exportación.")
-
                 customize_visual = st.toggle(
                     "Elegir qué imágenes incluir",
                     value=False,
@@ -1149,6 +1247,7 @@ def render_export_view(
                                 output_relative_path=output_relative,
                                 output_format=format_value,
                                 created_by=actor or "local_user",
+                                selected_page_keys=selected_page_keys,
                                 visual_options=visual_options,
                             )
                     finally:

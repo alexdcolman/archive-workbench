@@ -14,7 +14,7 @@ from archive_workbench.db import create_sqlite_engine, current_revision, databas
 from archive_workbench.db.models import ExchangeBundleRecord, ExchangeDryRun, ExchangeWorkspace, Project
 from archive_workbench.exchange import inspect_change_bundle, sha256_file
 
-EXPECTED_REVISION = "0048_catalog_document_components"
+EXPECTED_REVISION = "0050_external_analysis_continuity"
 VALIDATION_FILE = Path("exchange/google_drive_validation.json")
 
 

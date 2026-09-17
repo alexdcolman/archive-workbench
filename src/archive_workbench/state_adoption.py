@@ -44,6 +44,10 @@ from archive_workbench.db.models import (
     ExtractionPage,
     ExtractionPageSelection,
     ExtractionRun,
+    ExternalAnalysisPackage,
+    ExternalAnalysisProposal,
+    ExternalAnalysisReview,
+    ExternalAnalysisSelection,
     Project,
     TranscriptSegment,
     TranscriptSegmentRevision,
@@ -65,7 +69,7 @@ from archive_workbench.project_admin import (
 from archive_workbench.version import __version__
 
 
-STATE_ADOPTION_SCHEMA_VERSION = "1.3"
+STATE_ADOPTION_SCHEMA_VERSION = "1.4"
 LEGACY_BASE_STATE_SECTIONS = (
     "selections",
     "pages",
@@ -92,11 +96,18 @@ TIMELINE_STATE_SECTIONS = (
     "audiovisual_timeline_annotations",
     "audiovisual_timeline_annotation_revisions",
 )
+EXTERNAL_ANALYSIS_STATE_SECTIONS = (
+    "external_analysis_packages",
+    "external_analysis_proposals",
+    "external_analysis_reviews",
+    "external_analysis_selections",
+)
 STATE_SECTIONS_V10 = LEGACY_BASE_STATE_SECTIONS
 STATE_SECTIONS_V11 = LEGACY_BASE_STATE_SECTIONS + AUDIOVISUAL_STATE_SECTIONS
 STATE_SECTIONS_V12 = STATE_SECTIONS_V11 + TIMELINE_STATE_SECTIONS
 STATE_SECTIONS_V13 = BASE_STATE_SECTIONS + AUDIOVISUAL_STATE_SECTIONS + TIMELINE_STATE_SECTIONS
-STATE_SECTIONS = STATE_SECTIONS_V13
+STATE_SECTIONS_V14 = STATE_SECTIONS_V13 + EXTERNAL_ANALYSIS_STATE_SECTIONS
+STATE_SECTIONS = STATE_SECTIONS_V14
 
 
 def _sections_for_state(state: dict[str, Any]) -> tuple[str, ...]:
@@ -106,12 +117,24 @@ def _sections_for_state(state: dict[str, Any]) -> tuple[str, ...]:
         sections += AUDIOVISUAL_STATE_SECTIONS
     if any(section in state for section in TIMELINE_STATE_SECTIONS):
         sections += TIMELINE_STATE_SECTIONS
+    if any(section in state for section in EXTERNAL_ANALYSIS_STATE_SECTIONS):
+        sections += EXTERNAL_ANALYSIS_STATE_SECTIONS
     return sections
 
 
 def _sections_for_schema(
     schema_version: str, state: dict[str, Any] | None = None
 ) -> tuple[str, ...]:
+    if schema_version == "1.4":
+        if state is None:
+            return STATE_SECTIONS_V14
+        base = BASE_STATE_SECTIONS if "document_components" in state else LEGACY_BASE_STATE_SECTIONS
+        sections = base
+        if any(section in state for section in AUDIOVISUAL_STATE_SECTIONS):
+            sections += AUDIOVISUAL_STATE_SECTIONS
+        if any(section in state for section in TIMELINE_STATE_SECTIONS):
+            sections += TIMELINE_STATE_SECTIONS
+        return sections + EXTERNAL_ANALYSIS_STATE_SECTIONS
     if schema_version == "1.3":
         if state is None:
             return BASE_STATE_SECTIONS
@@ -126,7 +149,7 @@ def _sections_for_schema(
 class StateAdoptionManifest(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
-    schema_version: Literal["1.0", "1.1", "1.2", "1.3"] = STATE_ADOPTION_SCHEMA_VERSION
+    schema_version: Literal["1.0", "1.1", "1.2", "1.3", "1.4"] = STATE_ADOPTION_SCHEMA_VERSION
     artifact_type: Literal["state_adoption_package"] = "state_adoption_package"
     adoption_id: str = Field(min_length=36, max_length=36)
     project_id: str
@@ -403,6 +426,10 @@ def _referenced_ids(state: dict[str, Any]) -> dict[str, set[str]]:
         digital_ids.add(row["digital_object_id"])
     for row in state.get("audiovisual_media", []):
         digital_ids.add(row["digital_object_id"])
+    for row in state.get("external_analysis_proposals", []):
+        digital_ids.add(row["digital_object_id"])
+    for row in state.get("external_analysis_selections", []):
+        digital_ids.add(row["digital_object_id"])
     for row in state["entity_relations"]:
         if row.get("target_document_part_id"):
             part_ids.add(row["target_document_part_id"])
@@ -549,7 +576,9 @@ def create_state_adoption_package(
     sequence = _current_sequence(session, workspace.id)
     sections = _sections_for_state(state)
     schema_version = (
-        "1.3"
+        "1.4"
+        if any(section in state for section in EXTERNAL_ANALYSIS_STATE_SECTIONS)
+        else "1.3"
         if "document_components" in state
         else "1.2"
         if sections == STATE_SECTIONS_V12
@@ -665,6 +694,13 @@ def preview_state_adoption(
             "La base documental u OCR de esta copia no coincide con la requerida por el paquete"
         )
     local_state = _editable_state_payload(session, project.id)
+    if manifest.schema_version != "1.4" and any(
+        section in local_state for section in EXTERNAL_ANALYSIS_STATE_SECTIONS
+    ):
+        raise ValueError(
+            "El paquete de estado anterior a 1.4 no representa la historia de análisis "
+            "asistido que ya existe en esta copia"
+        )
     if manifest.schema_version == "1.0" and any(
         section in local_state for section in AUDIOVISUAL_STATE_SECTIONS
     ):
@@ -676,6 +712,12 @@ def preview_state_adoption(
     ):
         raise ValueError(
             "El paquete de estado no incluye las anotaciones audiovisuales que ya existen en esta copia"
+        )
+    if manifest.schema_version == "1.4":
+        _require_external_analysis_append_only_compatibility(
+            session,
+            project_id=project.id,
+            state=state,
         )
     return StateAdoptionPreview(
         adoption_id=manifest.adoption_id,
@@ -726,6 +768,160 @@ def _delete_missing(rows: list[Any], keep_ids: set[str]) -> None:
             session = Session.object_session(row)
             assert session is not None
             session.delete(row)
+
+
+def _require_external_analysis_append_only_compatibility(
+    session: Session,
+    *,
+    project_id: str,
+    state: dict[str, Any],
+) -> None:
+    """Impide que una adopción reescriba o borre historia P3 ya auditada."""
+
+    if not any(section in state for section in EXTERNAL_ANALYSIS_STATE_SECTIONS):
+        return
+    local_state = _editable_state_payload(session, project_id)
+    for section in EXTERNAL_ANALYSIS_STATE_SECTIONS:
+        local = _section_map(local_state.get(section, []))
+        incoming = _section_map(state.get(section, []))
+        local_only = sorted(set(local) - set(incoming))
+        if local_only:
+            raise ValueError(
+                "La adopción requeriría borrar historial append-only de análisis asistido "
+                f"en {section}: {local_only[:5]}"
+            )
+        mismatched = sorted(
+            row_id for row_id in set(local) & set(incoming) if local[row_id] != incoming[row_id]
+        )
+        if mismatched:
+            raise ValueError(
+                "La adopción requeriría reescribir historial inmutable/append-only de análisis "
+                f"asistido en {section}: {mismatched[:5]}"
+            )
+
+
+def _insert_external_analysis_state(
+    session: Session,
+    *,
+    state: dict[str, Any],
+) -> list[str]:
+    """Agrega la historia P3 faltante respetando package→proposal→review→selection."""
+
+    if not any(section in state for section in EXTERNAL_ANALYSIS_STATE_SECTIONS):
+        return []
+
+    package_ids: list[str] = []
+    for item in state["external_analysis_packages"]:
+        package_ids.append(item["id"])
+        if session.get(ExternalAnalysisPackage, item["id"]) is not None:
+            continue
+        session.add(
+            ExternalAnalysisPackage(
+                id=item["id"],
+                project_id=item["project_id"],
+                package_sha256=item["package_sha256"],
+                package_type=item["package_type"],
+                schema_version=item["schema_version"],
+                protocol=item["protocol"],
+                producer_id=item.get("producer_id"),
+                producer_version=item.get("producer_version"),
+                request_id=item.get("request_id"),
+                exp01_sha256=item["exp01_sha256"],
+                result_bundle_sha256=item["result_bundle_sha256"],
+                model_json=item.get("model_json") or {},
+                runtime_json=item.get("runtime_json") or {},
+                prompt_json=item.get("prompt_json") or {},
+                source_scope_json=item.get("source_scope_json") or {},
+                proposal_count=item["proposal_count"],
+                manifest_json=item.get("manifest_json") or {},
+                imported_by=item["imported_by"],
+                imported_at=_parse_datetime(item.get("imported_at")) or utc_now(),
+            )
+        )
+    session.flush()
+
+    for item in state["external_analysis_proposals"]:
+        if session.get(ExternalAnalysisProposal, item["id"]) is not None:
+            continue
+        session.add(
+            ExternalAnalysisProposal(
+                id=item["id"],
+                package_id=item["package_id"],
+                external_proposal_id=item["external_proposal_id"],
+                result_id=item["result_id"],
+                output_schema_id=item["output_schema_id"],
+                target_type=item["target_type"],
+                target_id=item["target_id"],
+                digital_object_id=item["digital_object_id"],
+                page_number=item["page_number"],
+                source_key=item.get("source_key"),
+                original_filename=item.get("original_filename"),
+                asset_path=item["asset_path"],
+                source_asset_sha256=item["source_asset_sha256"],
+                output_json=item.get("output_json") or {},
+                output_sha256=item["output_sha256"],
+                provenance_json=item.get("provenance_json") or {},
+                warnings_json=item.get("warnings_json") or [],
+                created_at=_parse_datetime(item.get("created_at")) or utc_now(),
+            )
+        )
+    session.flush()
+
+    for item in state["external_analysis_reviews"]:
+        if session.get(ExternalAnalysisReview, item["id"]) is not None:
+            continue
+        session.add(
+            ExternalAnalysisReview(
+                id=item["id"],
+                proposal_id=item["proposal_id"],
+                revision=item["revision"],
+                decision=item["decision"],
+                reviewed_output_json=item.get("reviewed_output_json"),
+                review_note=item.get("review_note"),
+                reviewed_by=item["reviewed_by"],
+                reviewed_at=_parse_datetime(item.get("reviewed_at")) or utc_now(),
+                source_proposal_sha256=item["source_proposal_sha256"],
+            )
+        )
+    session.flush()
+
+    pending = {item["id"]: item for item in state["external_analysis_selections"]}
+    while pending:
+        progressed = False
+        for row_id, item in list(pending.items()):
+            if session.get(ExternalAnalysisSelection, row_id) is not None:
+                pending.pop(row_id)
+                progressed = True
+                continue
+            predecessor = item.get("supersedes_selection_id")
+            if predecessor and session.get(ExternalAnalysisSelection, predecessor) is None:
+                if predecessor in pending:
+                    continue
+                raise ValueError(
+                    "La vigencia de análisis asistido referencia un evento predecesor inexistente"
+                )
+            session.add(
+                ExternalAnalysisSelection(
+                    id=row_id,
+                    project_id=item["project_id"],
+                    target_type=item["target_type"],
+                    target_id=item["target_id"],
+                    digital_object_id=item["digital_object_id"],
+                    page_number=item["page_number"],
+                    output_schema_id=item["output_schema_id"],
+                    review_id=item.get("review_id"),
+                    action=item["action"],
+                    supersedes_selection_id=predecessor,
+                    selected_by=item["selected_by"],
+                    selected_at=_parse_datetime(item.get("selected_at")) or utc_now(),
+                )
+            )
+            session.flush()
+            pending.pop(row_id)
+            progressed = True
+        if not progressed:
+            raise ValueError("La cadena append-only de vigencia contiene una dependencia circular")
+    return package_ids
 
 
 def _synchronize_editable_state(
@@ -1250,6 +1446,8 @@ def _synchronize_editable_state(
             },
         )
 
+    _insert_external_analysis_state(session, state=state)
+
     # Los valores descriptivos no exponen un ID en la huella canónica; se reemplazan
     # dentro de las unidades del proyecto y se recrean con IDs locales nuevos.
     existing_units = session.scalars(
@@ -1606,6 +1804,11 @@ def apply_state_adoption(
         state=state,
         actor=actor,
     )
+    if manifest.schema_version == "1.4":
+        from archive_workbench.external_analysis import rebuild_external_analysis_package_sources
+
+        for package in state["external_analysis_packages"]:
+            rebuild_external_analysis_package_sources(session, package_id=package["id"])
     observed = current_editable_state_sha256(session, project.id)
     if observed != manifest.state_sha256:
         raise ValueError(

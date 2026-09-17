@@ -121,6 +121,11 @@ from archive_workbench.search import (
 )
 from archive_workbench.graph_app import render_graph_view
 from archive_workbench.export_app import render_export_view
+from archive_workbench.assisted_analysis_app import (
+    render_assisted_analysis_view,
+    request_assisted_analysis_document,
+)
+from archive_workbench.external_analysis import external_analysis_current_review_ids_for_page
 from archive_workbench.admin_app import render_admin_view
 from archive_workbench.semantic_app import (
     queue_similar_semantic_search,
@@ -258,6 +263,7 @@ _VIEW_LABELS = {
     "authorities": "Entidades y menciones",
     "graph": "Explorar relaciones",
     "export": "Exportar corpus",
+    "assisted_analysis": "Análisis asistido",
     "exchange": "Intercambiar cambios",
     "admin": "Administrar y recuperar",
 }
@@ -274,6 +280,7 @@ _WORKFLOW_STEPS = (
     "authorities",
     "graph",
     "export",
+    "assisted_analysis",
     "exchange",
     "admin",
 )
@@ -290,6 +297,7 @@ _VIEW_PHASES = {
     "authorities": "3. Explorar y describir",
     "graph": "3. Explorar y describir",
     "export": "4. Preparar resultados",
+    "assisted_analysis": "4. Preparar resultados",
     "exchange": "5. Compartir y preservar",
     "admin": "5. Compartir y preservar",
 }
@@ -349,6 +357,11 @@ _VIEW_GUIDANCE = {
         "Elegir qué textos revisados y datos descriptivos incluir y crear archivos reproducibles para análisis o intercambio externo.",
         "Definí qué estados de revisión y qué tipos de texto o datos descriptivos querés incluir en la exportación.",
         "Revisá la vista previa antes de crear el archivo final.",
+    ),
+    "assisted_analysis": (
+        "Recibir resultados externos de AI-01, revisarlos sobre la imagen exacta de origen y conservar una capa humana auditable.",
+        "Necesitás una exportación visual EXP-01 registrada localmente y un handoff AI-01 compatible que vuelva de esa exportación.",
+        "Después de revisar cada propuesta, podés consultar la página junto con su análisis vigente o volver al documento para revisar texto y estructura.",
     ),
     "exchange": (
         "Compartir cambios entre copias del mismo proyecto sin compartir una base de datos abierta.",
@@ -2127,6 +2140,7 @@ def _apply_pending_app_mode(st) -> None:
         "authorities",
         "graph",
         "export",
+        "assisted_analysis",
         "exchange",
         "admin",
     }:
@@ -2171,6 +2185,22 @@ def _set_annotation_focus(st, object_id: str | None) -> None:
     st.session_state["annotation_focus_token"] = (
         int(st.session_state.get("annotation_focus_token", 0)) + 1
     )
+
+
+def _render_assisted_analysis_backlink(
+    st,
+    *,
+    review_ids: tuple[str, ...],
+    key: str,
+) -> None:
+    if not review_ids:
+        return
+    if st.button(
+        "Ver análisis asistido de esta página",
+        key=key,
+        use_container_width=False,
+    ):
+        request_assisted_analysis_document(st, review_id=review_ids[0])
 
 
 def _render_annotation_view(
@@ -2220,6 +2250,12 @@ def _render_annotation_view(
                 page=page,
                 include_deleted=False,
             )
+            analysis_review_ids = external_analysis_current_review_ids_for_page(
+                session,
+                project_id=decisions.project_id,
+                source_key=source_key,
+                page_number=page,
+            )
             object_ids = [
                 item.object_id for item in view.objects if item.lifecycle_status == "active"
             ]
@@ -2237,6 +2273,12 @@ def _render_annotation_view(
             )
     finally:
         engine.dispose()
+
+    _render_assisted_analysis_backlink(
+        st,
+        review_ids=analysis_review_ids,
+        key=f"annotation_assisted_analysis_{source_key}_{page}",
+    )
 
     valid_ids = {item.object_id for item in view.objects if item.lifecycle_status == "active"}
     focus_object_id = st.session_state.get("annotation_focus_object_id")
@@ -5667,6 +5709,15 @@ def main() -> None:
                 object_type_labels=type_labels,
             )
             return
+        if app_mode == "assisted_analysis":
+            render_assisted_analysis_view(
+                st,
+                project_root=project_root,
+                db_path=db_path,
+                project_id=decisions.project_id,
+                actor=reviewer,
+            )
+            return
         if app_mode == "semantic":
             render_semantic_search_view(
                 st,
@@ -5836,8 +5887,20 @@ def main() -> None:
                 availability = page_action_availability(
                     session, editable_page_id=view.editable_page_id
                 )
+                analysis_review_ids = external_analysis_current_review_ids_for_page(
+                    session,
+                    project_id=decisions.project_id,
+                    source_key=source_key,
+                    page_number=page,
+                )
         finally:
             engine.dispose()
+
+        _render_assisted_analysis_backlink(
+            st,
+            review_ids=analysis_review_ids,
+            key=f"review_assisted_analysis_{source_key}_{page}",
+        )
 
         with st.sidebar:
             st.divider()

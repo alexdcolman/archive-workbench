@@ -173,7 +173,7 @@ def test_release_example_project_tools_are_packaged() -> None:
 
     creator_source = creator.read_text(encoding="utf-8")
     assert "Proyecto de ejemplo Archive Workbench" in creator_source
-    assert "0048_catalog_document_components" in creator_source
+    assert "0050_external_analysis_continuity" in creator_source
     assert "create_ready_project" in creator_source
     assert "register_test_corpus" in creator_source
     assert "bootstrap_editable_layer" in creator_source
@@ -183,7 +183,7 @@ def test_release_example_project_tools_are_packaged() -> None:
     assert "pilot_data no fue leído ni modificado" in creator_source
 
     verifier_source = verifier.read_text(encoding="utf-8")
-    assert "0048_catalog_document_components" in verifier_source
+    assert "0050_external_analysis_continuity" in verifier_source
     assert "synthetic_data_only" in verifier_source
     assert "verified_sha256" in verifier_source
     assert "ZIP PORTABLE: OK" in verifier_source
@@ -245,6 +245,31 @@ def test_version_docs_and_discovery_plan_are_packaged() -> None:
     assert (
         'down_revision = "0047_authority_relation_profiles"'
         in document_components_migration.read_text(encoding="utf-8")
+    )
+    external_analysis_migration = (
+        root
+        / "src"
+        / "archive_workbench"
+        / "migrations"
+        / "versions"
+        / "0049_external_analysis_layer.py"
+    )
+    assert external_analysis_migration.is_file()
+    assert (
+        'down_revision = "0048_catalog_document_components"'
+        in external_analysis_migration.read_text(encoding="utf-8")
+    )
+    continuity_migration = (
+        root
+        / "src"
+        / "archive_workbench"
+        / "migrations"
+        / "versions"
+        / "0050_external_analysis_continuity.py"
+    )
+    assert continuity_migration.is_file()
+    assert 'down_revision = "0049_external_analysis_layer"' in continuity_migration.read_text(
+        encoding="utf-8"
     )
     assert (root / "src" / "archive_workbench" / "audiovisual.py").is_file()
     assert (root / "src" / "archive_workbench" / "audiovisual_app.py").is_file()
