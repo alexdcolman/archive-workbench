@@ -59,6 +59,14 @@ Con [Docker Desktop](https://docs.docker.com/desktop/) abierto, descargá y extr
 
 La guía de [Instalación](https://alexdcolman.github.io/archive-workbench/instalacion.html) explica `ArchiveWorkbenchData`, CPU/GPU, apertura de proyectos existentes y la ruta técnica desde terminal. La clonación del repositorio queda reservada para desarrollo o diagnóstico.
 
+## Análisis asistido con Archive Workbench AI
+
+Archive Workbench puede conectarse con **Archive Workbench AI**, un componente opcional y separado que ejecuta modelos multimodales localmente y devuelve propuestas para revisión. El motor no abre la base SQLite del proyecto, no modifica registros por sí mismo y no convierte una salida automática en una decisión archivística.
+
+En la distribución administrada con Docker, Archive Workbench AI se ejecuta de forma nativa en el sistema anfitrión para aprovechar la aceleración disponible. Los lanzadores de Archive Workbench intentan iniciar su compañero local cuando `aw-ai` está instalado; si no lo está, Archive Workbench abre normalmente sin el motor opcional. El intercambio se limita al material autorizado para el análisis y a los paquetes de resultado/propuestas dentro de `ArchiveWorkbenchData/Settings`; no se abre un puerto de red para esta integración.
+
+La integración permanece en **pre-release** hasta completar la validación con las imágenes definitivas publicadas. El recorrido final se probará en Windows con la imagen CPU y en Ubuntu con las imágenes CPU y GPU NVIDIA. La documentación técnica del motor está en [Archive Workbench AI](https://github.com/alexdcolman/archive-workbench-ai). La página dedicada del sitio de Archive Workbench se completará al cerrar ese proceso.
+
 ## Abrir o crear un proyecto
 
 Los lanzadores permiten elegir directamente una carpeta que ya contiene un proyecto. Si se abre el inicio general, la interfaz ofrece «Abrir un proyecto existente» y «Crear un proyecto nuevo».

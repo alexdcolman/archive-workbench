@@ -61,8 +61,8 @@ SECTION_HELP = {
         "Archive Workbench. Las exportaciones quedan registradas para poder reconstruir qué contenido y qué configuración produjo cada archivo."
     ),
     "Análisis asistido": (
-        "Permite recibir resultados producidos fuera de Archive Workbench por AI-01, comprobar que vuelvan de una exportación EXP-01 local y revisar cada propuesta sobre la imagen exacta que la originó. "
-        "Las decisiones humanas se guardan como una capa separada y auditable sin reemplazar OCR, texto corregido, geometría, catálogo, entidades ni relaciones."
+        "Permite analizar páginas con el módulo de inteligencia artificial, revisar cada resultado junto con la imagen utilizada y decidir qué propuestas incorporar. "
+        "Las decisiones revisadas se guardan por separado y no reemplazan el texto, la estructura, el catálogo, las entidades ni las relaciones del proyecto."
     ),
     "Intercambiar cambios": (
         "Permite compartir trabajo entre distintas copias del mismo proyecto sin mantener una base de datos abierta en común. "
@@ -241,16 +241,16 @@ TAB_HELP = {
     },
     "assisted_analysis_tabs": {
         "Resultados recibidos": (
-            "Permite inspeccionar un handoff AI-01 antes de incorporarlo. Archive Workbench valida el contrato, la procedencia, la exportación EXP-01 de origen y los targets sin aplicar automáticamente ninguna propuesta."
+            "Permite iniciar un análisis sobre las páginas elegidas o cargar resultados creados previamente. Archive Workbench comprueba que cada propuesta corresponda a materiales del proyecto antes de permitir incorporarla."
         ),
         "Revisar propuestas": (
-            "Permite revisar una propuesta a la vez junto con la imagen exacta verificada del EXP-01. Aceptar, editar y aceptar o rechazar crea una decisión humana nueva y conserva intacto el output automático original."
+            "Permite revisar una propuesta a la vez junto con la imagen utilizada durante el análisis. Aceptar, editar y aceptar o rechazar crea una decisión nueva y conserva sin cambios la propuesta automática original."
         ),
         "Documentos con análisis": (
             "Muestra las páginas que ya tienen una revisión aceptada vigente, con la imagen de origen y la descripción revisada en paralelo. Desde aquí se puede volver a Edición y anotación o Revisión estructural de la misma página."
         ),
         "Historial": (
-            "Muestra las decisiones registradas sobre propuestas de análisis asistido y permite filtrarlas por estado, modelo, persona revisora y schema. Una revisión aceptada anterior puede volver a elegirse como vigente mediante una decisión explícita."
+            "Muestra las decisiones registradas sobre propuestas de análisis asistido y permite filtrarlas por estado, modelo, persona revisora y tipo de análisis. Una revisión aceptada anterior puede volver a elegirse como vigente mediante una decisión explícita."
         ),
     },
     "admin_tabs": {

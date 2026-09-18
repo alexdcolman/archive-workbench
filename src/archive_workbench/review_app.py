@@ -359,8 +359,8 @@ _VIEW_GUIDANCE = {
         "Revisá la vista previa antes de crear el archivo final.",
     ),
     "assisted_analysis": (
-        "Recibir resultados externos de AI-01, revisarlos sobre la imagen exacta de origen y conservar una capa humana auditable.",
-        "Necesitás una exportación visual EXP-01 registrada localmente y un handoff AI-01 compatible que vuelva de esa exportación.",
+        "Revisar resultados de análisis asistido sobre la imagen de origen y conservar las decisiones tomadas durante la revisión.",
+        "Podés analizar páginas desde Archive Workbench o abrir resultados ya generados para revisarlos antes de incorporarlos.",
         "Después de revisar cada propuesta, podés consultar la página junto con su análisis vigente o volver al documento para revisar texto y estructura.",
     ),
     "exchange": (

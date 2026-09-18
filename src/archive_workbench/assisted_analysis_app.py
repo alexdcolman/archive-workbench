@@ -4,10 +4,25 @@ import hashlib
 from pathlib import Path
 from typing import Any
 
+from archive_workbench.ai_execution import (
+    AIExecutionError,
+    ai_authorization_parameters,
+    inspect_ai_capabilities,
+    resolve_ai_executable,
+    run_ai_analysis,
+)
 from archive_workbench.ai_handoff import (
     AIHandoffError,
     inspect_ai_handoff_bytes,
     resolve_ai_handoff,
+)
+from archive_workbench.analysis_audit import record_automatic_analysis_authorization
+from archive_workbench.analysis_quality import analysis_quality_scope, quality_scope_caption
+from archive_workbench.corpus_export import (
+    export_page_candidates,
+    export_profile_rows,
+    export_unit_scope_candidates,
+    run_export,
 )
 from archive_workbench.db import create_sqlite_engine, session_scope
 from archive_workbench.external_analysis import (
@@ -23,9 +38,11 @@ from archive_workbench.external_analysis import (
     review_external_analysis_proposal,
     set_external_analysis_current_review,
 )
+from archive_workbench.identity import new_id
 from archive_workbench.review import review_page_view
 from archive_workbench.review_canvas import static_image_canvas_bytes
 from archive_workbench.ui_help import TAB_HELP
+from archive_workbench.visual_export import VisualExportOptions
 from archive_workbench.ui_navigation import (
     request_app_view,
     request_tab,
@@ -49,6 +66,78 @@ _STATUS_LABELS = {
     "accepted": "Aceptada",
     "rejected": "Rechazada",
 }
+
+
+_ANALYSIS_TYPE_LABELS = {
+    "vision_describe/0.1": "Descripción visual",
+}
+
+
+_MODEL_LABELS = {
+    "ggml-org/gemma-4-26B-A4B-it-GGUF:Q4_0": "Gemma 4 26B",
+    "unsloth/Qwen3.5-9B-GGUF:Q4_K_M": "Qwen 3.5 9B",
+}
+
+
+def _model_label(value: str | None) -> str:
+    if not value:
+        return "Modelo no informado"
+    return _MODEL_LABELS.get(value, "Otro modelo")
+
+
+def _analysis_type_label(value: str | None) -> str:
+    if not value:
+        return "No informado"
+    return _ANALYSIS_TYPE_LABELS.get(value, "Otro tipo de análisis")
+
+
+def _friendly_ai_error(error: Exception) -> str:
+    detail = str(error)
+    lowered = detail.casefold()
+    if "no está disponible" in lowered or "no existe" in lowered or "no es ejecutable" in lowered:
+        return (
+            "El módulo de análisis asistido no está disponible en esta computadora. "
+            "Revisá su instalación antes de volver a intentar."
+        )
+    if any(
+        token in lowered
+        for token in (
+            "protocolo",
+            "handoff",
+            "workflow",
+            "salida consolidada",
+            "no declara",
+            "versión del resultado",
+        )
+    ):
+        return (
+            "La versión instalada del módulo de análisis no es compatible con esta "
+            "versión de Archive Workbench."
+        )
+    if "terminó con código" in lowered or "no se pudo ejecutar" in lowered:
+        return "El análisis se interrumpió antes de terminar. Podés volver a intentarlo."
+    if "no produjo" in lowered:
+        return "El análisis terminó sin generar un resultado que Archive Workbench pueda abrir."
+    if "no puede vincularse" in lowered or "no pudo relacionarse" in lowered:
+        return (
+            "El resultado no pudo relacionarse de forma segura con las páginas analizadas. "
+            "No se incorporó ninguna propuesta."
+        )
+    return "No se pudo completar el análisis. No se incorporó ninguna propuesta."
+
+
+def _friendly_handoff_error() -> str:
+    return (
+        "No se pudo abrir este resultado. El archivo puede estar incompleto, modificado "
+        "o creado con una versión no compatible."
+    )
+
+
+def _render_diagnostic_detail(st, detail: str) -> None:
+    if not detail.strip():
+        return
+    with st.expander("Detalles para diagnóstico", expanded=False):
+        st.caption(detail)
 
 
 def _format_datetime(value) -> str:
@@ -117,9 +206,7 @@ def _render_exact_asset(st, *, asset, page: int, key: str) -> None:
     )
     if not shown:
         st.image(asset.payload, use_container_width=True)
-    st.caption(
-        f"Imagen exacta verificada contra el EXP-01 de origen · SHA-256 `{asset.sha256[:16]}…`"
-    )
+    st.caption("Imagen utilizada para generar esta propuesta.")
 
 
 def _load_surface_rows(db_path: Path, *, project_id: str):
@@ -136,7 +223,7 @@ def _load_surface_rows(db_path: Path, *, project_id: str):
 
 def _proposal_label(row: ExternalAnalysisProposalSummary) -> str:
     name = row.original_filename or row.source_key or row.digital_object_id
-    model = row.model_id or row.producer_id or "modelo no identificado"
+    model = _model_label(row.model_id or row.producer_id)
     return f"{name} · página {row.page_number} · {_STATUS_LABELS.get(row.status, row.status)} · {model}"
 
 
@@ -145,7 +232,7 @@ def _history_label(row: ExternalAnalysisHistoryRow) -> str:
     current = " · vigente" if row.is_current else ""
     return (
         f"{name} · página {row.page_number} · "
-        f"{_STATUS_LABELS.get(row.decision, row.decision)} r{row.revision}{current}"
+        f"{_STATUS_LABELS.get(row.decision, row.decision)} · revisión {row.revision}{current}"
     )
 
 
@@ -219,7 +306,8 @@ def _render_current_page_fallback(st, *, preview_path: Path | None) -> None:
         return
     st.image(str(preview_path), use_container_width=True)
     st.caption(
-        "Página actual correspondiente. No se verificó identidad binaria con el asset de origen del EXP-01."
+        "Página actual del proyecto. No se pudo comprobar automáticamente que sea "
+        "exactamente la misma imagen utilizada durante el análisis."
     )
 
 
@@ -255,6 +343,380 @@ def _inspect_uploaded_handoff_cached(
     return preview, resolution
 
 
+def _render_handoff_preview(
+    st,
+    *,
+    payload: bytes,
+    cache_key: str,
+    project_root: Path,
+    db_path: Path,
+    project_id: str,
+    actor: str,
+) -> None:
+    try:
+        preview, resolution = _inspect_uploaded_handoff_cached(
+            st,
+            payload=payload,
+            project_root=project_root,
+            db_path=db_path,
+            project_id=project_id,
+        )
+    except (AIHandoffError, OSError, ValueError) as exc:
+        st.error(_friendly_handoff_error())
+        _render_diagnostic_detail(st, str(exc))
+        return
+
+    resolved = sum(item.acceptance_ready for item in resolution.proposal_resolutions)
+    unresolved = preview.proposal_count - resolved
+    source_matches = len(resolution.source_matches)
+    summary = st.columns(3)
+    summary[0].metric("Propuestas recibidas", preview.proposal_count)
+    summary[1].metric("Páginas verificadas", resolved)
+    summary[2].metric("Propuestas sin página", unresolved)
+    warning_count = sum(bool(item.warnings) for item in preview.proposals)
+    if warning_count:
+        st.warning(
+            f"{warning_count} propuesta(s) contienen advertencias del modelo que deben "
+            "revisarse individualmente."
+        )
+    if resolution.blocking_reasons:
+        st.warning(
+            "Algunas propuestas no pueden incorporarse porque Archive Workbench no pudo "
+            "relacionarlas con las páginas de origen."
+        )
+    elif source_matches > 1:
+        st.info(
+            "Se encontró más de una copia de los mismos materiales. Archive Workbench "
+            "comprobó las coincidencias y puede continuar."
+        )
+    with st.expander("Detalles técnicos", expanded=False):
+        st.write(f"Modelo: `{preview.model_id or 'No informado'}`")
+        st.write(
+            f"Origen: `{preview.producer_id or 'No informado'} "
+            f"{preview.producer_version or ''}`".rstrip()
+        )
+        if preview.created_at:
+            st.write(f"Fecha declarada: `{preview.created_at}`")
+        st.write(f"Schema: `{preview.schema_version}`")
+        st.write(f"Protocolo: `{preview.protocol}`")
+        st.write(f"SHA-256 del handoff: `{preview.sha256}`")
+        st.write(f"SHA-256 EXP-01: `{preview.exp01_sha256}`")
+        st.write(f"SHA-256 result bundle: `{preview.result_bundle_sha256}`")
+        if preview.request_id:
+            st.write(f"Request: `{preview.request_id}`")
+        if preview.runtime:
+            st.write("Runtime")
+            st.json(preview.runtime)
+        if preview.prompt:
+            st.write("Prompt")
+            st.json(preview.prompt)
+    if st.button(
+        "Incorporar propuestas para revisión",
+        type="primary",
+        disabled=not resolution.incorporation_allowed,
+        key=f"assisted_analysis_incorporate_{cache_key}",
+    ):
+        try:
+            engine = create_sqlite_engine(db_path)
+            try:
+                with session_scope(engine) as session:
+                    fresh_preview = inspect_ai_handoff_bytes(payload)
+                    fresh_resolution = resolve_ai_handoff(
+                        session,
+                        project_root=project_root,
+                        project_id=project_id,
+                        preview=fresh_preview,
+                    )
+                    result = incorporate_ai_handoff(
+                        session,
+                        project_id=project_id,
+                        preview=fresh_preview,
+                        resolution=fresh_resolution,
+                        imported_by=actor or "local_user",
+                    )
+            finally:
+                engine.dispose()
+        except (ExternalAnalysisError, ValueError, OSError) as exc:
+            st.error("No se pudieron incorporar las propuestas. No se modificó ninguna decisión.")
+            _render_diagnostic_detail(st, str(exc))
+        else:
+            st.session_state["assisted_analysis_notice"] = (
+                "Propuestas incorporadas para revisión."
+                if result.created
+                else "Este resultado ya había sido incorporado; no se duplicó."
+            )
+            request_tab(st, key=_TAB_KEY, label="Revisar propuestas")
+            rerun_view(st)
+
+
+def _load_ai_export_scope(db_path: Path, *, project_id: str, profile_id: str, scope_kind: str):
+    engine = create_sqlite_engine(db_path)
+    try:
+        with session_scope(engine) as session:
+            profiles = export_profile_rows(session, project_id=project_id)
+            profile = next((row for row in profiles if row.id == profile_id), None)
+            if profile is None:
+                return None, [], []
+            units = (
+                export_unit_scope_candidates(session, project_id=project_id, profile=profile)
+                if scope_kind == "archival_units"
+                else []
+            )
+            pages = (
+                export_page_candidates(session, project_id=project_id, profile=profile)
+                if scope_kind == "explicit_pages"
+                else []
+            )
+            return profile, units, pages
+    finally:
+        engine.dispose()
+
+
+def _render_ai_execution(
+    st,
+    *,
+    project_root: Path,
+    db_path: Path,
+    project_id: str,
+    actor: str,
+) -> None:
+    st.subheader("Analizar documentos con inteligencia artificial")
+    st.caption(
+        "Elegí qué páginas querés analizar. El resultado se mostrará como una propuesta "
+        "para revisar antes de incorporarla al proyecto."
+    )
+    try:
+        executable = resolve_ai_executable()
+    except AIExecutionError as exc:
+        st.info(_friendly_ai_error(exc))
+        _render_diagnostic_detail(st, str(exc))
+        return
+
+    engine = create_sqlite_engine(db_path)
+    try:
+        with session_scope(engine) as session:
+            profiles = export_profile_rows(session, project_id=project_id)
+            profile_options = [(row.id, row.name, row.revision) for row in profiles]
+    finally:
+        engine.dispose()
+    if not profile_options:
+        st.info("Creá primero una configuración activa en Exportar corpus.")
+        return
+
+    profile_ids = [row[0] for row in profile_options]
+    profile_labels = {row[0]: row[1] for row in profile_options}
+    profile_id = st.selectbox(
+        "Configuración de exportación",
+        options=profile_ids,
+        format_func=lambda value: profile_labels[value],
+        key="assisted_analysis_ai01_export_profile",
+    )
+    scope_kind = st.radio(
+        "Qué querés analizar",
+        options=("profile_scope", "archival_units", "explicit_pages"),
+        format_func=lambda value: {
+            "profile_scope": "Todo lo incluido en la configuración",
+            "archival_units": "Fondos, legajos o documentos seleccionados",
+            "explicit_pages": "Páginas específicas",
+        }[value],
+        key="assisted_analysis_ai01_scope_kind",
+    )
+    profile, units, pages = _load_ai_export_scope(
+        db_path,
+        project_id=project_id,
+        profile_id=profile_id,
+        scope_kind=scope_kind,
+    )
+    if profile is None:
+        st.warning("La configuración elegida ya no está disponible.")
+        return
+
+    selected_unit_ids: list[str] = []
+    selected_page_keys: list[tuple[str, int]] = []
+    if scope_kind == "archival_units":
+        by_id = {row.archival_unit_id: row for row in units}
+        selected_unit_ids = st.multiselect(
+            "Fondos, legajos o documentos",
+            options=list(by_id),
+            format_func=lambda value: by_id[value].label,
+            key="assisted_analysis_ai01_unit_ids",
+        )
+        if not units:
+            st.info("No hay unidades archivísticas elegibles dentro de esta configuración.")
+    elif scope_kind == "explicit_pages":
+        by_key = {(row.digital_object_id, row.page_number): row for row in pages}
+        selected_page_keys = st.multiselect(
+            "Páginas",
+            options=list(by_key),
+            format_func=lambda value: by_key[value].label,
+            key="assisted_analysis_ai01_page_keys",
+        )
+        if not pages:
+            st.info("No hay páginas elegibles dentro de esta configuración.")
+
+    quality_statuses = tuple(profile.include_page_review_statuses_json or [])
+    quality_scope = analysis_quality_scope(quality_statuses)
+    if quality_scope.is_default:
+        st.info(quality_scope_caption(quality_statuses))
+    else:
+        st.warning(quality_scope_caption(quality_statuses))
+
+    with st.form("assisted_analysis_ai01_execute_form", enter_to_submit=False):
+        hardware_profile = st.radio(
+            "Tipo de equipo",
+            options=("H24", "L12"),
+            format_func=lambda value: {
+                "H24": "GPU NVIDIA con 24 GB de memoria",
+                "L12": "GPU NVIDIA con 12 GB de memoria",
+            }[value],
+            horizontal=True,
+        )
+        broader_confirmed = False
+        quality_reason = None
+        if quality_scope.is_broader_than_default:
+            broader_confirmed = st.checkbox(
+                "Confirmo que este análisis puede incluir páginas que todavía no están aprobadas"
+            )
+            quality_reason = st.text_area(
+                "Motivo para incluir estas páginas",
+                help="El motivo queda registrado junto con esta ejecución.",
+            )
+        submitted = st.form_submit_button(
+            "Iniciar análisis",
+            type="primary",
+        )
+    if not submitted:
+        return
+    if scope_kind == "archival_units" and not selected_unit_ids:
+        st.error("Elegí al menos un fondo, legajo o documento.")
+        return
+    if scope_kind == "explicit_pages" and not selected_page_keys:
+        st.error("Elegí al menos una página.")
+        return
+
+    planned_run_id = new_id()
+    exp01_relative = f"exports/ai01/{planned_run_id}_EXP01.zip"
+    handoff_relative = f"exports/ai01/{planned_run_id}_HANDOFF.zip"
+    result_relative = f"exports/ai01/{planned_run_id}_RESULT.zip"
+    try:
+        capabilities = inspect_ai_capabilities(executable)
+        model_id = capabilities.model_for_profile(hardware_profile)
+        parameters = ai_authorization_parameters(
+            capabilities=capabilities,
+            hardware_profile=hardware_profile,
+            model_id=model_id,
+            export_profile_id=profile.id,
+            export_profile_revision=profile.revision,
+            scope_kind=scope_kind,
+            selected_unit_ids=tuple(sorted(selected_unit_ids)),
+            selected_page_keys=tuple(sorted(selected_page_keys)),
+        )
+        engine = create_sqlite_engine(db_path)
+        try:
+            with session_scope(engine) as session:
+                fresh_profiles = export_profile_rows(session, project_id=project_id)
+                fresh_profile = next((row for row in fresh_profiles if row.id == profile.id), None)
+                if fresh_profile is None:
+                    raise ValueError("La configuración elegida ya no está activa.")
+                if fresh_profile.revision != profile.revision:
+                    raise ValueError(
+                        "La configuración cambió desde que se abrió esta vista. "
+                        "Revisala antes de iniciar el análisis."
+                    )
+                record_automatic_analysis_authorization(
+                    session,
+                    project_id=project_id,
+                    analysis_kind="llm_tool",
+                    page_review_statuses=quality_statuses,
+                    broader_scope_confirmed=broader_confirmed,
+                    confirmed_by=actor or "local_user",
+                    confirmation_reason=quality_reason,
+                    source="ui",
+                    target_type="corpus_export_run",
+                    target_id=planned_run_id,
+                    parameters=parameters,
+                )
+                export_result = run_export(
+                    session,
+                    project_root=project_root,
+                    project_id=project_id,
+                    profile=fresh_profile,
+                    output_relative_path=exp01_relative,
+                    output_format="visual_zip",
+                    created_by=actor or "local_user",
+                    selected_page_keys=(
+                        set(selected_page_keys) if scope_kind == "explicit_pages" else None
+                    ),
+                    selected_unit_ids=(
+                        set(selected_unit_ids) if scope_kind == "archival_units" else None
+                    ),
+                    visual_options=VisualExportOptions(
+                        include_pages=True,
+                        include_regions=False,
+                        include_figures=False,
+                        include_context=True,
+                    ),
+                    run_id=planned_run_id,
+                )
+        finally:
+            engine.dispose()
+
+        with st.spinner("Analizando las páginas seleccionadas…"):
+            execution = run_ai_analysis(
+                capabilities=capabilities,
+                input_path=export_result.output_path,
+                handoff_output_path=project_root / handoff_relative,
+                result_output_path=project_root / result_relative,
+                hardware_profile=hardware_profile,
+                model_id=model_id,
+            )
+        handoff_payload = execution.handoff_path.read_bytes()
+        generated_preview = inspect_ai_handoff_bytes(handoff_payload)
+        engine = create_sqlite_engine(db_path)
+        try:
+            with session_scope(engine) as session:
+                generated_resolution = resolve_ai_handoff(
+                    session,
+                    project_root=project_root,
+                    project_id=project_id,
+                    preview=generated_preview,
+                )
+        finally:
+            engine.dispose()
+        if generated_resolution.blocking_reasons:
+            raise AIExecutionError(
+                "El resultado no pudo relacionarse de forma segura con las páginas analizadas."
+            )
+    except (AIExecutionError, AIHandoffError, ValueError, OSError) as exc:
+        if isinstance(exc, AIExecutionError):
+            st.error(_friendly_ai_error(exc))
+        elif isinstance(exc, ValueError) and any(
+            phrase in str(exc)
+            for phrase in (
+                "La configuración elegida ya no está activa.",
+                "La configuración cambió desde que se abrió esta vista.",
+                "alcance ampliado",
+                "fundamento",
+            )
+        ):
+            st.error(str(exc))
+        else:
+            st.error("No se pudo completar el análisis. No se incorporó ninguna propuesta.")
+        _render_diagnostic_detail(st, str(exc))
+        st.caption(
+            "Si la preparación del análisis ya había terminado, los archivos creados se "
+            "conservaron en el proyecto para poder revisar el problema."
+        )
+        return
+
+    st.session_state["assisted_analysis_generated_handoff"] = handoff_relative
+    st.session_state["assisted_analysis_notice"] = (
+        f"El análisis terminó: se generaron {execution.proposal_count} propuesta(s). "
+        "Revisalas antes de incorporarlas al proyecto."
+    )
+    rerun_view(st)
+
+
 def _render_received_results(
     st,
     *,
@@ -264,124 +726,65 @@ def _render_received_results(
     actor: str,
     packages,
 ) -> None:
-    st.subheader("Recibir resultados")
+    _render_ai_execution(
+        st,
+        project_root=project_root,
+        db_path=db_path,
+        project_id=project_id,
+        actor=actor,
+    )
+
+    generated_relative = st.session_state.get("assisted_analysis_generated_handoff")
+    if isinstance(generated_relative, str) and generated_relative:
+        generated_path = project_root / generated_relative
+        st.subheader("Resultado del análisis")
+        if generated_path.is_file():
+            _render_handoff_preview(
+                st,
+                payload=generated_path.read_bytes(),
+                cache_key="generated",
+                project_root=project_root,
+                db_path=db_path,
+                project_id=project_id,
+                actor=actor,
+            )
+        else:
+            st.warning("El resultado generado ya no está disponible.")
+
+    st.subheader("Cargar resultados externos")
     st.caption(
-        "El paquete se inspecciona y se contrasta con una exportación EXP-01 local antes de escribir en el proyecto."
+        "Podés cargar un archivo de resultados creado fuera de este proyecto. Archive "
+        "Workbench comprobará que corresponda a materiales del proyecto antes de permitir "
+        "incorporarlo."
     )
     uploaded = st.file_uploader(
-        "Paquete de resultados AI-01 (ZIP)",
+        "Archivo de resultados",
         type=["zip"],
         accept_multiple_files=False,
         key="assisted_analysis_upload",
     )
     if uploaded is not None:
-        payload = uploaded.getvalue()
-        try:
-            preview, resolution = _inspect_uploaded_handoff_cached(
-                st,
-                payload=payload,
-                project_root=project_root,
-                db_path=db_path,
-                project_id=project_id,
-            )
-        except (AIHandoffError, OSError, ValueError) as exc:
-            st.error(str(exc))
-        else:
-            resolved = sum(item.acceptance_ready for item in resolution.proposal_resolutions)
-            unresolved = preview.proposal_count - resolved
-            source_matches = len(resolution.source_matches)
-            usable_sources = sum(
-                item.usable_for_incorporation for item in resolution.source_matches
-            )
-            summary = st.columns(4)
-            summary[0].metric("Propuestas", preview.proposal_count)
-            summary[1].metric("Páginas verificadas", resolved)
-            summary[2].metric("No resueltas", unresolved)
-            summary[3].metric("EXP-01 utilizables", usable_sources)
-            st.write(f"**Modelo:** {preview.model_id or 'No informado'}")
-            st.write(
-                f"**Origen:** {preview.producer_id or 'No informado'} "
-                f"{preview.producer_version or ''}".rstrip()
-            )
-            if preview.created_at:
-                st.caption(f"Fecha declarada por el paquete: {preview.created_at}")
-            warning_count = sum(bool(item.warnings) for item in preview.proposals)
-            if warning_count:
-                st.warning(
-                    f"{warning_count} propuesta(s) contienen advertencias del modelo que deben revisarse individualmente."
-                )
-            if resolution.blocking_reasons:
-                for reason in resolution.blocking_reasons:
-                    st.warning(reason)
-            elif source_matches > 1:
-                st.info(
-                    "Más de una corrida local coincide exactamente con el EXP-01. "
-                    "Archive Workbench conserva todas las coincidencias verificadas."
-                )
-            with st.expander("Detalles técnicos del paquete", expanded=False):
-                st.write(f"Schema: `{preview.schema_version}`")
-                st.write(f"Protocolo: `{preview.protocol}`")
-                st.write(f"SHA-256 del handoff: `{preview.sha256}`")
-                st.write(f"SHA-256 EXP-01: `{preview.exp01_sha256}`")
-                st.write(f"SHA-256 result bundle: `{preview.result_bundle_sha256}`")
-                if preview.request_id:
-                    st.write(f"Request: `{preview.request_id}`")
-                if preview.runtime:
-                    st.write("Runtime")
-                    st.json(preview.runtime)
-                if preview.prompt:
-                    st.write("Prompt")
-                    st.json(preview.prompt)
-            if st.button(
-                "Incorporar propuestas para revisión",
-                type="primary",
-                disabled=not resolution.incorporation_allowed,
-                key="assisted_analysis_incorporate",
-            ):
-                try:
-                    engine = create_sqlite_engine(db_path)
-                    try:
-                        with session_scope(engine) as session:
-                            fresh_preview = inspect_ai_handoff_bytes(payload)
-                            fresh_resolution = resolve_ai_handoff(
-                                session,
-                                project_root=project_root,
-                                project_id=project_id,
-                                preview=fresh_preview,
-                            )
-                            result = incorporate_ai_handoff(
-                                session,
-                                project_id=project_id,
-                                preview=fresh_preview,
-                                resolution=fresh_resolution,
-                                imported_by=actor or "local_user",
-                            )
-                    finally:
-                        engine.dispose()
-                except (ExternalAnalysisError, ValueError, OSError) as exc:
-                    st.error(str(exc))
-                else:
-                    st.session_state["assisted_analysis_notice"] = (
-                        "Propuestas incorporadas para revisión."
-                        if result.created
-                        else "Este paquete ya había sido recibido; no se duplicó."
-                    )
-                    request_tab(st, key=_TAB_KEY, label="Revisar propuestas")
-                    rerun_view(st)
+        _render_handoff_preview(
+            st,
+            payload=uploaded.getvalue(),
+            cache_key="uploaded",
+            project_root=project_root,
+            db_path=db_path,
+            project_id=project_id,
+            actor=actor,
+        )
 
-    st.subheader("Paquetes incorporados")
+    st.subheader("Resultados incorporados")
     if not packages:
-        st.caption("Todavía no se incorporaron paquetes de análisis asistido.")
+        st.caption("Todavía no se incorporaron resultados de análisis asistido.")
         return
     st.dataframe(
         [
             {
                 "Fecha": _format_datetime(row.imported_at),
                 "Propuestas": row.proposal_count,
-                "Modelo": row.model_id or "-",
-                "Proveedor": row.producer_id or "-",
+                "Modelo": _model_label(row.model_id),
                 "Responsable": row.imported_by,
-                "SHA": row.package_sha256[:12] + "…",
             }
             for row in packages[:50]
         ],
@@ -419,7 +822,7 @@ def _render_proposal_review(
     model_filter = filter_cols[1].selectbox(
         "Modelo",
         options=[""] + models,
-        format_func=lambda value: "Todos" if not value else value,
+        format_func=lambda value: "Todos" if not value else _model_label(value),
         key="assisted_analysis_review_model",
     )
     search_text = (
@@ -530,13 +933,15 @@ def _render_proposal_review(
     st.caption(
         f"{selected.original_filename or selected.source_key or selected.digital_object_id} · "
         f"página {selected.page_number} · {status_text}{current_text} · "
-        f"{selected.model_id or 'modelo no informado'}"
+        f"{_model_label(selected.model_id)}"
     )
     image_col, proposal_col = st.columns([1.15, 1], gap="large")
     with image_col:
         st.subheader("Imagen de origen")
         if asset is None:
-            st.error(asset_error or "No se pudo verificar la imagen de origen.")
+            st.error("No se pudo comprobar la imagen utilizada para esta propuesta.")
+            if asset_error:
+                _render_diagnostic_detail(st, asset_error)
             _render_current_page_fallback(st, preview_path=fallback_preview)
         else:
             _render_exact_asset(
@@ -579,7 +984,7 @@ def _render_proposal_review(
 
     if asset is None:
         st.info(
-            "No se habilitan decisiones mientras Archive Workbench no pueda volver a verificar el asset exacto del EXP-01."
+            "No se habilitan decisiones hasta que Archive Workbench pueda comprobar la imagen utilizada para generar esta propuesta."
         )
         return
 
@@ -678,10 +1083,11 @@ def _render_proposal_review(
         finally:
             engine.dispose()
     except (ExternalAnalysisError, ValueError, OSError) as exc:
-        st.error(str(exc))
+        st.error("No se pudo guardar la decisión. La propuesta quedó sin cambios.")
+        _render_diagnostic_detail(st, str(exc))
         return
     if reject:
-        notice = "Propuesta rechazada. El output automático original se conservó sin cambios."
+        notice = "Propuesta rechazada. El resultado automático original se conservó sin cambios."
     elif made_current:
         notice = "Propuesta aceptada y vinculada como análisis vigente de esta página."
     else:
@@ -721,9 +1127,7 @@ def _render_proposal_comparison(
         key=f"assisted_analysis_compare_{selected.proposal_id}",
     )
     if compare_id is None:
-        st.caption(
-            "La segunda propuesta se carga sólo después de elegirla; cambiar de pestaña no dispara esta carga."
-        )
+        st.caption("Elegí otra propuesta para verla junto a la seleccionada.")
         return
     compared = next(row for row in comparable if row.proposal_id == compare_id)
     engine = create_sqlite_engine(db_path)
@@ -738,23 +1142,14 @@ def _render_proposal_comparison(
         engine.dispose()
     left, right = st.columns(2, gap="large")
     with left:
-        st.write(
-            f"**Seleccionada · {selected.model_id or selected.producer_id or 'modelo no informado'}**"
-        )
-        st.caption(
-            f"{_STATUS_LABELS.get(selected.status, selected.status)} · "
-            f"`{selected.external_proposal_id}`"
-        )
+        st.write(f"**Seleccionada · {_model_label(selected.model_id or selected.producer_id)}**")
+        st.caption(_STATUS_LABELS.get(selected.status, selected.status))
         _render_output(st, selected_output)
         if selected.warnings:
             st.warning("Advertencias del modelo: " + " · ".join(selected.warnings))
     with right:
-        st.write(
-            f"**Comparación · {compared.model_id or compared.producer_id or 'modelo no informado'}**"
-        )
-        st.caption(
-            f"{_STATUS_LABELS.get(compared.status, compared.status)} · `{compared.external_proposal_id}`"
-        )
+        st.write(f"**Comparación · {_model_label(compared.model_id or compared.producer_id)}**")
+        st.caption(_STATUS_LABELS.get(compared.status, compared.status))
         _render_output(st, detail.raw_output)
         if compared.warnings:
             st.warning("Advertencias del modelo: " + " · ".join(compared.warnings))
@@ -778,7 +1173,7 @@ def _render_documents_with_analysis(
     model_filter = filter_cols[0].selectbox(
         "Modelo",
         options=[""] + models,
-        format_func=lambda value: "Todos" if not value else value,
+        format_func=lambda value: "Todos" if not value else _model_label(value),
         key="assisted_analysis_documents_model",
     )
     search_text = (
@@ -875,7 +1270,9 @@ def _render_documents_with_analysis(
             f"{selected.original_filename or selected.source_key or selected.digital_object_id} · página {selected.page_number}"
         )
         if asset is None:
-            st.error(asset_error or "No se pudo recuperar la imagen exacta de origen.")
+            st.error("No se pudo comprobar la imagen utilizada para este análisis.")
+            if asset_error:
+                _render_diagnostic_detail(st, asset_error)
             _render_current_page_fallback(st, preview_path=fallback_preview)
         else:
             _render_exact_asset(
@@ -888,7 +1285,7 @@ def _render_documents_with_analysis(
         _render_output(st, selected.reviewed_output, title="Análisis revisado vigente")
         st.caption(
             f"Revisado por {selected.reviewed_by} · {_format_datetime(selected.reviewed_at)} · "
-            f"{selected.model_id or 'modelo no informado'}"
+            f"{_model_label(selected.model_id)}"
         )
         if selected.review_note:
             st.write(f"**Nota de revisión:** {selected.review_note}")
@@ -932,9 +1329,9 @@ def _render_history(
         {row.model_id or row.producer_id for row in history if row.model_id or row.producer_id}
     )
     model_filter = filter_b.selectbox(
-        "Modelo / proveedor",
+        "Modelo de análisis",
         options=[""] + model_options,
-        format_func=lambda value: "Todos" if not value else value,
+        format_func=lambda value: "Todos" if not value else _model_label(value),
         key="assisted_analysis_history_model",
     )
     reviewer_options = sorted({row.reviewed_by for row in history if row.reviewed_by})
@@ -947,9 +1344,9 @@ def _render_history(
     filter_d, filter_e, filter_f = st.columns([1, 1, 1.6])
     schemas = sorted({row.output_schema_id for row in history})
     schema_filter = filter_d.selectbox(
-        "Schema / tarea",
+        "Tipo de análisis",
         options=[""] + schemas,
-        format_func=lambda value: "Todos" if not value else value,
+        format_func=lambda value: "Todos" if not value else _analysis_type_label(value),
         key="assisted_analysis_history_schema",
     )
     page_filter = int(
@@ -1040,12 +1437,12 @@ def _render_history(
         f"{selected.reviewed_by} · {_format_datetime(selected.reviewed_at)}"
     )
     if selected.is_current:
-        st.success("Esta revisión es la descripción vigente para esta página y schema.")
+        st.success("Esta revisión es la descripción vigente de esta página.")
     if selected.reviewed_output:
         _render_output(st, selected.reviewed_output)
     if selected.review_note:
         st.write(f"**Nota:** {selected.review_note}")
-    with st.expander("Detalles y propuesta original", expanded=False):
+    with st.expander("Detalles técnicos y propuesta original", expanded=False):
         st.write(f"proposal_id: `{selected.external_proposal_id}`")
         st.write(f"schema: `{selected.output_schema_id}`")
         st.write(f"modelo: `{selected.model_id or '-'}`")
@@ -1084,7 +1481,8 @@ def _render_history(
                     finally:
                         engine.dispose()
                 except (ExternalAnalysisError, ValueError) as exc:
-                    st.error(str(exc))
+                    st.error("No se pudo cambiar la revisión vigente.")
+                    _render_diagnostic_detail(st, str(exc))
                 else:
                     st.session_state["assisted_analysis_notice"] = (
                         "La revisión seleccionada quedó vigente para esta página."

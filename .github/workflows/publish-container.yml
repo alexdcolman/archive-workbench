@@ -36,6 +36,7 @@ jobs:
         run: echo "tag=$(cat docker/image-tag.txt)" >> "$GITHUB_OUTPUT"
 
       - name: Build and publish CPU image
+        id: cpu-build
         uses: docker/build-push-action@v7
         with:
           context: .
@@ -48,6 +49,27 @@ jobs:
             ARCHIVE_WORKBENCH_GOOGLE_OAUTH_CLIENT_SECRET=${{ secrets.ARCHIVE_WORKBENCH_GOOGLE_OAUTH_CLIENT_SECRET }}
           cache-from: type=gha,scope=archive-workbench-cpu
           cache-to: type=gha,mode=max,scope=archive-workbench-cpu
+
+      - name: Record CPU image digest
+        shell: bash
+        run: |
+          mkdir -p image-digests
+          printf '%s\n' 'ghcr.io/${{ github.repository }}:${{ steps.cpu-version.outputs.tag }}' > image-digests/image.txt
+          printf '%s\n' '${{ steps.cpu-build.outputs.digest }}' > image-digests/digest.txt
+          {
+            echo '### CPU image'
+            echo
+            echo '`ghcr.io/${{ github.repository }}:${{ steps.cpu-version.outputs.tag }}`'
+            echo
+            echo '`${{ steps.cpu-build.outputs.digest }}`'
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Upload CPU image digest
+        uses: actions/upload-artifact@v4
+        with:
+          name: archive-workbench-cpu-image-digest
+          path: image-digests/
+          if-no-files-found: error
 
   publish-gpu:
     name: NVIDIA GPU - linux/amd64
@@ -72,6 +94,7 @@ jobs:
         run: echo "tag=$(cat docker/gpu-image-tag.txt)" >> "$GITHUB_OUTPUT"
 
       - name: Build and publish GPU image
+        id: gpu-build
         uses: docker/build-push-action@v7
         with:
           context: .
@@ -84,3 +107,24 @@ jobs:
             ARCHIVE_WORKBENCH_GOOGLE_OAUTH_CLIENT_SECRET=${{ secrets.ARCHIVE_WORKBENCH_GOOGLE_OAUTH_CLIENT_SECRET }}
           cache-from: type=gha,scope=archive-workbench-gpu
           cache-to: type=gha,mode=max,scope=archive-workbench-gpu
+
+      - name: Record GPU image digest
+        shell: bash
+        run: |
+          mkdir -p image-digests
+          printf '%s\n' 'ghcr.io/${{ github.repository }}:${{ steps.gpu-version.outputs.tag }}' > image-digests/image.txt
+          printf '%s\n' '${{ steps.gpu-build.outputs.digest }}' > image-digests/digest.txt
+          {
+            echo '### GPU image'
+            echo
+            echo '`ghcr.io/${{ github.repository }}:${{ steps.gpu-version.outputs.tag }}`'
+            echo
+            echo '`${{ steps.gpu-build.outputs.digest }}`'
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Upload GPU image digest
+        uses: actions/upload-artifact@v4
+        with:
+          name: archive-workbench-gpu-image-digest
+          path: image-digests/
+          if-no-files-found: error

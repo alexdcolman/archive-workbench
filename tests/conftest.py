@@ -11,6 +11,7 @@ import pytest
 TEST_LEVELS: dict[str, frozenset[str]] = {
     "fast": frozenset(
         {
+            "test_ai_execution.py",
             "test_ai_handoff.py",
             "test_assisted_analysis_app.py",
             "test_contracts.py",

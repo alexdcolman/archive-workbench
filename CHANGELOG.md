@@ -1,3 +1,20 @@
+## Unreleased
+
+## 1.3.0 RC1 - candidata de integración - 2026-09-18
+
+- **Puente administrado con Archive Workbench AI:** la distribución Docker puede intercambiar trabajos con el motor nativo mediante un buzón local en `ArchiveWorkbenchData/Settings`, sin abrir puertos ni dar al motor acceso a SQLite.
+- Los launchers intentan iniciar el compañero opcional cuando `aw-ai` está disponible y mantienen el funcionamiento normal de Archive Workbench cuando no lo está.
+- README y `FIRST_START.txt` quedan preparados para el recorrido integrado; la página dedicada del sitio público se difiere hasta cerrar imágenes e integración.
+- La validación manual final queda fijada para las imágenes publicadas: Windows CPU, Ubuntu CPU y Ubuntu GPU NVIDIA.
+- No hay migración SQLite nueva; continúa `0050_external_analysis_continuity`.
+
+## Unreleased — exportación jerárquica + AI-01 dev19 — 2026-09-17
+
+- `Exportar corpus` puede limitar una corrida por fondos, legajos o documentos completos, además de páginas específicas.
+- El alcance jerárquico se aplica a JSONL, CSV y EXP-01 texto+imagen y sólo estrecha las páginas ya admitidas por el perfil.
+- La instantánea de corrida registra unidades archivísticas y páginas resueltas mediante `execution_scope=archival_units`.
+- No agrega migración SQLite; continúa `0050_external_analysis_continuity`.
+
 ## Unreleased — AI-01 P3-C — 2026-09-16
 
 - Agrega `0049_external_analysis_layer` para package/proposal/review/selection de análisis asistido.
@@ -5,7 +22,9 @@
 - Separa aceptación de vigencia: la primera aceptación puede quedar vigente; reemplazarla exige una selección explícita append-only.
 - Conserva `external_analysis_package_sources` como resolución local reconstruible; intercambio/adopción quedan para P3-D.
 - No agrega todavía la sección Streamlit `Análisis asistido`; corresponde a P3-C.
-
+- La candidata usa `1.3.0rc1` como versión Python y `1.3.0-rc1-cpu` / `1.3.0-rc1-gpu` como tags de contenedor.
+- La estable pública 1.2.0 y `releases/latest` no se modifican durante este gate.
+- GitHub Actions conserva el digest inmutable de cada imagen para identificar los artefactos sometidos a validación manual.
 ## 1.2.0 - versión estable - 2026-09-15
 
 - Amplía **Exportar texto e imágenes (ZIP)** a EXP-01 schema 1.1.

@@ -1,4 +1,4 @@
-ARCHIVE WORKBENCH 1.2.0 - PRIMER INICIO
+ARCHIVE WORKBENCH 1.3.0-rc1 - CANDIDATA DE VALIDACIÓN
 
 Archive Workbench se ejecuta dentro de una imagen preparada de Docker. No instala Python ni las dependencias del programa en tu sistema.
 
@@ -74,6 +74,14 @@ CPU Y GPU
 
 La imagen CPU funciona sin placa NVIDIA y es la opción segura para cualquier equipo compatible con Docker.
 La imagen GPU contiene las bibliotecas CUDA necesarias para el procesamiento que puede usar una placa NVIDIA. El controlador de la placa sigue perteneciendo al sistema anfitrión y Docker debe poder acceder a él.
+
+ARCHIVE WORKBENCH AI (OPCIONAL)
+
+Archive Workbench AI se instala por separado y se ejecuta de forma nativa en la computadora. Si el comando aw-ai está disponible, los lanzadores intentan iniciar automáticamente su compañero local. Si no está instalado o no puede iniciarse, Archive Workbench abre normalmente sin el motor opcional.
+
+El análisis asistido sólo recibe el material que se autoriza desde Archive Workbench. El motor no abre la base SQLite del proyecto y sus resultados vuelven como propuestas que requieren revisión humana. La integración no abre un puerto de red: usa una carpeta local de intercambio dentro de ArchiveWorkbenchData/Settings.
+
+Hasta completar la publicación y validación de las imágenes definitivas, esta integración debe considerarse pre-release.
 
 DETENER
 

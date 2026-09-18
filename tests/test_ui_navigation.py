@@ -2988,3 +2988,41 @@ def test_catalog_document_organizer_is_a_first_class_catalog_task() -> None:
     assert "Crear estos {len(drafts)} documentos en el catálogo" in source
     assert "organization_source_rows" in source
     assert "create_document_groups" in source
+
+
+def test_export_run_scope_supports_archival_units_across_output_formats() -> None:
+    source = (Path(__file__).parents[1] / "src" / "archive_workbench" / "export_app.py").read_text(
+        encoding="utf-8"
+    )
+
+    assert '"Alcance de esta exportación"' in source
+    assert '"archival_units": "Fondos, legajos o documentos completos"' in source
+    assert 'if execution_scope == "archival_units":' in source
+    assert "export_unit_scope_candidates(" in source
+    assert "selected_unit_ids=selected_unit_ids" in source
+    tree = ast.parse(source)
+    selected_page_values = [
+        keyword.value
+        for node in ast.walk(tree)
+        if isinstance(node, ast.Call)
+        and isinstance(node.func, ast.Name)
+        and node.func.id == "run_export"
+        for keyword in node.keywords
+        if keyword.arg == "selected_page_keys"
+    ]
+    assert any(
+        isinstance(value, ast.IfExp)
+        and isinstance(value.test, ast.Compare)
+        and isinstance(value.test.left, ast.Name)
+        and value.test.left.id == "execution_scope"
+        and len(value.test.ops) == 1
+        and isinstance(value.test.ops[0], ast.Eq)
+        and len(value.test.comparators) == 1
+        and isinstance(value.test.comparators[0], ast.Constant)
+        and value.test.comparators[0].value == "explicit_pages"
+        and isinstance(value.body, ast.Name)
+        and value.body.id == "selected_page_keys"
+        and isinstance(value.orelse, ast.Constant)
+        and value.orelse.value is None
+        for value in selected_page_values
+    )

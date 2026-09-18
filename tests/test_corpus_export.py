@@ -9,13 +9,14 @@ from archive_workbench.corpus_export import (
     _natural_text_sort_key,
     build_export_rows,
     export_page_candidates,
+    export_unit_scope_candidates,
     export_run_rows,
     preview_export,
     run_export,
     save_export_profile,
 )
 from archive_workbench.db import create_sqlite_engine, database_path, session_scope
-from archive_workbench.db.models import EditableObject, EditablePage
+from archive_workbench.db.models import ArchivalUnit, EditableObject, EditablePage
 from tests.test_search import _seed_search_project
 
 
@@ -731,3 +732,221 @@ def test_exp_sel_01_text_only_run_records_explicit_page_scope(tmp_path: Path) ->
             }
     finally:
         engine.dispose()
+
+
+def test_export_unit_scope_candidates_include_fonds_file_and_document(tmp_path: Path) -> None:
+    from archive_workbench.identity import new_id
+
+    root = tmp_path / "project"
+    _seed_search_project(root)
+    engine = create_sqlite_engine(database_path(root))
+    try:
+        with session_scope(engine) as session:
+            document = (
+                session.query(ArchivalUnit)
+                .filter_by(
+                    project_id="search_project",
+                    level_key="documento",
+                )
+                .one()
+            )
+            fonds = ArchivalUnit(
+                id=new_id(),
+                project_id="search_project",
+                level_key="fondo",
+                title="Fondo de prueba",
+                reference_code="F1",
+                created_by="tests",
+                updated_by="tests",
+            )
+            session.add(fonds)
+            session.flush()
+            file_unit = ArchivalUnit(
+                id=new_id(),
+                project_id="search_project",
+                parent_id=fonds.id,
+                level_key="legajo",
+                title="Legajo 15",
+                reference_code="L15",
+                created_by="tests",
+                updated_by="tests",
+            )
+            session.add(file_unit)
+            session.flush()
+            document.parent_id = file_unit.id
+            session.flush()
+
+            profile = _profile(session, aggregation="object")
+            candidates = export_unit_scope_candidates(
+                session,
+                project_id="search_project",
+                profile=profile,
+            )
+
+            by_kind = {row.scope_kind: row for row in candidates}
+            assert set(by_kind) == {"fonds", "file", "document"}
+            expected_page = export_page_candidates(
+                session,
+                project_id="search_project",
+                profile=profile,
+            )[0]
+            expected_key = ((expected_page.digital_object_id, expected_page.page_number),)
+            assert by_kind["fonds"].page_keys == expected_key
+            assert by_kind["file"].page_keys == expected_key
+            assert by_kind["document"].page_keys == expected_key
+            assert by_kind["fonds"].label.startswith("Fondo · F1")
+            assert by_kind["file"].label.startswith("Legajo · L15")
+            assert by_kind["document"].label.startswith("Documento ·")
+    finally:
+        engine.dispose()
+
+
+def test_run_export_archival_unit_scope_records_units_and_resolved_pages(tmp_path: Path) -> None:
+    from archive_workbench.identity import new_id
+
+    root = tmp_path / "project"
+    _seed_search_project(root)
+    engine = create_sqlite_engine(database_path(root))
+    try:
+        with session_scope(engine) as session:
+            document = (
+                session.query(ArchivalUnit)
+                .filter_by(
+                    project_id="search_project",
+                    level_key="documento",
+                )
+                .one()
+            )
+            fonds = ArchivalUnit(
+                id=new_id(),
+                project_id="search_project",
+                level_key="fondo",
+                title="Fondo completo",
+                created_by="tests",
+                updated_by="tests",
+            )
+            session.add(fonds)
+            session.flush()
+            document.parent_id = fonds.id
+            session.flush()
+
+            profile = _profile(session, aggregation="object")
+            result = run_export(
+                session,
+                project_root=root,
+                project_id="search_project",
+                profile=profile,
+                output_relative_path="exports/fondo.jsonl",
+                output_format="jsonl",
+                created_by="tests",
+                selected_unit_ids={fonds.id},
+            )
+            history = export_run_rows(session, project_id="search_project")
+            scope = history[0].profile_snapshot["execution_scope"]
+
+            assert result.row_count == 1
+            assert scope["mode"] == "archival_units"
+            assert scope["units"] == [
+                {
+                    "archival_unit_id": fonds.id,
+                    "level_key": "fondo",
+                    "scope_kind": "fonds",
+                    "title": "Fondo completo",
+                    "reference_code": None,
+                }
+            ]
+            assert len(scope["pages"]) == 1
+    finally:
+        engine.dispose()
+
+
+def test_visual_zip_accepts_archival_unit_scope(tmp_path: Path) -> None:
+    from archive_workbench.identity import new_id
+
+    root = tmp_path / "project"
+    _seed_visual_export_material(root)
+    engine = create_sqlite_engine(database_path(root))
+    try:
+        with session_scope(engine) as session:
+            document = (
+                session.query(ArchivalUnit)
+                .filter_by(
+                    project_id="search_project",
+                    level_key="documento",
+                )
+                .one()
+            )
+            fonds = ArchivalUnit(
+                id=new_id(),
+                project_id="search_project",
+                level_key="fondo",
+                title="Fondo visual",
+                created_by="tests",
+                updated_by="tests",
+            )
+            session.add(fonds)
+            session.flush()
+            document.parent_id = fonds.id
+            session.flush()
+
+            profile = _profile(
+                session,
+                aggregation="object",
+                include_review_statuses=("approved",),
+            )
+            result = run_export(
+                session,
+                project_root=root,
+                project_id="search_project",
+                profile=profile,
+                output_relative_path="exports/fondo_visual",
+                output_format="visual_zip",
+                created_by="tests",
+                selected_unit_ids={fonds.id},
+            )
+            history = export_run_rows(session, project_id="search_project")
+            scope = history[0].profile_snapshot["execution_scope"]
+
+            assert result.page_image_count == 1
+            assert result.region_image_count == 1
+            assert result.figure_image_count == 1
+            assert scope["mode"] == "archival_units"
+            assert scope["units"][0]["archival_unit_id"] == fonds.id
+            assert scope["units"][0]["scope_kind"] == "fonds"
+            assert len(scope["pages"]) == 1
+
+            import zipfile
+
+            with zipfile.ZipFile(result.output_path) as archive:
+                manifest = json.loads(archive.read("manifest.json"))
+            assert manifest["options"]["selected_pages"] == [
+                [scope["pages"][0]["digital_object_id"], scope["pages"][0]["page_number"]]
+            ]
+    finally:
+        engine.dispose()
+
+
+def test_run_export_accepts_preallocated_run_id_for_prior_authorization(tmp_path: Path) -> None:
+    root = tmp_path / "project"
+    _seed_search_project(root)
+    engine = create_sqlite_engine(database_path(root))
+    try:
+        with session_scope(engine) as session:
+            profile = _profile(session)
+            result = run_export(
+                session,
+                project_root=root,
+                project_id="search_project",
+                profile=profile,
+                output_relative_path="exports/preallocated",
+                created_by="tests",
+                run_id="preallocated-exp01-run",
+            )
+            history = export_run_rows(session, project_id="search_project")
+    finally:
+        engine.dispose()
+
+    assert result.run_id == "preallocated-exp01-run"
+    assert history[0].run_id == "preallocated-exp01-run"
+    payload = json.loads(result.output_path.read_text(encoding="utf-8").splitlines()[0])
+    assert payload["export_run_id"] == "preallocated-exp01-run"

@@ -130,8 +130,8 @@ def test_p3d_ui_surfaces_remain_explicit_and_passive() -> None:
 
     assert "Comparar propuestas" in assisted
     assert "Elegir otra propuesta" in assisted
-    assert "Página actual correspondiente" in assisted
-    assert "No se verificó identidad binaria" in assisted
+    assert "_render_current_page_fallback" in assisted
+    assert "if asset is None:" in assisted
     assert assisted.count("page=selected.page_number") >= 2
     assert "active_tab" not in assisted
 

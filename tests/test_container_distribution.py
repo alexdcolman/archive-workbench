@@ -468,3 +468,42 @@ def test_release_bundle_workflow_attaches_static_latest_download_asset() -> None
     assert "Archive-Workbench.zip" in workflow_text
     assert "Archive-Workbench.zip.sha256" in workflow_text
     assert "gh release upload" in workflow_text
+
+
+def test_managed_distribution_exposes_archive_workbench_ai_bridge() -> None:
+    compose_text = (ROOT / "compose.yaml").read_text(encoding="utf-8")
+    assert (
+        "ARCHIVE_WORKBENCH_AI_BRIDGE_DIR: /workspace/Settings/archive-workbench-ai-bridge"
+        in compose_text
+    )
+    for relative in (
+        "Start Archive Workbench - Linux.sh",
+        "Start Archive Workbench - GPU - Linux.sh",
+        "Start Archive Workbench - macOS.command",
+        "Start Archive Workbench - Windows.bat",
+        "Start Archive Workbench - GPU - Windows.bat",
+    ):
+        source = (ROOT / relative).read_text(encoding="utf-8-sig")
+        assert "bridge start" in source
+        assert "archive-workbench-ai-bridge" in source
+
+
+def test_rc1_images_are_candidate_tags_and_publish_immutable_digests() -> None:
+    root = Path(__file__).parents[1]
+    cpu_tag = (root / "docker" / "image-tag.txt").read_text(encoding="utf-8").strip()
+    gpu_tag = (root / "docker" / "gpu-image-tag.txt").read_text(encoding="utf-8").strip()
+    assert cpu_tag == "1.3.0-rc1-cpu"
+    assert gpu_tag == "1.3.0-rc1-gpu"
+
+    compose = (root / "compose.yaml").read_text(encoding="utf-8")
+    assert f"ghcr.io/alexdcolman/archive-workbench:{cpu_tag}" in compose
+    assert f"ghcr.io/alexdcolman/archive-workbench:{gpu_tag}" in compose
+
+    workflow = (root / ".github" / "workflows" / "publish-container.yml").read_text(
+        encoding="utf-8"
+    )
+    assert "id: cpu-build" in workflow
+    assert "id: gpu-build" in workflow
+    assert "archive-workbench-cpu-image-digest" in workflow
+    assert "archive-workbench-gpu-image-digest" in workflow
+    assert workflow.count("actions/upload-artifact@v4") >= 2

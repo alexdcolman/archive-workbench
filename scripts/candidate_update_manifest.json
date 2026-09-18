@@ -1,6 +1,6 @@
 {
   "schema_version": 1,
-  "candidate": "Archive Workbench 1.2.0 — P3-D cierre FIX2 de gates de estilo 2026-09-17",
+  "candidate": "Archive Workbench 1.2.0 — candidata P3-D + ejecución gobernada AI-01 FIX1 2026-09-18",
   "base_release": "1.2.0",
   "base_public_head": "677dca89cce13795f6e25c1fa8003894010ac343",
   "database_revision": "0050_external_analysis_continuity",

@@ -31,7 +31,6 @@ def test_p3c_review_requires_exact_asset_and_explicit_human_actions() -> None:
     ).read_text(encoding="utf-8")
 
     assert "read_external_analysis_proposal_asset" in source
-    assert "Imagen exacta verificada contra el EXP-01 de origen" in source
     assert "Aceptar tal como está" in source
     assert "Editar y aceptar" in source
     assert "Rechazar" in source
@@ -54,3 +53,23 @@ def test_p3c_documents_surface_links_back_to_same_page_without_rewriting_canonic
     assert "set_page_review_status" not in source
     assert "create_mention" not in source
     assert "create_relationship" not in source
+
+
+def test_ai_execution_is_explicit_governed_external_and_returns_through_p3() -> None:
+    root = Path(__file__).parents[1] / "src" / "archive_workbench"
+    app_source = (root / "assisted_analysis_app.py").read_text(encoding="utf-8")
+    execution_source = (root / "ai_execution.py").read_text(encoding="utf-8")
+
+    assert "run_ai_analysis" in app_source
+    assert 'analysis_kind="llm_tool"' in app_source
+    assert 'target_type="corpus_export_run"' in app_source
+    assert "run_id=planned_run_id" in app_source
+    assert "inspect_ai_handoff_bytes" in app_source
+    assert "Incorporar propuestas para revisión" in app_source
+    assert "subprocess" not in app_source
+    assert "capabilities.executable," in execution_source
+    assert '"analyze",' in execution_source
+    assert '"--input"' in execution_source
+    assert '"--output"' in execution_source
+    assert '"--result-output"' in execution_source
+    assert "shell=True" not in execution_source

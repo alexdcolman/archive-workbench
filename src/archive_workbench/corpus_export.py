@@ -4,7 +4,7 @@ import csv
 import hashlib
 import json
 import re
-from dataclasses import asdict, dataclass
+from dataclasses import asdict, dataclass, replace
 from datetime import date, datetime
 from pathlib import Path
 from typing import Any, Iterable
@@ -22,12 +22,14 @@ from archive_workbench.analysis_quality import (
     validate_automatic_quality_scope,
 )
 from archive_workbench.db.models import (
+    ArchivalDocumentComponent,
     ArchivalUnit,
     AuthorityRecord,
     CorpusExportProfile,
     CorpusExportRun,
     DocumentPart,
     DigitalObject,
+    DigitalObjectUnitLink,
     EditableObject,
     EditableObjectTag,
     EditablePage,
@@ -145,6 +147,32 @@ class ExportPageCandidate:
             f"{source}{self.original_filename} · página {self.page_number} · "
             f"{self.object_count} {blocks}"
         )
+
+
+@dataclass(slots=True, frozen=True)
+class ExportUnitScopeCandidate:
+    archival_unit_id: str
+    level_key: str
+    scope_kind: str
+    title: str
+    reference_code: str | None
+    hierarchy_path: str | None
+    page_keys: tuple[tuple[str, int], ...]
+
+    @property
+    def key(self) -> str:
+        return self.archival_unit_id
+
+    @property
+    def label(self) -> str:
+        kind_label = {
+            "fonds": "Fondo",
+            "file": "Legajo",
+            "document": "Documento",
+        }.get(self.scope_kind, self.level_key)
+        code = f"{self.reference_code} · " if self.reference_code else ""
+        pages = "página" if len(self.page_keys) == 1 else "páginas"
+        return f"{kind_label} · {code}{self.title} · {len(self.page_keys)} {pages}"
 
 
 @dataclass(slots=True)
@@ -807,13 +835,166 @@ def export_page_candidates(
     return result
 
 
+def _export_scope_kind(level_key: str) -> str | None:
+    normalized = str(level_key or "").strip().casefold()
+    if normalized in {"fondo", "fonds"}:
+        return "fonds"
+    if normalized in {"legajo", "file"}:
+        return "file"
+    if normalized in {"documento", "document", "record"}:
+        return "document"
+    return None
+
+
+def export_unit_scope_candidates(
+    session: Session,
+    *,
+    project_id: str,
+    profile: CorpusExportProfile,
+) -> list[ExportUnitScopeCandidate]:
+    """Devuelve fondos, legajos y documentos que estrechan el alcance del perfil.
+
+    La resolución se hace contra las páginas ya admitidas por el perfil. Una unidad
+    archivística nunca puede incorporar páginas que los filtros de calidad/texto del
+    perfil hubieran excluido.
+    """
+
+    page_candidates = export_page_candidates(
+        session,
+        project_id=project_id,
+        profile=profile,
+    )
+    if not page_candidates:
+        return []
+
+    ordered_page_keys = [(row.digital_object_id, row.page_number) for row in page_candidates]
+    eligible_by_digital: dict[str, set[int]] = {}
+    for digital_object_id, page_number in ordered_page_keys:
+        eligible_by_digital.setdefault(digital_object_id, set()).add(page_number)
+
+    units = session.scalars(
+        select(ArchivalUnit)
+        .where(ArchivalUnit.project_id == project_id)
+        .order_by(ArchivalUnit.title, ArchivalUnit.id)
+    ).all()
+    if not units:
+        return []
+    children_by_parent: dict[str | None, list[str]] = {}
+    for row in units:
+        children_by_parent.setdefault(row.parent_id, []).append(row.id)
+    paths = _unit_paths(units)
+
+    registrations = session.scalars(
+        select(SourceRegistration).where(
+            SourceRegistration.project_id == project_id,
+            SourceRegistration.archival_unit_id.is_not(None),
+            SourceRegistration.digital_object_id.is_not(None),
+        )
+    ).all()
+    links = session.scalars(
+        select(DigitalObjectUnitLink)
+        .join(ArchivalUnit, ArchivalUnit.id == DigitalObjectUnitLink.archival_unit_id)
+        .where(ArchivalUnit.project_id == project_id)
+    ).all()
+    components = session.scalars(
+        select(ArchivalDocumentComponent)
+        .join(ArchivalUnit, ArchivalUnit.id == ArchivalDocumentComponent.archival_unit_id)
+        .where(ArchivalUnit.project_id == project_id)
+    ).all()
+
+    def descendants(unit_id: str) -> set[str]:
+        result = {unit_id}
+        stack = [unit_id]
+        while stack:
+            current = stack.pop()
+            for child_id in children_by_parent.get(current, []):
+                if child_id not in result:
+                    result.add(child_id)
+                    stack.append(child_id)
+        return result
+
+    def add_range(
+        destination: set[tuple[str, int]],
+        digital_object_id: str | None,
+        page_start: int | None,
+        page_end: int | None,
+    ) -> None:
+        if not digital_object_id or digital_object_id not in eligible_by_digital:
+            return
+        for page_number in eligible_by_digital[digital_object_id]:
+            if page_start is not None and page_number < page_start:
+                continue
+            if page_end is not None and page_number > page_end:
+                continue
+            destination.add((digital_object_id, page_number))
+
+    result: list[ExportUnitScopeCandidate] = []
+    scope_order = {"fonds": 0, "file": 1, "document": 2}
+    for unit in units:
+        scope_kind = _export_scope_kind(unit.level_key)
+        if scope_kind is None:
+            continue
+        member_unit_ids = descendants(unit.id)
+        page_keys: set[tuple[str, int]] = set()
+        for row in registrations:
+            if row.archival_unit_id in member_unit_ids:
+                add_range(page_keys, row.digital_object_id, None, None)
+        for row in links:
+            if row.archival_unit_id in member_unit_ids:
+                add_range(page_keys, row.digital_object_id, row.page_start, row.page_end)
+        for row in components:
+            if row.archival_unit_id in member_unit_ids:
+                add_range(page_keys, row.digital_object_id, row.page_start, row.page_end)
+        if not page_keys:
+            continue
+        ordered = tuple(key for key in ordered_page_keys if key in page_keys)
+        result.append(
+            ExportUnitScopeCandidate(
+                archival_unit_id=unit.id,
+                level_key=unit.level_key,
+                scope_kind=scope_kind,
+                title=unit.title,
+                reference_code=unit.reference_code,
+                hierarchy_path=paths.get(unit.id),
+                page_keys=ordered,
+            )
+        )
+    result.sort(
+        key=lambda row: (
+            scope_order.get(row.scope_kind, 99),
+            _natural_text_sort_key(row.hierarchy_path or row.title),
+            row.archival_unit_id,
+        )
+    )
+    return result
+
+
 def _run_profile_snapshot(
     profile: CorpusExportProfile,
     *,
     selected_page_keys: set[tuple[str, int]] | None,
+    selected_units: tuple[ExportUnitScopeCandidate, ...] | None = None,
 ) -> dict[str, Any]:
     snapshot = profile_snapshot(profile)
-    if selected_page_keys is None:
+    if selected_units is not None:
+        snapshot["execution_scope"] = {
+            "mode": "archival_units",
+            "units": [
+                {
+                    "archival_unit_id": row.archival_unit_id,
+                    "level_key": row.level_key,
+                    "scope_kind": row.scope_kind,
+                    "title": row.title,
+                    "reference_code": row.reference_code,
+                }
+                for row in selected_units
+            ],
+            "pages": [
+                {"digital_object_id": digital_object_id, "page_number": page_number}
+                for digital_object_id, page_number in sorted(selected_page_keys or set())
+            ],
+        }
+    elif selected_page_keys is None:
         snapshot["execution_scope"] = {"mode": "profile_scope"}
     else:
         snapshot["execution_scope"] = {
@@ -1114,7 +1295,9 @@ def run_export(
     output_format: str | None = None,
     overwrite: bool = False,
     selected_page_keys: set[tuple[str, int]] | None = None,
+    selected_unit_ids: set[str] | None = None,
     visual_options=None,
+    run_id: str | None = None,
 ) -> ExportRunResult:
     if profile.lifecycle_status != "active":
         raise ValueError("El perfil está archivado y no puede ejecutar exportaciones")
@@ -1122,7 +1305,29 @@ def run_export(
     selected_format = output_format or profile.output_format
     if selected_format not in RUN_OUTPUT_FORMATS:
         raise ValueError("Formato de salida inválido")
-    if selected_page_keys is None and visual_options is not None:
+    selected_units: tuple[ExportUnitScopeCandidate, ...] | None = None
+    if selected_unit_ids is not None:
+        normalized_unit_ids = {str(unit_id) for unit_id in selected_unit_ids if str(unit_id)}
+        if not normalized_unit_ids:
+            raise ValueError(
+                "Elegí al menos un fondo, legajo o documento para crear esta exportación"
+            )
+        available_units = export_unit_scope_candidates(
+            session,
+            project_id=project_id,
+            profile=profile,
+        )
+        by_id = {row.archival_unit_id: row for row in available_units}
+        unknown = sorted(normalized_unit_ids - by_id.keys())
+        if unknown:
+            raise ValueError(
+                "La selección archivística ya no está disponible para esta exportación"
+            )
+        selected_units = tuple(
+            row for row in available_units if row.archival_unit_id in normalized_unit_ids
+        )
+        selected_page_keys = {page_key for row in selected_units for page_key in row.page_keys}
+    elif selected_page_keys is None and visual_options is not None:
         raw_selected_pages = getattr(visual_options, "selected_pages", None)
         if raw_selected_pages is not None:
             selected_page_keys = {
@@ -1135,6 +1340,10 @@ def run_export(
             for digital_object_id, page_number in selected_page_keys
         }
         if not selected_page_keys:
+            if selected_units is not None:
+                raise ValueError(
+                    "Las unidades seleccionadas no contienen páginas admitidas por esta configuración"
+                )
             raise ValueError("Elegí al menos una página para crear esta exportación")
     rows = build_export_rows(
         session,
@@ -1149,10 +1358,14 @@ def run_export(
         )
     output_path.parent.mkdir(parents=True, exist_ok=True)
     state_digest = current_editable_state_sha256(session, project_id)
-    run_id = new_id()
+    assigned_run_id = str(run_id or new_id()).strip()
+    if not assigned_run_id:
+        raise ValueError("El ID preasignado de la exportación no puede estar vacío")
+    if session.get(CorpusExportRun, assigned_run_id) is not None:
+        raise ValueError("El ID preasignado de la exportación ya existe")
     exported_at = utc_now()
     for row in rows:
-        row.export_run_id = run_id
+        row.export_run_id = assigned_run_id
         row.exported_at = exported_at.isoformat()
         row.corpus_state_sha256 = state_digest
     visual_result = None
@@ -1160,12 +1373,21 @@ def run_export(
         from archive_workbench.visual_export import VisualExportOptions, build_text_image_package
 
         selected_visual_options = visual_options or VisualExportOptions()
+        if selected_page_keys is not None:
+            selected_visual_options = replace(
+                selected_visual_options,
+                selected_pages=tuple(sorted(selected_page_keys)),
+            )
         visual_result = build_text_image_package(
             session,
             project_root=project_root,
             project_id=project_id,
             records=[_jsonable_record(row) for row in rows],
-            profile_snapshot=_run_profile_snapshot(profile, selected_page_keys=selected_page_keys),
+            profile_snapshot=_run_profile_snapshot(
+                profile,
+                selected_page_keys=selected_page_keys,
+                selected_units=selected_units,
+            ),
             corpus_state_sha256=state_digest,
             destination=output_path,
             options=selected_visual_options,
@@ -1181,7 +1403,11 @@ def run_export(
         finally:
             temporary.unlink(missing_ok=True)
     digest = hashlib.sha256(output_path.read_bytes()).hexdigest()
-    snapshot = _run_profile_snapshot(profile, selected_page_keys=selected_page_keys)
+    snapshot = _run_profile_snapshot(
+        profile,
+        selected_page_keys=selected_page_keys,
+        selected_units=selected_units,
+    )
     if visual_result is not None:
         snapshot["execution"] = {
             "format": "visual_zip",
@@ -1189,7 +1415,7 @@ def run_export(
             "manifest_schema_version": visual_result.manifest["schema_version"],
         }
     run = CorpusExportRun(
-        id=run_id,
+        id=assigned_run_id,
         project_id=project_id,
         profile_id=profile.id,
         profile_name=profile.name,

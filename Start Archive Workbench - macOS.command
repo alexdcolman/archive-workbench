@@ -1,7 +1,7 @@
 #!/bin/bash
 set -u
 cd "$(dirname "$0")"
-IMAGE="${ARCHIVE_WORKBENCH_CPU_IMAGE:-ghcr.io/alexdcolman/archive-workbench:1.2.0-cpu}"
+IMAGE="${ARCHIVE_WORKBENCH_CPU_IMAGE:-ghcr.io/alexdcolman/archive-workbench:1.3.0-rc1-cpu}"
 export ARCHIVE_WORKBENCH_CPU_IMAGE="$IMAGE"
 
 if ! command -v docker >/dev/null 2>&1; then
@@ -58,6 +58,20 @@ mkdir -p \
   ArchiveWorkbenchData/Imports/Documents \
   ArchiveWorkbenchData/Imports/AudioVideo \
   ArchiveWorkbenchData/Settings
+
+AI_BRIDGE_ROOT="$PWD/ArchiveWorkbenchData/Settings/archive-workbench-ai-bridge"
+AI_EXECUTABLE="${ARCHIVE_WORKBENCH_AI_EXECUTABLE:-}"
+if [ -n "$AI_EXECUTABLE" ] && [ -x "$AI_EXECUTABLE" ]; then
+  if ! "$AI_EXECUTABLE" bridge start --root "$AI_BRIDGE_ROOT" >/dev/null 2>&1; then
+    printf '%s\n' "Archive Workbench AI está instalado, pero su compañero local no pudo iniciarse. Archive Workbench abrirá sin análisis asistido local."
+  fi
+elif command -v aw-ai >/dev/null 2>&1; then
+  if ! aw-ai bridge start --root "$AI_BRIDGE_ROOT" >/dev/null 2>&1; then
+    printf '%s\n' "Archive Workbench AI está instalado, pero su compañero local no pudo iniciarse. Archive Workbench abrirá sin análisis asistido local."
+  fi
+else
+  printf '%s\n' "Archive Workbench AI no está instalado; Archive Workbench abrirá normalmente sin el motor opcional de análisis asistido."
+fi
 
 docker compose --profile cpu --profile gpu down >/dev/null 2>&1 || true
 

@@ -27,6 +27,7 @@ from archive_workbench.corpus_export import (
     default_export_filename,
     delete_export_profile,
     export_page_candidates,
+    export_unit_scope_candidates,
     export_profile_rows,
     export_run_rows,
     preview_export,
@@ -1137,16 +1138,56 @@ def render_export_view(
             )
             selected_pages: tuple[tuple[str, int], ...] | None = None
             selected_page_keys: set[tuple[str, int]] | None = None
-            choose_specific_pages = st.toggle(
-                "Elegir páginas específicas para esta exportación",
-                value=False,
-                key=f"export_specific_pages_{selected.id}",
-                help=(
-                    "Limita únicamente esta ejecución. No cambia estados de revisión "
-                    "ni modifica la configuración guardada."
-                ),
+            selected_unit_ids: set[str] | None = None
+            execution_scope = st.radio(
+                "Alcance de esta exportación",
+                options=("profile_scope", "archival_units", "explicit_pages"),
+                format_func=lambda value: {
+                    "profile_scope": "Todo lo que admite la configuración",
+                    "archival_units": "Fondos, legajos o documentos completos",
+                    "explicit_pages": "Páginas específicas",
+                }[value],
+                key=f"export_execution_scope_{selected.id}",
             )
-            if choose_specific_pages:
+            if execution_scope == "archival_units":
+                engine = create_sqlite_engine(db_path)
+                try:
+                    with session_scope(engine) as scope_session:
+                        scope_candidates = export_unit_scope_candidates(
+                            scope_session,
+                            project_id=project_id,
+                            profile=selected,
+                        )
+                finally:
+                    engine.dispose()
+
+                unit_by_key = {candidate.key: candidate for candidate in scope_candidates}
+                chosen_unit_ids = st.multiselect(
+                    "Fondos, legajos o documentos que querés incluir",
+                    options=list(unit_by_key),
+                    format_func=lambda key: unit_by_key[key].label,
+                    key=f"export_specific_units_{selected.id}",
+                )
+                selected_unit_ids = set(chosen_unit_ids)
+                selected_page_keys = {
+                    page_key
+                    for unit_id in chosen_unit_ids
+                    for page_key in unit_by_key[unit_id].page_keys
+                }
+                selected_pages = tuple(sorted(selected_page_keys))
+                st.caption(
+                    "Se incluyen las páginas elegibles de cada unidad y de sus unidades descendientes. "
+                    "La selección sólo estrecha esta ejecución y no modifica el catálogo ni la configuración guardada."
+                )
+                if not scope_candidates:
+                    st.info(
+                        "No hay fondos, legajos o documentos con páginas admitidas por esta configuración."
+                    )
+                elif not selected_unit_ids:
+                    st.warning(
+                        "Elegí al menos un fondo, legajo o documento para crear esta exportación."
+                    )
+            elif execution_scope == "explicit_pages":
                 engine = create_sqlite_engine(db_path)
                 try:
                     with session_scope(engine) as page_session:
@@ -1247,7 +1288,12 @@ def render_export_view(
                                 output_relative_path=output_relative,
                                 output_format=format_value,
                                 created_by=actor or "local_user",
-                                selected_page_keys=selected_page_keys,
+                                selected_page_keys=(
+                                    selected_page_keys
+                                    if execution_scope == "explicit_pages"
+                                    else None
+                                ),
+                                selected_unit_ids=selected_unit_ids,
                                 visual_options=visual_options,
                             )
                     finally:
