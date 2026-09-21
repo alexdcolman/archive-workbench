@@ -1,0 +1,7 @@
+[Desktop Entry]
+Type=Application
+Name=Archive Workbench
+Comment=Abrir Archive Workbench con la imagen CPU
+Exec=sh -c 'cd "$(dirname "$1")" && exec ./docker/start-linux-gui.sh cpu' sh %k
+Terminal=false
+Categories=Office;Science;

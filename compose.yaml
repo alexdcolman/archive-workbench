@@ -29,13 +29,16 @@ x-app-common: &app-common
     - type: bind
       source: "${AW_SELECTED_PROJECT_HOST:-./ArchiveWorkbenchData/Projects}"
       target: /selected-project
+    - type: bind
+      source: "${AW_AI_BRIDGE_HOST:-./ArchiveWorkbenchData/Settings/archive-workbench-ai-bridge}"
+      target: /workspace/Settings/archive-workbench-ai-bridge
   shm_size: "2gb"
   restart: "no"
 
 services:
   app-cpu:
     <<: *app-common
-    image: ${ARCHIVE_WORKBENCH_CPU_IMAGE:-ghcr.io/alexdcolman/archive-workbench:1.3.0-rc1-cpu}
+    image: ${ARCHIVE_WORKBENCH_CPU_IMAGE:-ghcr.io/alexdcolman/archive-workbench:1.3.0-rc1-cpu@sha256:b255f97530b0a896395cc283e8744b6b3386bbfbe6ed7231642c2a9074abb3fb}
     build:
       context: .
       dockerfile: Dockerfile
@@ -47,7 +50,7 @@ services:
 
   app-gpu:
     <<: *app-common
-    image: ${ARCHIVE_WORKBENCH_GPU_IMAGE:-ghcr.io/alexdcolman/archive-workbench:1.3.0-rc1-gpu}
+    image: ${ARCHIVE_WORKBENCH_GPU_IMAGE:-ghcr.io/alexdcolman/archive-workbench:1.3.0-rc1-gpu@sha256:82796bdf09ed99aaa8b86400ab48576664bfd50f0f61e7a9d9145cf365a3c5d2}
     build:
       context: .
       dockerfile: Dockerfile.gpu

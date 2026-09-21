@@ -206,7 +206,7 @@ def test_container_publish_workflow_targets_cpu_and_gpu_images() -> None:
     workflow = yaml.safe_load(workflow_text)
 
     assert "workflow_dispatch" in workflow[True]
-    assert "release" in workflow[True]
+    assert "release" not in workflow[True]
     assert "packages: write" in workflow_text
     assert "ghcr.io/${{ github.repository }}" in workflow_text
     assert "linux/amd64,linux/arm64" in workflow_text
@@ -476,16 +476,23 @@ def test_managed_distribution_exposes_archive_workbench_ai_bridge() -> None:
         "ARCHIVE_WORKBENCH_AI_BRIDGE_DIR: /workspace/Settings/archive-workbench-ai-bridge"
         in compose_text
     )
+    assert (
+        "${AW_AI_BRIDGE_HOST:-./ArchiveWorkbenchData/Settings/archive-workbench-ai-bridge}"
+        in compose_text
+    )
     for relative in (
         "Start Archive Workbench - Linux.sh",
         "Start Archive Workbench - GPU - Linux.sh",
         "Start Archive Workbench - macOS.command",
+    ):
+        source = (ROOT / relative).read_text(encoding="utf-8-sig")
+        assert "start-ai-companion.sh" in source
+    for relative in (
         "Start Archive Workbench - Windows.bat",
         "Start Archive Workbench - GPU - Windows.bat",
     ):
         source = (ROOT / relative).read_text(encoding="utf-8-sig")
-        assert "bridge start" in source
-        assert "archive-workbench-ai-bridge" in source
+        assert "windows-ai-companion.ps1" in source
 
 
 def test_rc1_images_are_candidate_tags_and_publish_immutable_digests() -> None:
@@ -507,3 +514,61 @@ def test_rc1_images_are_candidate_tags_and_publish_immutable_digests() -> None:
     assert "archive-workbench-cpu-image-digest" in workflow
     assert "archive-workbench-gpu-image-digest" in workflow
     assert workflow.count("actions/upload-artifact@v4") >= 2
+
+
+def test_managed_ai_bridge_uses_global_host_mount_and_pinned_candidate_images() -> None:
+    compose = yaml.safe_load((ROOT / "compose.yaml").read_text(encoding="utf-8"))
+    expected_volume = {
+        "type": "bind",
+        "source": "${AW_AI_BRIDGE_HOST:-./ArchiveWorkbenchData/Settings/archive-workbench-ai-bridge}",
+        "target": "/workspace/Settings/archive-workbench-ai-bridge",
+    }
+    for service_name in ("app-cpu", "app-gpu"):
+        assert expected_volume in compose["services"][service_name]["volumes"]
+
+    assert (ROOT / "docker" / "image-digest.txt").read_text(
+        encoding="utf-8"
+    ).strip() == "sha256:b255f97530b0a896395cc283e8744b6b3386bbfbe6ed7231642c2a9074abb3fb"
+    assert (ROOT / "docker" / "gpu-image-digest.txt").read_text(
+        encoding="utf-8"
+    ).strip() == "sha256:82796bdf09ed99aaa8b86400ab48576664bfd50f0f61e7a9d9145cf365a3c5d2"
+    assert (ROOT / "docker" / "image-source-commit.txt").read_text(
+        encoding="utf-8"
+    ).strip() == "965459fda4ff75b6061e85c313b1154e7368bbcf"
+    assert (
+        "sha256:b255f97530b0a896395cc283e8744b6b3386bbfbe6ed7231642c2a9074abb3fb"
+        in compose["services"]["app-cpu"]["image"]
+    )
+    assert (
+        "sha256:82796bdf09ed99aaa8b86400ab48576664bfd50f0f61e7a9d9145cf365a3c5d2"
+        in compose["services"]["app-gpu"]["image"]
+    )
+
+    helper = (ROOT / "docker" / "start-ai-companion.sh").read_text(encoding="utf-8")
+    assert "bridge path" in helper
+    assert "bridge start" in helper
+    windows = (ROOT / "docker" / "windows-ai-companion.ps1").read_text(encoding="utf-8-sig")
+    assert "bridge path" in windows
+    assert "bridge start" in windows
+
+    first_start = (ROOT / "FIRST_START.txt").read_text(encoding="utf-8")
+    assert "Start Archive Workbench - Windows.vbs" in first_start
+    assert "Start Archive Workbench - GPU - Windows.vbs" in first_start
+    assert "Start Archive Workbench - Linux.desktop" in first_start
+    assert "Start Archive Workbench - GPU - Linux.desktop" in first_start
+    assert "Start Archive Workbench - Windows.bat" not in first_start
+    assert "Start Archive Workbench - Linux.sh" not in first_start
+
+
+def test_new_managed_shell_helpers_have_valid_syntax() -> None:
+    for shell, relative in (
+        ("sh", "docker/start-ai-companion.sh"),
+        ("sh", "docker/start-linux-gui.sh"),
+    ):
+        result = subprocess.run(
+            [shell, "-n", str(ROOT / relative)],
+            capture_output=True,
+            text=True,
+            check=False,
+        )
+        assert result.returncode == 0, result.stderr

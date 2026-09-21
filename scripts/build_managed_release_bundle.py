@@ -2,7 +2,6 @@ from __future__ import annotations
 
 import argparse
 import hashlib
-import os
 from pathlib import Path
 import stat
 import zipfile
@@ -35,6 +34,16 @@ RUNTIME_FILES = (
     "docker/windows-runtime.ps1",
     "docker/image-tag.txt",
     "docker/gpu-image-tag.txt",
+    "Start Archive Workbench - Linux.desktop",
+    "Start Archive Workbench - GPU - Linux.desktop",
+    "Start Archive Workbench - Windows.vbs",
+    "Start Archive Workbench - GPU - Windows.vbs",
+    "docker/windows-ai-companion.ps1",
+    "docker/start-ai-companion.sh",
+    "docker/start-linux-gui.sh",
+    "docker/image-digest.txt",
+    "docker/gpu-image-digest.txt",
+    "docker/image-source-commit.txt",
 )
 
 
@@ -85,6 +94,9 @@ def build(output_dir: Path, *, expected_release_tag: str | None = None) -> tuple
             f"Archive Workbench {version}\n"
             f"Imagen CPU: {(ROOT / 'docker' / 'image-tag.txt').read_text(encoding='utf-8').strip()}\n"
             f"Imagen GPU: {(ROOT / 'docker' / 'gpu-image-tag.txt').read_text(encoding='utf-8').strip()}\n"
+            f"Digest CPU: {(ROOT / 'docker' / 'image-digest.txt').read_text(encoding='utf-8').strip()}\n"
+            f"Digest GPU: {(ROOT / 'docker' / 'gpu-image-digest.txt').read_text(encoding='utf-8').strip()}\n"
+            f"Commit de imágenes: {(ROOT / 'docker' / 'image-source-commit.txt').read_text(encoding='utf-8').strip()}\n"
         )
         archive.writestr(
             _zip_info(f"{BUNDLE_DIRNAME}/VERSION.txt", 0o644),

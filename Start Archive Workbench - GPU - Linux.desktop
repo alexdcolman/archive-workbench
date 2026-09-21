@@ -1,0 +1,7 @@
+[Desktop Entry]
+Type=Application
+Name=Archive Workbench — NVIDIA GPU
+Comment=Abrir Archive Workbench con la imagen GPU NVIDIA
+Exec=sh -c 'cd "$(dirname "$1")" && exec ./docker/start-linux-gui.sh gpu' sh %k
+Terminal=false
+Categories=Office;Science;

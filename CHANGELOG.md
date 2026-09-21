@@ -2,6 +2,8 @@
 
 ## 1.3.0 RC1 - candidata de integración - 2026-09-18
 
+- Prepara el bundle administrado sin terminal: bridge global de AI, autodetección de instalación nativa, launchers gráficos para Ubuntu/Windows y pin de las imágenes candidatas por digest sin reconstruirlas.
+
 - **Puente administrado con Archive Workbench AI:** la distribución Docker puede intercambiar trabajos con el motor nativo mediante un buzón local en `ArchiveWorkbenchData/Settings`, sin abrir puertos ni dar al motor acceso a SQLite.
 - Los launchers intentan iniciar el compañero opcional cuando `aw-ai` está disponible y mantienen el funcionamiento normal de Archive Workbench cuando no lo está.
 - README y `FIRST_START.txt` quedan preparados para el recorrido integrado; la página dedicada del sitio público se difiere hasta cerrar imágenes e integración.

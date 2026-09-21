@@ -34,24 +34,14 @@ El ZIP contiene los lanzadores para Windows, Linux y macOS. Extraelo en una carp
 
 1. Instalá y abrí [Docker Desktop](https://docs.docker.com/desktop/).
 2. Descargá y extraé el ZIP de Archive Workbench.
-3. Abrí la carpeta `Archive Workbench` y hacé doble clic en `Start Archive Workbench - Windows.bat`.
+3. Abrí la carpeta `Archive Workbench` y hacé doble clic en `Start Archive Workbench - Windows.vbs`.
 4. Elegí un proyecto existente o abrí el inicio general.
 
-Con una GPU NVIDIA compatible y Docker Desktop sobre WSL2 puede utilizarse `Start Archive Workbench - GPU - Windows.bat`.
+Con una GPU NVIDIA compatible y Docker Desktop sobre WSL2 puede utilizarse `Start Archive Workbench - GPU - Windows.vbs`.
 
 ### Linux
 
-Con Docker Desktop o Docker Engine + Compose instalado, descargá y extraé el ZIP y ejecutá desde la carpeta `Archive Workbench`:
-
-```bash
-./Start\ Archive\ Workbench\ -\ Linux.sh
-```
-
-Para NVIDIA GPU, con NVIDIA Container Toolkit configurado:
-
-```bash
-./Start\ Archive\ Workbench\ -\ GPU\ -\ Linux.sh
-```
+Con Docker Desktop o Docker Engine + Compose instalado, descargá y extraé el ZIP y abrí `Start Archive Workbench - Linux.desktop` desde el explorador de archivos. Para NVIDIA GPU, con NVIDIA Container Toolkit configurado, abrí `Start Archive Workbench - GPU - Linux.desktop`. La terminal queda reservada a desarrollo y diagnóstico.
 
 ### macOS
 
@@ -63,7 +53,7 @@ La guía de [Instalación](https://alexdcolman.github.io/archive-workbench/insta
 
 Archive Workbench puede conectarse con **Archive Workbench AI**, un componente opcional y separado que ejecuta modelos multimodales localmente y devuelve propuestas para revisión. El motor no abre la base SQLite del proyecto, no modifica registros por sí mismo y no convierte una salida automática en una decisión archivística.
 
-En la distribución administrada con Docker, Archive Workbench AI se ejecuta de forma nativa en el sistema anfitrión para aprovechar la aceleración disponible. Los lanzadores de Archive Workbench intentan iniciar su compañero local cuando `aw-ai` está instalado; si no lo está, Archive Workbench abre normalmente sin el motor opcional. El intercambio se limita al material autorizado para el análisis y a los paquetes de resultado/propuestas dentro de `ArchiveWorkbenchData/Settings`; no se abre un puerto de red para esta integración.
+En la distribución administrada con Docker, Archive Workbench AI se ejecuta de forma nativa en el sistema anfitrión para aprovechar la aceleración disponible. Los lanzadores administrados descubren la instalación canónica de Archive Workbench AI e inician su compañero local automáticamente; si no lo está, Archive Workbench abre normalmente sin el motor opcional. El intercambio se limita al material autorizado para el análisis y a los paquetes de resultado/propuestas mediante un buzón global por usuario montado de forma acotada dentro del contenedor; no se abre un puerto de red para esta integración.
 
 La integración permanece en **pre-release** hasta completar la validación con las imágenes definitivas publicadas. El recorrido final se probará en Windows con la imagen CPU y en Ubuntu con las imágenes CPU y GPU NVIDIA. La documentación técnica del motor está en [Archive Workbench AI](https://github.com/alexdcolman/archive-workbench-ai). La página dedicada del sitio de Archive Workbench se completará al cerrar ese proceso.
 

@@ -7,7 +7,7 @@ set "AW_PROFILE=cpu"
 if defined ARCHIVE_WORKBENCH_CPU_IMAGE (
   set "AW_IMAGE=%ARCHIVE_WORKBENCH_CPU_IMAGE%"
 ) else (
-  set "AW_IMAGE=ghcr.io/alexdcolman/archive-workbench:1.3.0-rc1-cpu"
+  set "AW_IMAGE=ghcr.io/alexdcolman/archive-workbench:1.3.0-rc1-cpu@sha256:b255f97530b0a896395cc283e8744b6b3386bbfbe6ed7231642c2a9074abb3fb"
 )
 set "ARCHIVE_WORKBENCH_CPU_IMAGE=%AW_IMAGE%"
 
@@ -19,7 +19,7 @@ if errorlevel 1 (
   start "" "https://docs.docker.com/desktop/setup/install/windows-install/"
   echo.
   echo Instala Docker Desktop, inicia la aplicacion y vuelve a abrir este archivo.
-  pause
+if not defined AW_GUI_LAUNCH pause
   exit /b 1
 )
 
@@ -48,7 +48,7 @@ goto :selection_done
 del /q "%AW_SELECTION_FILE%" >nul 2>&1
 echo.
 echo No se pudo elegir el proyecto. Vuelve a abrir Archive Workbench e intentalo nuevamente.
-pause
+if not defined AW_GUI_LAUNCH pause
 exit /b 1
 
 :selection_done
@@ -58,15 +58,14 @@ if not exist "ArchiveWorkbenchData\Imports\Documents" mkdir "ArchiveWorkbenchDat
 if not exist "ArchiveWorkbenchData\Imports\AudioVideo" mkdir "ArchiveWorkbenchData\Imports\AudioVideo"
 if not exist "ArchiveWorkbenchData\Settings" mkdir "ArchiveWorkbenchData\Settings"
 
-set "AW_AI_CMD="
-if defined ARCHIVE_WORKBENCH_AI_EXECUTABLE set "AW_AI_CMD=%ARCHIVE_WORKBENCH_AI_EXECUTABLE%"
-if not defined AW_AI_CMD for /f "delims=" %%I in ('where aw-ai 2^>nul') do if not defined AW_AI_CMD set "AW_AI_CMD=%%I"
-if defined AW_AI_CMD (
-  "%AW_AI_CMD%" bridge start --root "%CD%\ArchiveWorkbenchData\Settings\archive-workbench-ai-bridge" >nul 2>&1
-  if errorlevel 1 echo Archive Workbench AI esta instalado, pero su companero local no pudo iniciarse. Archive Workbench abrira sin analisis asistido local.
-) else (
-  echo Archive Workbench AI no esta instalado; Archive Workbench abrira normalmente sin el motor opcional de analisis asistido.
+set "AW_AI_BRIDGE_HOST=%CD%\ArchiveWorkbenchData\Settings\archive-workbench-ai-bridge"
+if not exist "%AW_AI_BRIDGE_HOST%" mkdir "%AW_AI_BRIDGE_HOST%"
+set "AW_AI_BRIDGE_FILE=%TEMP%\archive_workbench_ai_bridge_%RANDOM%_%RANDOM%.txt"
+powershell -NoProfile -ExecutionPolicy Bypass -File "%~dp0docker\windows-ai-companion.ps1" -BridgePathFile "%AW_AI_BRIDGE_FILE%"
+if not errorlevel 1 (
+  set /p "AW_AI_BRIDGE_HOST="<"%AW_AI_BRIDGE_FILE%"
 )
+if exist "%AW_AI_BRIDGE_FILE%" del /q "%AW_AI_BRIDGE_FILE%" >nul 2>&1
 
 docker compose --profile cpu --profile gpu down >nul 2>&1
 
@@ -115,14 +114,14 @@ for /L %%I in (1,1,60) do (
 )
 echo.
 echo No se pudo iniciar Docker Desktop. Abrilo manualmente y volve a intentar.
-pause
+if not defined AW_GUI_LAUNCH pause
 exit /b 1
 
 :pull_failed
 echo.
 echo No se pudo descargar la imagen CPU preparada de Archive Workbench.
 echo Verifica la conexion a Internet y volve a intentar.
-pause
+if not defined AW_GUI_LAUNCH pause
 exit /b 1
 
 :failed
@@ -132,5 +131,5 @@ echo.
 docker compose logs --tail=80 %AW_SERVICE%
 echo.
 echo Copia el texto de esta ventana si necesitas informar el error.
-pause
+if not defined AW_GUI_LAUNCH pause
 exit /b 1
